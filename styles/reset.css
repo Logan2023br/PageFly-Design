@@ -1,0 +1,139 @@
+/* ==========================================================================
+   Scoped reset — the stand-in for Tailwind Preflight.
+
+   Preflight is deliberately not imported (see app/globals.css) so this feature
+   ships no global reset and cannot disturb pagefly.io's stylesheet. Everything
+   below is confined to `.pfd-root`.
+
+   THIS FILE MUST BE IMPORTED INTO `layer(base)`.
+
+   That is not a style preference, it is correctness. CSS gives unlayered rules
+   higher priority than every cascade layer, so importing this without a layer
+   makes `.pfd-root * { border-width: 0 }` beat Tailwind's `border` utility,
+   `.pfd-root button { padding: 0 }` beat `px-3.5`, `.pfd-root h1 { font-size:
+   inherit }` beat `text-pf-hero`, and `.pfd-root p { margin: 0 }` beat
+   `mx-auto`. The result is borderless chips, unpadded buttons, an h1 smaller
+   than its own body copy, and text that refuses to centre. Preflight lives in
+   `base` for exactly this reason.
+   ========================================================================== */
+
+.pfd-root {
+  font-family: var(--font-body);
+  font-size: var(--text-pf-body);
+  line-height: 1.6;
+  color: var(--color-pf-body);
+  background-color: var(--color-pf-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-synthesis: none;
+  isolation: isolate;
+}
+
+/* The border rule is load-bearing in the other direction too: without
+   Preflight, Tailwind's `border` utility sets border-width but leaves
+   border-style at its initial `none`, so every card border would be invisible
+   even once the layering is right. */
+.pfd-root *,
+.pfd-root *::before,
+.pfd-root *::after {
+  box-sizing: border-box;
+  border-width: 0;
+  border-style: solid;
+  border-color: var(--color-pf-border);
+}
+
+.pfd-root h1,
+.pfd-root h2,
+.pfd-root h3,
+.pfd-root h4,
+.pfd-root p,
+.pfd-root figure,
+.pfd-root blockquote,
+.pfd-root dl,
+.pfd-root dd,
+.pfd-root ul,
+.pfd-root ol {
+  margin: 0;
+}
+
+.pfd-root ul,
+.pfd-root ol {
+  padding: 0;
+  list-style: none;
+}
+
+.pfd-root h1,
+.pfd-root h2,
+.pfd-root h3,
+.pfd-root h4 {
+  font-family: var(--font-display);
+  font-size: inherit;
+  font-weight: inherit;
+  color: var(--color-pf-text);
+}
+
+.pfd-root button,
+.pfd-root input,
+.pfd-root optgroup,
+.pfd-root select,
+.pfd-root textarea {
+  font: inherit;
+  color: inherit;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+}
+
+.pfd-root button {
+  cursor: pointer;
+  text-align: inherit;
+  -webkit-appearance: button;
+}
+
+.pfd-root button:disabled {
+  cursor: not-allowed;
+}
+
+.pfd-root input::placeholder,
+.pfd-root textarea::placeholder {
+  color: var(--color-pf-faint);
+  opacity: 1;
+}
+
+.pfd-root textarea {
+  resize: none;
+}
+
+.pfd-root img,
+.pfd-root video,
+.pfd-root canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+/* svg is left out of the `height: auto` rule above: icon components set width
+   and height attributes, and forcing auto height collapses them. */
+.pfd-root svg {
+  display: block;
+}
+
+.pfd-root a {
+  color: inherit;
+  text-decoration: inherit;
+}
+
+.pfd-root hr {
+  border-top-width: 1px;
+  height: 0;
+  color: inherit;
+}
+
+/* Visible focus everywhere — never removed, only restyled. */
+.pfd-root :focus-visible {
+  outline: 2px solid var(--color-pf-primary-hi);
+  outline-offset: 2px;
+  border-radius: 4px;
+}

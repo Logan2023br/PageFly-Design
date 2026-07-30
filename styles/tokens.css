@@ -1,0 +1,218 @@
+/* ==========================================================================
+   PageFly Design — brand token layer
+   --------------------------------------------------------------------------
+   SINGLE SOURCE OF TRUTH for the PageFly look. Sampled from the pagefly.io
+   homepage reference (design-refs/pagefly-home.png).
+
+   To re-sample the brand: change values in the `@theme` block below ONLY.
+   Nothing else in the codebase hardcodes a brand color.
+
+   NOTE ON FONTS: pagefly.io's exact typeface could not be confirmed (the site
+   returned HTTP 429 on fetch). Per the brief we fall back to Plus Jakarta Sans
+   (display) + Inter (body). To swap in PageFly's real font, change the two
+   next/font imports in app/layout.tsx — the token names below do not move.
+   ========================================================================== */
+
+@theme {
+  /* ---- dark canvas ---------------------------------------------------- */
+  --color-pf-bg: #0a0616;
+  --color-pf-bg-alt: #100b26;
+  --color-pf-bg-deep: #070411;
+
+  /* ---- light bands ---------------------------------------------------- */
+  --color-pf-light: #ffffff;
+  --color-pf-light-alt: #f6f5fa;
+
+  /* ---- violet ramp ---------------------------------------------------- */
+  --color-pf-primary: #6b2ff7;
+  --color-pf-primary-hi: #9a6bff;
+  --color-pf-primary-lo: #4d1cc4;
+
+  /* ---- text on dark --------------------------------------------------- */
+  --color-pf-text: #ffffff;
+  --color-pf-body: #e7e4f5;
+  --color-pf-muted: rgba(231, 228, 245, 0.62);
+  --color-pf-faint: rgba(231, 228, 245, 0.38);
+
+  /* ---- text on light -------------------------------------------------- */
+  --color-pf-ink: #0a0616;
+  --color-pf-ink-muted: rgba(10, 6, 22, 0.62);
+  --color-pf-ink-faint: rgba(10, 6, 22, 0.38);
+
+  /* ---- surfaces ------------------------------------------------------- */
+  --color-pf-card: rgba(255, 255, 255, 0.035);
+  --color-pf-card-hi: rgba(255, 255, 255, 0.06);
+  --color-pf-border: rgba(255, 255, 255, 0.09);
+  --color-pf-border-hi: rgba(255, 255, 255, 0.16);
+  --color-pf-card-light: #ffffff;
+  --color-pf-border-light: rgba(10, 6, 22, 0.08);
+
+  /* ---- status --------------------------------------------------------- */
+  --color-pf-success: #2bd98a;
+  --color-pf-danger: #ff6b81;
+  --color-pf-warn: #ffb865;
+
+  /* ---- radii (matches rounded-2xl / rounded-3xl on the reference) ----- */
+  --radius-pf-sm: 8px;
+  --radius-pf-md: 12px;
+  --radius-pf-lg: 16px;
+  --radius-pf-card: 20px;
+  --radius-pf-xl: 28px;
+  --radius-pf-pill: 999px;
+
+  /* ---- type ----------------------------------------------------------- */
+  --font-display: var(--pf-font-display), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--pf-font-body), ui-sans-serif, system-ui, sans-serif;
+  --font-mono-pf: ui-monospace, "SF Mono", Menlo, monospace;
+
+  --text-pf-hero: clamp(2.5rem, 5.2vw, 4.25rem);
+  --text-pf-hero--line-height: 1.04;
+  --text-pf-hero--letter-spacing: -0.032em;
+
+  --text-pf-h2: clamp(1.875rem, 3.2vw, 2.75rem);
+  --text-pf-h2--line-height: 1.1;
+  --text-pf-h2--letter-spacing: -0.025em;
+
+  --text-pf-h3: clamp(1.125rem, 1.6vw, 1.375rem);
+  --text-pf-h3--line-height: 1.25;
+  --text-pf-h3--letter-spacing: -0.014em;
+
+  --text-pf-body: 1.0625rem;
+  --text-pf-body--line-height: 1.6;
+
+  --text-pf-sm: 0.875rem;
+  --text-pf-sm--line-height: 1.5;
+
+  --text-pf-eyebrow: 0.6875rem;
+  --text-pf-eyebrow--line-height: 1.2;
+  --text-pf-eyebrow--letter-spacing: 0.16em;
+
+  /* ---- rhythm (reference runs ~96-140px per band) --------------------- */
+  --spacing-pf-band: clamp(4rem, 9vw, 8.75rem);
+  --spacing-pf-gap: clamp(1rem, 2vw, 1.5rem);
+
+  /* ---- elevation & glow ---------------------------------------------- */
+  --shadow-pf-card: 0 1px 0 0 rgba(255, 255, 255, 0.05) inset,
+    0 18px 40px -24px rgba(0, 0, 0, 0.8);
+  --shadow-pf-glow: 0 0 0 1px rgba(154, 107, 255, 0.28),
+    0 20px 60px -20px rgba(107, 47, 247, 0.55);
+  --shadow-pf-button: 0 8px 24px -8px rgba(107, 47, 247, 0.7),
+    0 1px 0 0 rgba(255, 255, 255, 0.16) inset;
+  --shadow-pf-float: 0 32px 80px -32px rgba(0, 0, 0, 0.9);
+
+  /* ---- motion --------------------------------------------------------- */
+  --ease-pf-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-pf-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* ==========================================================================
+   Helpers. These are custom classes, not resets — they compete with nothing in
+   the utilities layer, so they stay unlayered. The element-level reset lives in
+   styles/reset.css and MUST be imported into layer(base); see the note there.
+   ========================================================================== */
+
+/* Scrollbars inside long panes. */
+.pfd-scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-pf-border-hi) transparent;
+}
+
+.pfd-scroll-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.pfd-scroll-thin::-webkit-scrollbar-thumb {
+  background: var(--color-pf-border-hi);
+  border-radius: 999px;
+}
+
+.pfd-scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Hide the scrollbar but keep scrolling — used by the mockup viewports, where a
+   host scrollbar would read as part of the mocked page. */
+.pfd-scroll-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.pfd-scroll-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* ==========================================================================
+   Texture: radial violet glow + fine grid, as on the reference hero.
+   ========================================================================== */
+
+.pfd-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      60% 50% at 50% 0%,
+      rgba(107, 47, 247, 0.34) 0%,
+      rgba(107, 47, 247, 0.1) 42%,
+      transparent 72%
+    ),
+    radial-gradient(
+      40% 34% at 84% 12%,
+      rgba(154, 107, 255, 0.16) 0%,
+      transparent 70%
+    );
+}
+
+.pfd-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(70% 60% at 50% 0%, #000 0%, transparent 78%);
+  -webkit-mask-image: radial-gradient(
+    70% 60% at 50% 0%,
+    #000 0%,
+    transparent 78%
+  );
+}
+
+/* Violet -> lavender gradient text. Used on ONE word per heading, never more. */
+.pfd-grad-text {
+  background: linear-gradient(
+    100deg,
+    var(--color-pf-primary-hi) 0%,
+    #d9c8ff 52%,
+    var(--color-pf-primary-hi) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Frosted bar used by the sticky action bar and the preview toolbar. */
+.pfd-glass {
+  background: rgba(10, 6, 22, 0.72);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+}
+
+/* ==========================================================================
+   Reduced motion.
+   Motion becomes instant; nothing is disabled. Long-running decorative
+   animations stop, but state changes still land at their end value.
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .pfd-root *,
+  .pfd-root *::before,
+  .pfd-root *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

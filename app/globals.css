@@ -1,0 +1,16 @@
+/* Tailwind, imported layer-by-layer with `preflight.css` deliberately OMITTED.
+   The brief requires this page to survive being dropped into the existing
+   pagefly.io stylesheet, so no global reset may leak out.
+
+   `reset.css` is the scoped stand-in for Preflight and goes into `layer(base)`
+   for the same reason Preflight does: unlayered CSS outranks every cascade
+   layer, so an unlayered reset would beat the utilities layer and silently
+   strip borders, padding, backgrounds, heading sizes and `mx-auto`. Do not
+   remove `layer(base)` from that import. */
+
+@layer theme, base, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "../styles/reset.css" layer(base);
+@import "../styles/tokens.css";

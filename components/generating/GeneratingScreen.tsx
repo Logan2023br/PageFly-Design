@@ -1,0 +1,163 @@
+"use client";
+
+import { motion, useReducedMotion } from "framer-motion";
+import { PAGE_BY_ID } from "@/lib/pageCatalog";
+import { useStore } from "@/lib/store";
+import { Button, Icon, Panel } from "../ui";
+import { WireframeMorph, type MorphPhase } from "./WireframeMorph";
+
+/* Status copy stays factual. No "consulting the design oracle" theatrics —
+   the line says which page is being built, because that is what is happening. */
+function statusLine(done: number, total: number, nextLabel: string | null) {
+  if (done === 0) return "Reading your brief";
+  if (done === 1) return "Setting the type scale";
+  if (done >= total) return "Almost there";
+  if (nextLabel) return `Building ${nextLabel}`;
+  return "Almost there";
+}
+
+export function GeneratingScreen() {
+  const plan = useStore((s) => s.plan);
+  const pages = useStore((s) => s.pages);
+  const failures = useStore((s) => s.failures);
+  const cancel = useStore((s) => s.cancel);
+  const reduced = useReducedMotion();
+
+  const total = plan.length;
+  const settled = pages.length + failures.length;
+  const pct = total === 0 ? 0 : Math.round((settled / total) * 100);
+
+  const nextEntry = plan[settled];
+  const nextLabel = nextEntry
+    ? (() => {
+        const def = PAGE_BY_ID[nextEntry.pageType];
+        const name = def?.label ?? nextEntry.pageType;
+        if (nextEntry.copyTotal > 1) {
+          return def?.category === "landing"
+            ? `landing page ${nextEntry.copyIndex} of ${nextEntry.copyTotal}`
+            : `${name} ${nextEntry.copyIndex} of ${nextEntry.copyTotal}`;
+        }
+        return `the ${name} page`;
+      })()
+    : null;
+
+  const byId = new Map(pages.map((p) => [p.id, p]));
+
+  return (
+    <motion.div
+      key="generating"
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -12 }}
+      transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
+      className="mx-auto max-w-6xl"
+    >
+      <div className="mx-auto max-w-2xl px-1 pb-9 pt-4 text-center sm:pt-8">
+        <h1 className="font-display text-[28px] font-semibold tracking-[-0.03em] text-pf-text sm:text-[38px]">
+          Building your pages
+        </h1>
+
+        <div className="mt-7 grid gap-3">
+          <div className="h-[3px] w-full overflow-hidden rounded-full bg-pf-border">
+            <motion.div
+              className="h-full rounded-full bg-pf-primary"
+              initial={{ width: 0 }}
+              animate={{ width: `${pct}%` }}
+              transition={{ duration: reduced ? 0 : 0.5, ease: [0.22, 1, 0.36, 1] }}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3 text-[13px]">
+            <span
+              aria-live="polite"
+              className="flex items-center gap-2 text-pf-body"
+            >
+              <motion.span
+                animate={reduced ? {} : { rotate: 360 }}
+                transition={{ duration: 2.2, repeat: Infinity, ease: "linear" }}
+                className="text-pf-primary-hi"
+              >
+                <Icon name="Loader" size={14} />
+              </motion.span>
+              {statusLine(settled, total, nextLabel)}
+            </span>
+            <span className="tabular-nums text-pf-muted">
+              {settled} of {total}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        {plan.map((entry, i) => {
+          const page = byId.get(entry.pageId);
+          const failed = failures.some((f) => f.pageId === entry.pageId);
+          const phase: MorphPhase = page
+            ? "done"
+            : i === settled
+              ? "building"
+              : "pending";
+          const def = PAGE_BY_ID[entry.pageType];
+
+          return (
+            <motion.div
+              key={entry.pageId}
+              initial={{ opacity: 0, y: 18, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{
+                type: "spring",
+                stiffness: 420,
+                damping: 34,
+                delay: reduced ? 0 : Math.min(i * 0.045, 0.6),
+              }}
+            >
+              <Panel
+                className={`overflow-hidden transition-colors duration-300 ${
+                  phase === "building"
+                    ? "border-pf-primary-hi/55 shadow-pf-glow"
+                    : failed
+                      ? "border-pf-danger/40"
+                      : ""
+                }`}
+              >
+                <div className="relative aspect-[3/4] bg-pf-bg-deep">
+                  {failed ? (
+                    <div className="grid size-full place-items-center gap-2 p-4 text-center">
+                      <Icon name="CircleAlert" size={18} />
+                      <span className="text-[12px] text-pf-muted">
+                        Couldn&apos;t build this one
+                      </span>
+                    </div>
+                  ) : (
+                    <WireframeMorph
+                      pageType={entry.pageType}
+                      page={page}
+                      phase={phase}
+                      className="size-full"
+                    />
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-2 border-t border-pf-border px-3 py-2.5">
+                  <span className="min-w-0 truncate text-[12.5px] font-semibold text-pf-text">
+                    {def?.label ?? entry.pageType}
+                    {entry.copyTotal > 1 && (
+                      <span className="text-pf-faint"> {entry.copyIndex}</span>
+                    )}
+                  </span>
+                  <span className="shrink-0 text-[11px] tabular-nums text-pf-faint">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                </div>
+              </Panel>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      <div className="mt-8 flex justify-center pb-6">
+        <Button variant="quiet" onClick={cancel} icon="ArrowLeft">
+          Cancel and go back to the brief
+        </Button>
+      </div>
+    </motion.div>
+  );
+}
