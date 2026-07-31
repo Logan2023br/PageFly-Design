@@ -62,7 +62,7 @@ components/
 ├── ui.tsx                    → app chrome primitives (Button, Panel, Chip, Stepper…)
 ├── brief/                    → one file per form section
 ├── generating/               → the wireframe→mockup morph
-├── results/                  → gallery, cards, PNG export
+├── results/                  → gallery, cards, PNG export, card actions
 ├── preview/                  → the full-screen overlay + device chrome
 └── mockup/
     ├── MockupPage.tsx        → block → component mapping (exhaustive switch)
@@ -80,6 +80,8 @@ lib/
 ├── palette.ts                → pure colour merge, safe on the server
 ├── mockArt.ts                → drawn product silhouettes per vertical
 ├── refLayout.ts              → layout fingerprint → generation hints (pure)
+├── promptExport.ts           → PageMockup → a FlyMate build spec
+├── clipboard.ts              → copy with a non-secure-context fallback
 ├── store.ts                  → zustand: brief + results
 └── png.ts                    → client-side capture helpers
 
@@ -150,6 +152,44 @@ The feature is one component tree under one class. Nothing leaks out.
    precisely because a global reset was not allowed.
 
 ---
+
+## Card actions
+
+Hovering a result card reveals two controls.
+
+**Copy prompt** turns the mockup into a build spec for PageFly's FlyMate, which
+builds pages from text. It is not a summary — a vague prompt is a page FlyMate
+invents differently from the mockup you approved. So the export is written to
+three rules:
+
+- **Exact values, never adjectives.** `#0E0D0B`, not "dark". `3px solid #000000`,
+  not "thick borders".
+- **Every section numbered, in order.** FlyMate composes top to bottom; an
+  unordered feature list produces a different page each run.
+- **Copy verbatim in quotes**, with an explicit instruction not to rewrite it.
+  The headline came from the merchant's brief — having it paraphrased loses the
+  thing they approved.
+
+A Home page export runs to about 920 words: full palette, type, radii, spacing
+and image treatment, then all nine sections with their real copy, then the
+responsive rules and a short "do not" list. The mockup is the only source, so a
+prompt can never drift from the page it describes.
+
+The button becomes **Prompt copied** for two seconds, or **Couldn't copy** if the
+clipboard is unavailable — `navigator.clipboard` needs a secure context, so
+there is a hidden-textarea fallback for plain-HTTP LAN testing.
+
+**Import to editor** is deliberately inert: faded, padlocked, `aria-disabled`
+rather than `disabled` (a disabled button stops firing pointer events in some
+browsers, and the hover message is the entire point of the control right now).
+Hovering shows a tooltip above it saying direct import ships if enough merchants
+say it is worth building.
+
+> Structure note: adding these buttons meant the card could no longer *be* a
+> button. A button inside a button is invalid HTML — the browser hoists the inner
+> one out of its parent and hydration breaks. The card root is now a `div`, with
+> a separate absolutely-positioned button covering the thumbnail as the preview
+> target and the actions row layered above it.
 
 ## Animation inventory
 
@@ -262,6 +302,12 @@ Checked, not assumed:
   toggle, stepper clamping, 30-cap, colour add/dedupe/reject — all pass.
 - Tunnel access: with `allowedDevOrigins` set, JS chunks return 200 for ngrok and
   Cloudflare hosts and still 403 for an unlisted one, so the protection holds.
+- Prompt export: all **45** page types produce a spec whose numbered sections
+  match their block count exactly, and all **34** block kinds produce a
+  description — no page can export a section as a blank line.
+- All **15** visual styles cite their own `bg`, `surfaceAlt`, `ink`, `accent` and
+  `accentInk` verbatim, and carry the uppercase and square-corner instructions
+  when the style calls for them.
 - `npm run build`, `npx tsc --noEmit` and `npx eslint .` all clean.
 
 Not verified: the mockups have not been eyeballed in a browser during this

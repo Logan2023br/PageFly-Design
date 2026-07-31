@@ -11,6 +11,7 @@ import { useRef, useState } from "react";
 import type { PageMockup } from "@/lib/generate/types";
 import { MockupThumb } from "../mockup/MockupThumb";
 import { Icon, Tag } from "../ui";
+import { CardActions } from "./CardActions";
 
 /* ==========================================================================
    A result card.
@@ -18,6 +19,12 @@ import { Icon, Tag } from "../ui";
    Hover does the work a click would otherwise be needed for: the tall page
    slowly auto-scrolls inside the card, so a merchant can read a whole page
    without opening anything. Leaving eases back to the top.
+
+   Structure note: the root is a div, not a button. The card carries its own
+   action buttons now, and a button inside a button is invalid HTML — the
+   browser hoists the inner one out of its parent and hydration breaks. So the
+   "open preview" target is a separate absolutely-positioned button underneath
+   the actions row.
    ========================================================================== */
 
 export function ResultCard({
@@ -47,27 +54,32 @@ export function ResultCard({
   };
 
   return (
-    /* `w-full` is explicit rather than relying on `display:block` inside the
-       grid cell — a button's intrinsic sizing plus a shared-layout transform is
-       exactly what made these cards come out uneven. */
-    <motion.button
-      type="button"
-      onClick={onOpen}
+    <motion.div
       onHoverStart={() => run(1, 7.5)}
       onHoverEnd={() => run(0, 0.55)}
-      onFocus={() => run(1, 7.5)}
-      onBlur={() => run(0, 0.55)}
       whileHover={reduced ? undefined : { y: -4 }}
       transition={{ type: "spring", stiffness: 420, damping: 34 }}
-      aria-label={`Open ${page.label} preview`}
-      className="group relative block w-full overflow-hidden rounded-pf-card border border-pf-border bg-pf-card text-left shadow-pf-card transition-shadow duration-200 hover:border-pf-primary-hi/50 hover:shadow-pf-glow"
+      className="group relative w-full overflow-hidden rounded-pf-card border border-pf-border bg-pf-card text-left shadow-pf-card transition-shadow duration-200 hover:border-pf-primary-hi/50 hover:shadow-pf-glow"
     >
       <div className="relative aspect-[3/4] bg-pf-bg-deep">
         <MockupThumb page={page} scroll={scrollState} className="size-full" />
 
+        {/* Click target for the preview. Covers the thumbnail only, so the
+            footer stays selectable text and the actions row sits above it. */}
+        <button
+          type="button"
+          onClick={onOpen}
+          onFocus={() => run(1, 7.5)}
+          onBlur={() => run(0, 0.55)}
+          aria-label={`Open ${page.label} preview`}
+          className="absolute inset-0 z-10 cursor-pointer"
+        />
+
+        <CardActions page={page} />
+
         {/* Scroll position indicator — only visible while scrubbing. */}
         <motion.div
-          className="absolute right-1.5 top-2 bottom-2 w-[2px] rounded-full bg-white/10"
+          className="pointer-events-none absolute bottom-2 right-1.5 top-2 z-10 w-[2px] rounded-full bg-white/10"
           initial={{ opacity: 0 }}
           animate={{ opacity: scrollState > 0.01 ? 1 : 0 }}
           transition={{ duration: 0.2 }}
@@ -79,7 +91,7 @@ export function ResultCard({
         </motion.div>
 
         {rebuilding && (
-          <div className="absolute inset-0 grid place-items-center bg-pf-bg/70 backdrop-blur-sm">
+          <div className="absolute inset-0 z-10 grid place-items-center bg-pf-bg/70 backdrop-blur-sm">
             <motion.span
               animate={reduced ? {} : { rotate: 360 }}
               transition={{ duration: 1.6, repeat: Infinity, ease: "linear" }}
@@ -90,7 +102,7 @@ export function ResultCard({
           </div>
         )}
 
-        <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center gap-1.5 bg-gradient-to-t from-pf-bg/85 to-transparent pb-3 pt-8 text-[11.5px] font-semibold text-pf-text opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+        <span className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-center justify-center gap-1.5 bg-gradient-to-t from-pf-bg/85 to-transparent pb-3 pt-8 text-[11.5px] font-semibold text-pf-text opacity-0 transition-opacity duration-200 group-hover:opacity-100">
           <Icon name="Maximize" size={12} />
           Open preview
         </span>
@@ -115,6 +127,6 @@ export function ResultCard({
           {String(index + 1).padStart(2, "0")}
         </span>
       </div>
-    </motion.button>
+    </motion.div>
   );
 }
