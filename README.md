@@ -191,6 +191,15 @@ say it is worth building.
 > a separate absolutely-positioned button covering the thumbnail as the preview
 > target and the actions row layered above it.
 
+> Second structure note: the card root carries no `overflow-hidden`. It used to,
+> so the mockup stayed inside the rounded corners — but it also clipped the
+> tooltip, which has to reach above the card's top edge, leaving only the arrow
+> tip visible. The clip now sits on the thumbnail wrapper, which is the only
+> element that needs it, and the actions row is a sibling of that wrapper rather
+> than a child. `hover:z-30` on the card keeps the escaped tooltip above its
+> neighbours, and the tooltip flips below the button when the card is scrolled
+> within 132px of the viewport top.
+
 ## Animation inventory
 
 Every animation, and what a `prefers-reduced-motion: reduce` user gets instead.

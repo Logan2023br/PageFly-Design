@@ -59,9 +59,15 @@ export function ResultCard({
       onHoverEnd={() => run(0, 0.55)}
       whileHover={reduced ? undefined : { y: -4 }}
       transition={{ type: "spring", stiffness: 420, damping: 34 }}
-      className="group relative w-full overflow-hidden rounded-pf-card border border-pf-border bg-pf-card text-left shadow-pf-card transition-shadow duration-200 hover:border-pf-primary-hi/50 hover:shadow-pf-glow"
+      /* No `overflow-hidden` on the card itself. It used to be here so the
+         mockup stayed inside the rounded corners, but it also clipped the
+         "Import to editor" tooltip, which has to escape the card's top edge —
+         only the arrow tip showed. The clip now lives on the thumbnail wrapper
+         below, which is the only thing that actually needs it.
+         `hover:z-30` keeps the escaped tooltip above neighbouring cards. */
+      className="group relative z-0 w-full rounded-pf-card border border-pf-border bg-pf-card text-left shadow-pf-card transition-shadow duration-200 hover:z-30 hover:border-pf-primary-hi/50 hover:shadow-pf-glow"
     >
-      <div className="relative aspect-[3/4] bg-pf-bg-deep">
+      <div className="relative aspect-[3/4] overflow-hidden rounded-t-pf-card bg-pf-bg-deep">
         <MockupThumb page={page} scroll={scrollState} className="size-full" />
 
         {/* Click target for the preview. Covers the thumbnail only, so the
@@ -74,8 +80,6 @@ export function ResultCard({
           aria-label={`Open ${page.label} preview`}
           className="absolute inset-0 z-10 cursor-pointer"
         />
-
-        <CardActions page={page} />
 
         {/* Scroll position indicator — only visible while scrubbing. */}
         <motion.div
@@ -107,6 +111,11 @@ export function ResultCard({
           Open preview
         </span>
       </div>
+
+      {/* Outside the thumbnail wrapper on purpose: that wrapper clips, and the
+          tooltip on the locked button has to reach above the card's top edge.
+          Positioned against the card root, which lands in the same place. */}
+      <CardActions page={page} />
 
       <div className="flex items-center justify-between gap-2 border-t border-pf-border px-3.5 py-3">
         <span className="min-w-0">

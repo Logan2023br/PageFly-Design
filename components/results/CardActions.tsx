@@ -23,7 +23,18 @@ export function CardActions({ page }: { page: PageMockup }) {
   const brief = useStore((s) => s.brief);
   const [state, setState] = useState<CopyState>("idle");
   const [tip, setTip] = useState(false);
+  /* The tooltip normally sits above the button. If the card has been scrolled
+     near the top of the viewport there is no room up there, so it flips below —
+     measured on hover rather than guessed, since it depends on scroll position. */
+  const [below, setBelow] = useState(false);
+  const lockRef = useRef<HTMLButtonElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const openTip = () => {
+    const top = lockRef.current?.getBoundingClientRect().top ?? 999;
+    setBelow(top < 132);
+    setTip(true);
+  };
 
   useEffect(
     () => () => {
@@ -82,12 +93,13 @@ export function CardActions({ page }: { page: PageMockup }) {
           point of this control right now is its hover message. */}
       <div className="pointer-events-auto relative">
         <button
+          ref={lockRef}
           type="button"
           aria-disabled="true"
           onClick={(e) => e.preventDefault()}
-          onMouseEnter={() => setTip(true)}
+          onMouseEnter={openTip}
           onMouseLeave={() => setTip(false)}
-          onFocus={() => setTip(true)}
+          onFocus={openTip}
           onBlur={() => setTip(false)}
           className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-pf-md bg-pf-bg/70 px-2.5 py-1.5 text-[11.5px] font-semibold text-pf-faint shadow-pf-float backdrop-blur transition-colors duration-150 hover:text-pf-muted"
         >
@@ -99,16 +111,21 @@ export function CardActions({ page }: { page: PageMockup }) {
           {tip && (
             <motion.div
               role="tooltip"
-              initial={{ opacity: 0, y: 4, scale: 0.97 }}
+              initial={{ opacity: 0, y: below ? -4 : 4, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 4, scale: 0.97 }}
+              exit={{ opacity: 0, y: below ? -4 : 4, scale: 0.97 }}
               transition={{ duration: 0.16 }}
-              className="absolute bottom-[calc(100%+8px)] right-0 w-[236px] rounded-pf-md border border-pf-border bg-pf-bg-deep px-3 py-2.5 text-left text-[11.5px] leading-snug text-pf-body shadow-pf-float"
+              className={`absolute right-0 z-40 w-[236px] rounded-pf-md border border-pf-border bg-pf-bg-deep px-3 py-2.5 text-left text-[11.5px] leading-snug text-pf-body shadow-pf-float ${
+                below ? "top-[calc(100%+8px)]" : "bottom-[calc(100%+8px)]"
+              }`}
             >
               Coming soon. We&apos;ll build direct import into the editor if
               enough merchants tell us this is worth having.
-              {/* arrow */}
-              <span className="absolute -bottom-1 right-5 size-2 rotate-45 border-b border-r border-pf-border bg-pf-bg-deep" />
+              <span
+                className={`absolute right-5 size-2 rotate-45 border-pf-border bg-pf-bg-deep ${
+                  below ? "-top-1 border-l border-t" : "-bottom-1 border-b border-r"
+                }`}
+              />
             </motion.div>
           )}
         </AnimatePresence>
