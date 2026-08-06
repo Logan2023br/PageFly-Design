@@ -56,7 +56,19 @@ const URL_VARS = [
 ] as const;
 
 function databaseUrlVar(): string | null {
-  return URL_VARS.find((name) => Boolean(process.env[name])) ?? null;
+  const known = URL_VARS.find((name) => Boolean(process.env[name]));
+  if (known) return known;
+
+  /* Last resort: find ANY variable holding a Postgres connection string.
+     Vercel's storage integrations offer a "Custom Prefix" that renames the
+     injected variables, so a project set up with one would have a perfectly good
+     database and this app would silently use a temp file instead — the failure
+     looks like data loss and gives no hint that a name is the cause. Matching on
+     the value rather than the name cannot be defeated by renaming. */
+  for (const [name, value] of Object.entries(process.env)) {
+    if (typeof value === "string" && /^postgres(ql)?:\/\//.test(value)) return name;
+  }
+  return null;
 }
 
 function databaseUrl(): string | null {
