@@ -43,7 +43,6 @@ export async function GET() {
   /* Only in production. In development the file-backed driver takes over and the
      app works, so calling this "blocking" there would be the same wrong-diagnosis
      mistake this endpoint exists to prevent. */
-  const production = process.env.NODE_ENV === "production";
   /* Vercel and anything like it: many short-lived instances, no shared disk. */
   const serverless = Boolean(process.env.VERCEL);
 
