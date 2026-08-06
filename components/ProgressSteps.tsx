@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import { useStore, type Screen } from "@/lib/store";
 import { useAccount } from "./AccountProvider";
+import { StoreMenu } from "./StoreMenu";
 import { Icon } from "./ui";
 
 const STEPS: { id: Screen; label: string }[] = [
@@ -107,7 +108,10 @@ export function ProgressSteps() {
 
       <WorkspaceNav current="design" />
 
-      <ol className="hidden items-center gap-1 md:flex sm:gap-2">
+      {/* Steps give way to the store identity before they crowd it: which store
+          this is matters on every screen, whereas the step indicator only says
+          something the screen already shows. */}
+      <ol className="hidden items-center gap-1 xl:flex sm:gap-2">
         {STEPS.map((step, i) => {
           const done = i < current;
           const active = i === current;
@@ -161,6 +165,8 @@ export function ProgressSteps() {
           );
         })}
       </ol>
+
+      <StoreMenu />
     </nav>
   );
 }

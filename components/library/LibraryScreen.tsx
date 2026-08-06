@@ -14,6 +14,7 @@ import { ExportProvider } from "../results/ExportProvider";
 import { ResultsScreen } from "../results/ResultsScreen";
 import { PageQuota, WorkspaceNav } from "../ProgressSteps";
 import { ReviewPrompt } from "../review/ReviewPrompt";
+import { StoreMenu } from "../StoreMenu";
 import { Button, Icon, Panel } from "../ui";
 
 /* ==========================================================================
@@ -180,9 +181,7 @@ export function LibraryScreen({
                 <PageQuota />
               </div>
               <WorkspaceNav current="library" />
-              <div className="hidden text-[12px] text-pf-muted md:block">
-                {account?.domain ?? ""}
-              </div>
+              <StoreMenu />
             </header>
 
             <div className="pt-4">
