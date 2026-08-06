@@ -3,9 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import type { PageMockup } from "@/lib/generate/types";
-import { buildFlyMatePrompt } from "@/lib/promptExport";
-import { copyText } from "@/lib/clipboard";
-import { useStore } from "@/lib/store";
+import { useExport } from "./ExportProvider";
 import { Icon } from "../ui";
 
 /* ==========================================================================
@@ -17,11 +15,14 @@ import { Icon } from "../ui";
    button for "open preview"; this row sits above it on a higher layer.
    ========================================================================== */
 
-type CopyState = "idle" | "copied" | "failed";
+export const LOCKED_TOOLTIP =
+  "This feature will be available in a future update.";
+
+type ExportState = "idle" | "done" | "failed";
 
 export function CardActions({ page }: { page: PageMockup }) {
-  const brief = useStore((s) => s.brief);
-  const [state, setState] = useState<CopyState>("idle");
+  const { exportPagefly, exporting } = useExport();
+  const [state, setState] = useState<ExportState>("idle");
   const [tip, setTip] = useState(false);
   /* The tooltip normally sits above the button. If the card has been scrolled
      near the top of the viewport there is no room up there, so it flips below —
@@ -43,31 +44,36 @@ export function CardActions({ page }: { page: PageMockup }) {
     [],
   );
 
-  const onCopy = async () => {
-    const ok = await copyText(buildFlyMatePrompt(page, brief));
-    setState(ok ? "copied" : "failed");
+  const onExport = async () => {
+    try {
+      await exportPagefly(page);
+      setState("done");
+    } catch {
+      setState("failed");
+    }
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => setState("idle"), 2200);
   };
 
   const label =
-    state === "copied"
-      ? "Prompt copied"
+    state === "done"
+      ? "Exported"
       : state === "failed"
-        ? "Couldn't copy"
-        : "Copy prompt";
+        ? "Export failed"
+        : exporting
+          ? "Exporting…"
+          : "Export";
 
   return (
-    <div
-      className="pointer-events-none absolute inset-x-2 top-2 z-20 flex items-start justify-between gap-2 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100"
-    >
-      {/* ---- copy prompt ---- */}
+    <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex items-start justify-between gap-2 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
+      {/* ---- export .pagefly ---- */}
       <button
         type="button"
-        onClick={onCopy}
-        title="Copy a full build spec for this page, ready to paste into FlyMate"
-        className={`pointer-events-auto inline-flex items-center gap-1.5 rounded-pf-md px-2.5 py-1.5 text-[11.5px] font-semibold shadow-pf-float backdrop-blur transition-colors duration-150 ${
-          state === "copied"
+        onClick={() => void onExport()}
+        disabled={exporting}
+        title="Download this page as a .pagefly file you can import into PageFly"
+        className={`pointer-events-auto inline-flex items-center gap-1.5 rounded-pf-md px-2.5 py-1.5 text-[11.5px] font-semibold shadow-pf-float backdrop-blur transition-colors duration-150 disabled:cursor-not-allowed ${
+          state === "done"
             ? "bg-pf-success text-pf-bg"
             : state === "failed"
               ? "bg-pf-danger text-white"
@@ -76,11 +82,11 @@ export function CardActions({ page }: { page: PageMockup }) {
       >
         <Icon
           name={
-            state === "copied"
+            state === "done"
               ? "CircleCheck"
               : state === "failed"
                 ? "CircleAlert"
-                : "ClipboardList"
+                : "Download"
           }
           size={13}
         />
@@ -119,8 +125,7 @@ export function CardActions({ page }: { page: PageMockup }) {
                 below ? "top-[calc(100%+8px)]" : "bottom-[calc(100%+8px)]"
               }`}
             >
-              Coming soon. We&apos;ll build direct import into the editor if
-              enough merchants tell us this is worth having.
+              {LOCKED_TOOLTIP}
               <span
                 className={`absolute right-5 size-2 rotate-45 border-pf-border bg-pf-bg-deep ${
                   below ? "-top-1 border-l border-t" : "-bottom-1 border-b border-r"

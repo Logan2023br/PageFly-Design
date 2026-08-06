@@ -1,11 +1,12 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { CATEGORY_BY_ID, PAGE_BY_ID, type CategoryId } from "@/lib/pageCatalog";
 import { useStore, useVisiblePages } from "@/lib/store";
 import { Button, Chip, Icon, InlineError, Panel } from "../ui";
 import { useExport } from "./ExportProvider";
+import { LOCKED_TOOLTIP } from "./CardActions";
 import { ResultCard } from "./ResultCard";
 
 /* ---- partial-failure notice -------------------------------------------- */
@@ -56,7 +57,8 @@ function Toolbar() {
   const editBrief = useStore((s) => s.editBrief);
   const regenerateAll = useStore((s) => s.regenerateAll);
   const visible = useVisiblePages();
-  const { exportAll, exporting, progress } = useExport();
+  const { exportAll, exportPageflyAll, exporting, progress } = useExport();
+  const [lockedTip, setLockedTip] = useState(false);
 
   // Only offer filters for categories that actually produced pages.
   const categories = useMemo(() => {
@@ -100,6 +102,52 @@ function Toolbar() {
           >
             {exporting ? `Exporting ${progress ?? ""}` : "PNG"}
           </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            icon="Download"
+            disabled={exporting || visible.length === 0}
+            onClick={() => void exportPageflyAll(visible)}
+            title={`Download ${visible.length} .pagefly file${visible.length === 1 ? "" : "s"} to import into PageFly`}
+          >
+            {exporting ? `Exporting ${progress ?? ""}` : "Export all"}
+          </Button>
+
+          {/* Not built yet. aria-disabled rather than disabled so the control
+              still fires pointer events — its hover message is the point. */}
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="sm"
+              icon="Lock"
+              aria-disabled="true"
+              onClick={(e) => e.preventDefault()}
+              onMouseEnter={() => setLockedTip(true)}
+              onMouseLeave={() => setLockedTip(false)}
+              onFocus={() => setLockedTip(true)}
+              onBlur={() => setLockedTip(false)}
+              className="cursor-not-allowed text-pf-faint hover:text-pf-muted"
+            >
+              Import to editor all
+            </Button>
+
+            <AnimatePresence>
+              {lockedTip && (
+                <motion.div
+                  role="tooltip"
+                  initial={{ opacity: 0, y: -4, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                  transition={{ duration: 0.16 }}
+                  className="absolute right-0 top-[calc(100%+8px)] z-40 w-[236px] rounded-pf-md border border-pf-border bg-pf-bg-deep px-3 py-2.5 text-left text-[11.5px] leading-snug text-pf-body shadow-pf-float"
+                >
+                  {LOCKED_TOOLTIP}
+                  <span className="absolute -top-1 right-5 size-2 rotate-45 border-l border-t border-pf-border bg-pf-bg-deep" />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </div>
 

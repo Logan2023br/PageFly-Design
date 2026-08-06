@@ -476,6 +476,7 @@ export function DataTable({
   const isMobile = bp === "mobile";
 
   const cell = (
+    key: string,
     value: string,
     opts: { head?: boolean; highlight?: boolean; first?: boolean },
   ) => {
@@ -483,6 +484,7 @@ export function DataTable({
       content.booleanCells && (value === "yes" || value === "no");
     return (
       <div
+        key={key}
         style={{
           padding: isMobile ? "10px 10px" : "13px 16px",
           fontFamily: tokens.fontBody,
@@ -520,7 +522,7 @@ export function DataTable({
           }}
         >
           {content.columns.map((c, i) =>
-            cell(c, {
+            cell(`h${i}`, c, {
               head: true,
               first: i === 0,
               highlight: i === content.highlightColumn,
@@ -538,7 +540,7 @@ export function DataTable({
               }}
             >
               {row.map((v, ci) =>
-                cell(v, {
+                cell(`r${ri}c${ci}`, v, {
                   first: ci === 0,
                   highlight: ci === content.highlightColumn,
                 }),

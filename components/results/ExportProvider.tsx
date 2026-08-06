@@ -11,6 +11,8 @@ import {
 } from "react";
 import type { PageMockup } from "@/lib/generate/types";
 import { captureNode, downloadDataUrl, nextPaint, slugify } from "@/lib/png";
+import { downloadBlob } from "@/lib/pagefly/builder";
+import { pageFromDom } from "@/lib/pagefly/fromDom";
 import { MockupPage } from "../mockup/MockupPage";
 
 /* ==========================================================================
@@ -28,6 +30,10 @@ type ExportState = {
   error: string | null;
   exportOne: (page: PageMockup) => Promise<void>;
   exportAll: (pages: PageMockup[]) => Promise<void>;
+  /** .pagefly import file for one page */
+  exportPagefly: (page: PageMockup) => Promise<void>;
+  /** one .pagefly per page, downloaded in sequence */
+  exportPageflyAll: (pages: PageMockup[]) => Promise<void>;
   clearError: () => void;
 };
 
@@ -59,6 +65,67 @@ export function ExportProvider({ children }: { children: ReactNode }) {
     const suffix = page.copyTotal && page.copyTotal > 1 ? `-${page.copyIndex}` : "";
     downloadDataUrl(dataUrl, `${slugify(page.label)}${suffix}.png`);
   }, []);
+
+  /* Same staged render the PNG capture uses. The DOM it produces already holds
+     the exact inline CSS that drew the mockup, so the export copies rather than
+     re-derives it — see lib/pagefly/fromDom.ts. */
+  const buildPagefly = useCallback(async (page: PageMockup) => {
+    setStaged(page);
+    await nextPaint();
+    await nextPaint();
+    const node = stageRef.current;
+    if (!node) throw new Error("Export surface not ready");
+    const { blob, filename } = pageFromDom(node, page, EXPORT_WIDTH);
+    downloadBlob(blob, filename);
+  }, []);
+
+  const exportPagefly = useCallback(
+    async (page: PageMockup) => {
+      setExporting(true);
+      setError(null);
+      try {
+        await buildPagefly(page);
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? `Couldn't build the .pagefly file: ${err.message}`
+            : "Couldn't build the .pagefly file.",
+        );
+      } finally {
+        setStaged(null);
+        setExporting(false);
+      }
+    },
+    [buildPagefly],
+  );
+
+  const exportPageflyAll = useCallback(
+    async (pages: PageMockup[]) => {
+      setExporting(true);
+      setError(null);
+      const failed: string[] = [];
+      try {
+        for (let i = 0; i < pages.length; i++) {
+          setProgress(`${i + 1} of ${pages.length}`);
+          try {
+            await buildPagefly(pages[i]);
+          } catch {
+            failed.push(pages[i].label);
+          }
+        }
+        if (failed.length) {
+          setError(
+            `${failed.length} of ${pages.length} page${failed.length === 1 ? "" : "s"} wouldn't export (${failed.join(", ")}). The rest downloaded.`,
+          );
+        }
+      } finally {
+        setStaged(null);
+        setProgress(null);
+        setExporting(false);
+      }
+    },
+    [buildPagefly],
+  );
 
   const exportOne = useCallback(
     async (page: PageMockup) => {
@@ -111,9 +178,19 @@ export function ExportProvider({ children }: { children: ReactNode }) {
       error,
       exportOne,
       exportAll,
+      exportPagefly,
+      exportPageflyAll,
       clearError: () => setError(null),
     }),
-    [exporting, progress, error, exportOne, exportAll],
+    [
+      exporting,
+      progress,
+      error,
+      exportOne,
+      exportAll,
+      exportPagefly,
+      exportPageflyAll,
+    ],
   );
 
   return (

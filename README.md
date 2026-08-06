@@ -80,8 +80,9 @@ lib/
 ├── palette.ts                → pure colour merge, safe on the server
 ├── mockArt.ts                → drawn product silhouettes per vertical
 ├── refLayout.ts              → layout fingerprint → generation hints (pure)
-├── promptExport.ts           → PageMockup → a FlyMate build spec
-├── clipboard.ts              → copy with a non-secure-context fallback
+├── pagefly/
+│   ├── builder.ts            → PageFly node/zip builder (port of the skill's Python)
+│   └── fromDom.ts            → rendered mockup DOM → .pagefly
 ├── store.ts                  → zustand: brief + results
 └── png.ts                    → client-side capture helpers
 
@@ -157,33 +158,47 @@ The feature is one component tree under one class. Nothing leaks out.
 
 Hovering a result card reveals two controls.
 
-**Copy prompt** turns the mockup into a build spec for PageFly's FlyMate, which
-builds pages from text. It is not a summary — a vague prompt is a page FlyMate
-invents differently from the mockup you approved. So the export is written to
-three rules:
+**Export** downloads that page as a `.pagefly` file — the import format for
+PageFly's Flex editor (a zip holding one `1 - <name>.json`). Drop it into
+PageFly → Pages → Import and the page opens in the editor.
 
-- **Exact values, never adjectives.** `#0E0D0B`, not "dark". `3px solid #000000`,
-  not "thick borders".
-- **Every section numbered, in order.** FlyMate composes top to bottom; an
-  unordered feature list produces a different page each run.
-- **Copy verbatim in quotes**, with an explicit instruction not to rewrite it.
-  The headline came from the merchant's brief — having it paraphrased loses the
-  thing they approved.
+The export does **not** re-implement the layout. The mockup renders with inline
+styles exclusively — 250 `style={{…}}` across the block components, zero
+classNames — so the rendered DOM already carries, on every element, the exact
+CSS string that produced the picture. `lib/pagefly/fromDom.ts` walks that DOM and
+copies `getAttribute("style")` verbatim into `styleData`. **The exported CSS is
+the CSS that drew the mockup, not a translation of it**, so there is one layout
+and nothing to drift. Drawn artwork (`MockImage` — gradients plus an inline SVG)
+goes through as a single `Custom.HTML` node carrying its `outerHTML`, so imagery
+is reproduced rather than approximated.
 
-A Home page export runs to about 920 words: full palette, type, radii, spacing
-and image treatment, then all nine sections with their real copy, then the
-responsive rules and a short "do not" list. The mockup is the only source, so a
-prompt can never drift from the page it describes.
-
-The button becomes **Prompt copied** for two seconds, or **Couldn't copy** if the
-clipboard is unavailable — `navigator.clipboard` needs a secure context, so
-there is a hidden-textarea fallback for plain-HTTP LAN testing.
+It reuses the same off-screen 1440px stage the PNG export already mounts.
 
 **Import to editor** is deliberately inert: faded, padlocked, `aria-disabled`
 rather than `disabled` (a disabled button stops firing pointer events in some
 browsers, and the hover message is the entire point of the control right now).
-Hovering shows a tooltip above it saying direct import ships if enough merchants
-say it is worth building.
+
+### How closely the import matches the mockup
+
+Everything expressible as CSS is carried over byte-for-byte: colours, padding,
+gaps, border widths and radii, font sizes, weights, letter-spacing, flex
+structure. Three things are **not** under the file's control, and an import will
+differ from the mockup by exactly these:
+
+| | Why |
+|---|---|
+| **Fonts** | Styles use generic families (`ui-serif`, `ui-rounded`, `"SF Pro Rounded"`). Those resolve to different real fonts per OS, and different metrics re-wrap text, which changes heights down the page. |
+| **Host theme CSS** | A PageFly page renders inside a Shopify theme that injects its own base `font-size`, `line-height`, and margins. |
+| **Container width** | `pf-container-2` is PageFly's container, not the mockup's 1180px content column. |
+
+The export mitigates the last two with a page-level `customCSS` reset scoped to
+`.pf-design-export` and an explicit max-width, but a **pixel-identical** result
+cannot be promised across arbitrary themes and machines. Load the same fonts in
+the theme to close most of the remaining gap.
+
+**Export all** in the toolbar downloads one `.pagefly` per visible page in
+sequence. **Import to editor all** is locked with the same tooltip as the
+per-card control.
 
 > Structure note: adding these buttons meant the card could no longer *be* a
 > button. A button inside a button is invalid HTML — the browser hoists the inner
@@ -311,12 +326,15 @@ Checked, not assumed:
   toggle, stepper clamping, 30-cap, colour add/dedupe/reject — all pass.
 - Tunnel access: with `allowedDevOrigins` set, JS chunks return 200 for ngrok and
   Cloudflare hosts and still 403 for an unlisted one, so the protection holds.
-- Prompt export: all **45** page types produce a spec whose numbered sections
-  match their block count exactly, and all **34** block kinds produce a
-  description — no page can export a section as a blank line.
-- All **15** visual styles cite their own `bg`, `surfaceAlt`, `ink`, `accent` and
-  `accentInk` verbatim, and carry the uppercase and square-corner instructions
-  when the style calls for them.
+- `.pagefly` export: all **45** page types and all **15** styles build without
+  error (6,881 nodes total). Verified by rendering each mockup with
+  `react-dom/server`, walking the result in jsdom, and unzipping the output —
+  schema keys all present, single `Body` root, `Layout` present, per-item
+  `styles` all `[]`, every style entry points at a real item, and every
+  `styles` field is a valid JSON string.
+- Fidelity spot-check on a Luxury Home page: the exported CSS contains the
+  page's own `bg`, `surfaceAlt`, `ink` and `accent` values verbatim, plus its
+  uppercase-heading and serif rules.
 - `npm run build`, `npx tsc --noEmit` and `npx eslint .` all clean.
 
 Not verified: the mockups have not been eyeballed in a browser during this
