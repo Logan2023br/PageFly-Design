@@ -1,6 +1,6 @@
 import { builtinStores } from "@/lib/allowlist";
 import { hasDatabase } from "@/lib/db";
-import { hasSessionSecret, hasStableSecret } from "@/lib/session";
+import { hasSessionSecret, hasStableSecret, keySource } from "@/lib/session";
 import { sheetSource } from "@/lib/sheet";
 
 /* ==========================================================================
@@ -26,6 +26,8 @@ export async function GET() {
     /* A generated secret on disk is stable; one that could not be written is not,
        and that difference decides whether anyone stays signed in. */
     sessionSecretStable: hasStableSecret(),
+    /** env | derived | file | ephemeral — see lib/session.ts */
+    sessionKeySource: keySource(),
     allowlistSource: sheetSource(),
     /* Push-only setups have no pull source, which is correct, not missing —
        hence reporting both rather than one "sheet ok" boolean. */
@@ -66,14 +68,12 @@ export async function GET() {
         "written anywhere. Sessions cannot work — set SESSION_SECRET.",
     );
 
-  /* On serverless the generated key lives in this instance's /tmp, which no other
-     instance can read. A cookie signed here fails verification there, so the
-     merchant is signed out at random and it looks like a routing fault. Nothing in
-     the code can fix that: the key has to come from the environment. */
-  if (!checks.sessionSecret && serverless)
+  /* Only when there is genuinely no key every instance agrees on. A derived key
+     satisfies that, so this no longer fires just because SESSION_SECRET is unset. */
+  if (serverless && checks.sessionKeySource === "ephemeral")
     blocking.push(
-      "SESSION_SECRET must be set on serverless. A generated key is per-instance, " +
-        "so a sign-in breaks as soon as the next request lands elsewhere.",
+      "No shared signing key on serverless: sign-ins break as soon as a request " +
+        "lands on another instance. Set SESSION_SECRET.",
     );
 
   const advisory: string[] = [];
@@ -82,10 +82,16 @@ export async function GET() {
       `Running on the built-in allowlist (${checks.builtinStores} store${checks.builtinStores === 1 ? "" : "s"}). ` +
         "Add a sheet source, or BETA_STORES, to admit more without a deploy.",
     );
-  if (!checks.sessionSecret && checks.sessionSecretStable && !serverless)
+  if (checks.sessionKeySource === "derived")
+    advisory.push(
+      "SESSION_SECRET is not set — sessions are signed with a key derived from the " +
+        "platform's project identifiers. Works across instances, but anyone with " +
+        "project access can derive it. Set SESSION_SECRET before this is public.",
+    );
+  if (checks.sessionKeySource === "file" && !serverless)
     advisory.push(
       "SESSION_SECRET is not set — a generated key on disk is in use, so sign-ins " +
-        "last as long as that file. Set it to survive redeploys.",
+        "last as long as that file. Set it to survive a rebuild.",
     );
   if (!checks.database && serverless)
     advisory.push(

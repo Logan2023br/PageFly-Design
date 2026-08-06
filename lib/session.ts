@@ -67,14 +67,61 @@ function secretFile(): string {
   return join(dirname(dataFile), ".pfd-session-secret");
 }
 
+/**
+ * A key derived from the platform's own project identifiers.
+ *
+ * This is what makes serverless work with nothing configured. Every instance of a
+ * deployment sees the same VERCEL_PROJECT_ID, so all of them derive the same key
+ * and a cookie signed by one verifies on the next — which a key generated into a
+ * per-instance /tmp can never do.
+ *
+ * It is NOT a secret in the strict sense: anyone with access to the Vercel project
+ * can read those identifiers. It is not published by this app, and someone with
+ * project access already has more power than forging a cookie would give them, so
+ * it is a real improvement over signing with a value that changes per instance.
+ * SESSION_SECRET still wins wherever it is set, and /api/health keeps saying so.
+ */
+function derivedKey(): string | null {
+  const parts = [
+    process.env.VERCEL_PROJECT_ID,
+    process.env.VERCEL_PROJECT_PRODUCTION_URL,
+    process.env.VERCEL_ENV,
+  ].filter(Boolean);
+  if (parts.length === 0) return null;
+
+  return createHmac("sha256", "pfd-derived-session-key-v1")
+    .update(parts.join("|"))
+    .digest("base64url");
+}
+
+export type KeySource = "env" | "derived" | "file" | "ephemeral";
+
 let cached: string | null = null;
-/** Whether the generated key reached disk. null until a key has been needed. */
-let persisted: boolean | null = null;
+let source: KeySource | null = null;
 
 function secret(): string {
-  const value = process.env.SESSION_SECRET;
-  if (value && value.length >= 16) return value;
+  const configured = process.env.SESSION_SECRET;
+  if (configured && configured.length >= 16) {
+    source = "env";
+    return configured;
+  }
+
   if (cached) return cached;
+
+  /* Order matters, and it is different per host. On serverless the derived key is
+     tried FIRST: a file in /tmp belongs to one instance, so preferring it there
+     would sign cookies nobody else can verify. On a real server the file is the
+     better answer — it is a true random secret and it survives restarts. */
+  const onServerless = Boolean(process.env.VERCEL);
+
+  if (onServerless) {
+    const derived = derivedKey();
+    if (derived) {
+      cached = derived;
+      source = "derived";
+      return cached;
+    }
+  }
 
   const file = secretFile();
   try {
@@ -82,7 +129,7 @@ function secret(): string {
       const stored = readFileSync(file, "utf8").trim();
       if (stored.length >= 16) {
         cached = stored;
-        persisted = true;
+        source = "file";
         return cached;
       }
     }
@@ -95,16 +142,31 @@ function secret(): string {
     mkdirSync(dirname(file), { recursive: true });
     /* Owner-only. This is the key that signs admin sessions. */
     writeFileSync(file, generated, { mode: 0o600 });
-    persisted = true;
+    cached = generated;
+    source = "file";
+    return cached;
   } catch {
-    persisted = false;
-    /* Read-only filesystem. Sessions then work only within this module instance,
-       which is the broken case described above — but returning something is still
-       better than throwing at sign-in. hasSessionSecret() reports the risk. */
+    // Read-only filesystem and no derived key available.
   }
 
+  const derived = derivedKey();
+  if (derived) {
+    cached = derived;
+    source = "derived";
+    return cached;
+  }
+
+  /* Last resort: usable within this module instance only. Sessions will fail
+     across instances, which hasStableSecret() reports. */
   cached = generated;
+  source = "ephemeral";
   return cached;
+}
+
+/** Where the signing key came from, for diagnostics. */
+export function keySource(): KeySource {
+  secret();
+  return source ?? "ephemeral";
 }
 
 /**
@@ -115,9 +177,11 @@ function secret(): string {
  * healthy deployment where simply nothing had needed a key yet.
  */
 export function hasStableSecret(): boolean {
-  if (hasSessionSecret()) return true;
-  secret();
-  return persisted === true;
+  const from = keySource();
+  /* "file" is stable on a server with a disk; on serverless the file path is a
+     per-instance /tmp, so it is not. */
+  if (from === "file") return !process.env.VERCEL;
+  return from === "env" || from === "derived";
 }
 
 /** True when SESSION_SECRET is properly set, so sessions survive a restart. */

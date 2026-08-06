@@ -259,11 +259,19 @@ not, a key is generated and written beside the data store. Never a hardcoded
 default — that would sit in a public repository and anyone who read it could mint
 an admin cookie.
 
-On serverless `SESSION_SECRET` is effectively **required**, not advisory. The
-generated key lands in that instance's `/tmp`, which no other instance can read, so
-a cookie signed by one is rejected by the next and the merchant is signed out at
-random — which presents as a routing fault, not a signing one. `/api/health`
-reports that as blocking when it detects a serverless host.
+On serverless the key is instead **derived from the platform's project
+identifiers**, because every instance of a deployment sees the same ones. A key
+generated into a per-instance `/tmp` cannot work there: a cookie signed by one
+instance is rejected by the next, and the merchant is signed out at random —
+which presents as a routing fault rather than a signing one, and is exactly how it
+was first reported.
+
+A derived key is not a secret in the strict sense: anyone with access to the Vercel
+project can recompute it. It is not published by the app, and project access is
+already more power than forging a cookie would grant, so it is a real improvement
+over signing with a value that differs per instance. `SESSION_SECRET` still wins
+wherever it is set, and `/api/health` reports which of the four sources is in use
+(`env`, `derived`, `file`, `ephemeral`).
 
 The key has to be on disk rather than in memory, and that is not a preference: a
 server component and a route handler are separate module instances with separate
