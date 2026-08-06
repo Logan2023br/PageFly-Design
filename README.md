@@ -194,11 +194,21 @@ count, token spend) · `run_pages` (one row per page, so the Library and the quo
 counter read from the same place) · `reviews` (one row per store, enforced by the
 primary key).
 
-Postgres in production; a file-backed driver takes over in development so a fresh
-clone runs with no credentials. It is never selected in production — quietly
-serving a per-instance in-memory store would look exactly like data loss. One
-dev-only wrinkle: that driver reads its file once at startup, so editing
-`.pfd-dev-db.json` by hand needs a restart.
+Postgres when `DATABASE_URL` (or `POSTGRES_URL`) is set. Otherwise a file-backed
+store, and whether that is acceptable depends on where this runs:
+
+| Where | Verdict |
+|---|---|
+| `npm run dev` | how a fresh clone works with no credentials |
+| One server with a persistent disk (a VPS) | legitimate — opt in with `PFD_STORE=file` |
+| Vercel or anything multi-instance | never. Instances neither share a disk nor keep one, so each answers from its own copy and a merchant's library appears and disappears depending on which one replied |
+
+Production therefore refuses the file store unless it is named explicitly, and the
+admin screens carry a banner saying which store is live — the failure mode is
+indistinguishable from data loss and would be blamed on anything but the store.
+
+One wrinkle: that driver reads its file once at startup, so editing the JSON by
+hand needs a restart.
 
 ### The allowlist
 
@@ -208,6 +218,12 @@ service account, any CSV URL, or an n8n push to `/api/admin/sync` — and all th
 land in the same mapper. Columns are matched by folded name rather than by
 position, so inserting a column does not shift every field by one, and the
 sheet's existing `Reivew` spelling is matched alongside the correct one.
+
+There is also a fourth route that needs no setup at all: **Admin → Users → "Paste
+the sheet instead"**, which takes rows pasted straight out of Google Sheets (tab
+separated or CSV) through the same parser. That exists because the two clean
+options both need provisioning first, and this is the difference between the beta
+being testable today and testable once a Google Cloud project exists.
 
 A sign-in reads the database first and only falls back to pulling the sheet for a
 domain it has never seen. Google being slow or unreachable therefore cannot lock

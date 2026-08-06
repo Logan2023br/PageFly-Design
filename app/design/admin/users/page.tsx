@@ -1,8 +1,10 @@
 import { AdminLogin } from "@/components/admin/AdminLogin";
 import { AdminShell } from "@/components/admin/AdminShell";
+import { PasteSheet } from "@/components/admin/PasteSheet";
+import { StoreBanner } from "@/components/admin/StoreBanner";
 import { SyncButton } from "@/components/admin/SyncButton";
 import { UsersTable } from "@/components/admin/UsersTable";
-import { getRepo } from "@/lib/db";
+import { getRepo, storeFile, storeKind } from "@/lib/db";
 import { readAdminSession } from "@/lib/session";
 import { sheetSource } from "@/lib/sheet";
 
@@ -22,7 +24,11 @@ export default async function AdminUsersPage() {
       subtitle={`${stores.length} on the list · ${active} have signed in`}
       actions={<SyncButton source={sheetSource()} />}
     >
-      <UsersTable stores={stores} />
+      <div className="grid gap-4">
+        <StoreBanner kind={storeKind()} file={storeFile()} />
+        <PasteSheet />
+        <UsersTable stores={stores} />
+      </div>
     </AdminShell>
   );
 }

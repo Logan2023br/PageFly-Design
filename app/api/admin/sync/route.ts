@@ -2,7 +2,7 @@ import { timingSafeEqual, createHash } from "node:crypto";
 import { z } from "zod";
 import { getRepo } from "@/lib/db";
 import { readAdminSession } from "@/lib/session";
-import { pullSheet, rowsToStores, sheetSource } from "@/lib/sheet";
+import { parseCsv, pullSheet, rowsToStores, sheetSource } from "@/lib/sheet";
 
 /* ==========================================================================
    POST /api/admin/sync
@@ -12,10 +12,13 @@ import { pullSheet, rowsToStores, sheetSource } from "@/lib/sheet";
    - the admin UI's "Sync now", authorised by the admin session cookie
    - n8n (or any scheduler), authorised by an `x-sync-secret` header
 
-   Two ways to supply data:
+   Three ways to supply data:
 
    - a body with `rows` (raw sheet values, header first) — the push model, which
      needs no Google credentials on our side because the caller already has them
+   - a body with `csv` — the same thing pasted straight out of the spreadsheet,
+     which is the fastest way to get a private sheet in without setting up any
+     Google access at all
    - an empty body — pull through whatever source is configured
 
    The push model is the one to prefer with n8n: the sheet holds merchant email
@@ -23,7 +26,12 @@ import { pullSheet, rowsToStores, sheetSource } from "@/lib/sheet";
    ========================================================================== */
 
 const bodySchema = z
-  .object({ rows: z.array(z.array(z.string())).optional() })
+  .object({
+    rows: z.array(z.array(z.string())).optional(),
+    /** Raw CSV or TSV, header row first. Parsed with the same reader the pull
+        path uses, so a paste and a fetch cannot disagree. */
+    csv: z.string().max(2_000_000).optional(),
+  })
   .optional();
 
 function secretMatches(header: string | null): boolean {
@@ -61,7 +69,17 @@ export async function POST(request: Request) {
     );
   }
 
-  const rows: string[][] | null = body?.rows ?? null;
+  /* Pasting out of Google Sheets yields TAB-separated text, not CSV, and a
+     merchant domain contains no tabs — so a tab in the first line is a reliable
+     signal, and treating it as CSV would read the whole row as one column. */
+  const pasted = body?.csv?.trim();
+  const rows: string[][] | null =
+    body?.rows ??
+    (pasted
+      ? pasted.split("\n")[0].includes("\t")
+        ? pasted.split(/\r?\n/).map((line) => line.split("\t"))
+        : parseCsv(pasted)
+      : null);
 
   if (!rows) {
     const pulled = await pullSheet();
@@ -97,7 +115,7 @@ export async function POST(request: Request) {
   return Response.json({
     ok: true,
     stores: mapped.length,
-    source: "push",
+    source: body?.csv ? "paste" : "push",
   } satisfies SyncResponse);
 }
 

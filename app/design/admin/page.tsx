@@ -2,7 +2,8 @@ import { AdminLogin } from "@/components/admin/AdminLogin";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { StatsView } from "@/components/admin/StatsView";
 import { SyncButton } from "@/components/admin/SyncButton";
-import { getRepo, isEphemeralStore } from "@/lib/db";
+import { StoreBanner } from "@/components/admin/StoreBanner";
+import { getRepo, storeFile, storeKind } from "@/lib/db";
 import { readAdminSession } from "@/lib/session";
 import { sheetSource } from "@/lib/sheet";
 
@@ -18,14 +19,12 @@ export default async function AdminStatsPage() {
     <AdminShell
       current="stats"
       title="Thống kê"
-      subtitle={
-        isEphemeralStore()
-          ? "Development store — numbers are local to this machine and are not durable."
-          : undefined
-      }
       actions={<SyncButton source={sheetSource()} />}
     >
-      <StatsView stats={stats} />
+      <div className="grid gap-4">
+        <StoreBanner kind={storeKind()} file={storeFile()} />
+        <StatsView stats={stats} />
+      </div>
     </AdminShell>
   );
 }

@@ -14,12 +14,27 @@ export type * from "./types";
    from being bundled into the browser. The build fails instead.
 
    Postgres whenever a URL is present, which covers Vercel Postgres, Neon and
-   Supabase alike. Without one, a file-backed driver so the app runs on a fresh
-   clone — but never in production, where quietly serving a private in-memory
-   store per instance would look like data loss.
+   Supabase alike.
+
+   Without one there is a file-backed store, and whether that is acceptable
+   depends entirely on where this runs:
+
+   - On a fresh clone it is how `npm run dev` works with no credentials.
+   - On a SINGLE-INSTANCE server with a persistent disk — a company VPS — it is a
+     legitimate choice, and PFD_STORE=file says so explicitly.
+   - On Vercel it is never acceptable. Serverless instances neither share a disk
+     nor keep one, so each would answer from its own copy and merchants would see
+     their library appear and disappear depending on which instance replied. That
+     is why production refuses it unless opted into by name: the failure looks
+     exactly like data loss and would be blamed on anything but the store.
    ========================================================================== */
 
-const DEV_DB_FILE = process.env.PFD_DEV_DB ?? ".pfd-dev-db.json";
+/** Explicit opt-in for the file store in production. Only safe when exactly one
+    process serves the app and its disk survives restarts. */
+const FILE_STORE = process.env.PFD_STORE === "file";
+
+const DB_FILE =
+  process.env.PFD_DB_FILE ?? process.env.PFD_DEV_DB ?? ".pfd-dev-db.json";
 
 function databaseUrl(): string | null {
   return (
@@ -54,14 +69,27 @@ export function getRepo(): Repo {
     return repo;
   }
 
-  if (process.env.NODE_ENV === "production") throw new MissingDatabaseError();
+  if (process.env.NODE_ENV === "production" && !FILE_STORE)
+    throw new MissingDatabaseError();
 
-  repo = createMemoryRepo(DEV_DB_FILE);
+  repo = createMemoryRepo(DB_FILE);
   return repo;
+}
+
+/** Where data actually goes, for the admin banner. An operator should never have
+    to read code to find out whether their data is durable. */
+export function storeKind(): "postgres" | "file" {
+  return databaseUrl() ? "postgres" : "file";
+}
+
+export function storeFile(): string {
+  return DB_FILE;
 }
 
 /** True when running on the file-backed dev driver, so the UI can say so rather
     than letting someone believe their data is durable. */
+/** True when data lives in a file rather than Postgres. Not the same as "lost on
+    restart" — on a VPS with a real disk the file survives; on Vercel it does not. */
 export function isEphemeralStore(): boolean {
   return databaseUrl() === null;
 }
