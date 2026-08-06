@@ -248,9 +248,17 @@ That is the specified design and it is reasonable for a gated beta, but it is an
 **allowlist, not authentication**, and should not be relied on as one.
 
 Sessions are signed cookies (HMAC, constant-time compare, expiry checked
-server-side as well as by the cookie). `SESSION_SECRET` is required in
-production with no fallback — a hardcoded default in a public repository is a
-forgeable admin cookie. `proxy.ts` (this version of Next renamed `middleware`)
+server-side as well as by the cookie). `SESSION_SECRET` should be set; when it is
+not, a key is generated and written beside the data store. Never a hardcoded
+default — that would sit in a public repository and anyone who read it could mint
+an admin cookie.
+
+The key has to be on disk rather than in memory, and that is not a preference: a
+server component and a route handler are separate module instances with separate
+copies of the module, so a per-process random key meant sign-in signed a cookie
+with one key and the next page verified it against another. Every session failed,
+and only on pages that read it — `/design` still answered 200 with no account,
+which reads as a routing bug rather than a signing one. `proxy.ts` (this version of Next renamed `middleware`)
 only checks that a cookie *exists*, as a fast redirect; every route that acts on
 a session verifies the signature itself.
 

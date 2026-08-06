@@ -1,6 +1,6 @@
 import { builtinStores } from "@/lib/allowlist";
 import { hasDatabase } from "@/lib/db";
-import { hasSessionSecret } from "@/lib/session";
+import { hasSessionSecret, hasStableSecret } from "@/lib/session";
 import { sheetSource } from "@/lib/sheet";
 
 /* ==========================================================================
@@ -23,6 +23,9 @@ export async function GET() {
   const checks = {
     database: hasDatabase(),
     sessionSecret: hasSessionSecret(),
+    /* A generated secret on disk is stable; one that could not be written is not,
+       and that difference decides whether anyone stays signed in. */
+    sessionSecretStable: hasStableSecret(),
     allowlistSource: sheetSource(),
     /* Push-only setups have no pull source, which is correct, not missing —
        hence reporting both rather than one "sheet ok" boolean. */
@@ -42,11 +45,11 @@ export async function GET() {
      mistake this endpoint exists to prevent. */
   const production = process.env.NODE_ENV === "production";
 
+  /* Blocking means "nobody can use this", not "this is not how I would run it".
+     Both of the entries that used to be here were the second kind: the app now
+     degrades rather than refusing, and listing them as blocking sent an operator
+     hunting for a fault while the product worked. */
   const blocking: string[] = [];
-  if (!checks.database && production)
-    blocking.push("DATABASE_URL (or POSTGRES_URL) is not set — nobody can sign in.");
-  if (!checks.sessionSecret)
-    blocking.push("SESSION_SECRET is not set — sessions cannot be signed.");
   if (
     checks.allowlistSource === "none" &&
     !checks.syncSecret &&

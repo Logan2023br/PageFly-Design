@@ -1,6 +1,8 @@
 import "server-only";
 
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { cookies } from "next/headers";
 
 /* ==========================================================================
@@ -10,10 +12,24 @@ import { cookies } from "next/headers";
    route can trust who is calling without a session table. Tampering fails the
    signature check.
 
-   SESSION_SECRET is REQUIRED in production and there is deliberately no
-   fallback. A hardcoded default would sit in a public repository, and anyone who
-   read it could mint themselves an admin cookie. Failing closed with a clear
-   message is the only honest option.
+   SESSION_SECRET should be set. When it is not, one is generated and written to a
+   file beside the data store — never a hardcoded default, because that would sit
+   in a public repository and anyone who read it could mint themselves an admin
+   cookie.
+
+   THE FILE IS NOT OPTIONAL. A per-process random value looked equivalent and was
+   not: a server component and a route handler are separate module instances with
+   separate copies of this module, so signing in produced a cookie signed with one
+   random key and the page that rendered next verified it against a different one.
+   Every session failed, but only on the pages that read it — /design still
+   answered 200 with no account, which made it look like a routing problem. Any
+   secret that is not shared between module instances is not a secret, it is a
+   coin flip.
+
+   Where the file lives decides how long a session lasts. On a server with a real
+   disk it survives restarts. On serverless it is per-instance and per-lifetime, so
+   sign-ins do not survive a redeploy — which is a reason to set SESSION_SECRET,
+   not a reason to refuse to run without it.
 
    What this is NOT: authentication of the merchant. Signing in only asks for a
    store domain, so anyone who knows an allowlisted domain can get in. That is
@@ -39,18 +55,67 @@ export class MissingSecretError extends Error {
   }
 }
 
+/** Beside the data store, so both live or die together. */
+function secretFile(): string {
+  const explicit = process.env.PFD_SECRET_FILE;
+  if (explicit) return explicit;
+
+  const dataFile =
+    process.env.PFD_DB_FILE ??
+    process.env.PFD_DEV_DB ??
+    (process.env.VERCEL ? "/tmp/pfd-store.json" : ".pfd-dev-db.json");
+  return join(dirname(dataFile), ".pfd-session-secret");
+}
+
+let cached: string | null = null;
+
 function secret(): string {
   const value = process.env.SESSION_SECRET;
   if (value && value.length >= 16) return value;
-  if (process.env.NODE_ENV === "production") throw new MissingSecretError();
-  /* Development only, and clearly marked as such. It never ships: production
-     throws above rather than reaching this line. */
-  return "pfd-development-only-secret";
+  if (cached) return cached;
+
+  const file = secretFile();
+  try {
+    if (existsSync(file)) {
+      const stored = readFileSync(file, "utf8").trim();
+      if (stored.length >= 16) {
+        cached = stored;
+        return cached;
+      }
+    }
+  } catch {
+    // Unreadable — fall through and try to write a fresh one.
+  }
+
+  const generated = randomBytes(32).toString("base64url");
+  try {
+    mkdirSync(dirname(file), { recursive: true });
+    /* Owner-only. This is the key that signs admin sessions. */
+    writeFileSync(file, generated, { mode: 0o600 });
+  } catch {
+    /* Read-only filesystem. Sessions then work only within this module instance,
+       which is the broken case described above — but returning something is still
+       better than throwing at sign-in. hasSessionSecret() reports the risk. */
+  }
+
+  cached = generated;
+  return cached;
 }
 
+/** True when the signing key is stable across instances and restarts. */
+export function hasStableSecret(): boolean {
+  if (hasSessionSecret()) return true;
+  try {
+    return existsSync(secretFile());
+  } catch {
+    return false;
+  }
+}
+
+/** True when SESSION_SECRET is properly set, so sessions survive a restart. */
 export function hasSessionSecret(): boolean {
   const value = process.env.SESSION_SECRET;
-  return Boolean(value && value.length >= 16) || process.env.NODE_ENV !== "production";
+  return Boolean(value && value.length >= 16);
 }
 
 /* ---- sign / verify ------------------------------------------------------- */

@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { buildStats } from "./postgresRepo";
 import type {
   Repo,
@@ -18,8 +18,12 @@ import type {
    merchant still finds their pages — which a driver that forgets on restart
    cannot demonstrate.
 
-   Never selected when a database URL is present, and it refuses to load in
-   production; see index.ts.
+   It re-reads the file whenever the file has changed, which is not a nicety. A
+   server component and a route handler are separate module instances, each with
+   its own copy of this driver: signing in wrote the store through the route
+   handler, and the page's instance never saw it, so a merchant with a valid
+   session was redirected back to sign-in. Anything that caches a whole dataset in
+   memory and never re-reads is wrong the moment there is more than one reader.
    ========================================================================== */
 
 type Shape = {
@@ -32,10 +36,11 @@ type Shape = {
 const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [] };
 
 export function createMemoryRepo(file: string): Repo {
-  const data: Shape = load();
   /* Writes are best-effort: a read-only filesystem downgrades this to a plain
      in-memory store rather than failing a request the merchant made. */
   let writable = true;
+  let mtime = -1;
+  let data: Shape = structuredClone(EMPTY);
 
   function load(): Shape {
     try {
@@ -51,10 +56,30 @@ export function createMemoryRepo(file: string): Repo {
     }
   }
 
+  /** Called at the top of every operation. A stat is a syscall on a small local
+      file — far cheaper than being wrong about what is stored. */
+  function sync() {
+    let current = -1;
+    try {
+      current = statSync(file).mtimeMs;
+    } catch {
+      // No file yet. Keep whatever is in memory; the first flush creates it.
+      if (mtime === -1) mtime = 0;
+      return;
+    }
+    if (current !== mtime) {
+      data = load();
+      mtime = current;
+    }
+  }
+
   function flush() {
     if (!writable) return;
     try {
       writeFileSync(file, JSON.stringify(data, null, 2));
+      /* Record the mtime we just produced, so the next sync() does not mistake
+         our own write for someone else's and reload over newer memory. */
+      mtime = statSync(file).mtimeMs;
     } catch {
       writable = false;
     }
@@ -73,9 +98,12 @@ export function createMemoryRepo(file: string): Repo {
   });
 
   return {
-    async ready() {},
+    async ready() {
+      sync();
+    },
 
     async upsertStores(stores) {
+      sync();
       for (const s of stores) {
         const existing = data.stores.find((x) => x.domain === s.domain);
         if (existing) {
@@ -92,10 +120,12 @@ export function createMemoryRepo(file: string): Repo {
     },
 
     async getStore(domain) {
+      sync();
       return data.stores.find((s) => s.domain === domain) ?? null;
     },
 
     async markSignedIn(domain, at) {
+      sync();
       const store = data.stores.find((s) => s.domain === domain);
       if (!store) return;
       store.lastSeenAt = at.toISOString();
@@ -104,6 +134,7 @@ export function createMemoryRepo(file: string): Repo {
     },
 
     async saveRun(run, pages) {
+      sync();
       if (data.runs.some((r) => r.id === run.id)) return;
       data.runs.push({ ...run });
       for (const p of pages) {
@@ -114,6 +145,7 @@ export function createMemoryRepo(file: string): Repo {
     },
 
     async listRuns(domain) {
+      sync();
       return data.runs
         .filter((r) => r.domain === domain)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -121,15 +153,18 @@ export function createMemoryRepo(file: string): Repo {
     },
 
     async getRun(id) {
+      sync();
       const run = data.runs.find((r) => r.id === id);
       return run ? withPages(run) : null;
     },
 
     async pagesUsed(domain) {
+      sync();
       return pagesOf(domain).length;
     },
 
     async lastRunAt(domain) {
+      sync();
       return (
         data.runs
           .filter((r) => r.domain === domain)
@@ -140,10 +175,12 @@ export function createMemoryRepo(file: string): Repo {
     },
 
     async getReview(domain) {
+      sync();
       return data.reviews.find((r) => r.domain === domain) ?? null;
     },
 
     async saveReview(review) {
+      sync();
       const existing = data.reviews.find((r) => r.domain === review.domain);
       // One review per store, for ever — only the forwarded flag may change.
       if (existing) existing.forwarded = review.forwarded;
@@ -152,6 +189,7 @@ export function createMemoryRepo(file: string): Repo {
     },
 
     async listStoreSummaries() {
+      sync();
       return data.stores
         .map((s): StoreSummary => {
           const runs = data.runs.filter((r) => r.domain === s.domain);
@@ -180,6 +218,7 @@ export function createMemoryRepo(file: string): Repo {
     },
 
     async stats() {
+      sync();
       const histogram = [0, 0, 0, 0, 0];
       for (const r of data.reviews) {
         if (r.stars >= 1 && r.stars <= 5) histogram[r.stars - 1]++;

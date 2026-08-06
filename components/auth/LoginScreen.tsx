@@ -35,7 +35,20 @@ export function LoginScreen({ next }: { next: string }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ domain }),
       });
-      const body = (await res.json()) as StoreAuthResponse;
+
+      /* A crashed route answers with an HTML error page, and res.json() throws on
+         it. Left in the outer catch, that surfaced as "could not reach the
+         server" for a server that had very much answered — the single most
+         misleading thing this form could say. */
+      let body: StoreAuthResponse;
+      try {
+        body = (await res.json()) as StoreAuthResponse;
+      } catch {
+        setState("denied");
+        setMessage(`The server returned an error (${res.status}).`);
+        setHint("Check /api/health for what is missing.");
+        return;
+      }
 
       if (body.ok) {
         setState("granted");

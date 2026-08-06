@@ -95,8 +95,27 @@ export async function POST(request: Request) {
     );
   }
 
-  await setStoreSession(store.domain);
-  await getRepo().markSignedIn(store.domain, new Date());
+  /* Wrapped because it was not: an exception here escaped as a 500 with an HTML
+     body, the browser's res.json() threw on it, and the form reported "could not
+     reach the server" for a server that had answered. */
+  try {
+    await setStoreSession(store.domain);
+  } catch (err) {
+    return Response.json(
+      {
+        ok: false,
+        error: "Could not start a session.",
+        hint: (err as Error).message,
+      } satisfies StoreAuthResponse,
+      { status: 500 },
+    );
+  }
+
+  /* Best effort. Recording the sign-in time is bookkeeping — a storage hiccup
+     must not turn a successful sign-in into a failure. */
+  await getRepo()
+    .markSignedIn(store.domain, new Date())
+    .catch(() => {});
 
   return Response.json({
     ok: true,
