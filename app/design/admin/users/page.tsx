@@ -4,6 +4,7 @@ import { PasteSheet } from "@/components/admin/PasteSheet";
 import { StoreBanner } from "@/components/admin/StoreBanner";
 import { SyncButton } from "@/components/admin/SyncButton";
 import { UsersTable } from "@/components/admin/UsersTable";
+import { seedBuiltinStores } from "@/lib/account";
 import { getRepo, storeFile, storeKind } from "@/lib/db";
 import { readAdminSession } from "@/lib/session";
 import { sheetSource } from "@/lib/sheet";
@@ -14,6 +15,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminUsersPage() {
   if (!(await readAdminSession())) return <AdminLogin />;
 
+  await seedBuiltinStores();
   const stores = await getRepo().listStoreSummaries();
   const active = stores.filter((s) => s.lastSeenAt).length;
 

@@ -1,3 +1,4 @@
+import { builtinStores } from "@/lib/allowlist";
 import { hasDatabase } from "@/lib/db";
 import { hasSessionSecret } from "@/lib/session";
 import { sheetSource } from "@/lib/sheet";
@@ -30,6 +31,10 @@ export async function GET() {
     adminCredentialsOverridden: Boolean(
       process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD,
     ),
+    /* The compiled-in list is a real source, so a deployment with no sheet is
+       configured, not broken. Reporting it as blocking sent an operator looking
+       for a problem that was not there. */
+    builtinStores: builtinStores().length,
   };
 
   /* Only in production. In development the file-backed driver takes over and the
@@ -42,13 +47,21 @@ export async function GET() {
     blocking.push("DATABASE_URL (or POSTGRES_URL) is not set — nobody can sign in.");
   if (!checks.sessionSecret)
     blocking.push("SESSION_SECRET is not set — sessions cannot be signed.");
-  if (checks.allowlistSource === "none" && !checks.syncSecret)
+  if (
+    checks.allowlistSource === "none" &&
+    !checks.syncSecret &&
+    checks.builtinStores === 0
+  )
     blocking.push(
-      "No allowlist source: set SHEET_SERVICE_ACCOUNT_JSON, ALLOWLIST_SHEET_CSV_URL, " +
-        "or SYNC_SECRET and push rows to /api/admin/sync.",
+      "Nobody can sign in: no built-in stores, no sheet source, and no SYNC_SECRET.",
     );
 
   const advisory: string[] = [];
+  if (checks.allowlistSource === "none" && !checks.syncSecret)
+    advisory.push(
+      `Running on the built-in allowlist (${checks.builtinStores} store${checks.builtinStores === 1 ? "" : "s"}). ` +
+        "Add a sheet source, or BETA_STORES, to admit more without a deploy.",
+    );
   if (!checks.database && !production)
     advisory.push(
       "No DATABASE_URL — using the local file driver (.pfd-dev-db.json). Fine for " +

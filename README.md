@@ -200,17 +200,29 @@ store, and whether that is acceptable depends on where this runs:
 | Where | Verdict |
 |---|---|
 | `npm run dev` | how a fresh clone works with no credentials |
-| One server with a persistent disk (a VPS) | legitimate — opt in with `PFD_STORE=file` |
-| Vercel or anything multi-instance | never. Instances neither share a disk nor keep one, so each answers from its own copy and a merchant's library appears and disappears depending on which one replied |
+| One server with a persistent disk (a VPS) | legitimate |
+| Vercel or anything multi-instance | for clicking through the product only. Instances neither share a disk nor keep one, so each answers from its own copy and a merchant's library appears and disappears depending on which one replied |
 
-Production therefore refuses the file store unless it is named explicitly, and the
-admin screens carry a banner saying which store is live — the failure mode is
-indistinguishable from data loss and would be blamed on anything but the store.
+The admin screens carry a banner naming which store is live, and it says something
+different in each case — the serverless one is "nothing here is saved", because
+that failure is indistinguishable from data loss and would be blamed on anything
+but the store.
 
 One wrinkle: that driver reads its file once at startup, so editing the JSON by
 hand needs a restart.
 
 ### The allowlist
+
+The domain in `lib/allowlist.ts` is compiled in, so a deployment with nothing
+configured still lets its testers in — a fresh deploy should show the product, not
+a setup error. `BETA_STORES` (comma-separated domains) adds more without a code
+change. The sheet still wins wherever it is configured; this is the floor.
+
+Storage degrades the same way rather than refusing: with no `DATABASE_URL` the
+file store takes over, on Vercel writing to `/tmp`, and the admin screens say
+plainly that nothing there is saved. Blocking the app was the wrong trade — it
+meant nobody could try the product at all.
+
 
 The sheet is private, and it contains merchant email addresses, so
 publish-to-web is the wrong default. Three sources are supported —

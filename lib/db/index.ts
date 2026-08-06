@@ -29,12 +29,13 @@ export type * from "./types";
      exactly like data loss and would be blamed on anything but the store.
    ========================================================================== */
 
-/** Explicit opt-in for the file store in production. Only safe when exactly one
-    process serves the app and its disk survives restarts. */
-const FILE_STORE = process.env.PFD_STORE === "file";
-
+/* Where the file store writes. On Vercel only /tmp is writable, and it lives as
+   long as the instance does — which is enough to click through the product, and
+   not enough to keep anything. Anywhere else, a path in the project. */
 const DB_FILE =
-  process.env.PFD_DB_FILE ?? process.env.PFD_DEV_DB ?? ".pfd-dev-db.json";
+  process.env.PFD_DB_FILE ??
+  process.env.PFD_DEV_DB ??
+  (process.env.VERCEL ? "/tmp/pfd-store.json" : ".pfd-dev-db.json");
 
 function databaseUrl(): string | null {
   return (
@@ -45,9 +46,8 @@ function databaseUrl(): string | null {
   );
 }
 
-/** Thrown when no database is configured. Distinct from a database that exists
-    but is unreachable: waiting fixes the second and never fixes the first, and
-    telling an operator to "try again" for this one wastes their afternoon. */
+/** Kept for the routes that distinguish a configuration problem from a blip.
+    No longer thrown by getRepo — a missing database degrades instead. */
 export class MissingDatabaseError extends Error {
   constructor() {
     super(
@@ -69,9 +69,11 @@ export function getRepo(): Repo {
     return repo;
   }
 
-  if (process.env.NODE_ENV === "production" && !FILE_STORE)
-    throw new MissingDatabaseError();
-
+  /* Falls back rather than refusing. Throwing here meant a deploy with no
+     database showed a configuration error where the product should be, and
+     nobody could try the thing at all. The banner in the admin screens says
+     plainly that this store is not durable, which is the honest version of the
+     same warning without blocking the app. */
   repo = createMemoryRepo(DB_FILE);
   return repo;
 }

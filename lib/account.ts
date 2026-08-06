@@ -1,5 +1,6 @@
 import "server-only";
 
+import { findBuiltinStore, builtinStores } from "./allowlist";
 import { getRepo, isEphemeralStore } from "./db";
 import { readStoreSession } from "./session";
 import { normalizeDomain, pullSheet } from "./sheet";
@@ -32,10 +33,15 @@ export type Account = {
 /**
  * Look a domain up in the allowlist.
  *
- * The database is checked first and is authoritative for a sign-in: it is the
- * cached copy of the sheet, so Google being slow or unreachable never locks a
- * merchant out. The sheet is only pulled when the domain is NOT known yet, which
- * is the one case where a stale cache would wrongly reject someone.
+ * Three sources, in this order:
+ *
+ * 1. The compiled-in list (lib/allowlist.ts). Checked first so a deployment with
+ *    nothing configured still lets its testers in. Seeded into the store on the
+ *    way past, so the admin screens and the page counter see it like any other.
+ * 2. The database — the cached copy of the sheet. Authoritative for anyone
+ *    already known, so Google being slow or down never locks out a merchant.
+ * 3. The sheet, pulled only for a domain nothing has heard of, which is the one
+ *    case where a stale cache would wrongly reject someone.
  */
 export async function findAllowedStore(
   rawDomain: string,
@@ -44,6 +50,16 @@ export async function findAllowedStore(
   if (!domain) return null;
 
   const repo = getRepo();
+
+  const builtin = findBuiltinStore(domain);
+  if (builtin) {
+    /* Upserted, not returned directly: the row carries page_limit and the sheet
+       fields the admin table reads, and a store that can sign in but appears
+       nowhere in admin is worse than not being in the list at all. */
+    await repo.upsertStores([builtin]).catch(() => {});
+    return (await repo.getStore(domain)) ?? builtin;
+  }
+
   const cached = await repo.getStore(domain);
   if (cached) return cached;
 
@@ -52,6 +68,17 @@ export async function findAllowedStore(
 
   await repo.upsertStores(pulled.rows.map((r) => r.store));
   return pulled.rows.find((r) => r.store.domain === domain)?.store ?? null;
+}
+
+/** Makes sure the compiled-in stores exist as rows, so admin lists them before
+    anyone has signed in. Failures are ignored: this is a convenience, and it must
+    never be the reason a page does not render. */
+export async function seedBuiltinStores(): Promise<void> {
+  try {
+    await getRepo().upsertStores(builtinStores());
+  } catch {
+    // ignored on purpose
+  }
 }
 
 /** The signed-in account, or null when there is no valid session. */
