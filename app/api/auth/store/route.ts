@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { findAllowedStore } from "@/lib/account";
-import { getRepo } from "@/lib/db";
+import { MissingDatabaseError, getRepo } from "@/lib/db";
 import {
   MissingSecretError,
   clearStoreSession,
@@ -49,14 +49,22 @@ export async function POST(request: Request) {
   try {
     store = await findAllowedStore(domain);
   } catch (err) {
-    if (err instanceof MissingSecretError) {
+    /* Missing configuration is permanent: "try again in a moment" sends an
+       operator away to wait for something that will never resolve on its own. It
+       gets its own message naming the variable to set. */
+    if (err instanceof MissingSecretError || err instanceof MissingDatabaseError) {
       return Response.json(
-        { ok: false, error: err.message } satisfies StoreAuthResponse,
-        { status: 500 },
+        {
+          ok: false,
+          error: "This deployment is not finished being set up.",
+          hint: err.message,
+        } satisfies StoreAuthResponse,
+        { status: 503 },
       );
     }
-    /* A storage or sheet failure must not read as "not allowed" — that would
-       tell an allowed merchant they are barred because a database blipped. */
+    /* A genuinely transient storage or sheet failure. It must not read as "not
+       allowed" — that would tell an allowed merchant they are barred because a
+       database blipped. */
     return Response.json(
       {
         ok: false,

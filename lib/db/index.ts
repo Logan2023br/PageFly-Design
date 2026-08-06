@@ -30,6 +30,19 @@ function databaseUrl(): string | null {
   );
 }
 
+/** Thrown when no database is configured. Distinct from a database that exists
+    but is unreachable: waiting fixes the second and never fixes the first, and
+    telling an operator to "try again" for this one wastes their afternoon. */
+export class MissingDatabaseError extends Error {
+  constructor() {
+    super(
+      "No database configured. Set DATABASE_URL (or POSTGRES_URL) to a Postgres " +
+        "connection string — Vercel Postgres, Neon and Supabase all work.",
+    );
+    this.name = "MissingDatabaseError";
+  }
+}
+
 let repo: Repo | null = null;
 
 export function getRepo(): Repo {
@@ -41,12 +54,7 @@ export function getRepo(): Repo {
     return repo;
   }
 
-  if (process.env.NODE_ENV === "production") {
-    throw new Error(
-      "No database configured. Set DATABASE_URL (or POSTGRES_URL) to a Postgres " +
-        "connection string — Vercel Postgres, Neon and Supabase all work.",
-    );
-  }
+  if (process.env.NODE_ENV === "production") throw new MissingDatabaseError();
 
   repo = createMemoryRepo(DEV_DB_FILE);
   return repo;
@@ -56,4 +64,8 @@ export function getRepo(): Repo {
     than letting someone believe their data is durable. */
 export function isEphemeralStore(): boolean {
   return databaseUrl() === null;
+}
+
+export function hasDatabase(): boolean {
+  return databaseUrl() !== null;
 }
