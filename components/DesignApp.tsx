@@ -49,17 +49,6 @@ function Screens() {
 
 export function DesignApp({ account }: { account: Account | null }) {
   const setFailFirstN = useStore((s) => s.setFailFirstN);
-  const editBrief = useStore((s) => s.editBrief);
-
-  /* Design always opens on the brief, ready to build again.
-     The store outlives client-side navigation, so coming back from the Library
-     used to land on the previous run's results — the merchant had to hunt for a
-     way back to the form to build anything new. Finished work lives in the
-     Library now, so there is nothing here worth returning to. The draft is kept,
-     so the last brief is still filled in. */
-  useEffect(() => {
-    if (useStore.getState().screen === "results") editBrief();
-  }, [editBrief]);
 
   /* Dev-only escape hatch so the partial-failure and retry paths can be seen
      without waiting for a real generator error: /design?pfd-fail=2 */

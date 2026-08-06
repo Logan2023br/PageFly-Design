@@ -16,6 +16,8 @@ const STEPS: { id: Screen; label: string }[] = [
 /** Design | Library, in the top bar where the brief asked for it. Rendered as a
     segmented control so the current area is obvious without a page title. */
 export function WorkspaceNav({ current }: { current: "design" | "library" }) {
+  const editBrief = useStore((s) => s.editBrief);
+
   const items = [
     { id: "design", label: "Design", href: "/design", icon: "Wand" },
     { id: "library", label: "Library", href: "/design/library", icon: "Library" },
@@ -32,6 +34,12 @@ export function WorkspaceNav({ current }: { current: "design" | "library" }) {
           <Link
             key={item.id}
             href={item.href}
+            /* Pressing Design is what starts the next build. Results stay on
+               screen after Create — a merchant wants to look at what they just
+               made — so this is the one action that clears them, and it works
+               whether they are already on Design or coming from the Library.
+               The draft is kept, so the last brief is still filled in. */
+            onClick={item.id === "design" ? editBrief : undefined}
             aria-current={active ? "page" : undefined}
             className={`relative flex items-center gap-1.5 rounded-pf-pill px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
               active ? "text-pf-text" : "text-pf-muted hover:text-pf-text"
