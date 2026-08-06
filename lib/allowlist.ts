@@ -23,7 +23,7 @@ import { normalizeDomain } from "./sheet";
 
 const DEFAULT_PAGE_LIMIT = Number(process.env.DEFAULT_PAGE_LIMIT ?? 30);
 
-type Seed = Omit<StoreRecord, "firstSeenAt" | "lastSeenAt">;
+type Seed = Omit<StoreRecord, "firstSeenAt" | "lastSeenAt" | "blocked">;
 
 const BUILTIN: Seed[] = [
   {
@@ -76,7 +76,7 @@ export function builtinStores(): StoreRecord[] {
       seen.add(s.domain);
       return true;
     })
-    .map((s) => ({ ...s, firstSeenAt: null, lastSeenAt: null }));
+    .map((s) => ({ ...s, firstSeenAt: null, lastSeenAt: null, blocked: false }));
 }
 
 export function findBuiltinStore(domain: string): StoreRecord | null {

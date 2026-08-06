@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { findAllowedStore } from "@/lib/account";
+import { builtinStores } from "@/lib/allowlist";
 import { MissingDatabaseError, getRepo } from "@/lib/db";
 import {
   MissingSecretError,
@@ -79,9 +80,13 @@ export async function POST(request: Request) {
        allowlist with no source. Showing it whenever no source is configured
        told an operator their sheet was missing while a pushed list sat in the
        database working fine. */
+    /* "Nothing is loaded" has to count the compiled-in list too. Without that it
+       told an operator to configure a sheet while a working built-in list was
+       admitting people — the same wrong diagnosis as before, one layer down. */
     const empty =
       sheetSource() === "none" &&
-      (await getRepo().listStoreSummaries()).length === 0;
+      builtinStores().length === 0 &&
+      (await getRepo().listStoreSummaries().catch(() => [])).length === 0;
 
     return Response.json(
       {

@@ -1,5 +1,6 @@
 import { AdminLogin } from "@/components/admin/AdminLogin";
 import { AdminShell } from "@/components/admin/AdminShell";
+import { AddStore } from "@/components/admin/AddStore";
 import { PasteSheet } from "@/components/admin/PasteSheet";
 import { StoreBanner } from "@/components/admin/StoreBanner";
 import { SyncButton } from "@/components/admin/SyncButton";
@@ -28,6 +29,7 @@ export default async function AdminUsersPage() {
     >
       <div className="grid gap-4">
         <StoreBanner kind={storeKind()} file={storeFile()} />
+        <AddStore />
         <PasteSheet />
         <UsersTable stores={stores} />
       </div>

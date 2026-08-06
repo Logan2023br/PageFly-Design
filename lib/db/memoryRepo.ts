@@ -108,15 +108,48 @@ export function createMemoryRepo(file: string): Repo {
         const existing = data.stores.find((x) => x.domain === s.domain);
         if (existing) {
           // The sheet never overwrites what the app observed.
+          /* blocked is preserved: a sheet re-sync must not silently restore
+             access an operator removed. */
           Object.assign(existing, s, {
             firstSeenAt: existing.firstSeenAt,
             lastSeenAt: existing.lastSeenAt,
+            blocked: existing.blocked,
           });
         } else {
           data.stores.push({ ...s });
         }
       }
       flush();
+    },
+
+    async deleteStore(domain, tombstone) {
+      sync();
+      const existing = data.stores.find((s) => s.domain === domain);
+      if (tombstone) {
+        if (existing) existing.blocked = true;
+        else
+          data.stores.push({
+            domain,
+            email: null,
+            storeName: null,
+            shopifyPlan: null,
+            currentPlan: null,
+            daysUsed: null,
+            country: null,
+            userType: null,
+            status: null,
+            pageLimit: 30,
+            firstSeenAt: null,
+            lastSeenAt: null,
+            blocked: true,
+          });
+        flush();
+        return true;
+      }
+      if (!existing) return false;
+      data.stores = data.stores.filter((s) => s.domain !== domain);
+      flush();
+      return true;
     },
 
     async getStore(domain) {

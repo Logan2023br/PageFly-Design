@@ -51,6 +51,11 @@ export async function findAllowedStore(
 
   const repo = getRepo();
 
+  /* Checked before anything else. A blocked row is how an operator removes a
+     store that is compiled into the built-in list, so it has to outrank it. */
+  const existing = await repo.getStore(domain).catch(() => null);
+  if (existing?.blocked) return null;
+
   const builtin = findBuiltinStore(domain);
   if (builtin) {
     /* Upserted, not returned directly: the row carries page_limit and the sheet
@@ -60,8 +65,7 @@ export async function findAllowedStore(
     return (await repo.getStore(domain)) ?? builtin;
   }
 
-  const cached = await repo.getStore(domain);
-  if (cached) return cached;
+  if (existing) return existing;
 
   const pulled = await pullSheet();
   if (!pulled.ok) return null;
@@ -93,9 +97,10 @@ export async function currentAccount(): Promise<Account | null> {
      instance that signed a merchant in is usually not the one that renders their
      next page — looking the store up in storage alone logged them straight back
      out. The built-in list needs no storage to answer. */
-  const store =
-    (await repo.getStore(session.domain).catch(() => null)) ??
-    findBuiltinStore(session.domain);
+  const stored = await repo.getStore(session.domain).catch(() => null);
+  /* A session that outlives access is not access. */
+  if (stored?.blocked) return null;
+  const store = stored ?? findBuiltinStore(session.domain);
 
   /* Signed in but not in any list — removed from the sheet since. Treated as
      signed out rather than silently allowed. */

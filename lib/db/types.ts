@@ -28,6 +28,14 @@ export type StoreRecord = {
   /** first and last time this store actually signed in */
   firstSeenAt: string | null;
   lastSeenAt: string | null;
+  /**
+   * Refused at sign-in even though a row exists.
+   *
+   * Needed because some stores are compiled into lib/allowlist.ts: deleting the
+   * row would let the built-in list admit them again on the next request, so a
+   * removal has to leave something behind that says "no".
+   */
+  blocked: boolean;
 };
 
 export type RunRecord = {
@@ -99,6 +107,9 @@ export type Repo = {
   /* ---- stores ---- */
   upsertStores(stores: StoreRecord[]): Promise<void>;
   getStore(domain: string): Promise<StoreRecord | null>;
+  /** Removes a store. `tombstone` keeps a blocked row so a compiled-in entry
+      cannot re-admit it. Returns false when there was nothing to remove. */
+  deleteStore(domain: string, tombstone: boolean): Promise<boolean>;
   markSignedIn(domain: string, at: Date): Promise<void>;
 
   /* ---- runs ---- */

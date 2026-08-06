@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import type { StoresResponse } from "@/app/api/admin/stores/route";
 import type { StoreSummary } from "@/lib/db";
 import { Icon, Panel } from "../ui";
 
@@ -150,6 +151,7 @@ export function UsersTable({ stores }: { stores: StoreSummary[] }) {
                     <StatusChip
                       status={store.status}
                       signedIn={Boolean(store.lastSeenAt)}
+                      blocked={store.blocked}
                     />
                   </Td>
 
@@ -196,13 +198,16 @@ export function UsersTable({ stores }: { stores: StoreSummary[] }) {
                   </Td>
 
                   <Td className="text-right">
-                    <Link
-                      href={`/design/admin/users/${encodeURIComponent(store.domain)}`}
-                      className="inline-flex items-center gap-1 rounded-pf-sm px-2 py-1 text-[11.5px] font-semibold text-pf-muted transition-colors hover:bg-pf-card hover:text-pf-text"
-                    >
-                      Pages
-                      <Icon name="ArrowUpRight" size={12} />
-                    </Link>
+                    <div className="flex items-center justify-end gap-1">
+                      <Link
+                        href={`/design/admin/users/${encodeURIComponent(store.domain)}`}
+                        className="inline-flex items-center gap-1 rounded-pf-sm px-2 py-1 text-[11.5px] font-semibold text-pf-muted transition-colors hover:bg-pf-card hover:text-pf-text"
+                      >
+                        Pages
+                        <Icon name="ArrowUpRight" size={12} />
+                      </Link>
+                      <RemoveStore store={store} />
+                    </div>
                   </Td>
                 </motion.tr>
               ))}
@@ -243,10 +248,23 @@ function Td({
 function StatusChip({
   status,
   signedIn,
+  blocked,
 }: {
   status: string | null;
   signedIn: boolean;
+  blocked: boolean;
 }) {
+  /* A removed store keeps its row and its pages, so the row has to say clearly
+     that it cannot sign in — otherwise it reads as still having access. */
+  if (blocked) {
+    return (
+      <span className="inline-flex w-fit items-center gap-1 rounded-pf-pill border border-pf-danger/40 bg-pf-danger/10 px-2 py-0.5 text-[11px] font-semibold text-pf-danger">
+        <Icon name="Lock" size={11} />
+        Removed
+      </span>
+    );
+  }
+
   /* Two different facts, and conflating them hides the interesting one: the
      sheet says what the plan is, `signedIn` says whether they ever showed up. */
   const active = /đang|active|using/i.test(status ?? "");
@@ -310,6 +328,78 @@ function Rating({ stars }: { stars: number | null }) {
     >
       {stars}s
       <span aria-hidden>★</span>
+    </span>
+  );
+}
+
+/** Removing keeps the store's pages: access is reversible, so destroying the work
+    would be an irreversible side effect of a reversible action. */
+function RemoveStore({ store }: { store: StoreSummary }) {
+  const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
+  if (store.blocked) {
+    return (
+      <button
+        type="button"
+        disabled={busy}
+        title="Give this store access again"
+        onClick={() => {
+          setBusy(true);
+          void fetch("/api/admin/stores", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ domain: store.domain }),
+          })
+            .then(() => window.location.reload())
+            .finally(() => setBusy(false));
+        }}
+        className="rounded-pf-sm px-2 py-1 text-[11.5px] font-semibold text-pf-success transition-colors hover:bg-pf-card disabled:opacity-50"
+      >
+        {busy ? "…" : "Restore"}
+      </button>
+    );
+  }
+
+  if (!confirming) {
+    return (
+      <button
+        type="button"
+        title="Remove access. Pages are kept."
+        onClick={() => setConfirming(true)}
+        className="rounded-pf-sm px-1.5 py-1 text-pf-faint transition-colors hover:bg-pf-card hover:text-pf-danger"
+      >
+        <Icon name="Trash2" size={13} />
+      </button>
+    );
+  }
+
+  return (
+    <span className="flex items-center gap-1">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          void fetch(
+            `/api/admin/stores?domain=${encodeURIComponent(store.domain)}`,
+            { method: "DELETE" },
+          )
+            .then((r) => r.json() as Promise<StoresResponse>)
+            .then(() => window.location.reload())
+            .finally(() => setBusy(false));
+        }}
+        className="rounded-pf-sm bg-pf-danger/15 px-2 py-1 text-[11px] font-bold text-pf-danger transition-colors hover:bg-pf-danger/25 disabled:opacity-50"
+      >
+        {busy ? "…" : "Remove"}
+      </button>
+      <button
+        type="button"
+        onClick={() => setConfirming(false)}
+        className="rounded-pf-sm px-1.5 py-1 text-[11px] text-pf-muted hover:text-pf-text"
+      >
+        No
+      </button>
     </span>
   );
 }

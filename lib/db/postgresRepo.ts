@@ -47,10 +47,14 @@ create table if not exists stores (
   user_type     text,
   status        text,
   page_limit    integer not null default 30,
+  blocked       boolean not null default false,
   first_seen_at timestamptz,
   last_seen_at  timestamptz,
   synced_at     timestamptz not null default now()
 );
+
+/* Added after the first release, so an existing table needs it too. */
+alter table stores add column if not exists blocked boolean not null default false;
 
 create table if not exists runs (
   id          text primary key,
@@ -118,6 +122,7 @@ export function createPostgresRepo(url: string): Repo {
     pageLimit: Number(r.page_limit ?? 30),
     firstSeenAt: iso(r.first_seen_at),
     lastSeenAt: iso(r.last_seen_at),
+    blocked: Boolean(r.blocked),
   });
 
   const toRun = (r: Record<string, unknown>): RunRecord => ({
@@ -177,6 +182,31 @@ export function createPostgresRepo(url: string): Repo {
            synced_at = now()`,
         values,
       );
+    },
+
+    async deleteStore(domain, tombstone) {
+      await ready();
+      if (tombstone) {
+        /* Kept as a blocked row rather than deleted. Its runs stay too — an
+           operator removing access should not silently destroy the merchant's
+           pages, and re-adding them restores everything. */
+        const { rowCount } = await db.query(
+          `update stores set blocked = true where domain = $1`,
+          [domain],
+        );
+        if (rowCount) return true;
+        await db.query(
+          `insert into stores (domain, blocked) values ($1, true)
+           on conflict (domain) do update set blocked = true`,
+          [domain],
+        );
+        return true;
+      }
+      const { rowCount } = await db.query(
+        "delete from stores where domain = $1",
+        [domain],
+      );
+      return Boolean(rowCount);
     },
 
     async getStore(domain) {

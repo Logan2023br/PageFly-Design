@@ -200,6 +200,7 @@ export function rowsToStores(rows: string[][]): SheetRow[] {
         pageLimit: readPageLimit(cell("pages")),
         firstSeenAt: null,
         lastSeenAt: null,
+        blocked: false,
       },
       review: readInt(cell("review")),
       comment: cell("comment") ?? null,
