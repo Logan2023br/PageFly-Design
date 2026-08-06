@@ -1,5 +1,5 @@
 import { builtinStores } from "@/lib/allowlist";
-import { hasDatabase } from "@/lib/db";
+import { databaseIsUnpooled, databaseSource, hasDatabase } from "@/lib/db";
 import { hasSessionSecret, hasStableSecret, keySource } from "@/lib/session";
 import { sheetSource } from "@/lib/sheet";
 
@@ -22,6 +22,8 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const checks = {
     database: hasDatabase(),
+    /** which env var the connection string came from, or null */
+    databaseFrom: databaseSource(),
     sessionSecret: hasSessionSecret(),
     /* A generated secret on disk is stable; one that could not be written is not,
        and that difference decides whether anyone stays signed in. */
@@ -102,6 +104,11 @@ export async function GET() {
     advisory.push(
       "No DATABASE_URL — using the file store. Correct on a single server with a " +
         "persistent disk; never behind more than one process.",
+    );
+  if (databaseIsUnpooled())
+    advisory.push(
+      `Using ${checks.databaseFrom}, which is an unpooled connection. On serverless ` +
+        "prefer DATABASE_URL (Neon) or POSTGRES_URL (Supabase) — the pooled string.",
     );
   if (!checks.reviewWebhook)
     advisory.push(

@@ -37,13 +37,43 @@ const DB_FILE =
   process.env.PFD_DEV_DB ??
   (process.env.VERCEL ? "/tmp/pfd-store.json" : ".pfd-dev-db.json");
 
+/* Ordered by preference, and the order matters on serverless: the first three are
+   POOLED connection strings. A serverless function opens a connection per instance,
+   so an unpooled string exhausts the database's connection limit long before
+   anything else goes wrong — it is last on purpose, as better than no database at
+   all rather than as a reasonable choice.
+
+   The names are the ones the Vercel Marketplace integrations actually inject:
+   Neon sets DATABASE_URL (pooled) and DATABASE_URL_UNPOOLED, Supabase sets the
+   POSTGRES_* family. Guessing one name and silently falling back to a temp file
+   would look exactly like "the database is not working". */
+const URL_VARS = [
+  "DATABASE_URL",
+  "POSTGRES_URL",
+  "POSTGRES_PRISMA_URL",
+  "POSTGRES_URL_NON_POOLING",
+  "DATABASE_URL_UNPOOLED",
+] as const;
+
+function databaseUrlVar(): string | null {
+  return URL_VARS.find((name) => Boolean(process.env[name])) ?? null;
+}
+
 function databaseUrl(): string | null {
-  return (
-    process.env.DATABASE_URL ??
-    process.env.POSTGRES_URL ??
-    process.env.POSTGRES_PRISMA_URL ??
-    null
-  );
+  const name = databaseUrlVar();
+  return name ? (process.env[name] ?? null) : null;
+}
+
+/** Which variable the connection came from, so a misconfiguration is visible
+    instead of presenting as a database that quietly does nothing. */
+export function databaseSource(): string | null {
+  return databaseUrlVar();
+}
+
+/** True when the connection string in use is not a pooled one. */
+export function databaseIsUnpooled(): boolean {
+  const name = databaseUrlVar();
+  return name === "POSTGRES_URL_NON_POOLING" || name === "DATABASE_URL_UNPOOLED";
 }
 
 /** Kept for the routes that distinguish a configuration problem from a blip.

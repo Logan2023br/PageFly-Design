@@ -187,6 +187,27 @@ downscaled copy are dropped.
 > generated pages instead. `runs.snapshot` already exists in the schema for
 > exactly that, so it is a reader change rather than a migration.
 
+### Setting up the database
+
+Nothing to design: the tables are created on the first request
+(`create table if not exists`, plus `alter table … add column if not exists` for
+columns added after a release). Point the app at an empty Postgres and it is ready.
+
+1. Vercel dashboard → **Storage** → **Marketplace** → Neon (or Supabase) →
+   **Install** → pick the **Free** plan → **Connect to project**.
+   From the CLI: `vercel install neon --plan free`.
+2. Add `SESSION_SECRET` (`openssl rand -base64 32`). Do this *before* the first
+   real sign-ins: on serverless the key is otherwise derived from the platform's
+   project identifiers, and moving hosts later would sign everyone out once.
+3. **Redeploy** — Vercel does not inject new variables into a running deployment.
+4. Open `/api/health`. Expect `"database": true` and `databaseFrom` naming the
+   variable in use.
+
+The connection string must be the **pooled** one — `DATABASE_URL` on Neon,
+`POSTGRES_URL` on Supabase. An unpooled string exhausts the database's connection
+limit because every serverless instance opens its own; the app accepts one as a last
+resort and says so in `/api/health` rather than failing silently.
+
 ### Tables
 
 `stores` (allowlist cache + observed sign-ins) · `runs` (brief payload, page
