@@ -22,11 +22,21 @@ import {
   type ReferenceImage,
 } from "./validation";
 import {
+  buildVariant,
   expandSelection,
   generatePages,
   isAbortError,
   regeneratePage,
 } from "./generate";
+import {
+  listHistory,
+  removeRun,
+  saveRun,
+  clearHistory,
+  openRun,
+  type HistoryEntry,
+} from "./history";
+import { shareUrl, SAFE_URL_LENGTH, type SharedRun } from "./shareLink";
 import { DEVICES } from "./generate/types";
 import type { DeviceId, GenerateFailure, PageMockup } from "./generate/types";
 import type { CategoryId } from "./pageCatalog";
@@ -56,8 +66,19 @@ type State = {
   pages: PageMockup[];
   failures: GenerateFailure[];
   variants: Record<string, number>;
+  /** pageId -> the instruction that page was last regenerated with */
+  notes: Record<string, string>;
   /** page ids currently being rebuilt, so their card can show the morph again */
   rebuilding: string[];
+
+  /* ---- workflow ---- */
+  /** recent runs, read from localStorage on demand (never during render) */
+  history: HistoryEntry[];
+  historyOpen: boolean;
+  /** page id whose variants are being compared, or null */
+  compareId: string | null;
+  /** result of the last Share press, so the button can report honestly */
+  share: { url: string; tooLong: boolean } | null;
 
   filter: CategoryId | "all";
 
@@ -94,8 +115,22 @@ type Actions = {
   cancel: () => void;
   editBrief: () => void;
   regenerateAll: () => Promise<void>;
-  regenerateOne: (pageId: string) => void;
+  regenerateOne: (pageId: string, note?: string) => void;
   retryFailed: () => Promise<void>;
+
+  /* ---- workflow ---- */
+  makeShareLink: () => void;
+  clearShareLink: () => void;
+  loadHistory: () => void;
+  openHistory: () => void;
+  closeHistory: () => void;
+  restoreRun: (run: SharedRun) => Promise<void>;
+  openHistoryEntry: (id: string) => Promise<void>;
+  deleteHistoryEntry: (id: string) => void;
+  clearAllHistory: () => void;
+  openCompare: (pageId: string) => void;
+  closeCompare: () => void;
+  useVariant: (pageId: string, variant: number) => void;
 
   setFilter: (f: CategoryId | "all") => void;
   openPreview: (index: number) => void;
@@ -119,7 +154,13 @@ export const useStore = create<State & Actions>((set, get) => ({
   pages: [],
   failures: [],
   variants: {},
+  notes: {},
   rebuilding: [],
+
+  history: [],
+  historyOpen: false,
+  compareId: null,
+  share: null,
 
   filter: "all",
 
@@ -256,8 +297,11 @@ export const useStore = create<State & Actions>((set, get) => ({
       pages: [],
       failures: [],
       variants: {},
+      notes: {},
       filter: "all",
       previewIndex: null,
+      compareId: null,
+      share: null,
     });
 
     try {
@@ -271,7 +315,16 @@ export const useStore = create<State & Actions>((set, get) => ({
           failFirstN: failFirstN || undefined,
         },
       );
-      set({ screen: "results" });
+      /* Saved on success only. A cancelled or wholly failed run is not something
+         the merchant wants to find in their history. `new Date()` is read here,
+         outside lib/generate, so the generator stays free of clock reads. */
+      set({
+        screen: "results",
+        history: saveRun(
+          { brief, variants: {}, notes: {} },
+          new Date(),
+        ),
+      });
     } catch (err) {
       if (!isAbortError(err)) throw err;
       // cancel() has already returned the user to the brief.
@@ -290,7 +343,7 @@ export const useStore = create<State & Actions>((set, get) => ({
     await get().start();
   },
 
-  regenerateOne: (pageId) => {
+  regenerateOne: (pageId, note) => {
     const { brief, pages } = get();
     if (!brief) return;
     const existing = pages.find((p) => p.id === pageId);
@@ -298,12 +351,21 @@ export const useStore = create<State & Actions>((set, get) => ({
 
     set((s) => ({ rebuilding: [...s.rebuilding, pageId] }));
 
-    const next = regeneratePage(brief, existing);
-    set((s) => ({
-      pages: s.pages.map((p) => (p.id === pageId ? next : p)),
-      variants: { ...s.variants, [pageId]: next.variant },
-      rebuilding: s.rebuilding.filter((id) => id !== pageId),
-    }));
+    const next = regeneratePage(brief, existing, note);
+    set((s) => {
+      const notes = { ...s.notes };
+      if (next.note) notes[pageId] = next.note;
+      else delete notes[pageId];
+      return {
+        pages: s.pages.map((p) => (p.id === pageId ? next : p)),
+        variants: { ...s.variants, [pageId]: next.variant },
+        notes,
+        rebuilding: s.rebuilding.filter((id) => id !== pageId),
+        /* The link no longer describes what is on screen. Better to make the
+           user press Share again than to hand out a stale link. */
+        share: null,
+      };
+    });
   },
 
   retryFailed: async () => {
@@ -333,6 +395,120 @@ export const useStore = create<State & Actions>((set, get) => ({
     } catch (err) {
       if (!isAbortError(err)) throw err;
     }
+  },
+
+  /* ---- workflow -------------------------------------------------------- */
+
+  /* A link carries the brief, not the pages — see lib/shareLink.ts. Built on
+     press rather than kept in sync, so it always matches what is on screen. */
+  makeShareLink: () => {
+    const { brief, variants, notes } = get();
+    if (!brief || typeof window === "undefined") return;
+    const url = shareUrl(
+      { brief, variants, notes },
+      window.location.origin,
+      window.location.pathname,
+    );
+    set({ share: { url, tooLong: url.length > SAFE_URL_LENGTH } });
+  },
+
+  clearShareLink: () => set({ share: null }),
+
+  /* localStorage is read here and never during render — a component that read
+     it directly would give the server and the client different markup. */
+  loadHistory: () => set({ history: listHistory() }),
+  openHistory: () => set({ history: listHistory(), historyOpen: true }),
+  closeHistory: () => set({ historyOpen: false }),
+
+  /**
+   * Rebuild a run from a link or a history entry.
+   *
+   * No fake thinking time: the merchant is reopening work they already waited
+   * for once, and the generating screen would be theatre. The pages come out
+   * identical to the ones the run originally produced.
+   */
+  restoreRun: async (run) => {
+    controller?.abort();
+    controller = new AbortController();
+
+    const plan: PlanEntry[] = expandSelection(run.brief.pages).map((p) => ({
+      pageId: p.pageId,
+      pageType: p.pageType,
+      label: p.pageType,
+      copyIndex: p.copyIndex,
+      copyTotal: p.copyTotal,
+    }));
+
+    set({
+      screen: "generating",
+      draft: briefToDraft(run.brief),
+      brief: run.brief,
+      plan,
+      pages: [],
+      failures: [],
+      variants: run.variants,
+      notes: run.notes,
+      filter: "all",
+      previewIndex: null,
+      historyOpen: false,
+      compareId: null,
+      share: null,
+    });
+
+    try {
+      await generatePages(
+        run.brief,
+        (page) => set((s) => ({ pages: [...s.pages, page] })),
+        controller.signal,
+        {
+          variants: run.variants,
+          notes: run.notes,
+          instant: true,
+          onPageFailed: (f) => set((s) => ({ failures: [...s.failures, f] })),
+        },
+      );
+      set({ screen: "results" });
+    } catch (err) {
+      if (!isAbortError(err)) throw err;
+    }
+  },
+
+  openHistoryEntry: async (id) => {
+    const entry = listHistory().find((e) => e.id === id);
+    if (!entry) return;
+    const decoded = openRun(entry);
+    if (!decoded.ok) {
+      // Unreadable entry — drop it rather than leave a dead row in the list.
+      set({ history: removeRun(id) });
+      return;
+    }
+    await get().restoreRun(decoded.run);
+  },
+
+  deleteHistoryEntry: (id) => set({ history: removeRun(id) }),
+  clearAllHistory: () => set({ history: clearHistory() }),
+
+  openCompare: (pageId) => set({ compareId: pageId, previewIndex: null }),
+  closeCompare: () => set({ compareId: null }),
+
+  /* Compare renders alternatives without touching state, so picking one is the
+     only place it writes — and it goes through the same path as Regenerate so
+     the note and the variant stay consistent. */
+  useVariant: (pageId, variant) => {
+    const { brief, pages } = get();
+    if (!brief) return;
+    const existing = pages.find((p) => p.id === pageId);
+    if (!existing || existing.variant === variant) {
+      set({ compareId: null });
+      return;
+    }
+    const next = buildVariant(brief, existing, variant);
+    set((s) => ({
+      pages: s.pages.map((p) => (p.id === pageId ? next : p)),
+      variants: { ...s.variants, [pageId]: variant },
+      compareId: null,
+      share: null,
+    }));
   },
 
   /* ---- results / preview ---------------------------------------------- */
@@ -374,6 +550,22 @@ export const useStore = create<State & Actions>((set, get) => ({
   markShortcutsSeen: () => set({ hasSeenShortcuts: true }),
   setFailFirstN: (n) => set({ failFirstN: n }),
 }));
+
+/* ---- brief <-> draft ---------------------------------------------------- */
+
+/** A restored run has to refill the form as well as the deck, otherwise Edit
+    brief opens on an empty form and the merchant loses the run. */
+function briefToDraft(brief: Brief): BriefDraft {
+  return {
+    whatYouSell: brief.whatYouSell,
+    visualStyle: brief.visualStyle,
+    storeType: brief.storeType,
+    prompt: brief.prompt,
+    brandColors: [...brief.brandColors],
+    referenceImages: brief.referenceImages,
+    pages: { ...brief.pages },
+  };
+}
 
 /* ---- selectors ---------------------------------------------------------- */
 

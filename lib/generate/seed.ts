@@ -68,6 +68,11 @@ export function makeRng(seed: string | number): Rng {
 }
 
 /** The seed string for one mockup. `variant` increments on regenerate. */
-export function pageSeed(pageId: string, variant = 0): string {
-  return `${pageId}::v${variant}`;
+/** A per-page note is part of the seed, so the same note always reproduces the
+    same page — which is what makes a shared link exact. */
+export function pageSeed(pageId: string, variant = 0, note = ""): string {
+  const salt = note.trim();
+  return salt
+    ? `${pageId}::v${variant}::n${hashString(salt).toString(36)}`
+    : `${pageId}::v${variant}`;
 }

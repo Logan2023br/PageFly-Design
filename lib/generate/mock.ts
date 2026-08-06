@@ -1048,19 +1048,24 @@ export function buildPage(args: {
   copyIndex: number;
   copyTotal: number;
   variant: number;
+  /** free-text instruction for this page alone, from "Regenerate with a note" */
+  note?: string;
 }): PageMockup {
   const { brief, pageType, pageId, index, copyIndex, copyTotal, variant } = args;
+  const note = args.note?.trim() ?? "";
 
   const def = PAGE_BY_ID[pageType];
   const category = def?.category ?? "core";
-  const seed = pageSeed(pageId, variant);
+  const seed = pageSeed(pageId, variant, note);
   const rng = makeRng(seed);
 
   const subject = parseSubject(brief.whatYouSell);
   const vertical = detectVertical(
     `${brief.whatYouSell} ${brief.prompt}`.toLowerCase(),
   );
-  const signals = readPromptSignals(brief.prompt);
+  const signals = readPromptSignals(
+    note ? `${brief.prompt}\n${note}` : brief.prompt,
+  );
 
   /* Colour precedence, most authoritative first:
        1. swatches the merchant added deliberately
@@ -1147,6 +1152,7 @@ export function buildPage(args: {
     refHints,
     blocks,
     variant,
+    note: note || undefined,
     seed,
   };
 }

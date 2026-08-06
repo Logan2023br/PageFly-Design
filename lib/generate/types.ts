@@ -323,6 +323,8 @@ export type PageMockup = {
   blocks: MockupBlock[];
   /** bumped by Regenerate to produce a different reproducible variant */
   variant: number;
+  /** the instruction this page was last regenerated with, if any */
+  note?: string;
   seed: string;
 };
 

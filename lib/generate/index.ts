@@ -28,6 +28,8 @@ export type GenerateOptions = {
   onlyPageIds?: string[];
   /** pageId -> variant number. Bumped by "Regenerate" to get a new take. */
   variants?: Record<string, number>;
+  /** pageId -> per-page instruction. Replayed so a shared link reproduces. */
+  notes?: Record<string, string>;
   /**
    * Mock only: forces the first N pages to fail so the partial-failure and
    * retry paths can be exercised. Never set in production.
@@ -89,6 +91,7 @@ export async function generatePages(
 
     const target = targets[i];
     const variant = options.variants?.[target.pageId] ?? 0;
+    const note = options.notes?.[target.pageId];
 
     // Deterministic "thinking" time, 700-1400ms per the brief.
     if (!options.instant) {
@@ -117,6 +120,7 @@ export async function generatePages(
         copyIndex: target.copyIndex,
         copyTotal: target.copyTotal,
         variant,
+        note,
       });
       done.push(page);
       onPageReady(page);
@@ -133,9 +137,42 @@ export async function generatePages(
 }
 
 /** Rebuild a single page with a fresh variant. Used by "Regenerate this page". */
+/**
+ * Rebuild one page as a different-but-reproducible variant.
+ *
+ * A note replaces whatever note the page carried. It runs through the same
+ * signal reader as the brief's prompt, so "add more social proof" genuinely
+ * changes which sections the page gets rather than only reshuffling it — the
+ * engine understands the vocabulary in `SECTION_HINTS`, nothing beyond it.
+ */
 export function regeneratePage(
   brief: Brief,
   page: PageMockup,
+  note?: string,
+): PageMockup {
+  const nextNote = note?.trim() ?? page.note ?? "";
+  /* A new note is a new starting point, so the variant counter resets — reusing
+     it would make the first result for a note depend on how many times the page
+     had been regenerated before, and a shared link would not reproduce. */
+  const changedNote = nextNote !== (page.note ?? "");
+  return buildPage({
+    brief,
+    pageType: page.pageType,
+    pageId: page.id,
+    index: page.index,
+    copyIndex: page.copyIndex ?? 1,
+    copyTotal: page.copyTotal ?? 1,
+    variant: changedNote ? 0 : page.variant + 1,
+    note: nextNote,
+  });
+}
+
+/** Build a specific variant of an existing page without disturbing it — the
+    compare view renders alternatives side by side and never mutates state. */
+export function buildVariant(
+  brief: Brief,
+  page: PageMockup,
+  variant: number,
 ): PageMockup {
   return buildPage({
     brief,
@@ -144,7 +181,8 @@ export function regeneratePage(
     index: page.index,
     copyIndex: page.copyIndex ?? 1,
     copyTotal: page.copyTotal ?? 1,
-    variant: page.variant + 1,
+    variant,
+    note: page.note,
   });
 }
 
