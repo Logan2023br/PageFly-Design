@@ -237,6 +237,12 @@ separated or CSV) through the same parser. That exists because the two clean
 options both need provisioning first, and this is the difference between the beta
 being testable today and testable once a Google Cloud project exists.
 
+The compiled-in record also answers when storage does not have the row, which is
+what makes the zero-configuration path work on serverless: each instance starts
+with an empty `/tmp`, so the instance that signed a merchant in is usually not the
+one rendering their next page, and looking the store up in storage alone signed
+them straight back out.
+
 A sign-in reads the database first and only falls back to pulling the sheet for a
 domain it has never seen. Google being slow or unreachable therefore cannot lock
 out a merchant who is already known.
@@ -252,6 +258,12 @@ server-side as well as by the cookie). `SESSION_SECRET` should be set; when it i
 not, a key is generated and written beside the data store. Never a hardcoded
 default — that would sit in a public repository and anyone who read it could mint
 an admin cookie.
+
+On serverless `SESSION_SECRET` is effectively **required**, not advisory. The
+generated key lands in that instance's `/tmp`, which no other instance can read, so
+a cookie signed by one is rejected by the next and the merchant is signed out at
+random — which presents as a routing fault, not a signing one. `/api/health`
+reports that as blocking when it detects a serverless host.
 
 The key has to be on disk rather than in memory, and that is not a preference: a
 server component and a route handler are separate module instances with separate

@@ -68,6 +68,8 @@ function secretFile(): string {
 }
 
 let cached: string | null = null;
+/** Whether the generated key reached disk. null until a key has been needed. */
+let persisted: boolean | null = null;
 
 function secret(): string {
   const value = process.env.SESSION_SECRET;
@@ -80,6 +82,7 @@ function secret(): string {
       const stored = readFileSync(file, "utf8").trim();
       if (stored.length >= 16) {
         cached = stored;
+        persisted = true;
         return cached;
       }
     }
@@ -92,7 +95,9 @@ function secret(): string {
     mkdirSync(dirname(file), { recursive: true });
     /* Owner-only. This is the key that signs admin sessions. */
     writeFileSync(file, generated, { mode: 0o600 });
+    persisted = true;
   } catch {
+    persisted = false;
     /* Read-only filesystem. Sessions then work only within this module instance,
        which is the broken case described above — but returning something is still
        better than throwing at sign-in. hasSessionSecret() reports the risk. */
@@ -102,14 +107,17 @@ function secret(): string {
   return cached;
 }
 
-/** True when the signing key is stable across instances and restarts. */
+/**
+ * True when the signing key is stable across restarts.
+ *
+ * Establishes the key first rather than only looking for the file. Checking for a
+ * file that is created lazily reported "could not be written anywhere" on a
+ * healthy deployment where simply nothing had needed a key yet.
+ */
 export function hasStableSecret(): boolean {
   if (hasSessionSecret()) return true;
-  try {
-    return existsSync(secretFile());
-  } catch {
-    return false;
-  }
+  secret();
+  return persisted === true;
 }
 
 /** True when SESSION_SECRET is properly set, so sessions survive a restart. */

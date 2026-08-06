@@ -44,6 +44,8 @@ export async function GET() {
      app works, so calling this "blocking" there would be the same wrong-diagnosis
      mistake this endpoint exists to prevent. */
   const production = process.env.NODE_ENV === "production";
+  /* Vercel and anything like it: many short-lived instances, no shared disk. */
+  const serverless = Boolean(process.env.VERCEL);
 
   /* Blocking means "nobody can use this", not "this is not how I would run it".
      Both of the entries that used to be here were the second kind: the app now
@@ -59,16 +61,42 @@ export async function GET() {
       "Nobody can sign in: no built-in stores, no sheet source, and no SYNC_SECRET.",
     );
 
+  if (!checks.sessionSecretStable)
+    blocking.push(
+      "No signing key: SESSION_SECRET is unset and a generated one could not be " +
+        "written anywhere. Sessions cannot work — set SESSION_SECRET.",
+    );
+
+  /* On serverless the generated key lives in this instance's /tmp, which no other
+     instance can read. A cookie signed here fails verification there, so the
+     merchant is signed out at random and it looks like a routing fault. Nothing in
+     the code can fix that: the key has to come from the environment. */
+  if (!checks.sessionSecret && serverless)
+    blocking.push(
+      "SESSION_SECRET must be set on serverless. A generated key is per-instance, " +
+        "so a sign-in breaks as soon as the next request lands elsewhere.",
+    );
+
   const advisory: string[] = [];
   if (checks.allowlistSource === "none" && !checks.syncSecret)
     advisory.push(
       `Running on the built-in allowlist (${checks.builtinStores} store${checks.builtinStores === 1 ? "" : "s"}). ` +
         "Add a sheet source, or BETA_STORES, to admit more without a deploy.",
     );
-  if (!checks.database && !production)
+  if (!checks.sessionSecret && checks.sessionSecretStable && !serverless)
     advisory.push(
-      "No DATABASE_URL — using the local file driver (.pfd-dev-db.json). Fine for " +
-        "development; production refuses to start without one.",
+      "SESSION_SECRET is not set — a generated key on disk is in use, so sign-ins " +
+        "last as long as that file. Set it to survive redeploys.",
+    );
+  if (!checks.database && serverless)
+    advisory.push(
+      "No DATABASE_URL — data is in this instance's /tmp and is NOT shared or kept. " +
+        "Saved pages will appear and disappear; set it before anyone relies on them.",
+    );
+  if (!checks.database && !serverless)
+    advisory.push(
+      "No DATABASE_URL — using the file store. Correct on a single server with a " +
+        "persistent disk; never behind more than one process.",
     );
   if (!checks.reviewWebhook)
     advisory.push(

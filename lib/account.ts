@@ -87,15 +87,26 @@ export async function currentAccount(): Promise<Account | null> {
   if (!session?.domain) return null;
 
   const repo = getRepo();
-  const store = await repo.getStore(session.domain);
-  /* Signed in but no longer in the allowlist — removed from the sheet since.
-     Treated as signed out rather than silently allowed. */
+
+  /* The compiled-in record is used whenever storage does not have the row. On
+     serverless with no database each instance has its own empty /tmp, so the
+     instance that signed a merchant in is usually not the one that renders their
+     next page — looking the store up in storage alone logged them straight back
+     out. The built-in list needs no storage to answer. */
+  const store =
+    (await repo.getStore(session.domain).catch(() => null)) ??
+    findBuiltinStore(session.domain);
+
+  /* Signed in but not in any list — removed from the sheet since. Treated as
+     signed out rather than silently allowed. */
   if (!store) return null;
 
+  /* Counters degrade to zero rather than failing the whole account: a merchant
+     with no page count is a merchant who can still work. */
   const [pagesUsed, review, lastRunAt] = await Promise.all([
-    repo.pagesUsed(store.domain),
-    repo.getReview(store.domain),
-    repo.lastRunAt(store.domain),
+    repo.pagesUsed(store.domain).catch(() => 0),
+    repo.getReview(store.domain).catch(() => null),
+    repo.lastRunAt(store.domain).catch(() => null),
   ]);
 
   return {
