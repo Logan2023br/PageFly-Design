@@ -117,10 +117,17 @@ export async function POST(request: Request) {
 
   const repo = getRepo();
   const createdAt = new Date().toISOString();
-  /* Derived from the payload rather than random, so pressing Create twice with
-     the same brief cannot produce two rows for one piece of work — saveRun does
-     nothing on a conflicting id. */
-  const id = runId(account.domain, body.payload, createdAt);
+  /* Derived from the CONTENT alone — no timestamp. The id used to include
+     Date.now(), which meant two identical saves produced two different ids and
+     `on conflict do nothing` could never fire. Navigating Design → Library →
+     Design remounts the recorder, its in-memory guard resets, and the same deck
+     was written again every time: seven rows for one build, and the page
+     allowance charged for all seven.
+
+     With a content id the database refuses the duplicate no matter how many
+     times a client asks. Two builds of the identical brief collapsing into one
+     row is correct — they are the same deck. */
+  const id = runId(account.domain, body.payload, body.pages);
 
   const run: RunRecord = {
     id,
@@ -146,12 +153,28 @@ export async function POST(request: Request) {
   } satisfies SaveRunResponse);
 }
 
-/** Short, stable and collision-resistant enough for one store's runs. */
-function runId(domain: string, payload: string, createdAt: string): string {
-  let h = 0x811c9dc5;
-  for (const ch of `${domain}|${payload}|${createdAt.slice(0, 16)}`) {
-    h ^= ch.charCodeAt(0);
-    h = Math.imul(h, 0x01000193);
+/**
+ * Stable id for a run: same store, same brief, same pages → same id.
+ *
+ * Two hashes over the same bytes rather than one, so the id is 64-bit-ish. A
+ * single 32-bit FNV over a store's runs would start colliding in the hundreds,
+ * and a collision here silently drops someone's build.
+ */
+function runId(
+  domain: string,
+  payload: string,
+  pages: { pageId: string; index: number }[],
+): string {
+  const material = `${domain}|${payload}|${pages
+    .map((p) => `${p.index}:${p.pageId}`)
+    .join(",")}`;
+
+  let a = 0x811c9dc5;
+  let b = 0x01000193;
+  for (const ch of material) {
+    const code = ch.charCodeAt(0);
+    a = Math.imul(a ^ code, 0x01000193);
+    b = Math.imul(b + code, 0x85ebca6b) ^ (b >>> 13);
   }
-  return `${(h >>> 0).toString(36)}${Date.now().toString(36).slice(-5)}`;
+  return `${(a >>> 0).toString(36)}${(b >>> 0).toString(36)}`;
 }

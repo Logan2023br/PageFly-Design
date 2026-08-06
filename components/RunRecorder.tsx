@@ -9,6 +9,12 @@ import { useAccount } from "./AccountProvider";
 /* ==========================================================================
    Saves a finished run, then re-reads the allowance.
 
+   Guarded twice on purpose. The ref below stops a re-render from saving twice, but
+   it lives in the component: navigating Design → Library → Design remounts this and
+   the ref resets, which is how one build became seven rows. The durable guard is
+   the run id being derived from content, so the database refuses a duplicate
+   however many times a client asks.
+
    A separate component rather than a call inside the store: the store must stay
    free of network work, and this way nothing about how pages are generated is
    touched by persistence.
@@ -22,6 +28,7 @@ export function RunRecorder() {
   const brief = useStore((s) => s.brief);
   const pages = useStore((s) => s.pages);
   const variants = useStore((s) => s.variants);
+  const reopened = useStore((s) => s.reopened);
   const { refresh } = useAccount();
 
   /* Signature of the last run written, so a re-render, a filter change or a
@@ -29,6 +36,10 @@ export function RunRecorder() {
   const saved = useRef<string | null>(null);
 
   useEffect(() => {
+    /* A deck reopened from the Library is already saved. Without this check,
+       opening one and navigating back to Design wrote it again as a new build and
+       charged the allowance a second time. */
+    if (reopened) return;
     if (screen !== "results" || !brief || pages.length === 0) return;
 
     const payload = encodeRunPayload(brief, variants);
@@ -67,7 +78,7 @@ export function RunRecorder() {
       }
       await refresh();
     })();
-  }, [screen, brief, pages, variants, refresh]);
+  }, [screen, brief, pages, variants, reopened, refresh]);
 
   return null;
 }

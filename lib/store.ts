@@ -56,6 +56,9 @@ type State = {
   pages: PageMockup[];
   failures: GenerateFailure[];
   variants: Record<string, number>;
+  /** true when the deck on screen was reopened from the Library, so the recorder
+      knows there is nothing new to save */
+  reopened: boolean;
   /** page ids currently being rebuilt, so their card can show the morph again */
   rebuilding: string[];
 
@@ -99,6 +102,10 @@ type Actions = {
 
   /** Rebuild a run saved in the Library. Uses the same generator, instantly. */
   loadSavedRun: (brief: Brief, variants: Record<string, number>) => Promise<void>;
+  /** Rebuild EVERY saved run into one deck — what the Library shows. */
+  loadLibrary: (
+    runs: { id: string; brief: Brief; variants: Record<string, number> }[],
+  ) => Promise<void>;
 
   setFilter: (f: CategoryId | "all") => void;
   openPreview: (index: number) => void;
@@ -122,6 +129,7 @@ export const useStore = create<State & Actions>((set, get) => ({
   pages: [],
   failures: [],
   variants: {},
+  reopened: false,
   rebuilding: [],
 
   filter: "all",
@@ -259,6 +267,7 @@ export const useStore = create<State & Actions>((set, get) => ({
       pages: [],
       failures: [],
       variants: {},
+      reopened: false,
       filter: "all",
       previewIndex: null,
     });
@@ -368,6 +377,7 @@ export const useStore = create<State & Actions>((set, get) => ({
       pages: [],
       failures: [],
       variants,
+      reopened: true,
       filter: "all",
       previewIndex: null,
     });
@@ -379,6 +389,56 @@ export const useStore = create<State & Actions>((set, get) => ({
         controller.signal,
         { variants, instant: true },
       );
+      set({ screen: "results" });
+    } catch (err) {
+      if (!isAbortError(err)) throw err;
+    }
+  },
+
+  /**
+   * Every saved build, as one deck.
+   *
+   * The Library shows the pages themselves rather than a list of builds: two
+   * builds of three and two pages are five pages, and that is what a merchant is
+   * looking for. Each run is replayed through the same generator, so every page
+   * is identical to the one that was saved.
+   *
+   * Page ids are namespaced with the run id. Two builds both contain a page whose
+   * id is "home", and duplicate React keys make the grid reuse the wrong DOM and
+   * the preview step to the wrong page. The page is BUILT with its original id so
+   * its seed — and therefore its content — is unchanged; only the identity used by
+   * the deck is rewritten.
+   */
+  loadLibrary: async (runs) => {
+    controller?.abort();
+    controller = new AbortController();
+    const signal = controller.signal;
+
+    set({
+      screen: "generating",
+      brief: runs.at(-1)?.brief ?? null,
+      plan: [],
+      pages: [],
+      failures: [],
+      variants: {},
+      reopened: true,
+      filter: "all",
+      previewIndex: null,
+    });
+
+    try {
+      for (const run of runs) {
+        if (signal.aborted) return;
+        await generatePages(
+          run.brief,
+          (page) =>
+            set((s) => ({
+              pages: [...s.pages, { ...page, id: `${run.id}::${page.id}` }],
+            })),
+          signal,
+          { variants: run.variants, instant: true },
+        );
+      }
       set({ screen: "results" });
     } catch (err) {
       if (!isAbortError(err)) throw err;
