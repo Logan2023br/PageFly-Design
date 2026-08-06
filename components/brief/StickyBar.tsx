@@ -1,20 +1,56 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useState } from "react";
 import { describeSelection, totalSelected } from "@/lib/pageCatalog";
 import { useStore } from "@/lib/store";
 import { firstMissing } from "@/lib/validation";
+import { useAccount } from "../AccountProvider";
 import { Button, Icon } from "../ui";
+
+/** Wording fixed by the brief. */
+const OVER_LIMIT =
+  "Bạn đã vượt quá số page build được cho phép, hãy liên hệ với support để hỗ trợ.";
 
 /* The sticky bar names the ONE thing still missing rather than listing every
    validation error — the user only has to act on the next one. */
 export function StickyBar() {
   const draft = useStore((s) => s.draft);
   const start = useStore((s) => s.start);
+  const { account, refresh } = useAccount();
+  const [checking, setChecking] = useState(false);
+  const [blocked, setBlocked] = useState<string | null>(null);
 
   const total = totalSelected(draft.pages);
   const missing = firstMissing(draft);
   const ready = missing === null;
+
+  const remaining = account ? Math.max(0, account.pageLimit - account.pagesUsed) : null;
+  /* Selecting more pages than are left is refused up front rather than letting a
+     merchant watch a deck generate and then be told it cannot be kept. */
+  const wouldExceed = remaining !== null && total > remaining;
+
+  /**
+   * The allowance is re-read from the server on the click, not trusted from the
+   * last render: a second tab or another admin change could have used it up
+   * since this screen loaded.
+   */
+  const create = async () => {
+    if (!ready || checking) return;
+    setBlocked(null);
+    setChecking(true);
+    try {
+      const fresh = await refresh();
+      const left = fresh ? Math.max(0, fresh.pageLimit - fresh.pagesUsed) : null;
+      if (left !== null && (left === 0 || total > left)) {
+        setBlocked(OVER_LIMIT);
+        return;
+      }
+      await start();
+    } finally {
+      setChecking(false);
+    }
+  };
 
   const anchor: Record<string, string> = {
     "Tell us what you sell": "pfd-sell",
@@ -47,6 +83,25 @@ export function StickyBar() {
               {total > 0 ? describeSelection(draft.pages) : "Pick what you need below"}
             </span>
           </div>
+          {blocked && (
+            <p
+              role="alert"
+              className="mt-1 flex items-start gap-1.5 text-[12px] font-semibold text-pf-danger"
+            >
+              <span className="mt-px shrink-0">
+                <Icon name="CircleAlert" size={13} />
+              </span>
+              {blocked}
+            </p>
+          )}
+          {!blocked && ready && wouldExceed && (
+            <p className="mt-0.5 flex items-center gap-1.5 text-[12px] font-medium text-pf-warn">
+              <Icon name="TriangleAlert" size={13} />
+              {remaining === 0
+                ? "No pages left in your allowance"
+                : `Only ${remaining} page${remaining === 1 ? "" : "s"} left in your allowance`}
+            </p>
+          )}
           {!ready && (
             <button
               type="button"
@@ -63,14 +118,16 @@ export function StickyBar() {
           )}
         </div>
 
+        {/* Left enabled when the allowance is short: the click is what explains
+            why, and a dead button explains nothing. */}
         <Button
           size="lg"
-          disabled={!ready}
-          onClick={() => void start()}
+          disabled={!ready || checking}
+          onClick={() => void create()}
           title={ready ? undefined : missing ?? undefined}
-          iconRight="Sparkles"
+          iconRight={checking ? undefined : "Sparkles"}
         >
-          Create pages
+          {checking ? "Checking…" : "Create pages"}
         </Button>
       </motion.div>
     </motion.div>

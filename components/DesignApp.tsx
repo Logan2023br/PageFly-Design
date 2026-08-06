@@ -3,6 +3,10 @@
 import { AnimatePresence, MotionConfig } from "framer-motion";
 import { useEffect } from "react";
 import { useStore, useVisiblePages } from "@/lib/store";
+import type { Account } from "@/lib/account";
+import { AccountProvider } from "./AccountProvider";
+import { RunRecorder } from "./RunRecorder";
+import { ReviewPrompt } from "./review/ReviewPrompt";
 import { BriefScreen } from "./brief/BriefScreen";
 import { GeneratingScreen } from "./generating/GeneratingScreen";
 import { PreviewOverlay } from "./preview/PreviewOverlay";
@@ -43,7 +47,7 @@ function Screens() {
   );
 }
 
-export function DesignApp() {
+export function DesignApp({ account }: { account: Account | null }) {
   const setFailFirstN = useStore((s) => s.setFailFirstN);
 
   /* Dev-only escape hatch so the partial-failure and retry paths can be seen
@@ -73,6 +77,7 @@ export function DesignApp() {
        whole feature. Individual components additionally read useReducedMotion()
        where they own a long-running or looping animation. */
     <MotionConfig reducedMotion="user">
+     <AccountProvider account={account}>
       {/* translate="no" + notranslate is a functional requirement, not a
           preference. Google Translate rewrites text nodes into <font> wrappers
           before React hydrates; the tree then fails to match, event handlers
@@ -95,8 +100,11 @@ export function DesignApp() {
               <Screens />
             </ExportProvider>
           </div>
+          <RunRecorder />
+          <ReviewPrompt />
         </div>
       </div>
+     </AccountProvider>
     </MotionConfig>
   );
 }

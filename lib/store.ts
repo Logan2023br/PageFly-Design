@@ -97,6 +97,9 @@ type Actions = {
   regenerateOne: (pageId: string) => void;
   retryFailed: () => Promise<void>;
 
+  /** Rebuild a run saved in the Library. Uses the same generator, instantly. */
+  loadSavedRun: (brief: Brief, variants: Record<string, number>) => Promise<void>;
+
   setFilter: (f: CategoryId | "all") => void;
   openPreview: (index: number) => void;
   closePreview: () => void;
@@ -335,6 +338,53 @@ export const useStore = create<State & Actions>((set, get) => ({
     }
   },
 
+  /* ---- library --------------------------------------------------------- */
+
+  /**
+   * Reopen a saved run.
+   *
+   * No fake thinking time: the merchant already waited for this deck once, and
+   * the generating screen would be theatre. Because generation is deterministic,
+   * replaying the brief and the variant numbers rebuilds exactly the pages that
+   * were saved — nothing about buildPage changes here.
+   */
+  loadSavedRun: async (brief, variants) => {
+    controller?.abort();
+    controller = new AbortController();
+
+    const plan: PlanEntry[] = expandSelection(brief.pages).map((p) => ({
+      pageId: p.pageId,
+      pageType: p.pageType,
+      label: p.pageType,
+      copyIndex: p.copyIndex,
+      copyTotal: p.copyTotal,
+    }));
+
+    set({
+      screen: "generating",
+      draft: briefToDraft(brief),
+      brief,
+      plan,
+      pages: [],
+      failures: [],
+      variants,
+      filter: "all",
+      previewIndex: null,
+    });
+
+    try {
+      await generatePages(
+        brief,
+        (page) => set((s) => ({ pages: [...s.pages, page] })),
+        controller.signal,
+        { variants, instant: true },
+      );
+      set({ screen: "results" });
+    } catch (err) {
+      if (!isAbortError(err)) throw err;
+    }
+  },
+
   /* ---- results / preview ---------------------------------------------- */
 
   setFilter: (f) => set({ filter: f }),
@@ -374,6 +424,22 @@ export const useStore = create<State & Actions>((set, get) => ({
   markShortcutsSeen: () => set({ hasSeenShortcuts: true }),
   setFailFirstN: (n) => set({ failFirstN: n }),
 }));
+
+/* ---- brief <-> draft ---------------------------------------------------- */
+
+/** Reopening a run has to refill the form as well as the deck, or "Edit brief"
+    lands on an empty form and the merchant loses the run. */
+function briefToDraft(brief: Brief): BriefDraft {
+  return {
+    whatYouSell: brief.whatYouSell,
+    visualStyle: brief.visualStyle,
+    storeType: brief.storeType,
+    prompt: brief.prompt,
+    brandColors: [...brief.brandColors],
+    referenceImages: brief.referenceImages,
+    pages: { ...brief.pages },
+  };
+}
 
 /* ---- selectors ---------------------------------------------------------- */
 

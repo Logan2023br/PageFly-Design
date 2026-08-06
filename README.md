@@ -154,6 +154,98 @@ The feature is one component tree under one class. Nothing leaks out.
 
 ---
 
+## Accounts, Library and admin
+
+The merchant app is gated and now keeps its work. Five surfaces:
+
+| Route | What it is |
+|---|---|
+| `/design/login` | store-domain entry, checked against the beta allowlist |
+| `/design` | the brief → generate → results flow |
+| `/design/library` | every deck this store has built, reopenable |
+| `/design/admin` | Thống kê — animated counters and charts |
+| `/design/admin/users` | the store table, and each store's pages |
+
+### The storage decision: runs are briefs, not pages
+
+A saved deck is **not** stored as pages. Generation is a pure function of the
+brief — seeded PRNG only, with no `Math.random` and no `Date.now` anywhere under
+`lib/generate`, which was verified rather than assumed. So a run stores the brief
+plus each page's variant number, and reopening it replays the generator to get
+the same deck back, byte for byte.
+
+That makes a row a few hundred bytes instead of megabytes of markup, needs no
+image hosting, and means the Library cannot drift from what the merchant
+approved. `lib/runPayload.ts` holds the format.
+
+Reference images travel as hints only (`palette`, `layout`). Their pixels never
+reach a mockup — the artwork is drawn from scratch — so the object URL and the
+downscaled copy are dropped.
+
+> **Forward note.** Determinism is the whole mechanism. The day generation calls
+> a model, a payload stops reproducing anything and a run has to carry its
+> generated pages instead. `runs.snapshot` already exists in the schema for
+> exactly that, so it is a reader change rather than a migration.
+
+### Tables
+
+`stores` (allowlist cache + observed sign-ins) · `runs` (brief payload, page
+count, token spend) · `run_pages` (one row per page, so the Library and the quota
+counter read from the same place) · `reviews` (one row per store, enforced by the
+primary key).
+
+Postgres in production; a file-backed driver takes over in development so a fresh
+clone runs with no credentials. It is never selected in production — quietly
+serving a per-instance in-memory store would look exactly like data loss. One
+dev-only wrinkle: that driver reads its file once at startup, so editing
+`.pfd-dev-db.json` by hand needs a restart.
+
+### The allowlist
+
+The sheet is private, and it contains merchant email addresses, so
+publish-to-web is the wrong default. Three sources are supported —
+service account, any CSV URL, or an n8n push to `/api/admin/sync` — and all three
+land in the same mapper. Columns are matched by folded name rather than by
+position, so inserting a column does not shift every field by one, and the
+sheet's existing `Reivew` spelling is matched alongside the correct one.
+
+A sign-in reads the database first and only falls back to pulling the sheet for a
+domain it has never seen. Google being slow or unreachable therefore cannot lock
+out a merchant who is already known.
+
+### What sign-in is and is not
+
+It asks for a store domain, so anyone who knows an allowlisted domain can get in.
+That is the specified design and it is reasonable for a gated beta, but it is an
+**allowlist, not authentication**, and should not be relied on as one.
+
+Sessions are signed cookies (HMAC, constant-time compare, expiry checked
+server-side as well as by the cookie). `SESSION_SECRET` is required in
+production with no fallback — a hardcoded default in a public repository is a
+forgeable admin cookie. `proxy.ts` (this version of Next renamed `middleware`)
+only checks that a cookie *exists*, as a fast redirect; every route that acts on
+a session verifies the signature itself.
+
+### Page allowance
+
+The counter in the top-left reads `pagesUsed/pageLimit` from the server on every
+load, and again after every build. The limit comes from the sheet's `Số page`
+cell (the `30` in `09/30`). Create re-reads the allowance on the click rather
+than trusting the last render, so a second tab cannot spend it twice, and refuses
+with the specified message when it is gone.
+
+### Reviews
+
+Five minutes after a build, once per store ever. The timer runs from the server's
+record of the last build, so it survives a reload instead of restarting. Ratings
+are written to the database **first** and forwarded to the n8n webhook second: a
+webhook that is down, slow or not yet configured leaves the review saved with
+`forwarded = false` for a later retry, rather than losing a merchant's rating.
+
+Token spend is recorded per run and is genuinely `0` today — nothing calls a
+model yet. The admin card says so rather than showing a bare zero that reads as
+a broken counter.
+
 ## Card actions
 
 Hovering a result card reveals two controls.
