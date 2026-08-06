@@ -161,7 +161,7 @@ The merchant app is gated and now keeps its work. Five surfaces:
 | Route | What it is |
 |---|---|
 | `/design/login` | store-domain entry, checked against the beta allowlist |
-| `/design` | the brief → generate → results flow |
+| `/design` | the brief → generate flow; always opens ready to build |
 | `/design/library` | every page this store has built, in one grid |
 | `/design/admin` | Thống kê — animated counters and charts |
 | `/design/admin/users` | the store table, and each store's pages |

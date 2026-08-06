@@ -106,7 +106,7 @@ function DeckView({ building }: { building: boolean }) {
         {building && visible.length === 0 ? (
           <GeneratingScreen key="generating" />
         ) : (
-          <ResultsScreen key="results" onOpen={openPreview} />
+          <ResultsScreen key="results" onOpen={openPreview} readOnly />
         )}
       </AnimatePresence>
 

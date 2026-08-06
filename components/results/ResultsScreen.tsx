@@ -50,7 +50,15 @@ function FailureNotice() {
 
 /* ---- toolbar ------------------------------------------------------------ */
 
-function Toolbar() {
+/**
+ * @param readOnly the Library view. Editing the brief or regenerating there would
+ * act on a build that is already stored, so those two belong to the Design flow.
+ *
+ * A prop rather than the store's `reopened` flag: that flag is set once the
+ * Library has finished rebuilding, so the server render and the first paint would
+ * show both buttons and then have them vanish.
+ */
+function Toolbar({ readOnly }: { readOnly: boolean }) {
   const pages = useStore((s) => s.pages);
   const filter = useStore((s) => s.filter);
   const setFilter = useStore((s) => s.setFilter);
@@ -80,18 +88,22 @@ function Toolbar() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="ghost" size="sm" icon="Pencil" onClick={editBrief}>
-            Edit brief
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            icon="RotateCcw"
-            onClick={() => void regenerateAll()}
-            title="Rebuild every page from the same brief"
-          >
-            Regenerate
-          </Button>
+          {!readOnly && (
+            <>
+              <Button variant="ghost" size="sm" icon="Pencil" onClick={editBrief}>
+                Edit brief
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon="RotateCcw"
+                onClick={() => void regenerateAll()}
+                title="Rebuild every page from the same brief"
+              >
+                Regenerate
+              </Button>
+            </>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -177,7 +189,14 @@ function Toolbar() {
 
 /* ---- screen ------------------------------------------------------------- */
 
-export function ResultsScreen({ onOpen }: { onOpen: (index: number) => void }) {
+export function ResultsScreen({
+  onOpen,
+  readOnly = false,
+}: {
+  onOpen: (index: number) => void;
+  /** true in the Library, where the deck is a saved build being viewed */
+  readOnly?: boolean;
+}) {
   const visible = useVisiblePages();
   const rebuilding = useStore((s) => s.rebuilding);
   const { error, clearError } = useExport();
@@ -192,7 +211,7 @@ export function ResultsScreen({ onOpen }: { onOpen: (index: number) => void }) {
       className="mx-auto max-w-7xl pt-4 sm:pt-8"
     >
       <div className="grid gap-5">
-        <Toolbar />
+        <Toolbar readOnly={readOnly} />
         <FailureNotice />
 
         <AnimatePresence>
