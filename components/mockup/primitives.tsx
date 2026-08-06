@@ -148,15 +148,18 @@ export function Display({
   size = 44,
   style,
   as: Tag = "h2",
+  dataPf,
 }: {
   children: ReactNode;
   size?: number;
   style?: CSSProperties;
   as?: "h1" | "h2" | "h3" | "div";
+  dataPf?: string;
 }) {
   const { tokens, fs } = useMock();
   return (
     <Tag
+      data-pf={dataPf}
       style={{
         fontFamily: tokens.fontDisplay,
         fontWeight: tokens.displayWeight,
@@ -178,15 +181,18 @@ export function Body({
   size = 15,
   muted = true,
   style,
+  dataPf,
 }: {
   children: ReactNode;
   size?: number;
   muted?: boolean;
   style?: CSSProperties;
+  dataPf?: string;
 }) {
   const { tokens, fs } = useMock();
   return (
     <p
+      data-pf={dataPf}
       style={{
         fontFamily: tokens.fontBody,
         fontWeight: tokens.bodyWeight,
@@ -253,11 +259,13 @@ export function Btn({
   variant = "primary",
   full,
   size = "md",
+  dataPf = "button",
 }: {
   label: string;
   variant?: "primary" | "ghost" | "onAccent";
   full?: boolean;
   size?: "sm" | "md" | "lg";
+  dataPf?: string;
 }) {
   const { tokens, fs } = useMock();
   const padY = size === "lg" ? 15 : size === "sm" ? 8 : 12;
@@ -282,6 +290,7 @@ export function Btn({
   if (variant === "primary")
     return (
       <span
+        data-pf={dataPf}
         style={{
           ...base,
           background: tokens.accent,
@@ -297,6 +306,7 @@ export function Btn({
   if (variant === "onAccent")
     return (
       <span
+        data-pf={dataPf}
         style={{
           ...base,
           background: tokens.accentInk,
@@ -310,6 +320,7 @@ export function Btn({
 
   return (
     <span
+      data-pf={dataPf}
       style={{
         ...base,
         background: "transparent",
@@ -329,15 +340,18 @@ export function Card({
   style,
   pad = 20,
   band,
+  dataPf,
 }: {
   children: ReactNode;
   style?: CSSProperties;
   pad?: number;
   band?: "base" | "alt" | "accent";
+  dataPf?: string;
 }) {
   const { tokens } = useMock();
   return (
     <div
+      data-pf={dataPf}
       style={{
         background:
           band === "accent"
@@ -494,6 +508,7 @@ export function MockImage({
   radius,
   label,
   kind = "auto",
+  dataPf,
 }: {
   seed: string;
   /** height / width */
@@ -502,6 +517,7 @@ export function MockImage({
   radius?: number;
   label?: string;
   kind?: "auto" | "product" | "scene";
+  dataPf?: string;
 }) {
   const { tokens, vertical, fs } = useMock();
 
@@ -515,6 +531,7 @@ export function MockImage({
 
   return (
     <div
+      data-pf={dataPf}
       style={{
         position: "relative",
         width: "100%",
@@ -627,15 +644,18 @@ export function Grid({
   gap,
   children,
   style,
+  dataPf,
 }: {
   cols: number;
   gap?: number;
   children: ReactNode;
   style?: CSSProperties;
+  dataPf?: string;
 }) {
   const { gap: defaultGap } = useMock();
   return (
     <div
+      data-pf={dataPf}
       style={{
         display: "grid",
         gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
@@ -652,13 +672,17 @@ export function Stack({
   gap = 12,
   children,
   style,
+  dataPf,
 }: {
   gap?: number;
   children: ReactNode;
   style?: CSSProperties;
+  dataPf?: string;
 }) {
   return (
-    <div style={{ display: "grid", gap, ...style }}>{children}</div>
+    <div data-pf={dataPf} style={{ display: "grid", gap, ...style }}>
+      {children}
+    </div>
   );
 }
 
@@ -667,14 +691,17 @@ export function Row({
   children,
   style,
   wrap,
+  dataPf,
 }: {
   gap?: number;
   children: ReactNode;
   style?: CSSProperties;
   wrap?: boolean;
+  dataPf?: string;
 }) {
   return (
     <div
+      data-pf={dataPf}
       style={{
         display: "flex",
         alignItems: "center",

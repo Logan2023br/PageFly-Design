@@ -155,9 +155,9 @@ export function ProductDetail({
   const isMobile = bp === "mobile";
 
   const gallery = (
-    <Stack gap={10}>
-      <MockImage seed={`${content.seed}-0`} ratio={1.1} />
-      <Grid cols={3} gap={10}>
+    <Stack gap={10} dataPf="product-media">
+      <MockImage seed={`${content.seed}-0`} ratio={1.1} dataPf="product-media-main" />
+      <Grid cols={3} gap={10} dataPf="product-media-list">
         {Array.from({ length: content.galleryCount - 1 }, (_, i) => (
           <MockImage key={i} seed={`${content.seed}-${i + 1}`} ratio={1} />
         ))}
@@ -166,22 +166,25 @@ export function ProductDetail({
   );
 
   const info = (
-    <Stack gap={16}>
+    <Stack gap={16} dataPf="product-info">
       <Stack gap={8}>
         <Body size={12}>Home / Shop / {content.name}</Body>
-        <Display size={isMobile ? 26 : 34}>{content.name}</Display>
+        <Display size={isMobile ? 26 : 34} dataPf="product-title">
+          {content.name}
+        </Display>
         <Row gap={10}>
           <Stars rating={content.rating} />
           <Body size={12}>{content.reviewCount}</Body>
         </Row>
       </Stack>
 
-      <Row gap={10}>
-        <Display size={22} as="div">
+      <Row gap={10} dataPf="product-price">
+        <Display size={22} as="div" dataPf="product-price-main">
           {content.price}
         </Display>
         {content.compareAt && (
           <span
+            data-pf="product-price-compare"
             style={{
               fontFamily: tokens.fontBody,
               fontSize: fs(15),
@@ -196,8 +199,9 @@ export function ProductDetail({
 
       <Rule />
 
-      <Stack gap={8}>
+      <Stack gap={8} dataPf="product-swatches">
         <div
+          data-pf="product-swatch-label"
           style={{
             fontFamily: tokens.fontBody,
             fontSize: fs(12),
@@ -206,7 +210,7 @@ export function ProductDetail({
         >
           {content.variantLabel}
         </div>
-        <Row gap={8} wrap>
+        <Row gap={8} wrap dataPf="product-swatch-options">
           {content.variants.map((v, i) => (
             <span
               key={v}
@@ -277,7 +281,7 @@ export function ProductDetail({
       )}
 
       <Stack gap={9}>
-        <Btn label={content.cta} full size="lg" />
+        <Btn label={content.cta} full size="lg" dataPf="product-atc" />
         <Btn label="Buy it now" variant="ghost" full size="lg" />
       </Stack>
 
@@ -315,6 +319,7 @@ export function ProductDetail({
       }}
     >
       <div
+        data-pf="product-box"
         style={{
           maxWidth: contentMax,
           margin: "0 auto",

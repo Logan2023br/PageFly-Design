@@ -128,6 +128,101 @@ export function CUSTOM_HTML(code: string, styleData?: StyleData, cls?: string) {
   );
 }
 
+/* ---- product + accordion families ---------------------------------------
+
+   These are the elements a merchant actually wants to receive: an imported
+   ProductBox is bound to a real Shopify product, so its title, price, swatches
+   and Add-to-cart work rather than being pictures of themselves.
+
+   Their `data` is deliberately left empty. The TYPES below are confirmed in
+   references/schema.md; their data KEYS are not documented anywhere in the
+   skill, and an invented key risks the whole payload being rejected on import.
+   Empty data also *is* the intent here — these elements are meant to pull their
+   content from the product they are bound to, not carry the mockup's copy.
+
+   Slot order is load-bearing and enforced in `validate` below.
+   ------------------------------------------------------------------------- */
+
+/** Renders a <form action="/cart/add">, so layout styling has to target
+    `& > form` — styling `&` leaves the form at its own default width, which is
+    the single easiest way to make an imported product page look wrong. */
+export function PRODUCT_BOX(media: PFNode, info: PFNode, css: string) {
+  return node(
+    "ProductBox",
+    {},
+    { all: { "&": "width: 100%;", "& > form": css } },
+    [media, info],
+  );
+}
+
+export function PRODUCT_MEDIA(main: PFNode, list: PFNode, styleData: StyleData) {
+  return node("ProductMedia3", {}, styleData, [main, list]);
+}
+
+export function MEDIA_MAIN(styleData: StyleData) {
+  return node("MediaMain3", {}, styleData, []);
+}
+
+export function MEDIA_LIST(count: number, styleData: StyleData, itemStyle: StyleData) {
+  const items = Array.from({ length: Math.max(1, count) }, () =>
+    node("MediaItem2", {}, itemStyle, []),
+  );
+  return node("MediaList2", {}, styleData, items);
+}
+
+export function PRODUCT_TITLE(styleData: StyleData) {
+  return node("ProductTitle", {}, styleData, []);
+}
+
+/** Both items are required; hide the compare-at one with display:none rather
+    than deleting it — a one-child ProductPrice2 renders empty. */
+export function PRODUCT_PRICE(
+  styleData: StyleData,
+  priceStyle: StyleData,
+  compareStyle: StyleData,
+) {
+  return node("ProductPrice2", {}, styleData, [
+    node("ProductPrice2Item", {}, priceStyle, []),
+    node("ProductPrice2Item", {}, compareStyle, []),
+  ]);
+}
+
+export function PRODUCT_SWATCHES(
+  styleData: StyleData,
+  labelStyle: StyleData,
+  swatchStyle: StyleData,
+) {
+  return node("ProductVariantSwatches", {}, styleData, [
+    node("OptionLabel", {}, labelStyle, []),
+    node("Swatch", {}, swatchStyle, []),
+  ]);
+}
+
+export function PRODUCT_ATC(styleData: StyleData) {
+  return node("ProductATC2", {}, styleData, []);
+}
+
+/** Four tiers, and the real content has to sit in the innermost one — content
+    placed in Accordion3.Content opens to an empty body. */
+export function ACCORDION(
+  rows: { header: PFNode; body: PFNode[]; style?: StyleData }[],
+  styleData: StyleData,
+) {
+  const wrappers = rows.map((r) =>
+    node("Accordion3.Content.Wrapper", {}, r.style ?? null, [
+      r.header,
+      node("Accordion3.Content", {}, null, [
+        node("Accordion3.Flex.Content", {}, null, r.body),
+      ]),
+    ]),
+  );
+  return node("Accordion3", {}, styleData, wrappers);
+}
+
+export function ACCORDION_HEADER(kids: PFNode[], styleData: StyleData) {
+  return node("Accordion3.Header", {}, styleData, kids);
+}
+
 /* ---- flatten + validate ------------------------------------------------- */
 
 export type FlatNode = {
@@ -166,11 +261,20 @@ export function flatten(root: PFNode): FlatNode[] {
 }
 
 const SLOT_RULES: Record<string, string[]> = {
+  ProductBox: ["ProductMedia3", "FlexBlock"],
+  ProductMedia3: ["MediaMain3", "MediaList2"],
   ProductPrice2: ["ProductPrice2Item", "ProductPrice2Item"],
   ProductQuantity: ["QuantityButton", "QuantityField", "QuantityButton"],
   ProductVariantSwatches: ["OptionLabel", "Swatch"],
   "Accordion3.Content.Wrapper": ["Accordion3.Header", "Accordion3.Content"],
   "Accordion3.Content": ["Accordion3.Flex.Content"],
+};
+
+/** Parents whose children must ALL be one type (count is free). */
+const UNIFORM_CHILDREN: Record<string, string> = {
+  Accordion3: "Accordion3.Content.Wrapper",
+  MediaList2: "MediaItem2",
+  ContentList2: "ContentListItem",
 };
 
 export function validate(nodes: FlatNode[]): void {
@@ -198,6 +302,14 @@ export function validate(nodes: FlatNode[]): void {
       const kt = n.children.map((c) => byId.get(c)!.type);
       if (kt.join("|") !== rule.join("|"))
         throw new Error(`${n.type} slots must be ${rule}, got ${kt}`);
+    }
+    const uniform = UNIFORM_CHILDREN[n.type];
+    if (uniform) {
+      const wrong = n.children
+        .map((c) => byId.get(c)!.type)
+        .filter((t) => t !== uniform);
+      if (wrong.length)
+        throw new Error(`${n.type} children must all be ${uniform}, got ${wrong}`);
     }
     // Shopify's Liquid engine eats these on publish.
     const code = (n.data?.code as string | undefined) ?? "";
@@ -376,6 +488,29 @@ export class Page {
     const roots = items.filter((i) => !childSet.has(i.id));
     if (roots.length !== 1 || roots[0].type !== "Body")
       throw new Error("single Body root required");
+
+    /* The slot rules apply to the .pagefly path too — this used to only run on
+       the clipboard path, so a malformed ProductBox would have shipped. */
+    const byId = new Map(items.map((i) => [i.id, i]));
+    for (const i of items) {
+      const rule = SLOT_RULES[i.type];
+      if (rule) {
+        const kt = i.children.map((c) => byId.get(c)!.type);
+        if (kt.join("|") !== rule.join("|"))
+          throw new Error(`${i.type} slots must be ${rule}, got ${kt}`);
+      }
+      const uniform = UNIFORM_CHILDREN[i.type];
+      if (uniform) {
+        const wrong = i.children
+          .map((c) => byId.get(c)!.type)
+          .filter((t) => t !== uniform);
+        if (wrong.length)
+          throw new Error(`${i.type} children must all be ${uniform}, got ${wrong}`);
+      }
+      const code = (i.data?.code as string | undefined) ?? "";
+      if (code.includes("{{") || code.includes("{%"))
+        throw new Error("Liquid tokens in Custom.HTML code");
+    }
 
     for (const s of styles) {
       if (!ids.has(s.id)) throw new Error("style entry points at missing item");

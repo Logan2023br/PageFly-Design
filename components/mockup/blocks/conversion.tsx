@@ -158,14 +158,14 @@ export function FaqAccordion({
     <Band band={band}>
       <div style={{ maxWidth: 760, marginLeft: "auto", marginRight: "auto" }}>
         <SectionHead title={content.title} align="center" />
-        <Card pad={0} style={{ overflow: "hidden" }}>
+        <Card pad={0} style={{ overflow: "hidden" }} dataPf="accordion">
           {content.items.map((item, i) => {
             const open = i === content.openIndex;
             return (
-              <div key={item.q}>
+              <div key={item.q} data-pf="accordion-row">
                 {i > 0 && <Rule />}
                 <div style={{ padding: "16px 20px" }}>
-                  <Row gap={14} style={{ justifyContent: "space-between" }}>
+                  <Row gap={14} style={{ justifyContent: "space-between" }} dataPf="accordion-header">
                     <div
                       style={{
                         fontFamily: tokens.fontBody,
@@ -187,11 +187,17 @@ export function FaqAccordion({
                       {open ? "−" : "+"}
                     </span>
                   </Row>
-                  {open && (
-                    <Body size={13.5} style={{ marginTop: 10, maxWidth: 620 }}>
-                      {item.a}
-                    </Body>
-                  )}
+                  <Body
+                    size={13.5}
+                    style={{
+                      marginTop: 10,
+                      maxWidth: 620,
+                      display: open ? undefined : "none",
+                    }}
+                    dataPf="accordion-body"
+                  >
+                    {item.a}
+                  </Body>
                 </div>
               </div>
             );

@@ -1,12 +1,23 @@
 "use client";
 
 import {
+  ACCORDION,
+  ACCORDION_HEADER,
+  BTN,
   CUSTOM_HTML,
   FB,
   FSECTION,
   H2,
   IMG,
+  MEDIA_LIST,
+  MEDIA_MAIN,
   P4,
+  PRODUCT_ATC,
+  PRODUCT_BOX,
+  PRODUCT_MEDIA,
+  PRODUCT_PRICE,
+  PRODUCT_SWATCHES,
+  PRODUCT_TITLE,
   Page,
   type PFNode,
   type StyleData,
@@ -272,13 +283,28 @@ function elementChildren(el: Element): Element[] {
   return Array.from(el.children).filter((c) => !SKIP_TAGS.has(c.tagName));
 }
 
+/** An inline tag is only really part of a text run when nothing about it says
+    "I am my own element". Getting this wrong in the greedy direction is worse
+    than the bug it fixes: `Btn` renders a <span>, so a container holding
+    "Add to cart" and "Buy it now" collapsed into ONE paragraph and both buttons
+    stopped being buttons. */
+function isInlineRun(c: Element): boolean {
+  if (!INLINE_TAGS.has(c.tagName)) return false;
+  // A semantic element anywhere inside has to be reached by the walk.
+  if (c.hasAttribute("data-pf") || c.querySelector("[data-pf]")) return false;
+  if (isDrawnArtwork(c) || c.querySelector("svg,img")) return false;
+  // An inline tag laid out as a box (inline-flex, flex, block) is a chip or a
+  // button, not a phrase.
+  const display = lookup(decl(c), "display");
+  if (display && display.trim() !== "inline") return false;
+  return true;
+}
+
 /** All element children inline and no artwork among them → the element is a
     single run of text and `innerHTML` reproduces it exactly. */
 function isTextRun(el: Element, kids: Element[]): boolean {
   if ((el.textContent ?? "").trim().length === 0) return false;
-  return kids.every(
-    (c) => INLINE_TAGS.has(c.tagName) && !isDrawnArtwork(c) && !c.querySelector("svg,img"),
-  );
+  return kids.every(isInlineRun);
 }
 
 /** Liquid tokens are eaten by Shopify on publish; the builder rejects them.
@@ -297,8 +323,209 @@ function looseText(text: string): PFNode {
   });
 }
 
+/* ==========================================================================
+   Semantic elements.
+
+   The DOM walk on its own can only ever produce containers and text, because
+   the mockup markup has no <button>, no <a> and no <details> — everything is a
+   styled div. So "Add to cart" was indistinguishable from a paragraph, which is
+   why an imported page was all FlexBlock and Paragraph4.
+
+   The signal has to come from the source, so the mockup primitives now carry a
+   `data-pf` attribute. It changes no pixel of the mockup and is the only thing
+   these mappers key off.
+
+   The tradeoff is deliberate and was chosen explicitly: a ProductBox binds to a
+   real Shopify product, so its title, price, swatches and Add-to-cart WORK —
+   but they show the merchant's product rather than the mockup's invented one,
+   and their internal slots are PageFly's, not ours. Static elements (Button2,
+   Accordion3) keep the mockup's own copy and CSS, so they cost no fidelity.
+   ========================================================================== */
+
+/** Drops `display: none` so a body the mockup had collapsed still renders once
+    the imported accordion opens it. */
+function unhide(style: StyleData): StyleData {
+  const css = style?.all?.["&"];
+  if (!css) return style;
+  const kept = declarations(css).filter(
+    ([p, v]) => !(p === "display" && v.replace("!important", "").trim() === "none"),
+  );
+  return {
+    ...style,
+    all: {
+      ...style!.all,
+      "&": kept
+        .map(([p, v]) =>
+          LAYOUT_PROPS.has(p) && !v.includes("!important")
+            ? `${p}: ${v} !important;`
+            : `${p}: ${v};`,
+        )
+        .join(" "),
+    },
+  };
+}
+
+function pfRole(el: Element): string {
+  return el.getAttribute("data-pf") ?? "";
+}
+
+function findRole(el: Element, role: string): Element | null {
+  return el.querySelector(`[data-pf="${role}"]`);
+}
+
+/** A styled div wrapping one product element, so the mockup's own spacing and
+    borders survive around an element whose internals PageFly owns. */
+function shell(el: Element, parentDir: Dir | null, inner: PFNode): PFNode {
+  return FB(styleOf(el, parentDir), [inner]);
+}
+
+function productBox(el: Element, parentDir: Dir | null): PFNode | null {
+  const mediaEl = findRole(el, "product-media");
+  const infoEl = findRole(el, "product-info");
+  if (!mediaEl || !infoEl) return null;
+
+  const mainEl = findRole(mediaEl, "product-media-main");
+  const listEl = findRole(mediaEl, "product-media-list");
+  if (!mainEl || !listEl) return null;
+
+  const media = PRODUCT_MEDIA(
+    MEDIA_MAIN(styleOf(mainEl, "vertical")),
+    MEDIA_LIST(
+      elementChildren(listEl).length,
+      styleOf(listEl, "vertical"),
+      null,
+    ),
+    styleOf(mediaEl, parentDir),
+  );
+
+  /* The info column is ProductBox's second required slot and has to be a plain
+     FlexBlock, so it is walked normally — every product element inside it is
+     picked up by `convert` on the way down. */
+  const info = FB(
+    styleOf(infoEl, parentDir),
+    walkChildren(infoEl, directionOf(decl(infoEl))),
+  );
+
+  /* ProductBox renders a <form>, so the grid that lays the two columns out has
+     to be applied to `& > form`. Styling `&` leaves the form at its default
+     width and the two columns stack. */
+  const own = styleOf(el, parentDir);
+  return PRODUCT_BOX(media, info, own?.all?.["&"] ?? "");
+}
+
+function accordion(el: Element, parentDir: Dir | null): PFNode | null {
+  const rowEls = Array.from(el.querySelectorAll('[data-pf="accordion-row"]'));
+  if (rowEls.length === 0) return null;
+
+  const rows = rowEls.map((row) => {
+    const headEl = findRole(row, "accordion-header");
+    const bodyEl = findRole(row, "accordion-body");
+    const header = ACCORDION_HEADER(
+      headEl ? walkChildren(headEl, directionOf(decl(headEl))) : [],
+      headEl ? styleOf(headEl, "vertical") : null,
+    );
+    /* Real content MUST land in Accordion3.Flex.Content — the builder nests the
+       four tiers. A row whose answer is collapsed in the mockup still gets its
+       body, because in the editor every row can be opened. */
+    /* The mockup hides the closed answers with display:none — laid out
+       identically to not rendering them, so the picture is unchanged, but the
+       DOM carries every answer. Strip that hiding here: in the editor every row
+       can be opened, and Accordion3 does the showing itself. */
+    const body = bodyEl
+      ? [P4(liquidSafe(bodyEl.innerHTML), unhide(styleOf(bodyEl, "vertical")))]
+      : [];
+    /* The mockup puts each row's padding on a container between the row and its
+       header; without it the imported accordion loses all its inner spacing. */
+    const padEl = headEl?.parentElement ?? null;
+    return {
+      header,
+      body,
+      style: padEl && padEl !== row ? styleOf(padEl, "vertical") : null,
+    };
+  });
+
+  return ACCORDION(rows, styleOf(el, parentDir));
+}
+
+function semantic(el: Element, parentDir: Dir | null): PFNode | null {
+  switch (pfRole(el)) {
+    case "button":
+      // Keeps the mockup's own label and CSS — a real button, same pixels.
+      return BTN(
+        liquidSafe(el.innerHTML),
+        "",
+        styleOf(el, parentDir),
+      );
+    case "product-box":
+      return productBox(el, parentDir);
+    case "accordion":
+      return accordion(el, parentDir);
+    case "product-title":
+      return PRODUCT_TITLE(styleOf(el, parentDir));
+    case "product-price": {
+      const main = findRole(el, "product-price-main");
+      const compare = findRole(el, "product-price-compare");
+      return shell(
+        el,
+        parentDir,
+        PRODUCT_PRICE(
+          null,
+          main ? styleOf(main, "horizontal") : null,
+          /* Both items are required. When the mockup has no compare-at price the
+             second slot is hidden rather than dropped — a one-child
+             ProductPrice2 renders empty. */
+          compare
+            ? styleOf(compare, "horizontal")
+            : { all: { "&": "display: none !important;" } },
+        ),
+      );
+    }
+    case "product-swatches": {
+      const label = findRole(el, "product-swatch-label");
+      const options = findRole(el, "product-swatch-options");
+      return shell(
+        el,
+        parentDir,
+        PRODUCT_SWATCHES(
+          null,
+          label ? styleOf(label, "vertical") : null,
+          options ? styleOf(options, "vertical") : null,
+        ),
+      );
+    }
+    case "product-atc":
+      return PRODUCT_ATC(styleOf(el, parentDir));
+    default:
+      return null;
+  }
+}
+
+function walkChildren(el: Element, dir: Dir | null): PFNode[] {
+  const out: PFNode[] = [];
+  for (const child of Array.from(el.childNodes)) {
+    if (child.nodeType === 1) {
+      const n = convert(child as Element, dir);
+      if (n) out.push(n);
+    } else if (child.nodeType === 3) {
+      // Bare text beside block siblings — dropped entirely before this fix.
+      const t = (child.nodeValue ?? "").trim();
+      if (t) out.push(looseText(t));
+    }
+  }
+  return out;
+}
+
 function convert(el: Element, parentDir: Dir | null): PFNode | null {
   if (SKIP_TAGS.has(el.tagName)) return null;
+
+  /* Semantic elements come first — a tagged node must not be reduced to a
+     FlexBlock by the generic rules below. A mapper returning null (a tag whose
+     expected inner parts are missing) falls through to the generic walk rather
+     than dropping the subtree. */
+  if (pfRole(el)) {
+    const mapped = semantic(el, parentDir);
+    if (mapped) return mapped;
+  }
 
   // Whole drawn-artwork subtrees go through verbatim.
   if (isDrawnArtwork(el)) {
@@ -335,20 +562,10 @@ function convert(el: Element, parentDir: Dir | null): PFNode | null {
     return CUSTOM_HTML(liquidSafe(el.outerHTML), styleOf(el, parentDir));
   }
 
-  const dir = directionOf(decl(el));
-  const out: PFNode[] = [];
-  for (const child of Array.from(el.childNodes)) {
-    if (child.nodeType === 1) {
-      const n = convert(child as Element, dir);
-      if (n) out.push(n);
-    } else if (child.nodeType === 3) {
-      // Bare text beside block siblings — dropped entirely before this fix.
-      const t = (child.nodeValue ?? "").trim();
-      if (t) out.push(looseText(t));
-    }
-  }
-
-  return FB(styleOf(el, parentDir), out);
+  return FB(
+    styleOf(el, parentDir),
+    walkChildren(el, directionOf(decl(el))),
+  );
 }
 
 /* ==========================================================================
