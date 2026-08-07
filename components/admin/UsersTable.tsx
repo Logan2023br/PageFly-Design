@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { StoresResponse } from "@/app/api/admin/stores/route";
 import type { StoreSummary } from "@/lib/db";
+import { EditStore } from "./EditStore";
 import { Icon, Panel } from "../ui";
 
 /* ==========================================================================
@@ -19,11 +20,12 @@ import { Icon, Panel } from "../ui";
    Rating colour is the specified split: 1–3 red, 4–5 green.
    ========================================================================== */
 
-type SortKey = "recent" | "pages" | "tokens" | "rating" | "domain";
+type SortKey = "recent" | "pages" | "tokens" | "rating" | "domain" | "registered";
 
 export function UsersTable({ stores }: { stores: StoreSummary[] }) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("recent");
+  const [editing, setEditing] = useState<StoreSummary | null>(null);
 
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -48,6 +50,10 @@ export function UsersTable({ stores }: { stores: StoreSummary[] }) {
           return (b.review?.stars ?? -1) - (a.review?.stars ?? -1);
         case "domain":
           return a.domain.localeCompare(b.domain);
+        case "registered":
+          /* Stores that never signed in have no registration date; they sort last
+             rather than first, which is what an empty string would do. */
+          return (b.firstSeenAt ?? "").localeCompare(a.firstSeenAt ?? "");
         default:
           return (b.lastRunAt ?? b.lastSeenAt ?? "").localeCompare(
             a.lastRunAt ?? a.lastSeenAt ?? "",
@@ -59,6 +65,10 @@ export function UsersTable({ stores }: { stores: StoreSummary[] }) {
 
   return (
     <div className="grid gap-3">
+      {editing && (
+        <EditStore store={editing} onClose={() => setEditing(null)} />
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         <label className="relative flex-1 min-w-[220px]">
           <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-pf-faint">
@@ -82,6 +92,7 @@ export function UsersTable({ stores }: { stores: StoreSummary[] }) {
           <option value="pages">Most pages</option>
           <option value="tokens">Most tokens</option>
           <option value="rating">Rating</option>
+          <option value="registered">Newest registered</option>
           <option value="domain">Domain A–Z</option>
         </select>
 
@@ -105,21 +116,24 @@ export function UsersTable({ stores }: { stores: StoreSummary[] }) {
         /* The table scrolls inside its own container, so the page body never
            scrolls sideways however many columns the sheet grows. */
         <Panel className="overflow-x-auto">
-          <table className="w-full min-w-[1080px] border-collapse text-left">
+          <table className="w-full min-w-[1560px] border-collapse text-left">
             <thead>
               <tr className="border-b border-pf-border text-[11px] uppercase tracking-[0.06em] text-pf-faint">
-                <Th>Store</Th>
-                <Th>Status</Th>
-                <Th className="text-right">Pages</Th>
+                <Th className="min-w-[240px]">Store</Th>
+                <Th className="min-w-[140px]">Status</Th>
+                <Th className="min-w-[110px] text-right">Pages</Th>
                 <Th className="text-right">Builds</Th>
                 <Th className="text-right">Tokens</Th>
-                <Th>Rating</Th>
-                <Th>Comment</Th>
-                <Th>Type</Th>
-                <Th>Plan</Th>
-                <Th>Country</Th>
-                <Th className="text-right">Last activity</Th>
-                <Th> </Th>
+                <Th className="min-w-[110px]">Rating</Th>
+                <Th className="min-w-[220px]">Comment</Th>
+                <Th className="min-w-[110px]">Type</Th>
+                <Th className="min-w-[180px]">Plan</Th>
+                <Th className="min-w-[130px]">Country</Th>
+                <Th className="min-w-[130px] text-right">Registered</Th>
+                <Th className="min-w-[130px] text-right">Last activity</Th>
+                <Th className="sticky right-0 z-20 bg-pf-card text-right shadow-[-12px_0_12px_-12px_rgba(0,0,0,0.9)]">
+                  {" "}
+                </Th>
               </tr>
             </thead>
             <tbody>
@@ -174,7 +188,7 @@ export function UsersTable({ stores }: { stores: StoreSummary[] }) {
                   <Td>
                     <span
                       title={store.review?.comment ?? undefined}
-                      className="line-clamp-2 max-w-[220px] text-[11.5px] text-pf-muted"
+                      className="line-clamp-2 block max-w-[260px] text-[11.5px] text-pf-muted"
                     >
                       {store.review?.comment ?? "—"}
                     </span>
@@ -194,18 +208,34 @@ export function UsersTable({ stores }: { stores: StoreSummary[] }) {
                   <Td className="text-pf-muted">{store.country ?? "—"}</Td>
 
                   <Td className="text-right text-pf-muted">
+                    <Ago iso={store.firstSeenAt} never="not yet" />
+                  </Td>
+
+                  <Td className="text-right text-pf-muted">
                     <Ago iso={store.lastRunAt ?? store.lastSeenAt} />
                   </Td>
 
-                  <Td className="text-right">
-                    <div className="flex items-center justify-end gap-1">
+                  {/* Pinned to the right edge. With this many columns the table
+                      scrolls sideways, and the two actions for a row are the last
+                      thing that should scroll out of reach. */}
+                  <Td className="sticky right-0 z-10 bg-pf-card text-right shadow-[-12px_0_12px_-12px_rgba(0,0,0,0.9)]">
+                    <div className="flex items-center justify-end gap-0.5">
                       <Link
                         href={`/design/admin/users/${encodeURIComponent(store.domain)}`}
-                        className="inline-flex items-center gap-1 rounded-pf-sm px-2 py-1 text-[11.5px] font-semibold text-pf-muted transition-colors hover:bg-pf-card hover:text-pf-text"
+                        className="inline-flex items-center gap-1 rounded-pf-sm px-2 py-1 text-[11.5px] font-semibold text-pf-muted transition-colors hover:bg-pf-bg-deep hover:text-pf-text"
                       >
                         Pages
                         <Icon name="ArrowUpRight" size={12} />
                       </Link>
+                      <button
+                        type="button"
+                        title="Edit this store"
+                        aria-label={`Edit ${store.domain}`}
+                        onClick={() => setEditing(store)}
+                        className="rounded-pf-sm px-1.5 py-1 text-pf-faint transition-colors hover:bg-pf-bg-deep hover:text-pf-text"
+                      >
+                        <Icon name="Pencil" size={13} />
+                      </button>
                       <RemoveStore store={store} />
                     </div>
                   </Td>
@@ -229,7 +259,10 @@ function Th({
   className?: string;
 }) {
   return (
-    <th scope="col" className={`whitespace-nowrap px-3 py-2.5 font-semibold ${className}`}>
+    <th
+      scope="col"
+      className={`whitespace-nowrap px-4 py-3 font-semibold ${className}`}
+    >
       {children}
     </th>
   );
@@ -242,7 +275,7 @@ function Td({
   children: React.ReactNode;
   className?: string;
 }) {
-  return <td className={`px-3 py-2.5 align-top ${className}`}>{children}</td>;
+  return <td className={`px-4 py-3 align-top ${className}`}>{children}</td>;
 }
 
 function StatusChip({
@@ -271,7 +304,7 @@ function StatusChip({
   return (
     <div className="grid gap-1">
       <span
-        className={`inline-flex w-fit items-center gap-1 rounded-pf-pill border px-2 py-0.5 text-[11px] font-semibold ${
+        className={`inline-flex w-fit items-center gap-1 whitespace-nowrap rounded-pf-pill border px-2.5 py-0.5 text-[11px] font-semibold ${
           active
             ? "border-pf-success/40 bg-pf-success/10 text-pf-success"
             : "border-pf-border text-pf-muted"
@@ -405,8 +438,8 @@ function RemoveStore({ store }: { store: StoreSummary }) {
 }
 
 /** Rendered on the client so the timezone is the operator's, not the server's. */
-function Ago({ iso }: { iso: string | null }) {
-  if (!iso) return <span className="text-pf-faint">never</span>;
+function Ago({ iso, never = "never" }: { iso: string | null; never?: string }) {
+  if (!iso) return <span className="text-pf-faint">{never}</span>;
   const then = new Date(iso);
   if (Number.isNaN(then.getTime())) return <span className="text-pf-faint">—</span>;
 

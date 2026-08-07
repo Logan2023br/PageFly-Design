@@ -58,11 +58,17 @@ export async function findAllowedStore(
 
   const builtin = findBuiltinStore(domain);
   if (builtin) {
-    /* Upserted, not returned directly: the row carries page_limit and the sheet
-       fields the admin table reads, and a store that can sign in but appears
-       nowhere in admin is worse than not being in the list at all. */
-    await repo.upsertStores([builtin]).catch(() => {});
-    return (await repo.getStore(domain)) ?? builtin;
+    /* Inserted only when the row does not exist yet. Upserting on every sign-in
+       overwrote whatever an operator had edited in admin — a renamed store or a
+       raised page limit reverted to the compiled-in values on the next request,
+       which looks like the edit silently failing to save.
+
+       A row that IS there is authoritative: it is the edited one. */
+    if (!existing) {
+      await repo.upsertStores([builtin]).catch(() => {});
+      return (await repo.getStore(domain)) ?? builtin;
+    }
+    return existing;
   }
 
   if (existing) return existing;
@@ -79,7 +85,16 @@ export async function findAllowedStore(
     never be the reason a page does not render. */
 export async function seedBuiltinStores(): Promise<void> {
   try {
-    await getRepo().upsertStores(builtinStores());
+    const repo = getRepo();
+    const all = builtinStores();
+    /* Only the ones with no row yet. Seeding unconditionally meant opening the
+       admin Users page rewrote every compiled-in store back to its original name
+       and page limit, undoing edits made moments earlier. */
+    const existing = await Promise.all(
+      all.map((s) => repo.getStore(s.domain).catch(() => null)),
+    );
+    const missing = all.filter((_, i) => existing[i] === null);
+    if (missing.length) await repo.upsertStores(missing);
   } catch {
     // ignored on purpose
   }

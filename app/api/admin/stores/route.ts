@@ -18,12 +18,20 @@ import { normalizeDomain } from "@/lib/sheet";
 
 export const dynamic = "force-dynamic";
 
+/* Every field the admin table shows, so adding a store and editing one go through
+   the same endpoint. Anything omitted keeps its existing value rather than being
+   blanked — a form that saves one field should not erase the others. */
 const addSchema = z.object({
   domain: z.string().min(4).max(255),
-  email: z.string().max(255).optional(),
-  storeName: z.string().max(255).optional(),
+  email: z.string().max(255).nullish(),
+  storeName: z.string().max(255).nullish(),
+  shopifyPlan: z.string().max(120).nullish(),
+  currentPlan: z.string().max(200).nullish(),
+  country: z.string().max(120).nullish(),
+  status: z.string().max(120).nullish(),
+  userType: z.string().max(100).nullish(),
+  daysUsed: z.number().int().min(0).max(100_000).nullish(),
   pageLimit: z.number().int().min(0).max(10_000).optional(),
-  userType: z.string().max(100).optional(),
 });
 
 export type StoresResponse =
@@ -67,17 +75,22 @@ export async function POST(request: Request) {
      row first, and that has to happen BEFORE the insert, not after. */
   if (existing?.blocked) await repo.deleteStore(domain, false).catch(() => {});
 
+  /* `undefined` means "not in this form"; an explicit null or "" means "clear it".
+     Collapsing the two would make every edit wipe the fields it did not include. */
+  const keep = <T,>(sent: T | null | undefined, current: T | null): T | null =>
+    sent === undefined ? current : (sent as T | null);
+
   await repo.upsertStores([
     {
       domain,
-      email: body.email ?? existing?.email ?? null,
-      storeName: body.storeName ?? existing?.storeName ?? null,
-      shopifyPlan: existing?.shopifyPlan ?? null,
-      currentPlan: existing?.currentPlan ?? null,
-      daysUsed: existing?.daysUsed ?? null,
-      country: existing?.country ?? null,
-      userType: body.userType ?? existing?.userType ?? "Beta",
-      status: existing?.status ?? "Đang sử dụng",
+      email: keep(body.email, existing?.email ?? null),
+      storeName: keep(body.storeName, existing?.storeName ?? null),
+      shopifyPlan: keep(body.shopifyPlan, existing?.shopifyPlan ?? null),
+      currentPlan: keep(body.currentPlan, existing?.currentPlan ?? null),
+      daysUsed: keep(body.daysUsed, existing?.daysUsed ?? null),
+      country: keep(body.country, existing?.country ?? null),
+      userType: keep(body.userType, existing?.userType ?? "Beta"),
+      status: keep(body.status, existing?.status ?? "Đang sử dụng"),
       pageLimit: body.pageLimit ?? existing?.pageLimit ?? 30,
       firstSeenAt: null,
       lastSeenAt: null,
