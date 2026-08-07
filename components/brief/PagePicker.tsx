@@ -5,7 +5,7 @@ import { useState } from "react";
 import {
   MAX_PER_PAGE,
   MAX_TOTAL_PAGES,
-  PAGE_CATEGORIES,
+  VISIBLE_PAGE_CATEGORIES,
   totalSelected,
   type CategoryDef,
   type PageDef,
@@ -173,7 +173,7 @@ export function PagePicker() {
       }
     >
       <div className="grid gap-2.5">
-        {PAGE_CATEGORIES.map((cat) => (
+        {VISIBLE_PAGE_CATEGORIES.map((cat) => (
           <Group key={cat.id} cat={cat} atCap={atCap} />
         ))}
 

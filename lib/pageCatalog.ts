@@ -23,10 +23,14 @@ export type PageDef = {
   icon: IconName;
   /** Pages that plausibly repeat in a real store get a 0-10 stepper. */
   repeatable?: true;
+  /** Hidden from the picker; existing briefs that name it still build. */
+  retired?: boolean;
 };
 
 export type CategoryDef = {
   id: CategoryId;
+  /** Hidden from the picker but still understood, so saved briefs keep working. */
+  retired?: boolean;
   label: string;
   /** Short tag shown on result cards. */
   tag: string;
@@ -65,6 +69,7 @@ export const PAGE_CATEGORIES: CategoryDef[] = [
       },
       {
         id: "cart",
+        retired: true,
         label: "Cart",
         blurb: "Line items, totals and the path to checkout.",
         icon: "ShoppingCart",
@@ -77,6 +82,7 @@ export const PAGE_CATEGORIES: CategoryDef[] = [
       },
       {
         id: "404",
+        retired: true,
         label: "404",
         blurb: "A dead end that still sells something.",
         icon: "TriangleAlert",
@@ -275,6 +281,7 @@ export const PAGE_CATEGORIES: CategoryDef[] = [
   },
   {
     id: "account",
+    retired: true,
     label: "Account",
     tag: "Account",
     blurb: "Everything behind a customer login.",
@@ -389,7 +396,31 @@ export const CATEGORY_BY_ID: Record<CategoryId, CategoryDef> =
     CategoryDef
   >;
 
+/* ==========================================================================
+   Retired page types.
+
+   Removed from the picker, NOT from the catalog. A saved brief names its pages by
+   id and the schema validates against ALL_PAGE_IDS, so deleting an entry outright
+   would make every stored build containing it fail validation and vanish from the
+   Library — the merchant would watch their work disappear because a menu changed.
+
+   They keep their recipes too, so an old build still rebuilds exactly as it was
+   made. They simply cannot be chosen again.
+   ========================================================================== */
+
+/** Everything the schema accepts, including retired types. */
 export const ALL_PAGE_IDS: string[] = Object.keys(PAGE_BY_ID);
+
+/** What the picker offers: categories and pages that are not retired. */
+export const VISIBLE_PAGE_CATEGORIES: CategoryDef[] = PAGE_CATEGORIES.filter(
+  (cat) => !cat.retired,
+).map((cat) => ({ ...cat, pages: cat.pages.filter((page) => !page.retired) }))
+  .filter((cat) => cat.pages.length > 0);
+
+export function isRetiredPage(pageId: string): boolean {
+  return Boolean(PAGE_BY_ID[pageId]?.retired) ||
+    Boolean(CATEGORY_BY_ID[PAGE_BY_ID[pageId]?.category]?.retired);
+}
 
 export function isRepeatable(pageId: string): boolean {
   return Boolean(PAGE_BY_ID[pageId]?.repeatable);

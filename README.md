@@ -73,7 +73,7 @@ components/
 lib/
 ├── generate/                 → THE GENERATION SEAM (see docs/generation-contract.md)
 ├── styleTokens.ts            → styleToTokens(): 15 styles × brand colors → design system
-├── pageCatalog.ts            → 45 page types, 6 groups, caps
+├── pageCatalog.ts            → 40 page types, 6 groups, caps
 ├── briefOptions.ts           → store types, chips, upload rules
 ├── validation.ts             → zod Brief schema
 ├── imageAnalysis.ts          → canvas: downscale + palette extraction (client only)
