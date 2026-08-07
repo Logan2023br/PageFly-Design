@@ -76,6 +76,7 @@ export const PAGE_CATEGORIES: CategoryDef[] = [
       },
       {
         id: "search",
+        retired: true,
         label: "Search results",
         blurb: "What shoppers land on after typing a query.",
         icon: "Search",
