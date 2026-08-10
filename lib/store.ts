@@ -107,7 +107,13 @@ type Actions = {
   loadSavedRun: (brief: Brief, variants: Record<string, number>) => Promise<void>;
   /** Rebuild EVERY saved run into one deck — what the Library shows. */
   loadLibrary: (
-    runs: { id: string; brief: Brief; variants: Record<string, number> }[],
+    runs: {
+      id: string;
+      brief: Brief;
+      variants: Record<string, number>;
+      /** the pages as built; used as-is when present */
+      snapshot?: PageMockup[] | null;
+    }[],
   ) => Promise<void>;
 
   setFilter: (f: CategoryId | "all") => void;
@@ -423,11 +429,16 @@ export const useStore = create<State & Actions>((set, get) => ({
    * looking for. Each run is replayed through the same generator, so every page
    * is identical to the one that was saved.
    *
+   * A run that carries a snapshot is shown from it directly. Replaying the brief
+   * would regenerate the copy, and the copy is now written by a model — so a replay
+   * returns different words and the merchant would find a page they never approved.
+   * Only runs saved before snapshots existed are replayed.
+   *
    * Page ids are namespaced with the run id. Two builds both contain a page whose
    * id is "home", and duplicate React keys make the grid reuse the wrong DOM and
-   * the preview step to the wrong page. The page is BUILT with its original id so
-   * its seed — and therefore its content — is unchanged; only the identity used by
-   * the deck is rewritten.
+   * the preview step to the wrong page. A replayed page is BUILT with its original
+   * id so its seed — and therefore its content — is unchanged; only the identity
+   * used by the deck is rewritten.
    */
   loadLibrary: async (runs) => {
     controller?.abort();
@@ -449,6 +460,16 @@ export const useStore = create<State & Actions>((set, get) => ({
     try {
       for (const run of runs) {
         if (signal.aborted) return;
+
+        if (run.snapshot && run.snapshot.length > 0) {
+          const saved = run.snapshot.map((page) => ({
+            ...page,
+            id: `${run.id}::${page.id}`,
+          }));
+          set((s) => ({ pages: [...s.pages, ...saved] }));
+          continue;
+        }
+
         await generatePages(
           run.brief,
           (page) =>

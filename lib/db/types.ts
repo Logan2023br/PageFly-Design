@@ -45,8 +45,20 @@ export type RunRecord = {
   /** encoded brief + variants + notes — the same payload a share link carries */
   payload: string;
   pageCount: number;
-  /** model spend for this run. Always 0 until generation calls a model. */
+  /** model spend for this run. 0 when no model is configured. */
   tokens: number;
+  /**
+   * The pages exactly as they were built.
+   *
+   * Was optional while generation was deterministic — the brief alone rebuilt the
+   * deck. A model writes the copy now, so replaying the brief produces DIFFERENT
+   * words, and a merchant opening the Library would find a page they never saw.
+   *
+   * Stored for every run, not only the ones a model touched: it also decouples the
+   * Library from the generator, so improving the generator later cannot rewrite
+   * what someone already approved.
+   */
+  snapshot: unknown | null;
   sell: string;
   styleLabel: string;
 };

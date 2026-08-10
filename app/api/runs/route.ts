@@ -32,13 +32,18 @@ const bodySchema = z.object({
   pages: z.array(pageSchema).min(1).max(60),
   sell: z.string().max(300).default(""),
   styleLabel: z.string().max(100).default(""),
-  /** model spend for this run. 0 until generation calls a model. */
+  /** model spend for this run. 0 when no model is configured. */
   tokens: z.number().int().min(0).max(100_000_000).default(0),
+  /* The pages as built. Capped: a deck of five is about 19KB, so anything past a
+     megabyte is not a deck. */
+  snapshot: z.array(z.unknown()).max(60).optional(),
 });
 
 export type RunSummary = {
   id: string;
   createdAt: string;
+  /** the pages as built, when the run has them */
+  snapshot?: unknown[] | null;
   /** the encoded brief, so the client can rebuild the deck without a second
       request per run — a run is a few hundred bytes, not a payload worth
       paginating */
@@ -68,6 +73,7 @@ export async function GET() {
     runs: runs.map((r) => ({
       id: r.id,
       createdAt: r.createdAt,
+      snapshot: Array.isArray(r.snapshot) ? r.snapshot : null,
       payload: r.payload,
       pageCount: r.pageCount,
       tokens: r.tokens,
@@ -129,11 +135,19 @@ export async function POST(request: Request) {
      row is correct — they are the same deck. */
   const id = runId(account.domain, body.payload, body.pages);
 
+  const snapshot = body.snapshot ?? null;
+  if (snapshot && JSON.stringify(snapshot).length > 1_000_000)
+    return Response.json(
+      { ok: false, error: "Snapshot too large." } satisfies SaveRunResponse,
+      { status: 413 },
+    );
+
   const run: RunRecord = {
     id,
     domain: account.domain,
     createdAt,
     payload: body.payload,
+    snapshot,
     pageCount: body.pages.length,
     tokens: body.tokens,
     sell: body.sell,

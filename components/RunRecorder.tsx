@@ -24,8 +24,10 @@ import { useAccount } from "./AccountProvider";
    free of network work, and this way nothing about how pages are generated is
    touched by persistence.
 
-   What is stored is the brief and each page's variant, never the pages — see
-   lib/runPayload.ts. Reopening replays the generator and gets the same deck.
+   The brief is stored so a run can be inspected and re-run, and the PAGES are
+   stored alongside it. Replaying the brief used to be enough, back when generation
+   was deterministic; a model writes the copy now, so a replay produces different
+   words and the Library would show a page the merchant never saw.
    ========================================================================== */
 
 export function RunRecorder() {
@@ -73,6 +75,8 @@ export function RunRecorder() {
             /* Real model spend for this build, summed across its pages. Still 0
                when no model is configured, which is the honest number then. */
             tokens,
+            /* The deck exactly as it is on screen — about 19KB for five pages. */
+            snapshot: pages,
           }),
         });
         /* A rejected save must not be remembered as done — the next render

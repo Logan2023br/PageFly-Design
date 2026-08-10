@@ -134,6 +134,7 @@ export function createPostgresRepo(url: string): Repo {
     tokens: Number(r.tokens ?? 0),
     sell: String(r.sell ?? ""),
     styleLabel: String(r.style_label ?? ""),
+    snapshot: r.snapshot ?? null,
   });
 
   return {
@@ -235,14 +236,15 @@ export function createPostgresRepo(url: string): Repo {
       try {
         await client.query("begin");
         await client.query(
-          `insert into runs (id,domain,created_at,payload,page_count,tokens,sell,style_label)
-           values ($1,$2,$3,$4,$5,$6,$7,$8)
+          `insert into runs (id,domain,created_at,payload,snapshot,page_count,tokens,sell,style_label)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
            on conflict (id) do nothing`,
           [
             run.id,
             run.domain,
             run.createdAt,
             run.payload,
+            run.snapshot === null ? null : JSON.stringify(run.snapshot),
             run.pageCount,
             run.tokens,
             run.sell,

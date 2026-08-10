@@ -4,6 +4,7 @@ import { AnimatePresence, MotionConfig } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import type { Account } from "@/lib/account";
 import type { Brief } from "@/lib/validation";
+import type { PageMockup } from "@/lib/generate/types";
 import { decodeRunPayload } from "@/lib/runPayload";
 import { useStore, useVisiblePages } from "@/lib/store";
 import type { RunSummary } from "@/app/api/runs/route";
@@ -31,7 +32,31 @@ import { Button, Icon, Panel } from "../ui";
    wherever a page is opened from.
    ========================================================================== */
 
-type Deck = { id: string; brief: Brief; variants: Record<string, number> };
+type Deck = {
+  id: string;
+  brief: Brief;
+  variants: Record<string, number>;
+  snapshot?: PageMockup[] | null;
+};
+
+/** A snapshot comes back from the database as `unknown`. It renders directly, so
+    it is checked for the shape the renderer needs before being trusted — a run
+    written by an older version, or a truncated row, falls back to a replay rather
+    than crashing the page it is meant to show. */
+function usableSnapshot(value: unknown): PageMockup[] | null {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  const ok = value.every((p) => {
+    const page = p as Partial<PageMockup>;
+    return (
+      page !== null &&
+      typeof page === "object" &&
+      typeof page.id === "string" &&
+      Array.isArray(page.blocks) &&
+      page.tokens !== undefined
+    );
+  });
+  return ok ? (value as PageMockup[]) : null;
+}
 
 export function LibraryContent({
   runs,
@@ -58,6 +83,7 @@ export function LibraryContent({
         id: run.id,
         brief: decoded.payload.brief,
         variants: decoded.payload.variants,
+        snapshot: usableSnapshot(run.snapshot),
       });
     }
     return { decks: out, unreadable: bad };
