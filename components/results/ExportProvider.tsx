@@ -12,7 +12,7 @@ import {
 import type { PageMockup } from "@/lib/generate/types";
 import { captureNode, downloadDataUrl, nextPaint, slugify } from "@/lib/png";
 import { downloadBlob } from "@/lib/pagefly/builder";
-import { pageFromDom } from "@/lib/pagefly/fromDom";
+import { pageFromBreakpoints, type Rendered } from "@/lib/pagefly/fromDom";
 import { MockupPage } from "../mockup/MockupPage";
 
 /* ==========================================================================
@@ -47,12 +47,25 @@ export function useExport(): ExportState {
 
 const EXPORT_WIDTH = 1440;
 
+/* Every breakpoint the mockup supports, mapped to the keys PageFly styles
+   against. All four are mounted at once rather than one at a time: the layout
+   custom properties are MEASURED from the laid-out element, and a render that has
+   been swapped out — or cloned detached — measures zero. */
+const EXPORT_BREAKPOINTS = [
+  { key: "all" as const, width: 1440 },
+  { key: "laptop" as const, width: 1280 },
+  { key: "tablet" as const, width: 834 },
+  { key: "mobile" as const, width: 390 },
+];
+
 export function ExportProvider({ children }: { children: ReactNode }) {
   const [staged, setStaged] = useState<PageMockup | null>(null);
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  /* One ref per breakpoint, in EXPORT_BREAKPOINTS order. */
+  const bpRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const capture = useCallback(async (page: PageMockup) => {
     setStaged(page);
@@ -72,10 +85,17 @@ export function ExportProvider({ children }: { children: ReactNode }) {
   const buildPagefly = useCallback(async (page: PageMockup) => {
     setStaged(page);
     await nextPaint();
+    // A second wait lets every breakpoint's layout settle before it is measured.
     await nextPaint();
-    const node = stageRef.current;
-    if (!node) throw new Error("Export surface not ready");
-    const { blob, filename } = pageFromDom(node, page, EXPORT_WIDTH);
+
+    const renders: Rendered[] = [];
+    EXPORT_BREAKPOINTS.forEach((bp, i) => {
+      const node = bpRefs.current[i];
+      if (node) renders.push({ key: bp.key, root: node });
+    });
+    if (renders.length === 0) throw new Error("Export surface not ready");
+
+    const { blob, filename } = pageFromBreakpoints(renders, page, EXPORT_WIDTH);
     downloadBlob(blob, filename);
   }, []);
 
@@ -211,9 +231,26 @@ export function ExportProvider({ children }: { children: ReactNode }) {
           zIndex: -1,
         }}
       >
+        {/* Desktop first — the PNG capture points at this one. */}
         <div ref={stageRef} style={{ width: EXPORT_WIDTH }}>
           {staged && <MockupPage page={staged} width={EXPORT_WIDTH} />}
         </div>
+
+        {/* The other breakpoints, mounted alongside so each is laid out at its
+            own width and can be measured. Only the .pagefly export reads them. */}
+        {EXPORT_BREAKPOINTS.map((bp, i) => (
+          <div
+            key={bp.key}
+            ref={(node) => {
+              bpRefs.current[i] = bp.key === "all" ? stageRef.current : node;
+            }}
+            style={{ width: bp.width }}
+          >
+            {staged && bp.key !== "all" && (
+              <MockupPage page={staged} width={bp.width} />
+            )}
+          </div>
+        ))}
       </div>
     </Ctx.Provider>
   );

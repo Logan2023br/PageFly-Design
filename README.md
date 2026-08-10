@@ -357,17 +357,32 @@ browsers, and the hover message is the entire point of the control right now).
 | `MD Json PageFly/` | the element model: 95 types, 419 fields, 5,536 legal parent/child pairs | generated from PageFly's own registry — it wins on anything about an element |
 | `docs/pagefly-file-format.md` | the container: the zip, its single entry, the top-level keys, the parallel `styles` array | hand-recorded, because the generated reference does not describe the container at all |
 
-**Known gaps against the generated reference**, not yet applied to the exporter:
+**Known gap against the generated reference**: `Heading2.tag` (h1–h6, default h3) is
+never set, so every exported heading imports as an h3. Deferred deliberately — the
+heading hierarchy is to be specified separately rather than inferred from the mockup.
 
-- `Button2.clickAction` is written as `"none"` when there is no href. The enum is
-  `url | popup | section | email | phone` — `"none"` is not a member and the field
-  should simply be omitted.
-- `Heading2.tag` (h1–h6, default h3) is never set, so every exported heading imports
-  as an h3 regardless of what the mockup used.
-- `ProductATC2.text` is never set, so the button shows the default "Add to Cart"
-  rather than the mockup's own label.
-- Responsive visibility lives in an `options` slot, not `data`. Writing it to `data`
-  is accepted, stored, and does nothing.
+### All four breakpoints, not just desktop
+
+The export walks the mockup at 1440, 1280, 834 and 390 and merges the results.
+Desktop supplies the structure; each narrower render contributes a `styleData` key
+of its own wherever its CSS differs, and elements that exist at only some widths
+carry `hideOnDesktop` / `hideOnLaptop` / `hideOnTablet` / `hideOnMobile` in the
+`options` slot — a sibling of `data`, where writing them to `data` instead is
+accepted, stored, and does nothing.
+
+This matters because the mockup genuinely reshapes: measured across 45 page types,
+laptop and tablet are structurally identical to desktop and differ only in CSS on a
+handful of nodes, while mobile differs on about a third of its nodes AND renders a
+few elements the others do not. A single-width export was a desktop snapshot.
+
+All four are mounted at once in the off-screen stage rather than rendered one at a
+time. The layout custom properties are measured from the laid-out element, and a
+render that has been swapped out — or cloned detached — measures zero.
+
+Narrower breakpoints carry their CSS in full rather than as a diff: a narrower key
+overrides the properties it names but does not reset the ones it omits, so a partial
+rule would leak desktop values wherever a property exists on desktop and not on
+mobile.
 
 ### How closely the import matches the mockup
 

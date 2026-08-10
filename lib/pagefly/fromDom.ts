@@ -2,6 +2,8 @@
 
 import {
   ACCORDION,
+  onlyOn,
+  type DeviceKey,
   ACCORDION_HEADER,
   BTN,
   CUSTOM_HTML,
@@ -239,15 +241,108 @@ function heightMode(d: [string, string][]): "hug" | "fill" | "fixed" {
   return "hug";
 }
 
+/* ---- one element, seen at every breakpoint ------------------------------- */
+
+/**
+ * The same element as rendered at each breakpoint. `[0]` is desktop and is the
+ * canonical one — it is never null, and the exported tree's structure comes from
+ * it. A null entry means the element is not rendered at that width, which becomes
+ * a `hideOn…` flag rather than a missing node.
+ */
+type Src = { key: DeviceKey; el: Element | null };
+
+/* A tuple, not an array: the first entry is desktop and must always be present.
+   Encoding that in the type removes a null check from every reader. */
+export type Sources = [{ key: "all"; el: Element }, ...Src[]];
+
+/** Enough to recognise the same element in a differently-shaped render.
+    Tag and role are structural; a little text disambiguates siblings that share
+    both. Deliberately not the CSS — the CSS is exactly what differs. */
+function signature(el: Element): string {
+  const role = el.getAttribute("data-pf") ?? "";
+  const text = (el.textContent ?? "").trim().slice(0, 24).replace(/\s+/g, " ");
+  return `${el.tagName}|${role}|${el.children.length}|${text}`;
+}
+
+/**
+ * Line up one device's children against desktop's.
+ *
+ * Index alignment is not enough: mobile renders a different number of children in
+ * places, and from the first mismatch onwards every later pair would be wrong.
+ * This is a longest-common-subsequence over signatures, which keeps the matched
+ * pairs aligned and reports the leftovers on each side honestly.
+ */
+function align(
+  base: Element[],
+  other: Element[],
+): { pairs: Map<number, Element>; extra: { after: number; el: Element }[] } {
+  const a = base.map(signature);
+  const b = other.map(signature);
+
+  const lcs: number[][] = Array.from({ length: a.length + 1 }, () =>
+    new Array<number>(b.length + 1).fill(0),
+  );
+  for (let i = a.length - 1; i >= 0; i--) {
+    for (let j = b.length - 1; j >= 0; j--) {
+      lcs[i][j] =
+        a[i] === b[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+    }
+  }
+
+  const pairs = new Map<number, Element>();
+  const extra: { after: number; el: Element }[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      pairs.set(i, other[j]);
+      i++;
+      j++;
+    } else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
+      i++;
+    } else {
+      extra.push({ after: i - 1, el: other[j] });
+      j++;
+    }
+  }
+  for (; j < b.length; j++) extra.push({ after: a.length - 1, el: other[j] });
+
+  return { pairs, extra };
+}
+
+
+/** The same child, located in every device that still renders it. */
+function childSources(
+  parent: Sources,
+  index: number,
+  alignments: Map<DeviceKey, Map<number, Element>>,
+): Sources {
+  const desktopKid = elementChildren(parent[0].el)[index];
+  const rest: Src[] = parent
+    .slice(1)
+    .map((s) => ({ key: s.key, el: alignments.get(s.key)?.get(index) ?? null }));
+  return [{ key: "all", el: desktopKid }, ...rest];
+}
+
+/** Which breakpoints actually render this element. */
+function presentOn(sources: Sources): DeviceKey[] {
+  return sources.filter((s) => s.el !== null).map((s) => s.key);
+}
+
+/** A single element promoted to a Sources tuple — for nodes that exist at one
+    breakpoint only, and for the paths that never needed the others. */
+function only(key: DeviceKey, el: Element): Sources {
+  return [{ key: "all", el }, ...(key === "all" ? [] : [{ key, el }])] as Sources;
+}
+
 /* ---- style composition --------------------------------------------------- */
 
 /**
  * The mockup's own declarations, plus the layout-engine props PageFly needs to
  * leave them alone.
  */
-function styleOf(el: Element, parentDir: Dir | null): StyleData {
+function cssFor(el: Element, parentDir: Dir | null): string {
   const d = decl(el);
-  if (d.length === 0 && parentDir === null) return null;
 
   const body = d
     .map(([p, v]) =>
@@ -267,7 +362,35 @@ function styleOf(el: Element, parentDir: Dir | null): StyleData {
     .filter(Boolean)
     .join(" ");
 
-  return { all: { "&": `${body} ${tail}`.trim() } };
+  return `${body} ${tail}`.trim();
+}
+
+/**
+ * One element's CSS across every breakpoint it appears at.
+ *
+ * `all` is the desktop render and the base. A narrower breakpoint is written only
+ * when its CSS actually differs, and it is written in FULL rather than as a diff:
+ * a narrower key overrides the properties it names but does not reset the ones it
+ * omits, so a partial rule would leave desktop values leaking through wherever a
+ * property exists on desktop and not on mobile.
+ */
+function styleOfAll(sources: Sources, parentDir: Dir | null): StyleData {
+  const base = cssFor(sources[0].el, parentDir);
+  const out: Record<string, Record<string, string>> = { all: { "&": base } };
+
+  for (const s of sources.slice(1)) {
+    if (!s.el) continue;
+    const css = cssFor(s.el, parentDir);
+    if (css !== base) out[s.key] = { "&": css };
+  }
+  return out;
+}
+
+/** Kept for the single-breakpoint paths (drawn artwork, loose text). */
+function styleOf(el: Element, parentDir: Dir | null): StyleData {
+  const d = decl(el);
+  if (d.length === 0 && parentDir === null) return null;
+  return { all: { "&": cssFor(el, parentDir) } };
 }
 
 /** True when the subtree is pure imagery — MockImage sets aspect-ratio and
@@ -375,11 +498,25 @@ function findRole(el: Element, role: string): Element | null {
 
 /** A styled div wrapping one product element, so the mockup's own spacing and
     borders survive around an element whose internals PageFly owns. */
-function shell(el: Element, parentDir: Dir | null, inner: PFNode): PFNode {
-  return FB(styleOf(el, parentDir), [inner]);
+function shell(sources: Sources, parentDir: Dir | null, inner: PFNode): PFNode {
+  return FB(styleOfAll(sources, parentDir), [inner]);
 }
 
-function productBox(el: Element, parentDir: Dir | null): PFNode | null {
+function productBox(sources: Sources, parentDir: Dir | null): PFNode | null {
+  const el = sources[0].el;
+  /* Locate the same part in every render, by role. These are fixed-slot elements
+     whose internals PageFly owns, so only their CSS varies by width. */
+  const part = (role: string): Sources | null => {
+    const found = findRole(el, role);
+    if (!found) return null;
+    return [
+      { key: "all", el: found },
+      ...sources.slice(1).map((s) => ({
+        key: s.key,
+        el: s.el ? findRole(s.el, role) : null,
+      })),
+    ] as Sources;
+  };
   const mediaEl = findRole(el, "product-media");
   const infoEl = findRole(el, "product-info");
   if (!mediaEl || !infoEl) return null;
@@ -389,40 +526,60 @@ function productBox(el: Element, parentDir: Dir | null): PFNode | null {
   if (!mainEl || !listEl) return null;
 
   const media = PRODUCT_MEDIA(
-    MEDIA_MAIN(styleOf(mainEl, "vertical")),
+    MEDIA_MAIN(styleOfAll(part("product-media-main")!, "vertical")),
     MEDIA_LIST(
       elementChildren(listEl).length,
-      styleOf(listEl, "vertical"),
+      styleOfAll(part("product-media-list")!, "vertical"),
       null,
     ),
-    styleOf(mediaEl, parentDir),
+    part("product-media") ? styleOfAll(part("product-media")!, parentDir) : null,
   );
 
   /* The info column is ProductBox's second required slot and has to be a plain
      FlexBlock, so it is walked normally — every product element inside it is
      picked up by `convert` on the way down. */
+  const infoSources = part("product-info")!;
   const info = FB(
-    styleOf(infoEl, parentDir),
-    walkChildren(infoEl, directionOf(decl(infoEl))),
+    styleOfAll(infoSources, parentDir),
+    walkChildren(infoSources, directionOf(decl(infoEl))),
   );
 
   /* ProductBox renders a <form>, so the grid that lays the two columns out has
      to be applied to `& > form`. Styling `&` leaves the form at its default
      width and the two columns stack. */
-  const own = styleOf(el, parentDir);
+  const own = styleOfAll(sources, parentDir);
   return PRODUCT_BOX(media, info, own?.all?.["&"] ?? "");
 }
 
-function accordion(el: Element, parentDir: Dir | null): PFNode | null {
+function accordion(sources: Sources, parentDir: Dir | null): PFNode | null {
+  const el = sources[0].el;
+  /* Rows are matched across renders by their index: the row list is generated
+     from the same data at every width, so the nth row is the nth row. */
+  const rowsAt = (key: DeviceKey): Element[] => {
+    const src = sources.find((x) => x.key === key)?.el ?? null;
+    return src ? Array.from(src.querySelectorAll('[data-pf="accordion-row"]')) : [];
+  };
+  const rowPart = (i: number, role: string): Sources | null => {
+    const found = findRole(rowEls[i], role);
+    if (!found) return null;
+    return [
+      { key: "all", el: found },
+      ...sources.slice(1).map((s) => {
+        const row = rowsAt(s.key)[i] ?? null;
+        return { key: s.key, el: row ? findRole(row, role) : null };
+      }),
+    ] as Sources;
+  };
   const rowEls = Array.from(el.querySelectorAll('[data-pf="accordion-row"]'));
   if (rowEls.length === 0) return null;
 
-  const rows = rowEls.map((row) => {
+  const rows = rowEls.map((row, i) => {
     const headEl = findRole(row, "accordion-header");
     const bodyEl = findRole(row, "accordion-body");
+    const headSources = rowPart(i, "accordion-header");
     const header = ACCORDION_HEADER(
-      headEl ? walkChildren(headEl, directionOf(decl(headEl))) : [],
-      headEl ? styleOf(headEl, "vertical") : null,
+      headSources ? walkChildren(headSources, directionOf(decl(headEl!))) : [],
+      headSources ? styleOfAll(headSources, "vertical") : null,
     );
     /* Real content MUST land in Accordion3.Flex.Content — the builder nests the
        four tiers. A row whose answer is collapsed in the mockup still gets its
@@ -431,8 +588,9 @@ function accordion(el: Element, parentDir: Dir | null): PFNode | null {
        identically to not rendering them, so the picture is unchanged, but the
        DOM carries every answer. Strip that hiding here: in the editor every row
        can be opened, and Accordion3 does the showing itself. */
-    const body = bodyEl
-      ? [P4(liquidSafe(bodyEl.innerHTML), unhide(styleOf(bodyEl, "vertical")))]
+    const bodySources = rowPart(i, "accordion-body");
+    const body = bodySources
+      ? [P4(liquidSafe(bodyEl!.innerHTML), unhide(styleOfAll(bodySources, "vertical")))]
       : [];
     /* The mockup puts each row's padding on a container between the row and its
        header; without it the imported accordion loses all its inner spacing. */
@@ -444,38 +602,48 @@ function accordion(el: Element, parentDir: Dir | null): PFNode | null {
     };
   });
 
-  return ACCORDION(rows, styleOf(el, parentDir));
+  return ACCORDION(rows, styleOfAll(sources, parentDir));
 }
 
-function semantic(el: Element, parentDir: Dir | null): PFNode | null {
+function semantic(sources: Sources, parentDir: Dir | null): PFNode | null {
+  const el = sources[0].el;
+
+  /* The same element, located in the other renders, so a semantic node still gets
+     per-breakpoint CSS. Structure comes from desktop: these are fixed-slot
+     elements whose internals PageFly owns, so they do not reshape by width. */
+  const sub = (found: Element | null): Sources =>
+    [
+      { key: "all", el: found ?? el },
+      ...sources.slice(1).map((s) => ({
+        key: s.key,
+        el: s.el && found ? s.el.querySelector(`[data-pf="${found.getAttribute("data-pf")}"]`) : s.el,
+      })),
+    ] as Sources;
+
   switch (pfRole(el)) {
     case "button":
       // Keeps the mockup's own label and CSS — a real button, same pixels.
-      return BTN(
-        liquidSafe(el.innerHTML),
-        "",
-        styleOf(el, parentDir),
-      );
+      return BTN(liquidSafe(el.innerHTML), "", styleOfAll(sources, parentDir));
     case "product-box":
-      return productBox(el, parentDir);
+      return productBox(sources, parentDir);
     case "accordion":
-      return accordion(el, parentDir);
+      return accordion(sources, parentDir);
     case "product-title":
-      return PRODUCT_TITLE(styleOf(el, parentDir));
+      return PRODUCT_TITLE(styleOfAll(sources, parentDir));
     case "product-price": {
       const main = findRole(el, "product-price-main");
       const compare = findRole(el, "product-price-compare");
       return shell(
-        el,
+        sources,
         parentDir,
         PRODUCT_PRICE(
           null,
-          main ? styleOf(main, "horizontal") : null,
+          main ? styleOfAll(sub(main), "horizontal") : null,
           /* Both items are required. When the mockup has no compare-at price the
              second slot is hidden rather than dropped — a one-child
              ProductPrice2 renders empty. */
           compare
-            ? styleOf(compare, "horizontal")
+            ? styleOfAll(sub(compare), "horizontal")
             : { all: { "&": "display: none !important;" } },
         ),
       );
@@ -484,38 +652,93 @@ function semantic(el: Element, parentDir: Dir | null): PFNode | null {
       const label = findRole(el, "product-swatch-label");
       const options = findRole(el, "product-swatch-options");
       return shell(
-        el,
+        sources,
         parentDir,
         PRODUCT_SWATCHES(
           null,
-          label ? styleOf(label, "vertical") : null,
-          options ? styleOf(options, "vertical") : null,
+          label ? styleOfAll(sub(label), "vertical") : null,
+          options ? styleOfAll(sub(options), "vertical") : null,
         ),
       );
     }
     case "product-atc":
-      return PRODUCT_ATC(styleOf(el, parentDir));
+      /* The mockup's own label, not PageFly's default "Add to Cart". */
+      return PRODUCT_ATC(
+        styleOfAll(sources, parentDir),
+        (el.textContent ?? "").trim(),
+      );
     default:
       return null;
   }
 }
 
-function walkChildren(el: Element, dir: Dir | null): PFNode[] {
-  const out: PFNode[] = [];
-  for (const child of Array.from(el.childNodes)) {
-    if (child.nodeType === 1) {
-      const n = convert(child as Element, dir);
-      if (n) out.push(n);
-    } else if (child.nodeType === 3) {
-      // Bare text beside block siblings — dropped entirely before this fix.
-      const t = (child.nodeValue ?? "").trim();
-      if (t) out.push(looseText(t));
+/**
+ * Children, merged across breakpoints.
+ *
+ * Desktop supplies the order and the structure. Each other device is aligned to it
+ * by signature; a desktop child the device does not render is hidden there, and a
+ * child only that device renders is inserted in place and hidden everywhere else.
+ * That is what makes the export a responsive page rather than a desktop snapshot
+ * with the widths rewritten.
+ */
+function walkChildren(sources: Sources, dir: Dir | null): PFNode[] {
+  const desktop = sources[0].el;
+  const kids = elementChildren(desktop);
+
+  const alignments = new Map<DeviceKey, Map<number, Element>>();
+  const extras = new Map<number, { key: DeviceKey; el: Element }[]>();
+
+  for (const s of sources.slice(1)) {
+    if (!s.el) continue;
+    const { pairs, extra } = align(kids, elementChildren(s.el));
+    alignments.set(s.key, pairs);
+    for (const e of extra) {
+      const list = extras.get(e.after) ?? [];
+      list.push({ key: s.key, el: e.el });
+      extras.set(e.after, list);
     }
   }
+
+  const out: PFNode[] = [];
+
+  const emitExtras = (after: number) => {
+    for (const e of extras.get(after) ?? []) {
+      const node = convert(only(e.key, e.el), dir);
+      if (node) out.push(onlyOn(node, [e.key]));
+    }
+  };
+
+  emitExtras(-1);
+
+  /* Bare text nodes are read from desktop only. They carry no per-breakpoint
+     styling of their own — whatever differs sits on the parent. */
+  let index = 0;
+  for (const child of Array.from(desktop.childNodes)) {
+    if (child.nodeType === 3) {
+      const t = (child.nodeValue ?? "").trim();
+      if (t) out.push(looseText(t));
+      continue;
+    }
+    if (child.nodeType !== 1) continue;
+    const el = child as Element;
+    if (SKIP_TAGS.has(el.tagName)) continue;
+
+    const childAt = childSources(sources, index, alignments);
+    const node = convert(childAt, dir);
+    if (node) {
+      const present = presentOn(childAt);
+      if (present.length < sources.length) onlyOn(node, present);
+      out.push(node);
+    }
+    emitExtras(index);
+    index++;
+  }
+
   return out;
 }
 
-function convert(el: Element, parentDir: Dir | null): PFNode | null {
+function convert(sources: Sources, parentDir: Dir | null): PFNode | null {
+  const el = sources[0].el;
   if (SKIP_TAGS.has(el.tagName)) return null;
 
   /* Semantic elements come first — a tagged node must not be reduced to a
@@ -523,22 +746,24 @@ function convert(el: Element, parentDir: Dir | null): PFNode | null {
      expected inner parts are missing) falls through to the generic walk rather
      than dropping the subtree. */
   if (pfRole(el)) {
-    const mapped = semantic(el, parentDir);
+    const mapped = semantic(sources, parentDir);
     if (mapped) return mapped;
   }
 
   // Whole drawn-artwork subtrees go through verbatim.
+  /* Drawn artwork keeps DESKTOP's markup. `data.code` has no per-breakpoint
+     form, so the SVG cannot vary; what does vary is its box, and that is CSS. */
   if (isDrawnArtwork(el)) {
-    return CUSTOM_HTML(liquidSafe(el.outerHTML), styleOf(el, parentDir));
+    return CUSTOM_HTML(liquidSafe(el.outerHTML), styleOfAll(sources, parentDir));
   }
 
   if (el.tagName === "SVG" || el.tagName === "svg") {
-    return CUSTOM_HTML(liquidSafe(el.outerHTML), styleOf(el, parentDir));
+    return CUSTOM_HTML(liquidSafe(el.outerHTML), styleOfAll(sources, parentDir));
   }
 
   if (el.tagName === "IMG") {
     const src = el.getAttribute("src") ?? "";
-    return IMG(src, styleOf(el, parentDir));
+    return IMG(src, styleOfAll(sources, parentDir));
   }
 
   const kids = elementChildren(el);
@@ -550,7 +775,7 @@ function convert(el: Element, parentDir: Dir | null): PFNode | null {
      Stars puts the filled and unfilled halves in different colours. */
   if (text && (TEXT_TAGS.has(el.tagName) || isTextRun(el, kids))) {
     const value = liquidSafe(el.innerHTML);
-    const style = styleOf(el, parentDir);
+    const style = styleOfAll(sources, parentDir);
     return TEXT_TAGS.has(el.tagName) && el.tagName !== "P"
       ? H2(value, style)
       : P4(value, style);
@@ -559,12 +784,12 @@ function convert(el: Element, parentDir: Dir | null): PFNode | null {
   /* CSS-only decoration: a divider, rail or dot. As a childless FlexBlock the
      editor covers it with a "Drop element here" placeholder. */
   if (kids.length === 0 && !text) {
-    return CUSTOM_HTML(liquidSafe(el.outerHTML), styleOf(el, parentDir));
+    return CUSTOM_HTML(liquidSafe(el.outerHTML), styleOfAll(sources, parentDir));
   }
 
   return FB(
-    styleOf(el, parentDir),
-    walkChildren(el, directionOf(decl(el))),
+    styleOfAll(sources, parentDir),
+    walkChildren(sources, directionOf(decl(el))),
   );
 }
 
@@ -594,22 +819,40 @@ function pageCss(width: number): string {
 
 export type BuiltPage = { blob: Blob; filename: string };
 
+/** One rendered mockup, per breakpoint. All four must be laid out and attached:
+    the layout custom properties are measured, and a detached clone measures 0. */
+export type Rendered = { key: DeviceKey; root: HTMLElement };
+
 /**
- * Convert one rendered mockup into a .pagefly import file.
+ * Convert the rendered mockup into a .pagefly import file.
  *
- * `root` must be the element MockupPage rendered into, already laid out at
- * `width` — the same off-screen stage the PNG export uses.
+ * Every breakpoint the mockup supports is walked, not just desktop. Exporting one
+ * width produced a page that only looked right on a desktop: the mockup genuinely
+ * reshapes below 834px — different CSS on about a third of its nodes, and a
+ * handful of elements that appear or disappear — and none of that reached the
+ * file. Now the desktop render supplies the structure, each narrower render
+ * contributes its own `styleData` key where it differs, and elements that exist at
+ * only some widths carry the matching `hideOn…` flags.
  */
-export function pageFromDom(
-  root: HTMLElement,
+export function pageFromBreakpoints(
+  renders: Rendered[],
   page: PageMockup,
   width: number,
 ): BuiltPage {
-  const inner = (root.firstElementChild as HTMLElement | null) ?? root;
+  const desktop = renders.find((r) => r.key === "all");
+  if (!desktop) throw new Error("The desktop render is required");
 
-  const children = elementChildren(inner)
-    .map((c) => convert(c, "vertical"))
-    .filter((n): n is PFNode => n !== null);
+  const innerOf = (root: HTMLElement) =>
+    (root.firstElementChild as HTMLElement | null) ?? root;
+
+  const roots: Sources = [
+    { key: "all", el: innerOf(desktop.root) },
+    ...renders
+      .filter((r) => r.key !== "all")
+      .map((r) => ({ key: r.key, el: innerOf(r.root) as Element | null })),
+  ] as Sources;
+
+  const children = walkChildren(roots, "vertical");
 
   if (children.length === 0)
     throw new Error("Nothing to export — the mockup rendered empty");

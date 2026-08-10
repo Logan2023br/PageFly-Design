@@ -28,9 +28,19 @@ export type PFNode = {
   type: string;
   data: Record<string, unknown>;
   styleData: StyleData;
+  /**
+   * Structural settings, a sibling of `data` and not interchangeable with it.
+   * Responsive visibility lives here: hideOnDesktop / hideOnLaptop /
+   * hideOnTablet / hideOnMobile. Writing those into `data` is accepted, stored,
+   * and does nothing — see MD Json PageFly/page-json.md.
+   */
+  options?: Record<string, unknown>;
   _kids: PFNode[];
   roomId?: string;
 };
+
+/** The four breakpoints PageFly styles against. `all` is the base. */
+export type DeviceKey = "all" | "laptop" | "tablet" | "mobile";
 
 /* Button2 carries these inert blobs in every real export. Copied verbatim —
    the editor expects the keys to exist. */
@@ -63,6 +73,17 @@ function node(
   kids: PFNode[] = [],
 ): PFNode {
   return { type, data, styleData, _kids: kids };
+}
+
+/** Hide a node on every breakpoint except the ones listed. */
+export function onlyOn(target: PFNode, devices: DeviceKey[]): PFNode {
+  const flags: Record<string, boolean> = {};
+  if (!devices.includes("all")) flags.hideOnDesktop = true;
+  if (!devices.includes("laptop")) flags.hideOnLaptop = true;
+  if (!devices.includes("tablet")) flags.hideOnTablet = true;
+  if (!devices.includes("mobile")) flags.hideOnMobile = true;
+  target.options = { ...target.options, ...flags };
+  return target;
 }
 
 /* ---- node constructors -------------------------------------------------- */
@@ -105,11 +126,17 @@ export function BTN(
   const d: Record<string, unknown> = {
     value,
     buttonType: "text",
-    href,
-    clickAction: href ? "url" : "none",
     placeholder: "Enter text here...",
     ...BTN_BLOBS,
   };
+  /* Omitted rather than sent as "none". The enum is url|popup|section|email|
+     phone with an unset default, so "none" was never a member — and a mockup
+     button has no real destination anyway. Left unset, the merchant picks one in
+     the editor. */
+  if (href) {
+    d.href = href;
+    d.clickAction = "url";
+  }
   if (cls) d.className = cls;
   return node("Button2", d, styleData, []);
 }
@@ -211,8 +238,12 @@ export function PRODUCT_SWATCHES(
   ]);
 }
 
-export function PRODUCT_ATC(styleData: StyleData) {
-  return node("ProductATC2", {}, styleData, []);
+/** `text` is the button's label. Left unset it renders PageFly's default
+    "Add to Cart", which is not necessarily what the mockup showed. */
+export function PRODUCT_ATC(styleData: StyleData, text?: string) {
+  const d: Record<string, unknown> = {};
+  if (text?.trim()) d.text = text.trim();
+  return node("ProductATC2", d, styleData, []);
 }
 
 /** Four tiers, and the real content has to sit in the innermost one — content
@@ -348,6 +379,7 @@ type Item = {
   createdAt: string;
   updatedAt: string;
   data?: Record<string, unknown>;
+  options?: Record<string, unknown>;
   roomId?: string;
 };
 
@@ -432,6 +464,7 @@ export class Page {
         updatedAt: ts,
       };
       if (Object.keys(n.data).length) item.data = n.data;
+      if (n.options && Object.keys(n.options).length) item.options = n.options;
       if (n.roomId !== undefined) item.roomId = n.roomId;
       items.push(item);
       parentChildren.push(id);
