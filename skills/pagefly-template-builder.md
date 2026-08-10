@@ -1,3 +1,7 @@
+---
+scope: export
+---
+
 # Role: PageFly template builder
 
 Bạn build PageFly Flex editor payloads từ design (screenshot / mockup / HTML file).

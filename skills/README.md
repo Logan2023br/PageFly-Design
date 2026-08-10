@@ -6,6 +6,26 @@ names a specific one.
 **Swapping a skill is: delete the old file, drop in the new one.** That is the whole
 procedure. No import to update, no registry to edit, no build step.
 
+## Scope
+
+A skill may say what it is for, in YAML front matter:
+
+```
+---
+scope: copy
+---
+```
+
+| scope | Goes to |
+| --- | --- |
+| `copy` | the model that rewrites page copy |
+| `export` | nothing yet — knowledge for building `.pagefly` files, which this repo does in TypeScript |
+| omitted | everywhere |
+
+Scope is not bookkeeping. The first skill here is 18KB about constructing PageFly
+payloads; unscoped, it cost 7,000 input tokens on every page of every build and told
+a copywriter nothing about the merchant.
+
 A skill is instructions for a model — it does nothing on its own. Today nothing reads
 this directory: page generation is deterministic code and never calls a model. These
 files become live when AI generation ships, at which point every `.md` here is

@@ -27,6 +27,7 @@ import {
   isAbortError,
   regeneratePage,
 } from "./generate";
+import { rewritePageCopy } from "./ai/rewritePage";
 import { DEVICES } from "./generate/types";
 import type { DeviceId, GenerateFailure, PageMockup } from "./generate/types";
 import type { CategoryId } from "./pageCatalog";
@@ -59,6 +60,8 @@ type State = {
   /** true when the deck on screen was reopened from the Library, so the recorder
       knows there is nothing new to save */
   reopened: boolean;
+  /** model tokens spent on the current build. 0 when no model is configured. */
+  tokens: number;
   /** page ids currently being rebuilt, so their card can show the morph again */
   rebuilding: string[];
 
@@ -130,6 +133,7 @@ export const useStore = create<State & Actions>((set, get) => ({
   failures: [],
   variants: {},
   reopened: false,
+  tokens: 0,
   rebuilding: [],
 
   filter: "all",
@@ -268,6 +272,7 @@ export const useStore = create<State & Actions>((set, get) => ({
       failures: [],
       variants: {},
       reopened: false,
+      tokens: 0,
       filter: "all",
       previewIndex: null,
     });
@@ -275,7 +280,22 @@ export const useStore = create<State & Actions>((set, get) => ({
     try {
       await generatePages(
         brief,
-        (page) => set((s) => ({ pages: [...s.pages, page] })),
+        (page) => {
+          /* The page is shown the moment it is generated, then improved in
+             place. Waiting for the model before showing anything would trade a
+             deck that fills in card by card for a blank screen and a spinner —
+             and the deterministic page is already a complete, correct page. */
+          set((s) => ({ pages: [...s.pages, page] }));
+
+          void rewritePageCopy(page, brief, controller?.signal).then((result) => {
+            set((s) => ({
+              tokens: s.tokens + result.tokens,
+              pages: result.used
+                ? s.pages.map((p) => (p.id === page.id ? result.page : p))
+                : s.pages,
+            }));
+          });
+        },
         controller.signal,
         {
           onPageFailed: (f) =>

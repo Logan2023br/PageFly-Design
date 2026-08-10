@@ -1,4 +1,6 @@
 import { builtinStores } from "@/lib/allowlist";
+import { providerName } from "@/lib/ai/provider";
+import { skillNames } from "@/lib/ai/skills";
 import { databaseIsUnpooled, databaseSource, hasDatabase } from "@/lib/db";
 import { hasSessionSecret, hasStableSecret, keySource } from "@/lib/session";
 import { sheetSource } from "@/lib/sheet";
@@ -42,6 +44,12 @@ export async function GET() {
        configured, not broken. Reporting it as blocking sent an operator looking
        for a problem that was not there. */
     builtinStores: builtinStores().length,
+    /* Which model writes the copy, and which skills it is given. "none" means
+       generation is fully deterministic — which is a valid way to run, not a
+       fault, so it never appears in `blocking`. */
+    aiProvider: providerName(),
+    aiModel: process.env.AI_MODEL ?? null,
+    skills: skillNames(),
   };
 
   /* Only in production. In development the file-backed driver takes over and the
@@ -109,6 +117,15 @@ export async function GET() {
     advisory.push(
       `Using ${checks.databaseFrom}, which is an unpooled connection. On serverless ` +
         "prefer DATABASE_URL (Neon) or POSTGRES_URL (Supabase) — the pooled string.",
+    );
+  if (checks.aiProvider === "none")
+    advisory.push(
+      "No model configured — page copy comes from the deterministic generator and " +
+        "costs no tokens. Set ANTHROPIC_API_KEY or DEEPSEEK_API_KEY to change that.",
+    );
+  if (checks.aiProvider !== "none" && checks.skills.length === 0)
+    advisory.push(
+      "A model is configured but skills/ is empty, so it gets no house rules.",
     );
   if (!checks.reviewWebhook)
     advisory.push(

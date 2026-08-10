@@ -34,6 +34,7 @@ export function RunRecorder() {
   const pages = useStore((s) => s.pages);
   const variants = useStore((s) => s.variants);
   const reopened = useStore((s) => s.reopened);
+  const tokens = useStore((s) => s.tokens);
   const { refresh } = useAccount();
 
   /* Signature of the last run written, so a re-render, a filter change or a
@@ -69,10 +70,9 @@ export function RunRecorder() {
             })),
             sell: brief.whatYouSell,
             styleLabel: style?.label ?? brief.visualStyle,
-            /* Zero until generation calls a model. Recorded rather than omitted
-               so the admin column is real from the first run and needs no
-               backfill later. */
-            tokens: 0,
+            /* Real model spend for this build, summed across its pages. Still 0
+               when no model is configured, which is the honest number then. */
+            tokens,
           }),
         });
         /* A rejected save must not be remembered as done — the next render
@@ -83,7 +83,7 @@ export function RunRecorder() {
       }
       await refresh();
     })();
-  }, [screen, brief, pages, variants, reopened, refresh]);
+  }, [screen, brief, pages, variants, reopened, tokens, refresh]);
 
   return null;
 }
