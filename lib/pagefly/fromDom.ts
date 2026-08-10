@@ -178,7 +178,9 @@ type Layout = {
   dir: Dir;
   rowGap: number;
   columnGap: number;
-  /** how many children sat on the first row, measured */
+  /** a CSS grid, which the Flex editor has no equivalent for */
+  isGrid: boolean;
+  /** how many children sat on the first row, measured. Only meaningful for a grid. */
   columns: number;
 };
 
@@ -202,26 +204,41 @@ function readLayout(el: Element): Layout {
       : null;
 
   const display = (view?.display ?? lookup(inline, "display") ?? "block").trim();
-  const flow = `${view?.flexDirection ?? ""} ${lookup(inline, "flex-flow") ?? ""} ${
-    lookup(inline, "flex-direction") ?? ""
-  } ${view?.flexWrap ?? ""} ${lookup(inline, "flex-wrap") ?? ""}`;
+  /* Tokens, never substrings. `"nowrap".includes("wrap")` is true, and reading it
+     that way classified every non-wrapping row in the mockup as a wrapping one —
+     which then handed each of its children an equal-width basis and collapsed the
+     hero headline into a one-character column. */
+  const tokens = new Set(
+    `${view?.flexDirection ?? ""} ${view?.flexWrap ?? ""} ${
+      lookup(inline, "flex-flow") ?? ""
+    } ${lookup(inline, "flex-direction") ?? ""} ${lookup(inline, "flex-wrap") ?? ""}`
+      .split(/\s+/)
+      .filter(Boolean),
+  );
+  const wraps = tokens.has("wrap") || tokens.has("wrap-reverse");
+  const column = tokens.has("column") || tokens.has("column-reverse");
 
   const rowGap = view ? px(view.rowGap) : px(lookup(inline, "gap"));
   const columnGap = view ? px(view.columnGap) : px(lookup(inline, "gap"));
 
+  const isGrid = display.includes("grid");
+
   let dir: Dir;
-  if (display.includes("grid")) dir = "wrap";
+  if (isGrid) dir = "wrap";
   else if (display.includes("flex"))
-    dir = flow.includes("wrap")
-      ? "wrap"
-      : flow.includes("column")
-        ? "vertical"
-        : "horizontal";
+    dir = wraps ? "wrap" : column ? "vertical" : "horizontal";
   /* Block-level children stack. That is a vertical flex column in PageFly terms,
      and saying so explicitly is the whole point of this function. */
   else dir = "vertical";
 
-  return { display, dir, rowGap, columnGap, columns: countColumns(el, display, inline) };
+  return {
+    display,
+    dir,
+    rowGap,
+    columnGap,
+    isGrid,
+    columns: isGrid ? countColumns(el, display, inline) : 1,
+  };
 }
 
 /** Children sharing the first row. Measured where there is layout; parsed from
@@ -478,8 +495,10 @@ function cssFor(el: Element, parent: ParentLayout | null): string {
       own.push(`gap: ${layout.rowGap}px ${layout.columnGap}px !important;`);
   }
 
-  /* A child of a translated grid needs its width stated, or wrapping puts every
-     item on its own row. Basis subtracts the gaps the row will add back. */
+  /* Only a translated GRID hands its children a width. A grid's columns really are
+     equal, so an equal basis reproduces it. A flex row's children are not — they
+     size themselves — and forcing a basis on them is how a headline ended up one
+     character wide. */
   if (parent && parent.columns > 1) {
     const gaps = parent.gapPx * (parent.columns - 1);
     own.push(
@@ -505,7 +524,7 @@ function layoutFor(el: Element): ParentLayout {
   const l = readLayout(el);
   return {
     dir: l.dir,
-    columns: l.dir === "wrap" ? l.columns : 1,
+    columns: l.isGrid ? l.columns : 1,
     gapPx: Math.max(l.rowGap, l.columnGap),
   };
 }
