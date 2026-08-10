@@ -7,11 +7,19 @@ import { useAccount } from "../AccountProvider";
 import { Button, Icon } from "../ui";
 
 /* ==========================================================================
-   "Was this useful?" — five minutes after a build finishes, once per store.
+   "Was this useful?" — a short wait after a build, once per store.
 
-   Timed from the server's record of the last build, not from a local timer, so
-   the five minutes keep running across a reload and the prompt does not restart
-   its countdown every time the tab is refreshed.
+   Two triggers, whichever lands later:
+
+   - 15 seconds after the last build, timed from the SERVER's record of it, so the
+     wait keeps running across a reload rather than restarting.
+   - 15 seconds after signing in, for a merchant who already has builds and never
+     answered. Without this they would only ever be asked in the window right
+     after a build, and someone who came back the next day would never see it.
+
+   The session mark lives in sessionStorage, not in this component: moving between
+   Design and Library remounts it, and a merchant who keeps switching tabs would
+   otherwise restart the countdown for ever and never be asked at all.
 
    Shown once ever: the server refuses a second review, and `hasReviewed` hides
    the form. Dismissing without answering does not mark it as done — it only
@@ -19,7 +27,26 @@ import { Button, Icon } from "../ui";
    by accident is asked again on their next visit rather than never.
    ========================================================================== */
 
-const DELAY_MS = 5 * 60 * 1000;
+const DELAY_MS = 15 * 1000;
+
+/** When this browser session first saw the app, per store. */
+function sessionStartedAt(domain: string): number {
+  const key = `pfd.session.${domain}`;
+  try {
+    const stored = window.sessionStorage.getItem(key);
+    if (stored) {
+      const at = Number(stored);
+      if (Number.isFinite(at)) return at;
+    }
+    const now = Date.now();
+    window.sessionStorage.setItem(key, String(now));
+    return now;
+  } catch {
+    /* Private mode or storage disabled. Falling back to "now" means the wait
+       restarts on navigation, which is a worse prompt but never a broken one. */
+    return Date.now();
+  }
+}
 
 type Phase = "hidden" | "asking" | "sending" | "thanks";
 
@@ -35,22 +62,31 @@ export function ReviewPrompt() {
   const lastRunAt = account?.lastRunAt ?? null;
   const eligible = Boolean(account && !account.hasReviewed && lastRunAt);
 
-  /* One timer, armed for whatever is left of the five minutes. When the build
-     already happened long enough ago — a merchant coming back the next day —
-     the remaining time is negative and it opens on this render's timeout. */
+  const domain = account?.domain ?? "";
+
+  /* One timer, armed for whatever is left of the wait. When both marks are
+     already past — a merchant coming back the next day — the remainder is
+     negative and it opens on this render's timeout. */
+
   useEffect(() => {
-    if (!eligible || dismissed || !lastRunAt) return;
+    if (!eligible || dismissed || !lastRunAt || !domain) return;
 
     const finishedAt = new Date(lastRunAt).getTime();
     if (Number.isNaN(finishedAt)) return;
 
-    const remaining = finishedAt + DELAY_MS - Date.now();
+    /* Whichever comes later. A build that finished long ago is due immediately on
+       the session clock; a build that just finished is due on its own. */
+    const dueAt = Math.max(
+      finishedAt + DELAY_MS,
+      sessionStartedAt(domain) + DELAY_MS,
+    );
+
     const timer = setTimeout(
       () => setPhase((p) => (p === "hidden" ? "asking" : p)),
-      Math.max(0, remaining),
+      Math.max(0, dueAt - Date.now()),
     );
     return () => clearTimeout(timer);
-  }, [eligible, dismissed, lastRunAt]);
+  }, [eligible, dismissed, lastRunAt, domain]);
 
   const submit = async () => {
     if (stars < 1 || phase === "sending") return;

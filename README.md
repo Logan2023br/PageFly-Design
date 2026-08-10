@@ -313,8 +313,11 @@ with the specified message when it is gone.
 
 ### Reviews
 
-Five minutes after a build, once per store ever. The timer runs from the server's
-record of the last build, so it survives a reload instead of restarting. Ratings
+Fifteen seconds after a build, or fifteen seconds after signing in for a merchant
+who already has builds and never answered — whichever lands later. The build mark
+comes from the server so it survives a reload; the session mark lives in
+sessionStorage so moving between Design and Library does not restart it for ever.
+Once per store, ever. Ratings
 are written to the database **first** and forwarded to the n8n webhook second: a
 webhook that is down, slow or not yet configured leaves the review saved with
 `forwarded = false` for a later retry, rather than losing a merchant's rating.
