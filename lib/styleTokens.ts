@@ -105,14 +105,41 @@ export type VisualStyleDef = {
 
 /* ---- font stacks -------------------------------------------------------- */
 
+/* ==========================================================================
+   Fonts.
+
+   Every family named first here is a real web font, loaded by name from Google
+   Fonts in app/layout.tsx and again by the .pagefly export's page CSS. That is
+   the only way a mockup and the page it exports look the same on two machines.
+
+   The previous stacks led with system families, and two things went wrong. The
+   mockups did not use the fonts the app loads at all: next/font gives its faces
+   hashed names, so a literal "Inter" here never matched the loaded face and every
+   mockup silently fell back to system-ui. And the ones that were not generic were
+   not portable — "SF Pro Rounded" exists only on Apple devices, "Arial Narrow"
+   resolves to something different on nearly every platform.
+
+   The system families are kept behind each web font as a fallback for the moment
+   before it loads, chosen to be close in width so the reflow is small.
+   ========================================================================== */
 const SANS = '"Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif';
 const GROTESK = 'Inter, ui-sans-serif, system-ui, sans-serif';
-const SERIF = 'ui-serif, Georgia, "Times New Roman", serif';
-const MONO = 'ui-monospace, "SF Mono", Menlo, Consolas, monospace';
-const ROUNDED =
-  '"SF Pro Rounded", ui-rounded, "Segoe UI Variable", system-ui, sans-serif';
+/* Gelasio is metric-compatible with Georgia, so the fallback swaps invisibly. */
+const SERIF = 'Gelasio, Georgia, "Times New Roman", serif';
+const MONO = '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace';
+const ROUNDED = 'Nunito, "SF Pro Rounded", ui-rounded, system-ui, sans-serif';
 const CONDENSED =
-  '"Arial Narrow", "Helvetica Neue", Impact, ui-sans-serif, sans-serif';
+  '"Archivo Narrow", "Arial Narrow", "Helvetica Neue", sans-serif';
+
+/** The Google Fonts stylesheet that makes the families above real. Shared by the
+    app and by every exported page, so both load exactly the same faces. */
+export const WEBFONT_CSS_URL =
+  "https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@400;500;600;700" +
+  "&family=Gelasio:wght@400;500;600;700" +
+  "&family=Inter:wght@400;500;600;700;800" +
+  "&family=JetBrains+Mono:wght@400;500;700" +
+  "&family=Nunito:wght@400;500;600;700;800" +
+  "&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap";
 
 /* ---- shadows ------------------------------------------------------------ */
 

@@ -393,7 +393,7 @@ differ from the mockup by exactly these:
 
 | | Why |
 |---|---|
-| **Fonts** | Styles use generic families (`ui-serif`, `ui-rounded`, `"SF Pro Rounded"`). Those resolve to different real fonts per OS, and different metrics re-wrap text, which changes heights down the page. |
+| **Fonts** | ~~Generic families resolve per OS~~ — **fixed.** Every stack now leads with a real web font, loaded by name from Google Fonts in both the app and the exported page's `customCSS`. |
 | **Host theme CSS** | A PageFly page renders inside a Shopify theme that injects its own base `font-size`, `line-height`, and margins. |
 | **Container width** | `pf-container-2` is PageFly's container, not the mockup's 1180px content column. |
 

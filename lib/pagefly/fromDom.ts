@@ -25,6 +25,7 @@ import {
   type StyleData,
 } from "./builder";
 import type { PageMockup } from "../generate/types";
+import { WEBFONT_CSS_URL } from "../styleTokens";
 
 /* ==========================================================================
    Mockup DOM → PageFly nodes.
@@ -943,6 +944,13 @@ function convert(sources: Sources, parent: ParentLayout | null): PFNode | null {
     at so nothing re-wraps. Scoped to the page — it does not touch the theme. */
 function pageCss(width: number): string {
   return [
+    /* First, because @import is only valid before any other rule. This is what
+       makes the exported page use the same faces the mockup did: the store has no
+       reason to have Plus Jakarta Sans, Nunito or Archivo Narrow installed, and
+       without loading them every heading falls back to whatever the theme's system
+       stack resolves to — which is exactly how an import came back in the wrong
+       font. customCSS survives import and runs on preview and live. */
+    `@import url("${WEBFONT_CSS_URL}");`,
     `/* PageFly Design export — keeps the imported page matching its mockup. */`,
     `.pf-design-export, .pf-design-export * { box-sizing: border-box; }`,
     `.pf-design-export p, .pf-design-export h1, .pf-design-export h2,`,

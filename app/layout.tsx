@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Inter } from "next/font/google";
 import "./globals.css";
+import { WEBFONT_CSS_URL } from "@/lib/styleTokens";
 
 /* Display + body pairing. pagefly.io's exact typeface could not be confirmed
    (the site rate-limited every fetch), so these are the fallbacks the brief
@@ -45,6 +46,22 @@ export default function RootLayout({
           margin reset inline rather than via a global stylesheet rule. When
           this feature is embedded into pagefly.io only the `.pfd-root` tree
           ships — this file does not. */}
+      <head>
+        {/* The mockup families, loaded by their real names.
+            next/font above covers the app's own chrome through CSS variables, but
+            the mockups name their families literally — and next/font's faces have
+            hashed names, so a literal "Inter" never matched one. Loading them here
+            by name is what makes a mockup show the font it asks for, and the same
+            stylesheet is referenced by every exported page so the imported result
+            matches. */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
+        <link rel="stylesheet" href={WEBFONT_CSS_URL} />
+      </head>
       <body suppressHydrationWarning style={{ margin: 0 }}>
         {children}
       </body>
