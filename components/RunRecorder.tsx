@@ -37,6 +37,7 @@ export function RunRecorder() {
   const variants = useStore((s) => s.variants);
   const reopened = useStore((s) => s.reopened);
   const tokens = useStore((s) => s.tokens);
+  const rewriting = useStore((s) => s.rewriting);
   const { refresh } = useAccount();
 
   /* Signature of the last run written, so a re-render, a filter change or a
@@ -49,6 +50,10 @@ export function RunRecorder() {
        charged the allowance a second time. */
     if (reopened) return;
     if (screen !== "results" || !brief || pages.length === 0) return;
+    /* Generation finishes before the rewrites do. Saving here would store the
+       deterministic copy as the snapshot, so the Library would show words the
+       merchant never saw — the exact failure snapshots exist to prevent. */
+    if (rewriting > 0) return;
 
     const payload = encodeRunPayload(brief, variants);
     const signature = `${payload}::${pages.map((p) => p.id).join(",")}`;
@@ -87,7 +92,7 @@ export function RunRecorder() {
       }
       await refresh();
     })();
-  }, [screen, brief, pages, variants, reopened, tokens, refresh]);
+  }, [screen, brief, pages, variants, reopened, tokens, rewriting, refresh]);
 
   return null;
 }

@@ -140,6 +140,117 @@ const LAYOUT_PROPS = new Set([
 
 type Dir = "horizontal" | "vertical" | "wrap";
 
+/* ==========================================================================
+   Translating a browser layout into a PageFly layout.
+
+   The export used to copy each element's inline CSS and assume the result would
+   render the same. It does not, for a reason that only shows up on import: a
+   PageFly FlexBlock is NOT a plain <div>. It has a layout engine, and an element
+   that declares no `display` inherits that engine's default rather than the
+   browser's `block`.
+
+   In one Home page, 254 of 310 elements declare no display at all — they stack
+   because that is what block elements do. Imported, they became rows: navigation
+   links ran together with no gaps, product images sat beside their titles, and
+   prices broke one character per line.
+
+   Another 32 declare `display: grid`. The Flex editor has no grid at all.
+
+   So every container is made EXPLICIT here, from what the browser actually
+   computed rather than from what the markup happened to declare, and grid is
+   translated into the flex-wrap that reproduces it.
+   ========================================================================== */
+
+/** A plain vertical stack, for the fixed slots whose parent is not walked. */
+const STACK: ParentLayout = { dir: "vertical", columns: 1, gapPx: 0 };
+const ROW: ParentLayout = { dir: "horizontal", columns: 1, gapPx: 0 };
+
+type ParentLayout = {
+  dir: Dir;
+  /** a translated grid: children need an explicit basis to keep their columns */
+  columns: number;
+  gapPx: number;
+};
+
+type Layout = {
+  display: string;
+  dir: Dir;
+  rowGap: number;
+  columnGap: number;
+  /** how many children sat on the first row, measured */
+  columns: number;
+};
+
+function px(value: string | undefined): number {
+  const n = parseFloat(value ?? "");
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * What the browser actually laid out, not what the markup declared.
+ *
+ * The export stage is attached and laid out, so computed values are real. jsdom —
+ * used by the tests — has no layout engine, so it falls back to the inline
+ * declarations and to parsing `repeat(N, …)` for the column count.
+ */
+function readLayout(el: Element): Layout {
+  const inline = decl(el);
+  const view =
+    typeof window !== "undefined" && window.getComputedStyle
+      ? window.getComputedStyle(el)
+      : null;
+
+  const display = (view?.display ?? lookup(inline, "display") ?? "block").trim();
+  const flow = `${view?.flexDirection ?? ""} ${lookup(inline, "flex-flow") ?? ""} ${
+    lookup(inline, "flex-direction") ?? ""
+  } ${view?.flexWrap ?? ""} ${lookup(inline, "flex-wrap") ?? ""}`;
+
+  const rowGap = view ? px(view.rowGap) : px(lookup(inline, "gap"));
+  const columnGap = view ? px(view.columnGap) : px(lookup(inline, "gap"));
+
+  let dir: Dir;
+  if (display.includes("grid")) dir = "wrap";
+  else if (display.includes("flex"))
+    dir = flow.includes("wrap")
+      ? "wrap"
+      : flow.includes("column")
+        ? "vertical"
+        : "horizontal";
+  /* Block-level children stack. That is a vertical flex column in PageFly terms,
+     and saying so explicitly is the whole point of this function. */
+  else dir = "vertical";
+
+  return { display, dir, rowGap, columnGap, columns: countColumns(el, display, inline) };
+}
+
+/** Children sharing the first row. Measured where there is layout; parsed from
+    `repeat(N, …)` where there is not. */
+function countColumns(
+  el: Element,
+  display: string,
+  inline: [string, string][],
+): number {
+  const kids = elementChildren(el);
+  if (kids.length === 0) return 1;
+
+  const first = kids[0].getBoundingClientRect?.();
+  if (first && first.width > 0) {
+    let n = 0;
+    for (const kid of kids) {
+      const box = kid.getBoundingClientRect();
+      if (Math.abs(box.top - first.top) > 2) break;
+      n++;
+    }
+    return Math.max(1, n);
+  }
+
+  const template = lookup(inline, "grid-template-columns") ?? "";
+  const repeat = /repeat\(\s*(\d+)/.exec(template);
+  if (repeat) return Number(repeat[1]);
+  if (template.trim()) return template.trim().split(/\s+/).length;
+  return display.includes("grid") ? 1 : kids.length || 1;
+}
+
 /* ---- inline-style parsing ----------------------------------------------- */
 
 /** Split a declaration list without cutting inside url(), gradients or quotes. */
@@ -179,17 +290,6 @@ function decl(el: Element): [string, string][] {
 function lookup(d: [string, string][], prop: string): string | undefined {
   for (let i = d.length - 1; i >= 0; i--) if (d[i][0] === prop) return d[i][1];
   return undefined;
-}
-
-/** The element's own flex direction, for its children to mirror. */
-function directionOf(d: [string, string][]): Dir | null {
-  const display = lookup(d, "display") ?? "";
-  if (!display.includes("flex")) return null;
-  const flow = `${lookup(d, "flex-flow") ?? ""} ${lookup(d, "flex-direction") ?? ""} ${
-    lookup(d, "flex-wrap") ?? ""
-  }`;
-  if (flow.includes("wrap")) return "wrap";
-  return flow.includes("column") ? "vertical" : "horizontal";
 }
 
 /* ---- sizing -------------------------------------------------------------- */
@@ -341,8 +441,14 @@ function only(key: DeviceKey, el: Element): Sources {
  * The mockup's own declarations, plus the layout-engine props PageFly needs to
  * leave them alone.
  */
-function cssFor(el: Element, parentDir: Dir | null): string {
-  const d = decl(el);
+function cssFor(el: Element, parent: ParentLayout | null): string {
+  /* Grid and its properties are dropped: the Flex editor has no grid, so
+     `display: grid` and `grid-template-columns` are dead weight that also stop
+     the explicit flex rules below from being the last word. */
+  const d = decl(el).filter(
+    ([p, v]) =>
+      !p.startsWith("grid-") && !(p === "display" && v.includes("grid")),
+  );
 
   const body = d
     .map(([p, v]) =>
@@ -352,17 +458,55 @@ function cssFor(el: Element, parentDir: Dir | null): string {
     )
     .join(" ");
 
-  const own = directionOf(d);
+  const layout = readLayout(el);
+  const hasKids = elementChildren(el).length > 0;
+
+  /* Stated for every container, because silence means "PageFly's default" rather
+     than "the browser's default", and those differ. */
+  const own: string[] = [];
+  if (hasKids) {
+    own.push("display: flex !important;");
+    own.push(
+      layout.dir === "vertical"
+        ? "flex-flow: column nowrap !important;"
+        : layout.dir === "wrap"
+          ? "flex-flow: row wrap !important;"
+          : "flex-flow: row nowrap !important;",
+    );
+    if (layout.rowGap || layout.columnGap)
+      own.push(`gap: ${layout.rowGap}px ${layout.columnGap}px !important;`);
+  }
+
+  /* A child of a translated grid needs its width stated, or wrapping puts every
+     item on its own row. Basis subtracts the gaps the row will add back. */
+  if (parent && parent.columns > 1) {
+    const gaps = parent.gapPx * (parent.columns - 1);
+    own.push(
+      `flex: 0 0 calc((100% - ${gaps}px) / ${parent.columns}) !important;`,
+      "min-width: 0 !important;",
+    );
+  }
+
   const tail = [
     `--pf-flex-layout-width: ${widthMode(el, d)};`,
     `--pf-flex-layout-height: ${heightMode(d)};`,
-    own ? `--pf-flex-layout-direction: ${own};` : "",
-    parentDir ? `--pf-flex-layout-parent-direction: ${parentDir};` : "",
+    hasKids ? `--pf-flex-layout-direction: ${layout.dir};` : "",
+    parent ? `--pf-flex-layout-parent-direction: ${parent.dir};` : "",
   ]
     .filter(Boolean)
     .join(" ");
 
-  return `${body} ${tail}`.trim();
+  return `${body} ${own.join(" ")} ${tail}`.trim();
+}
+
+/** What this element imposes on its children. */
+function layoutFor(el: Element): ParentLayout {
+  const l = readLayout(el);
+  return {
+    dir: l.dir,
+    columns: l.dir === "wrap" ? l.columns : 1,
+    gapPx: Math.max(l.rowGap, l.columnGap),
+  };
 }
 
 /**
@@ -374,23 +518,23 @@ function cssFor(el: Element, parentDir: Dir | null): string {
  * omits, so a partial rule would leave desktop values leaking through wherever a
  * property exists on desktop and not on mobile.
  */
-function styleOfAll(sources: Sources, parentDir: Dir | null): StyleData {
-  const base = cssFor(sources[0].el, parentDir);
+function styleOfAll(sources: Sources, parent: ParentLayout | null): StyleData {
+  const base = cssFor(sources[0].el, parent);
   const out: Record<string, Record<string, string>> = { all: { "&": base } };
 
   for (const s of sources.slice(1)) {
     if (!s.el) continue;
-    const css = cssFor(s.el, parentDir);
+    const css = cssFor(s.el, parent);
     if (css !== base) out[s.key] = { "&": css };
   }
   return out;
 }
 
 /** Kept for the single-breakpoint paths (drawn artwork, loose text). */
-function styleOf(el: Element, parentDir: Dir | null): StyleData {
+function styleOf(el: Element, parent: ParentLayout | null): StyleData {
   const d = decl(el);
-  if (d.length === 0 && parentDir === null) return null;
-  return { all: { "&": cssFor(el, parentDir) } };
+  if (d.length === 0 && parent === null) return null;
+  return { all: { "&": cssFor(el, parent) } };
 }
 
 /** True when the subtree is pure imagery — MockImage sets aspect-ratio and
@@ -498,11 +642,11 @@ function findRole(el: Element, role: string): Element | null {
 
 /** A styled div wrapping one product element, so the mockup's own spacing and
     borders survive around an element whose internals PageFly owns. */
-function shell(sources: Sources, parentDir: Dir | null, inner: PFNode): PFNode {
-  return FB(styleOfAll(sources, parentDir), [inner]);
+function shell(sources: Sources, parent: ParentLayout | null, inner: PFNode): PFNode {
+  return FB(styleOfAll(sources, parent), [inner]);
 }
 
-function productBox(sources: Sources, parentDir: Dir | null): PFNode | null {
+function productBox(sources: Sources, parent: ParentLayout | null): PFNode | null {
   const el = sources[0].el;
   /* Locate the same part in every render, by role. These are fixed-slot elements
      whose internals PageFly owns, so only their CSS varies by width. */
@@ -526,13 +670,13 @@ function productBox(sources: Sources, parentDir: Dir | null): PFNode | null {
   if (!mainEl || !listEl) return null;
 
   const media = PRODUCT_MEDIA(
-    MEDIA_MAIN(styleOfAll(part("product-media-main")!, "vertical")),
+    MEDIA_MAIN(styleOfAll(part("product-media-main")!, STACK)),
     MEDIA_LIST(
       elementChildren(listEl).length,
-      styleOfAll(part("product-media-list")!, "vertical"),
+      styleOfAll(part("product-media-list")!, STACK),
       null,
     ),
-    part("product-media") ? styleOfAll(part("product-media")!, parentDir) : null,
+    part("product-media") ? styleOfAll(part("product-media")!, parent) : null,
   );
 
   /* The info column is ProductBox's second required slot and has to be a plain
@@ -540,18 +684,18 @@ function productBox(sources: Sources, parentDir: Dir | null): PFNode | null {
      picked up by `convert` on the way down. */
   const infoSources = part("product-info")!;
   const info = FB(
-    styleOfAll(infoSources, parentDir),
-    walkChildren(infoSources, directionOf(decl(infoEl))),
+    styleOfAll(infoSources, parent),
+    walkChildren(infoSources, layoutFor(infoEl)),
   );
 
   /* ProductBox renders a <form>, so the grid that lays the two columns out has
      to be applied to `& > form`. Styling `&` leaves the form at its default
      width and the two columns stack. */
-  const own = styleOfAll(sources, parentDir);
+  const own = styleOfAll(sources, parent);
   return PRODUCT_BOX(media, info, own?.all?.["&"] ?? "");
 }
 
-function accordion(sources: Sources, parentDir: Dir | null): PFNode | null {
+function accordion(sources: Sources, parent: ParentLayout | null): PFNode | null {
   const el = sources[0].el;
   /* Rows are matched across renders by their index: the row list is generated
      from the same data at every width, so the nth row is the nth row. */
@@ -578,8 +722,8 @@ function accordion(sources: Sources, parentDir: Dir | null): PFNode | null {
     const bodyEl = findRole(row, "accordion-body");
     const headSources = rowPart(i, "accordion-header");
     const header = ACCORDION_HEADER(
-      headSources ? walkChildren(headSources, directionOf(decl(headEl!))) : [],
-      headSources ? styleOfAll(headSources, "vertical") : null,
+      headSources ? walkChildren(headSources, layoutFor(headEl!)) : [],
+      headSources ? styleOfAll(headSources, STACK) : null,
     );
     /* Real content MUST land in Accordion3.Flex.Content — the builder nests the
        four tiers. A row whose answer is collapsed in the mockup still gets its
@@ -590,7 +734,7 @@ function accordion(sources: Sources, parentDir: Dir | null): PFNode | null {
        can be opened, and Accordion3 does the showing itself. */
     const bodySources = rowPart(i, "accordion-body");
     const body = bodySources
-      ? [P4(liquidSafe(bodyEl!.innerHTML), unhide(styleOfAll(bodySources, "vertical")))]
+      ? [P4(liquidSafe(bodyEl!.innerHTML), unhide(styleOfAll(bodySources, STACK)))]
       : [];
     /* The mockup puts each row's padding on a container between the row and its
        header; without it the imported accordion loses all its inner spacing. */
@@ -598,14 +742,14 @@ function accordion(sources: Sources, parentDir: Dir | null): PFNode | null {
     return {
       header,
       body,
-      style: padEl && padEl !== row ? styleOf(padEl, "vertical") : null,
+      style: padEl && padEl !== row ? styleOf(padEl, STACK) : null,
     };
   });
 
-  return ACCORDION(rows, styleOfAll(sources, parentDir));
+  return ACCORDION(rows, styleOfAll(sources, parent));
 }
 
-function semantic(sources: Sources, parentDir: Dir | null): PFNode | null {
+function semantic(sources: Sources, parent: ParentLayout | null): PFNode | null {
   const el = sources[0].el;
 
   /* The same element, located in the other renders, so a semantic node still gets
@@ -623,27 +767,27 @@ function semantic(sources: Sources, parentDir: Dir | null): PFNode | null {
   switch (pfRole(el)) {
     case "button":
       // Keeps the mockup's own label and CSS — a real button, same pixels.
-      return BTN(liquidSafe(el.innerHTML), "", styleOfAll(sources, parentDir));
+      return BTN(liquidSafe(el.innerHTML), "", styleOfAll(sources, parent));
     case "product-box":
-      return productBox(sources, parentDir);
+      return productBox(sources, parent);
     case "accordion":
-      return accordion(sources, parentDir);
+      return accordion(sources, parent);
     case "product-title":
-      return PRODUCT_TITLE(styleOfAll(sources, parentDir));
+      return PRODUCT_TITLE(styleOfAll(sources, parent));
     case "product-price": {
       const main = findRole(el, "product-price-main");
       const compare = findRole(el, "product-price-compare");
       return shell(
         sources,
-        parentDir,
+        parent,
         PRODUCT_PRICE(
           null,
-          main ? styleOfAll(sub(main), "horizontal") : null,
+          main ? styleOfAll(sub(main), ROW) : null,
           /* Both items are required. When the mockup has no compare-at price the
              second slot is hidden rather than dropped — a one-child
              ProductPrice2 renders empty. */
           compare
-            ? styleOfAll(sub(compare), "horizontal")
+            ? styleOfAll(sub(compare), ROW)
             : { all: { "&": "display: none !important;" } },
         ),
       );
@@ -653,18 +797,18 @@ function semantic(sources: Sources, parentDir: Dir | null): PFNode | null {
       const options = findRole(el, "product-swatch-options");
       return shell(
         sources,
-        parentDir,
+        parent,
         PRODUCT_SWATCHES(
           null,
-          label ? styleOfAll(sub(label), "vertical") : null,
-          options ? styleOfAll(sub(options), "vertical") : null,
+          label ? styleOfAll(sub(label), STACK) : null,
+          options ? styleOfAll(sub(options), STACK) : null,
         ),
       );
     }
     case "product-atc":
       /* The mockup's own label, not PageFly's default "Add to Cart". */
       return PRODUCT_ATC(
-        styleOfAll(sources, parentDir),
+        styleOfAll(sources, parent),
         (el.textContent ?? "").trim(),
       );
     default:
@@ -681,7 +825,7 @@ function semantic(sources: Sources, parentDir: Dir | null): PFNode | null {
  * That is what makes the export a responsive page rather than a desktop snapshot
  * with the widths rewritten.
  */
-function walkChildren(sources: Sources, dir: Dir | null): PFNode[] {
+function walkChildren(sources: Sources, dir: ParentLayout | null): PFNode[] {
   const desktop = sources[0].el;
   const kids = elementChildren(desktop);
 
@@ -737,7 +881,7 @@ function walkChildren(sources: Sources, dir: Dir | null): PFNode[] {
   return out;
 }
 
-function convert(sources: Sources, parentDir: Dir | null): PFNode | null {
+function convert(sources: Sources, parent: ParentLayout | null): PFNode | null {
   const el = sources[0].el;
   if (SKIP_TAGS.has(el.tagName)) return null;
 
@@ -746,7 +890,7 @@ function convert(sources: Sources, parentDir: Dir | null): PFNode | null {
      expected inner parts are missing) falls through to the generic walk rather
      than dropping the subtree. */
   if (pfRole(el)) {
-    const mapped = semantic(sources, parentDir);
+    const mapped = semantic(sources, parent);
     if (mapped) return mapped;
   }
 
@@ -754,16 +898,16 @@ function convert(sources: Sources, parentDir: Dir | null): PFNode | null {
   /* Drawn artwork keeps DESKTOP's markup. `data.code` has no per-breakpoint
      form, so the SVG cannot vary; what does vary is its box, and that is CSS. */
   if (isDrawnArtwork(el)) {
-    return CUSTOM_HTML(liquidSafe(el.outerHTML), styleOfAll(sources, parentDir));
+    return CUSTOM_HTML(liquidSafe(el.outerHTML), styleOfAll(sources, parent));
   }
 
   if (el.tagName === "SVG" || el.tagName === "svg") {
-    return CUSTOM_HTML(liquidSafe(el.outerHTML), styleOfAll(sources, parentDir));
+    return CUSTOM_HTML(liquidSafe(el.outerHTML), styleOfAll(sources, parent));
   }
 
   if (el.tagName === "IMG") {
     const src = el.getAttribute("src") ?? "";
-    return IMG(src, styleOfAll(sources, parentDir));
+    return IMG(src, styleOfAll(sources, parent));
   }
 
   const kids = elementChildren(el);
@@ -775,7 +919,7 @@ function convert(sources: Sources, parentDir: Dir | null): PFNode | null {
      Stars puts the filled and unfilled halves in different colours. */
   if (text && (TEXT_TAGS.has(el.tagName) || isTextRun(el, kids))) {
     const value = liquidSafe(el.innerHTML);
-    const style = styleOfAll(sources, parentDir);
+    const style = styleOfAll(sources, parent);
     return TEXT_TAGS.has(el.tagName) && el.tagName !== "P"
       ? H2(value, style)
       : P4(value, style);
@@ -784,13 +928,10 @@ function convert(sources: Sources, parentDir: Dir | null): PFNode | null {
   /* CSS-only decoration: a divider, rail or dot. As a childless FlexBlock the
      editor covers it with a "Drop element here" placeholder. */
   if (kids.length === 0 && !text) {
-    return CUSTOM_HTML(liquidSafe(el.outerHTML), styleOfAll(sources, parentDir));
+    return CUSTOM_HTML(liquidSafe(el.outerHTML), styleOfAll(sources, parent));
   }
 
-  return FB(
-    styleOfAll(sources, parentDir),
-    walkChildren(sources, directionOf(decl(el))),
-  );
+  return FB(styleOfAll(sources, parent), walkChildren(sources, layoutFor(el)));
 }
 
 /* ==========================================================================
@@ -852,7 +993,7 @@ export function pageFromBreakpoints(
       .map((r) => ({ key: r.key, el: innerOf(r.root) as Element | null })),
   ] as Sources;
 
-  const children = walkChildren(roots, "vertical");
+  const children = walkChildren(roots, STACK);
 
   if (children.length === 0)
     throw new Error("Nothing to export — the mockup rendered empty");

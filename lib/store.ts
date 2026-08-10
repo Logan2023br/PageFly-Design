@@ -62,6 +62,9 @@ type State = {
   reopened: boolean;
   /** model tokens spent on the current build. 0 when no model is configured. */
   tokens: number;
+  /** rewrites still in flight. The recorder waits for zero before saving, or the
+      snapshot captures the deterministic copy the merchant never saw. */
+  rewriting: number;
   /** page ids currently being rebuilt, so their card can show the morph again */
   rebuilding: string[];
 
@@ -140,6 +143,7 @@ export const useStore = create<State & Actions>((set, get) => ({
   variants: {},
   reopened: false,
   tokens: 0,
+  rewriting: 0,
   rebuilding: [],
 
   filter: "all",
@@ -279,6 +283,7 @@ export const useStore = create<State & Actions>((set, get) => ({
       variants: {},
       reopened: false,
       tokens: 0,
+      rewriting: 0,
       filter: "all",
       previewIndex: null,
     });
@@ -291,11 +296,12 @@ export const useStore = create<State & Actions>((set, get) => ({
              place. Waiting for the model before showing anything would trade a
              deck that fills in card by card for a blank screen and a spinner —
              and the deterministic page is already a complete, correct page. */
-          set((s) => ({ pages: [...s.pages, page] }));
+          set((s) => ({ pages: [...s.pages, page], rewriting: s.rewriting + 1 }));
 
           void rewritePageCopy(page, brief, controller?.signal).then((result) => {
             set((s) => ({
               tokens: s.tokens + result.tokens,
+              rewriting: Math.max(0, s.rewriting - 1),
               pages: result.used
                 ? s.pages.map((p) => (p.id === page.id ? result.page : p))
                 : s.pages,
