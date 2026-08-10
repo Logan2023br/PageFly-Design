@@ -1,14 +1,23 @@
 import { zipSync, strToU8 } from "fflate";
 
 /* ==========================================================================
-   PageFly page builder — TypeScript port of
-   pagefly-template-builder/scripts/pagefly_builder.py
+   PageFly page builder.
 
-   Ported rather than shelled out to because generation is client-side: the
-   export has to produce a Blob the browser downloads, with no server hop and
-   no Python runtime. The schema rules below are the ones that fail SILENTLY in
-   the PageFly editor (it renders an empty block and reports nothing), so the
-   validator is not optional — see pagefly-template-builder/references/schema.md.
+   Two references, and they cover different things:
+
+   - `MD Json PageFly/` is the element model: every element type, every field,
+     every legal nesting. It is generated from PageFly's own registry, so it wins
+     on anything about an element.
+   - `docs/pagefly-file-format.md` is the CONTAINER: the zip, its single entry,
+     the top-level keys and the parallel `styles` array. The generated reference
+     does not describe any of that, so it is recorded separately.
+
+   Runs in the browser rather than shelling out to a script: generation is
+   client-side, so the export has to produce a Blob with no server hop.
+
+   The rules the validator enforces are the ones that fail SILENTLY in the editor
+   — it renders an empty block and reports nothing — which is why validation here
+   is not optional.
    ========================================================================== */
 
 export type StyleData = Record<string, Record<string, string>> | null;
@@ -134,11 +143,15 @@ export function CUSTOM_HTML(code: string, styleData?: StyleData, cls?: string) {
    ProductBox is bound to a real Shopify product, so its title, price, swatches
    and Add-to-cart work rather than being pictures of themselves.
 
-   Their `data` is deliberately left empty. The TYPES below are confirmed in
-   references/schema.md; their data KEYS are not documented anywhere in the
-   skill, and an invented key risks the whole payload being rejected on import.
-   Empty data also *is* the intent here — these elements are meant to pull their
-   content from the product they are bound to, not carry the mockup's copy.
+   Their `data` is left mostly empty, which is the intent: these elements pull
+   their content from the product they are bound to rather than carrying the
+   mockup's copy.
+
+   `MD Json PageFly/fields.md` now documents their fields, and it contradicts
+   nothing here — ProductPrice2Item genuinely has no configurable fields, so the
+   regular and compare-at lines are distinguished by ORDER, which is what the slot
+   table below encodes. It does list fields worth setting that this builder still
+   ignores (ProductATC2.text, Heading2.tag); see the README.
 
    Slot order is load-bearing and enforced in `validate` below.
    ------------------------------------------------------------------------- */
