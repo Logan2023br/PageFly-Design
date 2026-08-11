@@ -472,34 +472,19 @@ export function PreviewOverlay({
       </div>
 
       {/* ---- stage ---- */}
-      {/* items-stretch, not items-center — the same circularity on the other
-          axis. Under align-items: center a flex child is sized by its content,
-          so the stage's height was the frame's height and fit-to-height computed
-          (938 - gutter) / 938, always about 1. This was tried alone and appeared
-          not to work, because the stage was still 862px wide from the missing
-          min-w-0 above and the whole row was overflowing. The two are halves of
-          one bug. */}
-      <div className="relative z-10 flex min-h-0 flex-1 items-stretch gap-2 px-2 py-4 sm:px-4 sm:py-6">
+      <div className="relative z-10 flex min-h-0 flex-1 items-center gap-2 px-2 py-4 sm:px-4 sm:py-6">
         <button
           type="button"
           onClick={() => step(-1)}
           aria-label="Previous page"
-          className="hidden size-10 shrink-0 self-center place-items-center rounded-full border border-pf-border bg-pf-card text-pf-body transition-colors hover:border-pf-border-hi hover:bg-pf-card-hi sm:grid"
+          className="hidden size-10 shrink-0 place-items-center rounded-full border border-pf-border bg-pf-card text-pf-body transition-colors hover:border-pf-border-hi hover:bg-pf-card-hi sm:grid"
         >
           <Icon name="ChevronLeft" size={18} />
         </button>
 
         <div
           ref={stageRef}
-          /* min-w-0 and min-h-0 are both load-bearing.
-
-             A flex item's min-width defaults to `auto`, which means it cannot
-             shrink below its own content. The frame inside is 862px wide for a
-             tablet, so the stage was forced to 862px on a 390px screen — then
-             measured ITSELF and reported 862px of available width. Fit computed
-             ~1, applied no scaling, and the frame ran off the right edge at full
-             size. Exactly what switching to Tablet on a phone looked like. */
-          className="grid min-h-0 min-w-0 flex-1 place-items-center overflow-hidden"
+          className="grid min-h-0 flex-1 place-items-center overflow-hidden"
         >
           {/* Zoom is a plain CSS transform on the outside. Inside it, the frame
               springs from the ratio of the device we came from to 1 — so a
@@ -538,7 +523,7 @@ export function PreviewOverlay({
           type="button"
           onClick={() => step(1)}
           aria-label="Next page"
-          className="hidden size-10 shrink-0 self-center place-items-center rounded-full border border-pf-border bg-pf-card text-pf-body transition-colors hover:border-pf-border-hi hover:bg-pf-card-hi sm:grid"
+          className="hidden size-10 shrink-0 place-items-center rounded-full border border-pf-border bg-pf-card text-pf-body transition-colors hover:border-pf-border-hi hover:bg-pf-card-hi sm:grid"
         >
           <Icon name="ChevronRight" size={18} />
         </button>
