@@ -6,9 +6,13 @@ node_modules
 # next.js
 .next/
 out/
-build
-dist
-dist-ssr
+# Anchored to the repo root. Unanchored, `build` matches a directory of that
+# name at ANY depth — which silently excluded lib/build/ and app/api/build/,
+# two directories of source. `git add -A` skipped them without a word and the
+# deploy failed with module-not-found on a build that worked locally.
+/build
+/dist
+/dist-ssr
 
 # typescript
 *.tsbuildinfo
