@@ -1,6 +1,7 @@
 import { builtinStores } from "@/lib/allowlist";
 import { providerName } from "@/lib/ai/provider";
 import { skillNames } from "@/lib/ai/skills";
+import { stockProvider } from "@/lib/images/stock";
 import { databaseIsUnpooled, databaseSource, hasDatabase } from "@/lib/db";
 import { hasSessionSecret, hasStableSecret, keySource } from "@/lib/session";
 import { sheetSource } from "@/lib/sheet";
@@ -50,6 +51,10 @@ export async function GET() {
     aiProvider: providerName(),
     aiModel: process.env.AI_MODEL ?? null,
     skills: skillNames(),
+    /* Which library the mockups' photographs come from. "none" means every
+       image renders as a grey plate — the page is still complete, but it looks
+       like a wireframe, which is the exact complaint this replaced. */
+    stockPhotos: stockProvider(),
   };
 
   /* Only in production. In development the file-backed driver takes over and the
@@ -126,6 +131,11 @@ export async function GET() {
   if (checks.aiProvider !== "none" && checks.skills.length === 0)
     advisory.push(
       "A model is configured but skills/ is empty, so it gets no house rules.",
+    );
+  if (checks.stockPhotos === "none")
+    advisory.push(
+      "No stock photo key — every image in a mockup renders as a grey plate. " +
+        "Set PEXELS_API_KEY (free) or UNSPLASH_ACCESS_KEY.",
     );
   if (!checks.reviewWebhook)
     advisory.push(
