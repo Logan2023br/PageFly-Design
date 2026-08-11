@@ -347,8 +347,49 @@ export const useStore = create<State & Actions>((set, get) => ({
     set((s) => ({
       pages: s.pages.map((p) => (p.id === pageId ? next : p)),
       variants: { ...s.variants, [pageId]: next.variant },
-      rebuilding: s.rebuilding.filter((id) => id !== pageId),
+      /* The recorder waits on this. Without it the run saves the moment the
+         deterministic page lands and the Library keeps a page the merchant
+         watched get replaced. */
+      rewriting: s.rewriting + 1,
     }));
+
+    /* Regenerate goes down the same road a build does — generator first, then
+       the model. It did not, and the effect was worse than it sounds: a page
+       the model had designed reverted to a generator page, silently, which
+       reads as the model having produced something worse.
+
+       `rebuilding` stays set until the model answers, so the card holds its
+       morph for the whole call rather than flashing the plain page and
+       swapping it a minute later.
+
+       No abort signal: the build's controller belongs to the build, and if the
+       merchant cancelled that one it is already aborted — passing it here
+       would kill the regenerate before it started. */
+    void improvePage(next, brief).then((result) => {
+      set((s) => {
+        const stale = !s.pages.some(
+          (p) => p.id === pageId && p.variant === next.variant,
+        );
+        /* A new build started while this was in flight. Its pages and its token
+           count are not ours to touch — but the spinner is, or the card spins
+           for ever. */
+        if (stale)
+          return {
+            rewriting: Math.max(0, s.rewriting - 1),
+            rebuilding: s.rebuilding.filter((id) => id !== pageId),
+          };
+
+        return {
+          tokens: s.tokens + result.tokens,
+          rewriting: Math.max(0, s.rewriting - 1),
+          rebuilding: s.rebuilding.filter((id) => id !== pageId),
+          pages:
+            result.via === "none"
+              ? s.pages
+              : s.pages.map((p) => (p.id === pageId ? result.page : p)),
+        };
+      });
+    });
   },
 
   retryFailed: async () => {
