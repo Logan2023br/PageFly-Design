@@ -1,5 +1,6 @@
 import type { Brief } from "../validation";
 import { MOCK_MODE, buildPage, expandSelection } from "./mock";
+import { CHROME_KINDS, INCLUDE_CHROME } from "../pageChrome";
 import { makeRng } from "./seed";
 import type { GenerateFailure, PageMockup } from "./types";
 
@@ -118,8 +119,9 @@ export async function generatePages(
         copyTotal: target.copyTotal,
         variant,
       });
-      done.push(page);
-      onPageReady(page);
+      const trimmed = withoutChrome(page);
+      done.push(trimmed);
+      onPageReady(trimmed);
     } catch (err) {
       options.onPageFailed?.({
         pageId: target.pageId,
@@ -132,12 +134,24 @@ export async function generatePages(
   return done;
 }
 
+/**
+ * Strip the header and footer when chrome is off.
+ *
+ * Applied on the way OUT of the generator rather than inside it: the generator
+ * decides what a page is made of, and that decision is unchanged and still
+ * reversible by one flag. This only chooses what leaves.
+ */
+function withoutChrome(page: PageMockup): PageMockup {
+  if (INCLUDE_CHROME) return page;
+  return { ...page, blocks: page.blocks.filter((b) => !CHROME_KINDS.has(b.kind)) };
+}
+
 /** Rebuild a single page with a fresh variant. Used by "Regenerate this page". */
 export function regeneratePage(
   brief: Brief,
   page: PageMockup,
 ): PageMockup {
-  return buildPage({
+  return withoutChrome(buildPage({
     brief,
     pageType: page.pageType,
     pageId: page.id,
@@ -145,7 +159,7 @@ export function regeneratePage(
     copyIndex: page.copyIndex ?? 1,
     copyTotal: page.copyTotal ?? 1,
     variant: page.variant + 1,
-  });
+  }));
 }
 
 export function isAbortError(err: unknown): boolean {
