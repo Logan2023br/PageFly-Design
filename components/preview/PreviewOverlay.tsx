@@ -472,24 +472,12 @@ export function PreviewOverlay({
       </div>
 
       {/* ---- stage ---- */}
-      {/* `items-stretch`, not `items-center`, and that is the whole bug.
-
-          With align-items: center a flex child is sized by its CONTENT, so the
-          stage measured its own height as the height of the frame inside it —
-          938px for a desktop mockup. Fit-to-height then computed
-          (938 - gutter) / 938, which is always about 1, so it never shrank
-          anything. On a window shorter than the frame the 938px stage overflowed
-          its row equally at both ends and the top went up underneath the
-          toolbar, which has nothing clipping it.
-
-          Stretched, the stage is the space actually available, the measurement
-          means what it says, and Fit fits. */}
-      <div className="relative z-10 flex min-h-0 flex-1 items-stretch gap-2 px-2 py-4 sm:px-4 sm:py-6">
+      <div className="relative z-10 flex min-h-0 flex-1 items-center gap-2 px-2 py-4 sm:px-4 sm:py-6">
         <button
           type="button"
           onClick={() => step(-1)}
           aria-label="Previous page"
-          className="hidden size-10 shrink-0 self-center place-items-center rounded-full border border-pf-border bg-pf-card text-pf-body transition-colors hover:border-pf-border-hi hover:bg-pf-card-hi sm:grid"
+          className="hidden size-10 shrink-0 place-items-center rounded-full border border-pf-border bg-pf-card text-pf-body transition-colors hover:border-pf-border-hi hover:bg-pf-card-hi sm:grid"
         >
           <Icon name="ChevronLeft" size={18} />
         </button>
@@ -535,7 +523,7 @@ export function PreviewOverlay({
           type="button"
           onClick={() => step(1)}
           aria-label="Next page"
-          className="hidden size-10 shrink-0 self-center place-items-center rounded-full border border-pf-border bg-pf-card text-pf-body transition-colors hover:border-pf-border-hi hover:bg-pf-card-hi sm:grid"
+          className="hidden size-10 shrink-0 place-items-center rounded-full border border-pf-border bg-pf-card text-pf-body transition-colors hover:border-pf-border-hi hover:bg-pf-card-hi sm:grid"
         >
           <Icon name="ChevronRight" size={18} />
         </button>
