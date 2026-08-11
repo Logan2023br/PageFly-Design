@@ -21,10 +21,17 @@ import { join } from "node:path";
        scope: copy
        ---
 
-   `copy` reaches the copywriter, `export` reaches nothing yet (it is knowledge
-   for building .pagefly files, which this codebase does in TypeScript). A skill
+   `copy` reaches the copywriter, `design` reaches the page designer, and
+   `export` reaches nothing — it is knowledge for constructing .pagefly payloads,
+   which this codebase does in TypeScript and does not need a model for. A skill
    with no `scope` goes everywhere, which is the safe default for a file someone
    just dropped in.
+
+   The distinction between `design` and `export` is worth stating plainly,
+   because the first skill dropped in here looked like one and was the other: a
+   skill about slot rules and validators teaches a designer nothing about where
+   to put the whitespace. Aesthetics go to `design`; payload mechanics are
+   already solved in code.
 
    The mechanism exists because scope is not free: the first skill added here was
    18KB about constructing PageFly payloads, and sending it to a model asked to
@@ -34,7 +41,7 @@ import { join } from "node:path";
 
 const SKILLS_DIR = process.env.PFD_SKILLS_DIR ?? join(process.cwd(), "skills");
 
-export type SkillScope = "copy" | "export" | "all";
+export type SkillScope = "copy" | "design" | "export" | "all";
 
 const cache = new Map<SkillScope, string>();
 
@@ -43,7 +50,9 @@ function scopeOf(body: string): SkillScope {
   const front = /^---\r?\n([\s\S]*?)\r?\n---/.exec(body);
   if (!front) return "all";
   const declared = /^\s*scope:\s*([a-z]+)\s*$/m.exec(front[1])?.[1];
-  return declared === "copy" || declared === "export" ? declared : "all";
+  return declared === "copy" || declared === "design" || declared === "export"
+    ? declared
+    : "all";
 }
 
 function stripFrontMatter(body: string): string {

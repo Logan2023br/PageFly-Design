@@ -321,9 +321,30 @@ export type PageMockup = {
    */
   refHints: RefHints;
   blocks: MockupBlock[];
+  /**
+   * Set when a model laid this page out itself.
+   *
+   * When present it REPLACES `blocks` for both the preview and the export —
+   * the tree is a complete page, not an overlay on one. `blocks` is kept
+   * alongside it rather than discarded because it is the fallback the page
+   * reverts to if the design is ever rejected, and because a deck saved before
+   * this existed still has to reopen.
+   *
+   * Deliberately optional and deliberately last: every reader that predates it
+   * keeps working on `blocks` untouched.
+   */
+  design?: DesignOverlay | null;
   /** bumped by Regenerate to produce a different reproducible variant */
   variant: number;
   seed: string;
+};
+
+/** Kept structural (not importing lib/design) so this module stays free of
+    anything that pulls in zod or React. */
+export type DesignOverlay = {
+  tree: unknown;
+  /** image query → resolved photo URL */
+  images: Record<string, string>;
 };
 
 export type GenerateFailure = {

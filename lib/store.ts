@@ -27,7 +27,7 @@ import {
   isAbortError,
   regeneratePage,
 } from "./generate";
-import { rewritePageCopy } from "./ai/rewritePage";
+import { improvePage } from "./ai/improvePage";
 import { DEVICES } from "./generate/types";
 import type { DeviceId, GenerateFailure, PageMockup } from "./generate/types";
 import type { CategoryId } from "./pageCatalog";
@@ -298,13 +298,14 @@ export const useStore = create<State & Actions>((set, get) => ({
              and the deterministic page is already a complete, correct page. */
           set((s) => ({ pages: [...s.pages, page], rewriting: s.rewriting + 1 }));
 
-          void rewritePageCopy(page, brief, controller?.signal).then((result) => {
+          void improvePage(page, brief, controller?.signal).then((result) => {
             set((s) => ({
               tokens: s.tokens + result.tokens,
               rewriting: Math.max(0, s.rewriting - 1),
-              pages: result.used
-                ? s.pages.map((p) => (p.id === page.id ? result.page : p))
-                : s.pages,
+              pages:
+                result.via === "none"
+                  ? s.pages
+                  : s.pages.map((p) => (p.id === page.id ? result.page : p)),
             }));
           });
         },

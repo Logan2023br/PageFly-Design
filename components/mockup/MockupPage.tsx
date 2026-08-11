@@ -2,6 +2,9 @@
 
 import { memo } from "react";
 import type { MockupBlock, PageMockup } from "@/lib/generate/types";
+import { deviceForWidth } from "@/lib/design/derive";
+import { DesignRender } from "@/lib/design/render";
+import { designTreeSchema, type DesignTree } from "@/lib/design/schema";
 import { MockProvider } from "./primitives";
 import { Footer, NavBar } from "./blocks/chrome";
 import { Hero, PasswordGate } from "./blocks/hero";
@@ -140,16 +143,31 @@ export const MockupPage = memo(function MockupPage({
   page: PageMockup;
   width: number;
 }) {
+  const surface = {
+    width,
+    background: page.tokens.bg,
+    color: page.tokens.ink,
+    fontFamily: page.tokens.fontBody,
+  };
+
+  /* A page the model designed is rendered from its tree instead of its blocks.
+     Same surface, same width, so every frame, capture and export path around
+     this component is unaffected by which one it got. */
+  const tree = designTreeOf(page);
+  if (tree)
+    return (
+      <div style={surface}>
+        <DesignRender
+          tree={tree}
+          device={deviceForWidth(width)}
+          images={page.design?.images ?? {}}
+        />
+      </div>
+    );
+
   return (
     <MockProvider tokens={page.tokens} vertical={page.vertical} width={width}>
-      <div
-        style={{
-          width,
-          background: page.tokens.bg,
-          color: page.tokens.ink,
-          fontFamily: page.tokens.fontBody,
-        }}
-      >
+      <div style={surface}>
         {page.blocks.map((block) => (
           <Block key={block.id} block={block} />
         ))}
@@ -157,3 +175,17 @@ export const MockupPage = memo(function MockupPage({
     </MockProvider>
   );
 });
+
+/**
+ * The tree on a page, once, validated.
+ *
+ * `PageMockup.design.tree` is typed `unknown` so that module stays free of zod
+ * — and a deck restored from the Library is JSON that has been round-tripped
+ * through a database, so it has genuinely not been checked. Anything that fails
+ * renders as the block page it still carries.
+ */
+function designTreeOf(page: PageMockup): DesignTree | null {
+  if (!page.design?.tree) return null;
+  const parsed = designTreeSchema.safeParse(page.design.tree);
+  return parsed.success ? parsed.data : null;
+}

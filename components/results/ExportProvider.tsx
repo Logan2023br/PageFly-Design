@@ -12,7 +12,9 @@ import {
 import type { PageMockup } from "@/lib/generate/types";
 import { captureNode, downloadDataUrl, nextPaint, slugify } from "@/lib/png";
 import { downloadBlob } from "@/lib/pagefly/builder";
-import { pageFromBreakpoints, type Rendered } from "@/lib/pagefly/fromDom";
+import { fileStem, pageFromBreakpoints, type Rendered } from "@/lib/pagefly/fromDom";
+import { designTreeSchema, type DesignTree } from "@/lib/design/schema";
+import { pageflyFromTree } from "@/lib/design/toPagefly";
 import { MockupPage } from "../mockup/MockupPage";
 
 /* ==========================================================================
@@ -58,6 +60,25 @@ const EXPORT_BREAKPOINTS = [
   { key: "mobile" as const, width: 390 },
 ];
 
+/**
+ * The tree on a page, validated. Same guard as the renderer uses: a deck
+ * reopened from the Library has been through a database and is `unknown` until
+ * it is checked, and anything that fails falls back to the DOM walk.
+ */
+function designTreeOf(page: PageMockup): DesignTree | null {
+  if (!page.design?.tree) return null;
+  const parsed = designTreeSchema.safeParse(page.design.tree);
+  return parsed.success ? parsed.data : null;
+}
+
+/** The rendered <svg> for one icon name, lifted off the staged mockup. */
+function iconMarkup(stage: HTMLElement | null, name: string): string | null {
+  if (!stage) return null;
+  const key = name.toLowerCase().replace(/[^a-z]/g, "");
+  const host = stage.querySelector(`[data-icon="${key}"] svg`);
+  return host ? host.outerHTML : null;
+}
+
 export function ExportProvider({ children }: { children: ReactNode }) {
   const [staged, setStaged] = useState<PageMockup | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -87,6 +108,29 @@ export function ExportProvider({ children }: { children: ReactNode }) {
     await nextPaint();
     // A second wait lets every breakpoint's layout settle before it is measured.
     await nextPaint();
+
+    /* A page the model designed already states every breakpoint explicitly, so
+       there is nothing to measure — the file comes straight off the tree. The
+       staged render is still used, but only to lift the icon artwork. */
+    const tree = designTreeOf(page);
+    if (tree) {
+      const { blob, filename } = pageflyFromTree(
+        tree,
+        {
+          name: fileStem(page),
+          bg: page.tokens.bg,
+          ink: page.tokens.ink,
+          fontBody: page.tokens.fontBody,
+        },
+        EXPORT_WIDTH,
+        {
+          images: page.design?.images ?? {},
+          iconSvg: (name) => iconMarkup(stageRef.current, name),
+        },
+      );
+      downloadBlob(blob, filename);
+      return;
+    }
 
     const renders: Rendered[] = [];
     EXPORT_BREAKPOINTS.forEach((bp, i) => {
