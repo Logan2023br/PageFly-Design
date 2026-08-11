@@ -25,6 +25,17 @@ export default async function LibraryPage() {
   const runs: RunSummary[] = rows.map((r) => ({
     id: r.id,
     createdAt: r.createdAt,
+    /* The pages as they were built. Omitting this was silently discarding the
+       Library: with no snapshot the screen replays the brief through the
+       deterministic generator, so a merchant who had just watched the model
+       design their pages opened the Library and found generator pages instead.
+       The data was in the database the whole time — this route was the one
+       place it did not travel through.
+
+       Bounded by the page allowance rather than unbounded: a merchant can save
+       at most their limit in pages, so the payload is capped at roughly 33 KB
+       times that. */
+    snapshot: Array.isArray(r.snapshot) ? r.snapshot : null,
     payload: r.payload,
     pageCount: r.pageCount,
     tokens: r.tokens,

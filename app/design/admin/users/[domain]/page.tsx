@@ -37,6 +37,10 @@ export default async function AdminStorePagesPage({
 
   const rows = await repo.listRuns(domain);
   const runs: RunSummary[] = rows.map((r) => ({
+    /* Deliberately null. Admin lists a store's builds — page names, counts,
+       spend — and never renders a mockup, so shipping thirty page trees per
+       row would be megabytes of payload nothing on this screen reads. */
+    snapshot: null,
     id: r.id,
     createdAt: r.createdAt,
     payload: r.payload,

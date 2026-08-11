@@ -43,7 +43,7 @@ export type RunSummary = {
   id: string;
   createdAt: string;
   /** the pages as built, when the run has them */
-  snapshot?: unknown[] | null;
+  snapshot: unknown[] | null;
   /** the encoded brief, so the client can rebuild the deck without a second
       request per run — a run is a few hundred bytes, not a payload worth
       paginating */
