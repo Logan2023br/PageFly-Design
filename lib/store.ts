@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { create } from "zustand";
 import {
   MAX_BRAND_COLORS,
@@ -649,28 +649,4 @@ export function useVisiblePages() {
     () => (filter === "all" ? pages : pages.filter((p) => p.category === filter)),
     [pages, filter],
   );
-}
-
-/**
- * Preview default for a hand rather than a desk.
- *
- * A hook, and shared, because there are two shells that open a preview and they
- * are separate routes — the Design app and the Library. Setting this on mount of
- * one of them left the other opening on Desktop.
- *
- * Only the device. A 50% zoom default was tried here and was wrong: it made
- * sense against the 1440px Desktop frame the preview used to open on, and once
- * the device defaults to the phone frame it halves a 390px frame on a 390px
- * screen — worse than the Fit it replaced, which is already about 95% and
- * perfectly legible. Fit is the right target once the frame matches the screen.
- *
- * A default, not a lock. Every control in the preview still wins.
- */
-export function usePreviewDefaults(): void {
-  const setDevice = useStore((s) => s.setDevice);
-
-  useEffect(() => {
-    if (window.innerWidth >= 640) return;
-    setDevice("mobile");
-  }, [setDevice]);
 }
