@@ -6,7 +6,7 @@ import type { Account } from "@/lib/account";
 import type { Brief } from "@/lib/validation";
 import type { PageMockup } from "@/lib/generate/types";
 import { decodeRunPayload } from "@/lib/runPayload";
-import { useStore, useVisiblePages } from "@/lib/store";
+import { useStore, useVisiblePages, usePreviewDefaults } from "@/lib/store";
 import type { RunSummary } from "@/app/api/runs/route";
 import { AccountProvider } from "../AccountProvider";
 import { GeneratingScreen } from "../generating/GeneratingScreen";
@@ -66,6 +66,9 @@ export function LibraryContent({
   ownerLabel?: string;
 }) {
   const loadLibrary = useStore((s) => s.loadLibrary);
+  /* The Library is its own route with its own preview, so it needs these too —
+     without them opening a saved page on a phone landed at Fit. */
+  usePreviewDefaults();
   const screen = useStore((s) => s.screen);
 
   /* Decoded once, in the order the API returned (newest first), so the most

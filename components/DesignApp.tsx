@@ -2,7 +2,7 @@
 
 import { AnimatePresence, MotionConfig } from "framer-motion";
 import { useEffect } from "react";
-import { useStore, useVisiblePages } from "@/lib/store";
+import { usePreviewDefaults, useStore, useVisiblePages } from "@/lib/store";
 import type { Account } from "@/lib/account";
 import { AccountProvider } from "./AccountProvider";
 import { RunRecorder } from "./RunRecorder";
@@ -50,28 +50,7 @@ function Screens() {
 export function DesignApp({ account }: { account: Account | null }) {
   const setFailFirstN = useStore((s) => s.setFailFirstN);
   const resumeBuild = useStore((s) => s.resumeBuild);
-  const setDevice = useStore((s) => s.setDevice);
-  const setZoom = useStore((s) => s.setZoom);
-
-  /* Preview defaults for a hand rather than a desk.
-     
-     Two of them, and both are defaults rather than locks — every control in the
-     preview still wins over these.
-     
-     The device, because Desktop is right at a desk and unreadable in a hand: a
-     1440px mockup on a 390px screen is a quarter size before the merchant has
-     done anything.
-     
-     The zoom, because Fit is the wrong target here. Fit makes the whole frame
-     visible at once, and a page that fits a phone screen entirely is a page too
-     small to read a word of — the first act on opening a preview was always to
-     zoom in. 50% with panning was what actually let the details be seen, so
-     that is where it starts. */
-  useEffect(() => {
-    if (window.innerWidth >= 640) return;
-    setDevice("mobile");
-    setZoom(0.5);
-  }, [setDevice, setZoom]);
+  usePreviewDefaults();
 
   /* Rejoin a build this store already has running.
      
