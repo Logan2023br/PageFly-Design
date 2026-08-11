@@ -184,10 +184,19 @@ export function PreviewOverlay({
   const chromeH =
     device === "mobile" ? 58 : device === "tablet" ? 44 : 38;
 
+  /* Breathing room between the frame and the edges of the stage.
+
+     Was 8px — four each side, which put the top of the device frame four pixels
+     under a translucent glass toolbar. You could read the mockup through the
+     toolbar, which looks exactly like the header sitting on top of the page
+     rather than above it. 32px is enough that the frame reads as a separate
+     object. */
+  const GUTTER = 32;
+
   const fitScale = Math.min(
     1,
-    stage.w > 0 ? (stage.w - 8) / (spec.width + chromeW) : 1,
-    stage.h > 0 ? (stage.h - 8) / (spec.height + chromeH) : 1,
+    stage.w > 0 ? (stage.w - GUTTER) / (spec.width + chromeW) : 1,
+    stage.h > 0 ? (stage.h - GUTTER) / (spec.height + chromeH) : 1,
   );
   const scale = zoom ?? fitScale;
 
@@ -463,7 +472,7 @@ export function PreviewOverlay({
       </div>
 
       {/* ---- stage ---- */}
-      <div className="relative z-10 flex min-h-0 flex-1 items-center gap-2 px-2 py-3 sm:px-4">
+      <div className="relative z-10 flex min-h-0 flex-1 items-center gap-2 px-2 py-4 sm:px-4 sm:py-6">
         <button
           type="button"
           onClick={() => step(-1)}
