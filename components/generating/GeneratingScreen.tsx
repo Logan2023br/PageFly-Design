@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { PAGE_BY_ID } from "@/lib/pageCatalog";
 import { useStore } from "@/lib/store";
@@ -20,12 +21,43 @@ function statusLine(done: number, total: number): string {
   return total === 1 ? "Designing your page" : `Designing ${total} pages`;
 }
 
+/* Measured, not guessed: a page takes about 45 seconds and four are designed
+   at once, so a deck costs roughly one round of that per four pages. Used only
+   to say "about a minute" — never to draw a countdown, because a countdown
+   that runs out while the bar has not moved is worse than no number at all. */
+const SECONDS_PER_ROUND = 55;
+const AT_ONCE = 4;
+
+function estimate(total: number): number {
+  return Math.ceil(total / AT_ONCE) * SECONDS_PER_ROUND;
+}
+
+function clock(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m > 0 ? `${m}m ${String(s).padStart(2, "0")}s` : `${s}s`;
+}
+
+/** Seconds since the build was asked for, ticking. */
+function useElapsed(startedAt: number | null): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (startedAt === null) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [startedAt]);
+  if (startedAt === null) return 0;
+  return Math.max(0, Math.floor((now - startedAt) / 1000));
+}
+
 export function GeneratingScreen() {
   const plan = useStore((s) => s.plan);
   const pages = useStore((s) => s.pages);
   const failures = useStore((s) => s.failures);
   const cancel = useStore((s) => s.cancel);
+  const startedAt = useStore((s) => s.startedAt);
   const reduced = useReducedMotion();
+  const elapsed = useElapsed(startedAt);
 
   const total = plan.length;
   const settled = pages.length + failures.length;
@@ -74,6 +106,19 @@ export function GeneratingScreen() {
             <span className="tabular-nums text-pf-muted">
               {settled} of {total}
             </span>
+          </div>
+
+          {/* The reassurance, not a countdown. A merchant watching a bar that
+              has not moved for forty seconds needs to know that is normal and
+              that leaving costs them nothing — those two facts are the whole
+              reason this line exists. */}
+          <div className="flex items-center justify-between gap-3 text-[12px] text-pf-faint">
+            <span>
+              {settled >= total && total > 0
+                ? "Finishing up"
+                : `Usually about ${clock(estimate(total))} · you can close this tab, it keeps building`}
+            </span>
+            <span className="tabular-nums">{clock(elapsed)}</span>
           </div>
         </div>
       </div>

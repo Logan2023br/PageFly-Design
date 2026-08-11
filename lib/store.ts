@@ -28,6 +28,9 @@ import {
   regeneratePage,
 } from "./generate";
 import { improvePage } from "./ai/improvePage";
+import { cancelJob, fetchJob, startJob, watchJob } from "./build/watch";
+import { decodeRunPayload } from "./runPayload";
+import type { JobView } from "@/app/api/build/route";
 import { DEVICES } from "./generate/types";
 import type { DeviceId, GenerateFailure, PageMockup } from "./generate/types";
 import type { CategoryId } from "./pageCatalog";
@@ -38,6 +41,8 @@ import type { CategoryId } from "./pageCatalog";
    ========================================================================== */
 
 export type Screen = "brief" | "generating" | "results";
+
+type JobViewLike = JobView;
 
 type PlanEntry = {
   pageId: string;
@@ -67,6 +72,14 @@ type State = {
   rewriting: number;
   /** page ids currently being rebuilt, so their card can show the morph again */
   rebuilding: string[];
+
+  /** the server-side build being watched, or null when nothing is running */
+  jobId: string | null;
+  /** why the last build could not start or did not finish */
+  buildError: string | null;
+  /** when the current build was asked for, so the wait can show a real clock
+      rather than a guess */
+  startedAt: number | null;
 
   filter: CategoryId | "all";
 
@@ -100,6 +113,10 @@ type Actions = {
   selectAllInGroup: (pageIds: string[], on: boolean) => void;
 
   start: () => Promise<void>;
+  /** watch a build already running on the server */
+  followBuild: (jobId: string) => Promise<void>;
+  /** on a fresh load, rejoin this store's build if it has one */
+  resumeBuild: () => Promise<void>;
   cancel: () => void;
   editBrief: () => void;
   regenerateAll: () => Promise<void>;
@@ -132,19 +149,6 @@ type Actions = {
 
 let controller: AbortController | null = null;
 
-/**
- * The deck in the order the merchant asked for.
- *
- * Pages now arrive when the MODEL finishes them, and the model does not finish
- * them in the order they were generated — a page with one section answers
- * before a page with nine. Sorting on insert costs nothing at deck sizes of
- * thirty and keeps "Home" first, which is the only order anyone expects.
- */
-function inOrder(pages: PageMockup[]): PageMockup[] {
-  return [...pages].sort(
-    (a, b) => a.index - b.index || (a.copyIndex ?? 0) - (b.copyIndex ?? 0),
-  );
-}
 
 export const useStore = create<State & Actions>((set, get) => ({
   screen: "brief",
@@ -159,6 +163,10 @@ export const useStore = create<State & Actions>((set, get) => ({
   tokens: 0,
   rewriting: 0,
   rebuilding: [],
+
+  jobId: null,
+  buildError: null,
+  startedAt: null,
 
   filter: "all",
 
@@ -272,7 +280,7 @@ export const useStore = create<State & Actions>((set, get) => ({
   /* ---- generation ----------------------------------------------------- */
 
   start: async () => {
-    const { draft, failFirstN } = get();
+    const { draft } = get();
     const parsed = validateBrief(draft);
     if (!parsed.success) return;
 
@@ -298,61 +306,128 @@ export const useStore = create<State & Actions>((set, get) => ({
       reopened: false,
       tokens: 0,
       rewriting: 0,
+      buildError: null,
+      startedAt: Date.now(),
       filter: "all",
       previewIndex: null,
     });
 
-    /* One per page, resolving when that page has finished being improved. */
-    const settling: Promise<void>[] = [];
-
-    try {
-      await generatePages(
-        brief,
-        (page) => {
-          /* The deterministic page is NOT shown.
-
-             It used to be, and the reasoning was sound on its own terms — it is
-             a complete page, so putting it up immediately beat a blank screen.
-             What that missed is what the merchant reads into it: the page
-             appeared, then changed a minute later, and the version they had
-             already started judging was the one the model had not touched. Two
-             different pages for one build is a worse thing to show than a wait.
-
-             So it is still generated — it is the fallback, and it is what the
-             model's failure resolves to — but it stays off screen until the
-             model has had its turn. */
-          settling.push(
-            improvePage(page, brief, controller?.signal).then((result) => {
-              set((s) => ({
-                tokens: s.tokens + result.tokens,
-                pages: inOrder([...s.pages, result.page]),
-              }));
-            }),
-          );
-        },
-        controller.signal,
-        {
-          onPageFailed: (f) =>
-            set((s) => ({ failures: [...s.failures, f] })),
-          failFirstN: failFirstN || undefined,
-        },
-      );
-
-      /* Every page, not just every generation. The screen used to flip here
-         while the model was still working on all of them. */
-      await Promise.all(settling);
-      if (controller?.signal.aborted) return;
-      set({ screen: "results" });
-    } catch (err) {
-      if (!isAbortError(err)) throw err;
-      // cancel() has already returned the user to the brief.
+    /* The build runs on the SERVER now. All this does is ask for one and then
+       watch it, which is what makes closing the tab harmless: the work is not
+       here to lose. */
+    const started = await startJob(brief, {});
+    if (!started.ok || !started.job) {
+      set({
+        screen: "brief",
+        buildError: started.ok ? "Couldn't start the build." : started.error,
+      });
+      return;
     }
+
+    await get().followBuild(started.job.id);
+  },
+
+  /**
+   * Follow a build that is already running, wherever it was started.
+   *
+   * Called both by `start` and on a fresh page load, which is the whole point:
+   * a merchant who reloads mid-build, or signs in on another machine, rejoins
+   * the same job rather than losing it or starting a second one.
+   */
+  followBuild: async (jobId) => {
+    controller?.abort();
+    controller = new AbortController();
+    const signal = controller.signal;
+
+    set({ screen: "generating", jobId, buildError: null });
+
+    const apply = (job: JobViewLike) => {
+      set((prev) => ({
+        /* A rejoined build did not start when this tab opened. Taking the
+           clock from the job means the elapsed time is the build's, not the
+           browser's, which is the number the merchant is actually waiting on. */
+        startedAt: prev.startedAt ?? (Date.parse(job.createdAt) || Date.now()),
+        plan: job.plan.length ? (job.plan as PlanEntry[]) : prev.plan,
+        pages: job.pages as PageMockup[],
+        failures: job.failures,
+        tokens: job.tokens,
+      }));
+    };
+
+    const final = await watchJob(apply, signal);
+    if (signal.aborted || !final) return;
+
+    if (final.status === "done") {
+      set({
+        screen: "results",
+        pages: final.pages as PageMockup[],
+        failures: final.failures,
+        tokens: final.tokens,
+        /* The server saved this run when it finished the last page. Marking it
+           reopened is how the recorder is told there is nothing left to write —
+           without it the deck would be saved twice, once from each side. */
+        reopened: true,
+        jobId: null,
+      });
+      return;
+    }
+
+    /* Cancelled, or failed outright. Whatever pages did land are still worth
+       showing — a build that produced four of five pages should not throw the
+       four away. */
+    if (final.pages.length > 0) {
+      set({
+        screen: "results",
+        pages: final.pages as PageMockup[],
+        failures: final.failures,
+        tokens: final.tokens,
+        reopened: true,
+        jobId: null,
+      });
+      return;
+    }
+
+    set({
+      screen: "brief",
+      jobId: null,
+      buildError:
+        final.status === "cancelled" ? null : (final.error ?? "That build didn't finish."),
+    });
+  },
+
+  /**
+   * On a fresh load, rejoin whatever this store has running.
+   *
+   * Silent when there is nothing: the answer "no build" is the common case and
+   * must not disturb a merchant who just opened the brief.
+   */
+  resumeBuild: async () => {
+    const body = await fetchJob();
+    if (!body.ok || !body.job || body.job.status !== "running") return;
+
+    const decoded = decodeRunPayload(body.job.payload);
+    if (decoded.ok) set({ brief: decoded.payload.brief, draft: decoded.payload.brief });
+
+    set({ plan: body.job.plan as PlanEntry[] });
+    await get().followBuild(body.job.id);
   },
 
   cancel: () => {
     controller?.abort();
     controller = null;
-    set({ screen: "brief", pages: [], failures: [], plan: [] });
+    /* The build lives on the server, so stopping the poller is not stopping
+       the build — without this the merchant goes back to the brief while the
+       model keeps designing pages they will never see, and keeps billing for
+       them. Not awaited: the screen should change now. */
+    void cancelJob();
+    set({
+      screen: "brief",
+      pages: [],
+      failures: [],
+      plan: [],
+      jobId: null,
+      startedAt: null,
+    });
   },
 
   editBrief: () => set({ screen: "brief", previewIndex: null }),
@@ -373,6 +448,10 @@ export const useStore = create<State & Actions>((set, get) => ({
     set((s) => ({
       pages: s.pages.map((p) => (p.id === pageId ? next : p)),
       variants: { ...s.variants, [pageId]: next.variant },
+      /* The deck on screen is no longer the one the server saved, so the
+         recorder has something to write again. Without this a regenerated page
+         never reached the Library — it stayed marked as already-saved. */
+      reopened: false,
       /* The recorder waits on this. Without it the run saves the moment the
          deterministic page lands and the Library keeps a page the merchant
          watched get replaced. */

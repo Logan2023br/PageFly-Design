@@ -49,6 +49,19 @@ function Screens() {
 
 export function DesignApp({ account }: { account: Account | null }) {
   const setFailFirstN = useStore((s) => s.setFailFirstN);
+  const resumeBuild = useStore((s) => s.resumeBuild);
+
+  /* Rejoin a build this store already has running.
+     
+     This is what makes a reload harmless. The work is on the server, so an
+     unfinished build is not lost by closing the tab — but nothing would go
+     looking for it either, and the merchant would land on an empty brief while
+     their pages finished somewhere they could not see. Signed out, there is
+     nothing to rejoin and the call answers 401 without disturbing anything. */
+  useEffect(() => {
+    if (!account) return;
+    void resumeBuild();
+  }, [account, resumeBuild]);
 
   /* Dev-only escape hatch so the partial-failure and retry paths can be seen
      without waiting for a real generator error: /design?pfd-fail=2 */

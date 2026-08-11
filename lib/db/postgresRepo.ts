@@ -1,5 +1,6 @@
 import { Pool } from "pg";
 import type {
+  JobRecord,
   PhotoRecord,
   AdminStats,
   Repo,
@@ -98,6 +99,24 @@ create table if not exists photos (
   link       text not null default '',
   fetched_at timestamptz not null default now()
 );
+
+/* One row per build. The pages column grows as the model finishes them, so a
+   browser that comes back mid-build sees what has landed rather than starting
+   over. */
+create table if not exists jobs (
+  id         text primary key,
+  domain     text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  status     text not null,
+  payload    text not null,
+  plan       jsonb not null default '[]',
+  pages      jsonb not null default '[]',
+  failures   jsonb not null default '[]',
+  tokens     integer not null default 0,
+  error      text
+);
+create index if not exists jobs_domain_created on jobs (domain, created_at desc);
 `;
 
 export function createPostgresRepo(url: string): Repo {
@@ -149,6 +168,20 @@ export function createPostgresRepo(url: string): Repo {
     styleLabel: String(r.style_label ?? ""),
     snapshot: r.snapshot ?? null,
   });
+
+const toJob = (r: Record<string, unknown>): JobRecord => ({
+  id: String(r.id),
+  domain: String(r.domain),
+  createdAt: iso(r.created_at) ?? "",
+  updatedAt: iso(r.updated_at) ?? "",
+  status: String(r.status) as JobRecord["status"],
+  payload: String(r.payload ?? ""),
+  plan: r.plan ?? [],
+  pages: r.pages ?? [],
+  failures: r.failures ?? [],
+  tokens: Number(r.tokens ?? 0),
+  error: r.error === null || r.error === undefined ? null : String(r.error),
+});
 
   return {
     ready,
@@ -408,6 +441,73 @@ export function createPostgresRepo(url: string): Repo {
           review.forwarded,
         ],
       );
+    },
+
+    async createJob(job) {
+      await ready();
+      await db.query(
+        `insert into jobs (id,domain,created_at,updated_at,status,payload,plan,pages,failures,tokens,error)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [
+          job.id,
+          job.domain,
+          job.createdAt,
+          job.updatedAt,
+          job.status,
+          job.payload,
+          JSON.stringify(job.plan ?? []),
+          JSON.stringify(job.pages ?? []),
+          JSON.stringify(job.failures ?? []),
+          job.tokens,
+          job.error,
+        ],
+      );
+    },
+
+    async getJob(id) {
+      await ready();
+      const { rows } = await db.query(`select * from jobs where id = $1`, [id]);
+      return rows[0] ? toJob(rows[0]) : null;
+    },
+
+    async latestJob(domain) {
+      await ready();
+      const { rows } = await db.query(
+        `select * from jobs where domain = $1 order by created_at desc limit 1`,
+        [domain],
+      );
+      return rows[0] ? toJob(rows[0]) : null;
+    },
+
+    async updateJob(id, patch) {
+      await ready();
+      /* Built rather than written out, because a progress tick sets `pages`
+         alone and a finish sets four columns. updated_at always moves — it is
+         what tells a poller the job is alive. */
+      const sets: string[] = ["updated_at = now()"];
+      const values: unknown[] = [id];
+      const put = (col: string, value: unknown) => {
+        values.push(value);
+        sets.push(`${col} = $${values.length}`);
+      };
+      if (patch.status !== undefined) put("status", patch.status);
+      if (patch.pages !== undefined) put("pages", JSON.stringify(patch.pages));
+      if (patch.failures !== undefined)
+        put("failures", JSON.stringify(patch.failures));
+      if (patch.tokens !== undefined) put("tokens", patch.tokens);
+      if (patch.error !== undefined) put("error", patch.error);
+
+      await db.query(`update jobs set ${sets.join(", ")} where id = $1`, values);
+    },
+
+    async failOrphanedJobs() {
+      await ready();
+      const { rowCount } = await db.query(
+        `update jobs set status = 'failed', updated_at = now(),
+                error = coalesce(error, 'The server restarted while this build was running.')
+          where status = 'running'`,
+      );
+      return rowCount ?? 0;
     },
 
     async getPhotos(queries) {

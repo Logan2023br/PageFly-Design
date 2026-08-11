@@ -1,21 +1,18 @@
 import { z } from "zod";
 import { currentAccount } from "@/lib/account";
-import { getProvider, isAiEnabled } from "@/lib/ai/provider";
-import { loadSkills } from "@/lib/ai/skills";
-import { DESIGN_SYSTEM } from "@/lib/ai/designPrompt";
-import { designTreeSchema, walk, type DesignTree } from "@/lib/design/schema";
-import { resolvePhotos, stockProvider, urlsOf } from "@/lib/images/stock";
+import { designPageTree } from "@/lib/ai/designServer";
+import type { DesignTree } from "@/lib/design/schema";
 
 /* ==========================================================================
    POST /api/ai/design
 
-   The model lays the page out. This is a different job from /api/ai/copy — that
-   one rewrites the words on a page the generator already built; this one
-   decides what the page IS.
+   The browser's way in to the designer. A full build no longer comes through
+   here — that runs as a job on the server, which calls `designPageTree`
+   directly — so what is left is the one page a merchant asks to regenerate.
 
-   Both survive. When this route declines or fails the caller falls back to the
-   deterministic generator, which produces a complete, correct, unremarkable
-   page. A model outage must cost polish, never the product.
+   Failure is never an error status. The caller has a complete deterministic
+   page in hand and keeps it; all this reports is whether there is something
+   better to use.
    ========================================================================== */
 
 export const dynamic = "force-dynamic";
@@ -58,9 +55,6 @@ export type AiDesignResponse =
       used: true;
       tree: DesignTree;
       images: Record<string, string>;
-      /* Who took the photographs, and where their pages are. The API
-         guidelines require both to be shown, so both travel with the page
-         rather than being looked up again later. */
       credits: { name: string; link: string }[];
       usage: { input: number; output: number };
     }
@@ -70,7 +64,6 @@ export type AiDesignResponse =
       reason: string;
       usage: { input: number; output: number };
     };
-
 
 export async function POST(request: Request) {
   const account = await currentAccount();
@@ -84,118 +77,15 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, error: "Malformed request." }, { status: 400 });
   }
 
-  const decline = (reason: string, usage = { input: 0, output: 0 }): Response =>
-    Response.json({ ok: true, used: false, reason, usage } satisfies AiDesignResponse);
+  const outcome = await designPageTree({
+    sell: body.sell,
+    prompt: body.prompt,
+    storeType: body.storeType,
+    style: body.style,
+    pageLabel: body.pageLabel,
+    pageType: body.pageType,
+    tokens: { ...FALLBACK_TOKENS, ...body.tokens },
+  });
 
-  if (!isAiEnabled()) return decline("no model configured");
-  const provider = getProvider();
-  if (!provider) return decline("no model configured");
-
-  const skills = loadSkills("design");
-  const system = skills ? `${DESIGN_SYSTEM}\n\n${skills}` : DESIGN_SYSTEM;
-
-  const t = { ...FALLBACK_TOKENS, ...body.tokens };
-  const user = [
-    `Store sells: ${body.sell}`,
-    body.storeType && `Store type: ${body.storeType}`,
-    body.prompt && `Merchant's own words: ${body.prompt}`,
-    ``,
-    `Design this page: ${body.pageLabel || body.pageType}`,
-    ``,
-    `Palette and faces — work inside these, do not introduce others:`,
-    `  background ${t.bg}`,
-    `  text ${t.ink}`,
-    `  accent ${t.accent}`,
-    t.fontHeading && `  heading font-family: ${t.fontHeading}`,
-    t.fontBody && `  body font-family: ${t.fontBody}`,
-    `  corner radius ${t.radius}px`,
-    ``,
-    `Return the JSON object now.`,
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  try {
-    const completion = await provider.complete({
-      system,
-      user,
-      /* A full page tree runs 6-14k tokens. Cutting it short costs the whole
-         page, since a truncated tree is not parseable JSON. */
-      maxTokens: 16_000,
-      signal: AbortSignal.timeout(240_000),
-    });
-
-    const raw = parseObject(completion.text);
-    if (!raw) return decline("model did not return JSON", completion.usage);
-
-    const parsed = designTreeSchema.safeParse(raw);
-    if (!parsed.success)
-      return decline(
-        `tree rejected: ${parsed.error.issues[0]?.path.join(".")} ${parsed.error.issues[0]?.message}`.slice(0, 180),
-        completion.usage,
-      );
-
-    const tree = parsed.data;
-
-    /* A model that returns one empty section technically satisfies the schema
-       and would replace a working page with a blank one. */
-    const nodes = walk(tree);
-    if (tree.sections.length < 2 || nodes.length < 12)
-      return decline(
-        `tree too thin (${tree.sections.length} sections, ${nodes.length} nodes)`,
-        completion.usage,
-      );
-
-    const wants = nodes
-      .filter((n): n is Extract<typeof n, { type: "image" }> => n.type === "image")
-      .map((n) => ({ query: n.query, ratio: n.ratio }));
-
-    const productShots = nodes
-      .filter((n): n is Extract<typeof n, { type: "product" }> => n.type === "product")
-      .map((n) => ({ query: n.query, ratio: 1 }));
-
-    const photos =
-      stockProvider() === "none"
-        ? {}
-        : await resolvePhotos([...wants, ...productShots]);
-
-    /* One entry per photographer, not per photograph — a page using four
-       pictures by the same person credits them once. */
-    const byName = new Map<string, string>();
-    for (const p of Object.values(photos))
-      if (p.credit && !byName.has(p.credit)) byName.set(p.credit, p.link);
-
-    return Response.json({
-      ok: true,
-      used: true,
-      tree,
-      images: urlsOf(photos),
-      credits: [...byName].map(([name, link]) => ({ name, link })),
-      usage: completion.usage,
-    } satisfies AiDesignResponse);
-  } catch (err) {
-    return decline((err as Error).message.slice(0, 200));
-  }
-}
-
-/** Models wrap JSON in prose or fences more often than they should. */
-function parseObject(text: string): unknown | null {
-  const attempts = [text];
-
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
-  if (fenced) attempts.push(fenced[1]);
-
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start >= 0 && end > start) attempts.push(text.slice(start, end + 1));
-
-  for (const attempt of attempts) {
-    try {
-      const value = JSON.parse(attempt.trim());
-      if (value && typeof value === "object") return value;
-    } catch {
-      // try the next shape
-    }
-  }
-  return null;
+  return Response.json({ ok: true, ...outcome } satisfies AiDesignResponse);
 }

@@ -131,6 +131,41 @@ export type PhotoRecord = {
   fetchedAt: string;
 };
 
+/* ==========================================================================
+   A build, as the SERVER sees it.
+
+   Generation used to live entirely in the browser, which was right while it
+   was instant. A model designing every page turned it into a minute of
+   waiting, and a minute is long enough that people reload, switch tabs, or
+   close the laptop — and everything was lost, including the tokens already
+   spent on calls that had finished.
+
+   The job owns the build instead. The browser starts it, polls it, and can go
+   away; the pages land in the row as they finish, and the run is saved when
+   the last one does.
+   ========================================================================== */
+
+export type JobStatus = "running" | "done" | "failed" | "cancelled";
+
+export type JobRecord = {
+  id: string;
+  domain: string;
+  createdAt: string;
+  updatedAt: string;
+  status: JobStatus;
+  /** encoded brief + variants — the same string a run stores */
+  payload: string;
+  /** what the deck is meant to contain, so progress means something before
+      any page has landed */
+  plan: unknown;
+  /** pages finished so far, in plan order */
+  pages: unknown;
+  failures: unknown;
+  tokens: number;
+  /** why it failed, for the merchant and for the log */
+  error: string | null;
+};
+
 export type Repo = {
   /** Creates tables when missing. Safe to call on every request. */
   ready(): Promise<void>;
@@ -154,6 +189,21 @@ export type Repo = {
   /* ---- reviews ---- */
   getReview(domain: string): Promise<ReviewRecord | null>;
   saveReview(review: ReviewRecord): Promise<void>;
+
+  /* ---- build jobs ---- */
+  createJob(job: JobRecord): Promise<void>;
+  getJob(id: string): Promise<JobRecord | null>;
+  /** The store's most recent job, whatever its state. Drives "am I mid-build?"
+      on a fresh page load. */
+  latestJob(domain: string): Promise<JobRecord | null>;
+  updateJob(
+    id: string,
+    patch: Partial<Pick<JobRecord, "status" | "pages" | "failures" | "tokens" | "error">>,
+  ): Promise<void>;
+  /** Marks every job still claiming to run as failed. Called once at startup:
+      a job lives in this process, so anything left running is from a process
+      that no longer exists and would otherwise poll for ever. */
+  failOrphanedJobs(): Promise<number>;
 
   /* ---- stock photos ---- */
   getPhotos(queries: string[]): Promise<PhotoRecord[]>;

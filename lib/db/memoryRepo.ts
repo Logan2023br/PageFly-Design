@@ -1,6 +1,7 @@
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { buildStats } from "./postgresRepo";
 import type {
+  JobRecord,
   PhotoRecord,
   Repo,
   ReviewRecord,
@@ -33,9 +34,10 @@ type Shape = {
   runPages: RunPageRecord[];
   reviews: ReviewRecord[];
   photos: PhotoRecord[];
+  jobs: JobRecord[];
 };
 
-const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], photos: [] };
+const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], photos: [], jobs: [] };
 
 export function createMemoryRepo(file: string): Repo {
   /* Writes are best-effort: a read-only filesystem downgrades this to a plain
@@ -53,6 +55,7 @@ export function createMemoryRepo(file: string): Repo {
         runPages: parsed.runPages ?? [],
         reviews: parsed.reviews ?? [],
         photos: parsed.photos ?? [],
+        jobs: parsed.jobs ?? [],
       };
     } catch {
       return structuredClone(EMPTY);
@@ -236,6 +239,46 @@ export function createMemoryRepo(file: string): Repo {
       if (existing) existing.forwarded = review.forwarded;
       else data.reviews.push({ ...review });
       flush();
+    },
+
+    async createJob(job) {
+      sync();
+      data.jobs.push({ ...job });
+      flush();
+    },
+
+    async getJob(id) {
+      sync();
+      const job = data.jobs.find((j) => j.id === id);
+      return job ? { ...job } : null;
+    },
+
+    async latestJob(domain) {
+      sync();
+      const found = data.jobs
+        .filter((j) => j.domain === domain)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+      return found ? { ...found } : null;
+    },
+
+    async updateJob(id, patch) {
+      sync();
+      const job = data.jobs.find((j) => j.id === id);
+      if (!job) return;
+      Object.assign(job, patch, { updatedAt: new Date().toISOString() });
+      flush();
+    },
+
+    async failOrphanedJobs() {
+      sync();
+      const stale = data.jobs.filter((j) => j.status === "running");
+      for (const job of stale) {
+        job.status = "failed";
+        job.error ??= "The server restarted while this build was running.";
+        job.updatedAt = new Date().toISOString();
+      }
+      if (stale.length) flush();
+      return stale.length;
     },
 
     async getPhotos(queries) {
