@@ -51,17 +51,27 @@ export function DesignApp({ account }: { account: Account | null }) {
   const setFailFirstN = useStore((s) => s.setFailFirstN);
   const resumeBuild = useStore((s) => s.resumeBuild);
   const setDevice = useStore((s) => s.setDevice);
+  const setZoom = useStore((s) => s.setZoom);
 
-  /* Preview a phone on a phone.
+  /* Preview defaults for a hand rather than a desk.
      
-     The default is Desktop, which is right at a desk and unreadable in a hand:
-     a 1440px mockup shown on a 390px screen is a quarter size before anyone
-     has done anything, so the first act on opening a preview was always to
-     zoom. Set once, on mount, and only when the screen is genuinely small —
-     it is a default, not a lock, and the device buttons still win. */
+     Two of them, and both are defaults rather than locks — every control in the
+     preview still wins over these.
+     
+     The device, because Desktop is right at a desk and unreadable in a hand: a
+     1440px mockup on a 390px screen is a quarter size before the merchant has
+     done anything.
+     
+     The zoom, because Fit is the wrong target here. Fit makes the whole frame
+     visible at once, and a page that fits a phone screen entirely is a page too
+     small to read a word of — the first act on opening a preview was always to
+     zoom in. 50% with panning was what actually let the details be seen, so
+     that is where it starts. */
   useEffect(() => {
-    if (window.innerWidth < 640) setDevice("mobile");
-  }, [setDevice]);
+    if (window.innerWidth >= 640) return;
+    setDevice("mobile");
+    setZoom(0.5);
+  }, [setDevice, setZoom]);
 
   /* Rejoin a build this store already has running.
      
