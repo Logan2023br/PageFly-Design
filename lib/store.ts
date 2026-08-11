@@ -652,27 +652,25 @@ export function useVisiblePages() {
 }
 
 /**
- * Preview defaults for a hand rather than a desk.
+ * Preview default for a hand rather than a desk.
  *
- * A hook, and shared, because there are two shells that open a preview — the
- * Design app and the Library — and they are separate routes. Putting this in
- * one of them left the other opening at Fit: a 900px device frame made to fit a
- * phone lands near 25%, small enough that not a word can be read, which reads
- * as nothing having rendered.
+ * A hook, and shared, because there are two shells that open a preview and they
+ * are separate routes — the Design app and the Library. Setting this on mount of
+ * one of them left the other opening on Desktop.
  *
- * 50% is where the zoom controls bottom out (nudgeZoom clamps to [0.5, 2]) and
- * is the level that turned out to be legible once the stage panned instead of
- * clipping.
+ * Only the device. A 50% zoom default was tried here and was wrong: it made
+ * sense against the 1440px Desktop frame the preview used to open on, and once
+ * the device defaults to the phone frame it halves a 390px frame on a 390px
+ * screen — worse than the Fit it replaced, which is already about 95% and
+ * perfectly legible. Fit is the right target once the frame matches the screen.
  *
- * Both are defaults, not locks. Every control in the preview still wins.
+ * A default, not a lock. Every control in the preview still wins.
  */
 export function usePreviewDefaults(): void {
   const setDevice = useStore((s) => s.setDevice);
-  const setZoom = useStore((s) => s.setZoom);
 
   useEffect(() => {
     if (window.innerWidth >= 640) return;
     setDevice("mobile");
-    setZoom(0.5);
-  }, [setDevice, setZoom]);
+  }, [setDevice]);
 }
