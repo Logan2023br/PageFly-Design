@@ -50,6 +50,18 @@ function Screens() {
 export function DesignApp({ account }: { account: Account | null }) {
   const setFailFirstN = useStore((s) => s.setFailFirstN);
   const resumeBuild = useStore((s) => s.resumeBuild);
+  const setDevice = useStore((s) => s.setDevice);
+
+  /* Preview a phone on a phone.
+     
+     The default is Desktop, which is right at a desk and unreadable in a hand:
+     a 1440px mockup shown on a 390px screen is a quarter size before anyone
+     has done anything, so the first act on opening a preview was always to
+     zoom. Set once, on mount, and only when the screen is genuinely small —
+     it is a default, not a lock, and the device buttons still win. */
+  useEffect(() => {
+    if (window.innerWidth < 640) setDevice("mobile");
+  }, [setDevice]);
 
   /* Rejoin a build this store already has running.
      

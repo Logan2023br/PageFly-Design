@@ -431,8 +431,25 @@ export function PreviewOverlay({
 
         <div
           ref={stageRef}
-          className="grid min-h-0 flex-1 place-items-center overflow-hidden"
+          /* Scrolls rather than clips. A transform does not change layout size,
+             so with `overflow-hidden` anything zoomed past the fit was cropped
+             with no way to reach it — which on a phone is every zoom level that
+             makes the mockup legible. The sized box below gives the scroll
+             something to scroll. */
+          className="grid min-h-0 flex-1 place-items-center overflow-auto"
         >
+          {/* The scaled footprint, as a real box.
+
+              `scale()` is visual only: the element still occupies its unscaled
+              1440px and the scroll container has no idea the content shrank or
+              grew. Declaring the scaled size here is what makes centring correct
+              when it fits and panning possible when it does not. */}
+          <div
+            style={{
+              width: (spec.width + chromeW) * scale,
+              height: (spec.height + chromeH) * scale,
+            }}
+          >
           {/* Zoom is a plain CSS transform on the outside. Inside it, the frame
               springs from the ratio of the device we came from to 1 — so a
               1440 → 390 switch visibly shrinks instead of hard-cutting, while
@@ -443,8 +460,7 @@ export function PreviewOverlay({
               cards, and mixing it with a `scale` style on the same element
               fights over the transform. */}
           <div
-            style={{ transform: `scale(${scale})` }}
-            className="origin-center"
+            style={{ transform: `scale(${scale})`, transformOrigin: "top left" }}
           >
             <motion.div
               key={device}
@@ -463,6 +479,7 @@ export function PreviewOverlay({
                 scrub={scrub}
               />
             </motion.div>
+          </div>
           </div>
         </div>
 
