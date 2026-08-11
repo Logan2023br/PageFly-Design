@@ -136,7 +136,16 @@ export async function POST(request: Request) {
   const id = runId(account.domain, body.payload, body.pages);
 
   const snapshot = body.snapshot ?? null;
-  if (snapshot && JSON.stringify(snapshot).length > 1_000_000)
+  /* 1 MB was set when a page was blocks and a five-page deck was 19 KB. A page
+     the model designed carries its tree as well, about 33 KB, so a merchant
+     using their full thirty-page allowance lands at 0.97 MB — under the old
+     cap by three percent, and over it on any page with a long FAQ. The failure
+     is a 413 the recorder swallows, so they would have lost the whole build
+     and been told nothing.
+
+     8 MB is well inside what jsonb and the driver handle, and still low enough
+     to be a real guard against a client sending something absurd. */
+  if (snapshot && JSON.stringify(snapshot).length > 8_000_000)
     return Response.json(
       { ok: false, error: "Snapshot too large." } satisfies SaveRunResponse,
       { status: 413 },

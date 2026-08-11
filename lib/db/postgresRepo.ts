@@ -236,9 +236,33 @@ export function createPostgresRepo(url: string): Repo {
       try {
         await client.query("begin");
         await client.query(
+          /* Update, not "do nothing".
+
+             The id is derived from the brief, so rebuilding the same brief
+             lands on the same row — which is right, it is the same deck. But
+             `do nothing` meant the row kept the FIRST build's snapshot for
+             ever: a merchant who rebuilt after the model started designing
+             pages saw their new deck on screen and the old deterministic one
+             in the Library.
+
+             Replaced rather than accumulated, including tokens. The recorder's
+             guard against re-posting is in memory and resets on remount — the
+             original reason `do nothing` was here — so this has to stay
+             idempotent under a repeat POST of the same deck. The cost is that
+             rebuilding an identical brief reports the later build's spend
+             rather than the sum.
+
+             created_at is deliberately untouched: a re-post would otherwise
+             reorder the Library for no reason the merchant did anything to
+             cause. */
           `insert into runs (id,domain,created_at,payload,snapshot,page_count,tokens,sell,style_label)
            values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-           on conflict (id) do nothing`,
+           on conflict (id) do update set
+             snapshot   = excluded.snapshot,
+             page_count = excluded.page_count,
+             tokens     = excluded.tokens,
+             sell       = excluded.sell,
+             style_label = excluded.style_label`,
           [
             run.id,
             run.domain,
