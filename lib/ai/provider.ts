@@ -45,10 +45,34 @@ export function isAiEnabled(): boolean {
   return providerName() !== "none";
 }
 
+/**
+ * The model that will actually be used, defaults resolved.
+ *
+ * Reporting the raw AI_MODEL instead sends an operator looking for a fault:
+ * unset reads as `null`, which looks like nothing is configured on a server
+ * that is happily spending money on the default.
+ */
+export function modelName(): string | null {
+  if (process.env.AI_MODEL) return process.env.AI_MODEL;
+  switch (providerName()) {
+    case "anthropic":
+      return DEFAULT_ANTHROPIC_MODEL;
+    case "deepseek":
+      return DEFAULT_DEEPSEEK_MODEL;
+    default:
+      return null;
+  }
+}
+
+/* Named rather than inline so `modelName()` and the providers cannot drift —
+   the whole point of the function is that it reports what will really run. */
+const DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5";
+const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
+
 /* ---- Anthropic ----------------------------------------------------------- */
 
 function anthropicProvider(): Provider {
-  const model = process.env.AI_MODEL ?? "claude-haiku-4-5";
+  const model = process.env.AI_MODEL ?? DEFAULT_ANTHROPIC_MODEL;
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
   return {
@@ -93,7 +117,7 @@ function anthropicProvider(): Provider {
 /* ---- DeepSeek ------------------------------------------------------------ */
 
 function deepseekProvider(): Provider {
-  const model = process.env.AI_MODEL ?? "deepseek-v4-flash";
+  const model = process.env.AI_MODEL ?? DEFAULT_DEEPSEEK_MODEL;
   const key = process.env.DEEPSEEK_API_KEY!;
 
   return {

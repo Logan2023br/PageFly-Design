@@ -1,5 +1,5 @@
 import { builtinStores } from "@/lib/allowlist";
-import { providerName } from "@/lib/ai/provider";
+import { modelName, providerName } from "@/lib/ai/provider";
 import { skillNames } from "@/lib/ai/skills";
 import { stockProvider } from "@/lib/images/stock";
 import { databaseIsUnpooled, databaseSource, hasDatabase } from "@/lib/db";
@@ -49,7 +49,8 @@ export async function GET() {
        generation is fully deterministic — which is a valid way to run, not a
        fault, so it never appears in `blocking`. */
     aiProvider: providerName(),
-    aiModel: process.env.AI_MODEL ?? null,
+    /* What will really run, defaults resolved — not the raw env var. */
+    aiModel: modelName(),
     skills: skillNames(),
     /* Which library the mockups' photographs come from. "none" means every
        image renders as a grey plate — the page is still complete, but it looks
