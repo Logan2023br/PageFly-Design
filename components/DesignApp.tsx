@@ -2,7 +2,7 @@
 
 import { AnimatePresence, MotionConfig } from "framer-motion";
 import { useEffect } from "react";
-import { useStore, useVisiblePages } from "@/lib/store";
+import { usePreviewDefaults, useStore, useVisiblePages } from "@/lib/store";
 import type { Account } from "@/lib/account";
 import { AccountProvider } from "./AccountProvider";
 import { RunRecorder } from "./RunRecorder";
@@ -50,6 +50,7 @@ function Screens() {
 export function DesignApp({ account }: { account: Account | null }) {
   const setFailFirstN = useStore((s) => s.setFailFirstN);
   const resumeBuild = useStore((s) => s.resumeBuild);
+  usePreviewDefaults();
 
   /* Rejoin a build this store already has running.
      

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { create } from "zustand";
 import {
   MAX_BRAND_COLORS,
@@ -649,4 +649,28 @@ export function useVisiblePages() {
     () => (filter === "all" ? pages : pages.filter((p) => p.category === filter)),
     [pages, filter],
   );
+}
+
+/**
+ * Preview default for a hand rather than a desk.
+ *
+ * The device only. A 1440px desktop frame cannot be read on a 390px screen at
+ * any Fit — 390/1440 is about 25%, which puts the body text at three pixels
+ * tall — so every control looked broken because nothing it changed was visible.
+ * A 390px frame on a 390px screen fits at roughly 95% and reads immediately.
+ *
+ * NOT the zoom. That was tried and was wrong: 50% was measured against the
+ * desktop frame, and against the phone frame it halves something already the
+ * right size.
+ *
+ * A hook, and shared, because two separate routes open a preview — the Design
+ * app and the Library. A default, not a lock: the device buttons still win.
+ */
+export function usePreviewDefaults(): void {
+  const setDevice = useStore((s) => s.setDevice);
+
+  useEffect(() => {
+    if (window.innerWidth >= 640) return;
+    setDevice("mobile");
+  }, [setDevice]);
 }

@@ -255,7 +255,10 @@ export function PreviewOverlay({
 
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex flex-col"
+      /* touch-action: iOS otherwise holds every tap for ~300ms waiting to see
+         if it is a double-tap to zoom, which on a row of small controls reads
+         as taps being dropped. */
+      className="fixed inset-0 z-50 flex flex-col [touch-action:manipulation]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -264,15 +267,26 @@ export function PreviewOverlay({
       aria-modal="true"
       aria-label={`${page.label} preview`}
     >
-      <button
-        type="button"
-        aria-label="Close preview"
+      {/* Backdrop.
+
+          Was a <button> the size of the screen carrying its own
+          backdrop-filter, sitting as a previous sibling of a toolbar that also
+          has one. On iOS Safari a backdrop-filter element makes its own
+          compositing layer and does not reliably respect z-index against
+          another one — which is the shape of "every control in the toolbar
+          stopped responding on a phone and nowhere else".
+
+          A plain div at an explicit z-0, with no filter of its own, has nothing
+          to fight the toolbar over. It is also not a screen-sized button, which
+          a screen reader announced as one enormous control. */}
+      <div
+        aria-hidden="true"
         onClick={close}
-        className="absolute inset-0 cursor-default bg-pf-bg-deep/88 backdrop-blur-xl"
+        className="absolute inset-0 z-0 bg-pf-bg-deep/88"
       />
 
       {/* ---- toolbar ---- */}
-      <div className="pfd-glass relative z-10 border-b border-pf-border">
+      <div className="pfd-glass relative z-20 border-b border-pf-border">
         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2.5 sm:px-5">
           <div className="flex min-w-0 items-center gap-2.5">
             <span className="min-w-0 truncate text-[14px] font-semibold text-pf-text">
