@@ -123,8 +123,6 @@ type Actions = {
   regenerateOne: (pageId: string) => void;
   retryFailed: () => Promise<void>;
 
-  /** Rebuild a run saved in the Library. Uses the same generator, instantly. */
-  loadSavedRun: (brief: Brief, variants: Record<string, number>) => Promise<void>;
   /** Rebuild EVERY saved run into one deck — what the Library shows. */
   loadLibrary: (
     runs: {
@@ -505,94 +503,47 @@ export const useStore = create<State & Actions>((set, get) => ({
     controller?.abort();
     controller = new AbortController();
 
-    set({ failures: [], screen: "generating" });
+    set({
+      failures: [],
+      screen: "generating",
+      /* The deck is about to differ from the one the server saved. */
+      reopened: false,
+    });
+
+    /* Retried pages went down the deterministic path and stopped there, so a
+       page that failed once came back as a generator page sitting in a deck of
+       designed ones — visibly worse than its neighbours, with nothing to say
+       why. Same road as a build: generator first, then the model. */
+    const settling: Promise<void>[] = [];
 
     try {
       await generatePages(
         brief,
-        (page) =>
-          set((s) => ({
-            pages: [...s.pages, page].sort((a, b) => a.index - b.index),
-          })),
+        (page) => {
+          settling.push(
+            improvePage(page, brief, controller?.signal).then((result) => {
+              set((s) => ({
+                tokens: s.tokens + result.tokens,
+                pages: [...s.pages, result.page].sort((a, b) => a.index - b.index),
+              }));
+            }),
+          );
+        },
         controller.signal,
         {
           onlyPageIds: ids,
           onPageFailed: (f) => set((s) => ({ failures: [...s.failures, f] })),
         },
       );
+
+      await Promise.all(settling);
+      if (controller?.signal.aborted) return;
       set({ screen: "results" });
     } catch (err) {
       if (!isAbortError(err)) throw err;
     }
   },
 
-  /* ---- library --------------------------------------------------------- */
-
-  /**
-   * Reopen a saved run.
-   *
-   * No fake thinking time: the merchant already waited for this deck once, and
-   * the generating screen would be theatre. Because generation is deterministic,
-   * replaying the brief and the variant numbers rebuilds exactly the pages that
-   * were saved — nothing about buildPage changes here.
-   */
-  loadSavedRun: async (brief, variants) => {
-    controller?.abort();
-    controller = new AbortController();
-
-    const plan: PlanEntry[] = expandSelection(brief.pages).map((p) => ({
-      pageId: p.pageId,
-      pageType: p.pageType,
-      label: p.pageType,
-      copyIndex: p.copyIndex,
-      copyTotal: p.copyTotal,
-    }));
-
-    set({
-      screen: "generating",
-      draft: briefToDraft(brief),
-      brief,
-      plan,
-      pages: [],
-      failures: [],
-      variants,
-      reopened: true,
-      filter: "all",
-      previewIndex: null,
-    });
-
-    try {
-      await generatePages(
-        brief,
-        (page) => set((s) => ({ pages: [...s.pages, page] })),
-        controller.signal,
-        { variants, instant: true },
-      );
-      set({ screen: "results" });
-    } catch (err) {
-      if (!isAbortError(err)) throw err;
-    }
-  },
-
-  /**
-   * Every saved build, as one deck.
-   *
-   * The Library shows the pages themselves rather than a list of builds: two
-   * builds of three and two pages are five pages, and that is what a merchant is
-   * looking for. Each run is replayed through the same generator, so every page
-   * is identical to the one that was saved.
-   *
-   * A run that carries a snapshot is shown from it directly. Replaying the brief
-   * would regenerate the copy, and the copy is now written by a model — so a replay
-   * returns different words and the merchant would find a page they never approved.
-   * Only runs saved before snapshots existed are replayed.
-   *
-   * Page ids are namespaced with the run id. Two builds both contain a page whose
-   * id is "home", and duplicate React keys make the grid reuse the wrong DOM and
-   * the preview step to the wrong page. A replayed page is BUILT with its original
-   * id so its seed — and therefore its content — is unchanged; only the identity
-   * used by the deck is rewritten.
-   */
   loadLibrary: async (runs) => {
     controller?.abort();
     controller = new AbortController();
@@ -681,19 +632,6 @@ export const useStore = create<State & Actions>((set, get) => ({
 
 /* ---- brief <-> draft ---------------------------------------------------- */
 
-/** Reopening a run has to refill the form as well as the deck, or "Edit brief"
-    lands on an empty form and the merchant loses the run. */
-function briefToDraft(brief: Brief): BriefDraft {
-  return {
-    whatYouSell: brief.whatYouSell,
-    visualStyle: brief.visualStyle,
-    storeType: brief.storeType,
-    prompt: brief.prompt,
-    brandColors: [...brief.brandColors],
-    referenceImages: brief.referenceImages,
-    pages: { ...brief.pages },
-  };
-}
 
 /* ---- selectors ---------------------------------------------------------- */
 
