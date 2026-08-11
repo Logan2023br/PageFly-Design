@@ -285,6 +285,36 @@ export function PreviewOverlay({
             <span className="shrink-0 text-[12.5px] tabular-nums text-pf-muted">
               {index + 1} / {pages.length}
             </span>
+
+            {/* Page stepping, for screens with no keyboard.
+
+                The arrows either side of the stage are hidden below `sm` —
+                correctly, since two 40px buttons on a 390px screen would take a
+                quarter of the width away from the mockup. But nothing replaced
+                them, so on a phone a twelve-page deck had no way to reach page
+                two: the only route was the ← → keys, which is exactly what the
+                shortcuts panel was advertising to a device that has none.
+
+                Here rather than beside the stage so they cost no mockup width,
+                and next to the counter they act on. */}
+            <div className="ml-1 flex shrink-0 items-center gap-1 sm:hidden">
+              <button
+                type="button"
+                onClick={() => step(-1)}
+                aria-label="Previous page"
+                className="grid size-9 place-items-center rounded-full border border-pf-border bg-pf-card text-pf-body"
+              >
+                <Icon name="ChevronLeft" size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={() => step(1)}
+                aria-label="Next page"
+                className="grid size-9 place-items-center rounded-full border border-pf-border bg-pf-card text-pf-body"
+              >
+                <Icon name="ChevronRight" size={16} />
+              </button>
+            </div>
           </div>
 
           <div className="ml-auto flex flex-wrap items-center gap-2">
