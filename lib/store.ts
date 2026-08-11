@@ -132,6 +132,20 @@ type Actions = {
 
 let controller: AbortController | null = null;
 
+/**
+ * The deck in the order the merchant asked for.
+ *
+ * Pages now arrive when the MODEL finishes them, and the model does not finish
+ * them in the order they were generated — a page with one section answers
+ * before a page with nine. Sorting on insert costs nothing at deck sizes of
+ * thirty and keeps "Home" first, which is the only order anyone expects.
+ */
+function inOrder(pages: PageMockup[]): PageMockup[] {
+  return [...pages].sort(
+    (a, b) => a.index - b.index || (a.copyIndex ?? 0) - (b.copyIndex ?? 0),
+  );
+}
+
 export const useStore = create<State & Actions>((set, get) => ({
   screen: "brief",
   draft: EMPTY_DRAFT,
@@ -288,26 +302,33 @@ export const useStore = create<State & Actions>((set, get) => ({
       previewIndex: null,
     });
 
+    /* One per page, resolving when that page has finished being improved. */
+    const settling: Promise<void>[] = [];
+
     try {
       await generatePages(
         brief,
         (page) => {
-          /* The page is shown the moment it is generated, then improved in
-             place. Waiting for the model before showing anything would trade a
-             deck that fills in card by card for a blank screen and a spinner —
-             and the deterministic page is already a complete, correct page. */
-          set((s) => ({ pages: [...s.pages, page], rewriting: s.rewriting + 1 }));
+          /* The deterministic page is NOT shown.
 
-          void improvePage(page, brief, controller?.signal).then((result) => {
-            set((s) => ({
-              tokens: s.tokens + result.tokens,
-              rewriting: Math.max(0, s.rewriting - 1),
-              pages:
-                result.via === "none"
-                  ? s.pages
-                  : s.pages.map((p) => (p.id === page.id ? result.page : p)),
-            }));
-          });
+             It used to be, and the reasoning was sound on its own terms — it is
+             a complete page, so putting it up immediately beat a blank screen.
+             What that missed is what the merchant reads into it: the page
+             appeared, then changed a minute later, and the version they had
+             already started judging was the one the model had not touched. Two
+             different pages for one build is a worse thing to show than a wait.
+
+             So it is still generated — it is the fallback, and it is what the
+             model's failure resolves to — but it stays off screen until the
+             model has had its turn. */
+          settling.push(
+            improvePage(page, brief, controller?.signal).then((result) => {
+              set((s) => ({
+                tokens: s.tokens + result.tokens,
+                pages: inOrder([...s.pages, result.page]),
+              }));
+            }),
+          );
         },
         controller.signal,
         {
@@ -316,6 +337,11 @@ export const useStore = create<State & Actions>((set, get) => ({
           failFirstN: failFirstN || undefined,
         },
       );
+
+      /* Every page, not just every generation. The screen used to flip here
+         while the model was still working on all of them. */
+      await Promise.all(settling);
+      if (controller?.signal.aborted) return;
       set({ screen: "results" });
     } catch (err) {
       if (!isAbortError(err)) throw err;

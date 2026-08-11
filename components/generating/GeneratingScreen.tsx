@@ -7,13 +7,17 @@ import { Button, Icon, Panel } from "../ui";
 import { WireframeMorph, type MorphPhase } from "./WireframeMorph";
 
 /* Status copy stays factual. No "consulting the design oracle" theatrics —
-   the line says which page is being built, because that is what is happening. */
-function statusLine(done: number, total: number, nextLabel: string | null) {
-  if (done === 0) return "Reading your brief";
-  if (done === 1) return "Setting the type scale";
-  if (done >= total) return "Almost there";
-  if (nextLabel) return `Building ${nextLabel}`;
-  return "Almost there";
+   the line says what is happening, because that is what is happening.
+
+   It used to name the page being built, one at a time, which was true when
+   pages appeared as fast as the generator could make them. The model designs
+   every page at once and none of them lands for the better part of a minute,
+   so naming one would be picking a page at random and calling it the current
+   one. */
+function statusLine(done: number, total: number): string {
+  if (done >= total && total > 0) return "Almost there";
+  if (done > 0) return `${done} of ${total} designed`;
+  return total === 1 ? "Designing your page" : `Designing ${total} pages`;
 }
 
 export function GeneratingScreen() {
@@ -27,19 +31,6 @@ export function GeneratingScreen() {
   const settled = pages.length + failures.length;
   const pct = total === 0 ? 0 : Math.round((settled / total) * 100);
 
-  const nextEntry = plan[settled];
-  const nextLabel = nextEntry
-    ? (() => {
-        const def = PAGE_BY_ID[nextEntry.pageType];
-        const name = def?.label ?? nextEntry.pageType;
-        if (nextEntry.copyTotal > 1) {
-          return def?.category === "landing"
-            ? `landing page ${nextEntry.copyIndex} of ${nextEntry.copyTotal}`
-            : `${name} ${nextEntry.copyIndex} of ${nextEntry.copyTotal}`;
-        }
-        return `the ${name} page`;
-      })()
-    : null;
 
   const byId = new Map(pages.map((p) => [p.id, p]));
 
@@ -78,7 +69,7 @@ export function GeneratingScreen() {
               >
                 <Icon name="Loader" size={14} />
               </motion.span>
-              {statusLine(settled, total, nextLabel)}
+              {statusLine(settled, total)}
             </span>
             <span className="tabular-nums text-pf-muted">
               {settled} of {total}
@@ -91,11 +82,10 @@ export function GeneratingScreen() {
         {plan.map((entry, i) => {
           const page = byId.get(entry.pageId);
           const failed = failures.some((f) => f.pageId === entry.pageId);
-          const phase: MorphPhase = page
-            ? "done"
-            : i === settled
-              ? "building"
-              : "pending";
+          /* Every page that has not landed is genuinely in flight — the model
+             is given all of them at once. Marking only `settled` as building
+             left the rest looking queued when nothing was waiting. */
+          const phase: MorphPhase = page ? "done" : failed ? "pending" : "building";
           const def = PAGE_BY_ID[entry.pageType];
 
           return (
