@@ -8,6 +8,7 @@ import { Button, Chip, Icon, InlineError, Panel } from "../ui";
 import { useExport } from "./ExportProvider";
 import { LOCKED_TOOLTIP } from "./CardActions";
 import { ResultCard } from "./ResultCard";
+import { PhotoCredits } from "./PhotoCredits";
 
 /* ---- partial-failure notice -------------------------------------------- */
 
@@ -198,6 +199,9 @@ export function ResultsScreen({
   readOnly?: boolean;
 }) {
   const visible = useVisiblePages();
+  /* The whole deck, not the filtered view: a photographer whose work is on a
+     page the merchant has filtered out is still owed the credit. */
+  const allPages = useStore((s) => s.pages);
   const rebuilding = useStore((s) => s.rebuilding);
   const { error, clearError } = useExport();
 
@@ -245,6 +249,8 @@ export function ResultsScreen({
             ))}
           </AnimatePresence>
         </div>
+
+        <PhotoCredits pages={allPages} />
       </div>
     </motion.div>
   );

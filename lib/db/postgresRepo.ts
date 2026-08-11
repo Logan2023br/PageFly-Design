@@ -1,5 +1,6 @@
 import { Pool } from "pg";
 import type {
+  PhotoRecord,
   AdminStats,
   Repo,
   RunPageRecord,
@@ -84,6 +85,18 @@ create table if not exists reviews (
   comment    text,
   created_at timestamptz not null default now(),
   forwarded  boolean not null default false
+);
+
+/* Keyed by the search phrase, not by store: two merchants selling ceramics ask
+   for the same subjects, and the whole point is to spend one request for both.
+   No expiry — a photograph that matched "potter shaping clay" last month still
+   does, and re-fetching would spend the quota this table exists to protect. */
+create table if not exists photos (
+  query      text primary key,
+  url        text not null,
+  credit     text not null default '',
+  link       text not null default '',
+  fetched_at timestamptz not null default now()
 );
 `;
 
@@ -395,6 +408,41 @@ export function createPostgresRepo(url: string): Repo {
           review.forwarded,
         ],
       );
+    },
+
+    async getPhotos(queries) {
+      if (queries.length === 0) return [];
+      await ready();
+      const { rows } = await db.query(
+        `select query, url, credit, link, fetched_at from photos where query = any($1)`,
+        [queries],
+      );
+      return rows.map(
+        (r): PhotoRecord => ({
+          query: String(r.query),
+          url: String(r.url),
+          credit: String(r.credit ?? ""),
+          link: String(r.link ?? ""),
+          fetchedAt: iso(r.fetched_at) ?? "",
+        }),
+      );
+    },
+
+    async savePhotos(photos) {
+      if (photos.length === 0) return;
+      await ready();
+      for (const photo of photos) {
+        /* Last write wins. A query that resolves to a different photograph
+           later is not worth a conflict — either one is a correct answer to
+           the same search. */
+        await db.query(
+          `insert into photos (query,url,credit,link)
+           values ($1,$2,$3,$4)
+           on conflict (query) do update set
+             url = excluded.url, credit = excluded.credit, link = excluded.link`,
+          [photo.query, photo.url, photo.credit, photo.link],
+        );
+      }
     },
 
     async listStoreSummaries() {

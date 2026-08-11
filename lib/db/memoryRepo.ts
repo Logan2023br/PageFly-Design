@@ -1,6 +1,7 @@
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { buildStats } from "./postgresRepo";
 import type {
+  PhotoRecord,
   Repo,
   ReviewRecord,
   RunPageRecord,
@@ -31,9 +32,10 @@ type Shape = {
   runs: RunRecord[];
   runPages: RunPageRecord[];
   reviews: ReviewRecord[];
+  photos: PhotoRecord[];
 };
 
-const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [] };
+const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], photos: [] };
 
 export function createMemoryRepo(file: string): Repo {
   /* Writes are best-effort: a read-only filesystem downgrades this to a plain
@@ -50,6 +52,7 @@ export function createMemoryRepo(file: string): Repo {
         runs: parsed.runs ?? [],
         runPages: parsed.runPages ?? [],
         reviews: parsed.reviews ?? [],
+        photos: parsed.photos ?? [],
       };
     } catch {
       return structuredClone(EMPTY);
@@ -232,6 +235,23 @@ export function createMemoryRepo(file: string): Repo {
       // One review per store, for ever — only the forwarded flag may change.
       if (existing) existing.forwarded = review.forwarded;
       else data.reviews.push({ ...review });
+      flush();
+    },
+
+    async getPhotos(queries) {
+      sync();
+      const want = new Set(queries);
+      return data.photos.filter((p) => want.has(p.query)).map((p) => ({ ...p }));
+    },
+
+    async savePhotos(photos) {
+      if (photos.length === 0) return;
+      sync();
+      for (const photo of photos) {
+        const i = data.photos.findIndex((p) => p.query === photo.query);
+        if (i >= 0) data.photos[i] = { ...photo };
+        else data.photos.push({ ...photo });
+      }
       flush();
     },
 

@@ -80,7 +80,14 @@ export async function designPage(
       };
 
     return {
-      page: { ...page, design: { tree: checked.data, images: body.images } },
+      page: {
+        ...page,
+        design: {
+          tree: checked.data,
+          images: body.images,
+          credits: body.credits,
+        },
+      },
       used: true,
       tokens: body.usage.input + body.usage.output,
     };

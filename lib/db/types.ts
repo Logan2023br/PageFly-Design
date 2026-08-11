@@ -112,6 +112,25 @@ export type AdminStats = {
   daily: { date: string; pages: number; runs: number }[];
 };
 
+/**
+ * One stock photo, remembered so the same subject is never searched twice.
+ *
+ * Cached in the database rather than in memory because the free tier allows
+ * 200 searches an hour and a single thirty-page build asks for about 210 —
+ * and a process-lifetime cache is lost on every deploy, which is exactly when
+ * someone is about to test a build.
+ */
+export type PhotoRecord = {
+  /** the search phrase, lowercased — the cache key */
+  query: string;
+  url: string;
+  /** photographer, for the credit the API guidelines require */
+  credit: string;
+  /** the photo's page, which is where the credit has to link */
+  link: string;
+  fetchedAt: string;
+};
+
 export type Repo = {
   /** Creates tables when missing. Safe to call on every request. */
   ready(): Promise<void>;
@@ -135,6 +154,10 @@ export type Repo = {
   /* ---- reviews ---- */
   getReview(domain: string): Promise<ReviewRecord | null>;
   saveReview(review: ReviewRecord): Promise<void>;
+
+  /* ---- stock photos ---- */
+  getPhotos(queries: string[]): Promise<PhotoRecord[]>;
+  savePhotos(photos: PhotoRecord[]): Promise<void>;
 
   /* ---- admin ---- */
   listStoreSummaries(): Promise<StoreSummary[]>;

@@ -345,6 +345,9 @@ export type DesignOverlay = {
   tree: unknown;
   /** image query → resolved photo URL */
   images: Record<string, string>;
+  /** photographers whose work is on this page, and where to link them. The
+      stock library's API terms require the credit wherever the photo shows. */
+  credits?: { name: string; link: string }[];
 };
 
 export type GenerateFailure = {

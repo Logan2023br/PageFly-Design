@@ -4,7 +4,7 @@ import { getProvider, isAiEnabled } from "@/lib/ai/provider";
 import { loadSkills } from "@/lib/ai/skills";
 import { DESIGN_SYSTEM } from "@/lib/ai/designPrompt";
 import { designTreeSchema, walk, type DesignTree } from "@/lib/design/schema";
-import { resolvePhotos, stockProvider } from "@/lib/images/stock";
+import { resolvePhotos, stockProvider, urlsOf } from "@/lib/images/stock";
 
 /* ==========================================================================
    POST /api/ai/design
@@ -58,6 +58,10 @@ export type AiDesignResponse =
       used: true;
       tree: DesignTree;
       images: Record<string, string>;
+      /* Who took the photographs, and where their pages are. The API
+         guidelines require both to be shown, so both travel with the page
+         rather than being looked up again later. */
+      credits: { name: string; link: string }[];
       usage: { input: number; output: number };
     }
   | {
@@ -150,16 +154,23 @@ export async function POST(request: Request) {
       .filter((n): n is Extract<typeof n, { type: "product" }> => n.type === "product")
       .map((n) => ({ query: n.query, ratio: 1 }));
 
-    const images =
+    const photos =
       stockProvider() === "none"
         ? {}
         : await resolvePhotos([...wants, ...productShots]);
+
+    /* One entry per photographer, not per photograph — a page using four
+       pictures by the same person credits them once. */
+    const byName = new Map<string, string>();
+    for (const p of Object.values(photos))
+      if (p.credit && !byName.has(p.credit)) byName.set(p.credit, p.link);
 
     return Response.json({
       ok: true,
       used: true,
       tree,
-      images,
+      images: urlsOf(photos),
+      credits: [...byName].map(([name, link]) => ({ name, link })),
       usage: completion.usage,
     } satisfies AiDesignResponse);
   } catch (err) {
