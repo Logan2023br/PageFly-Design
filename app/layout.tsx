@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, Inter } from "next/font/google";
 import "./globals.css";
 import { WEBFONT_CSS_URL } from "@/lib/styleTokens";
@@ -25,6 +25,22 @@ export const metadata: Metadata = {
   title: "PageFly Design — see your store as pages, before you build them",
   description:
     "Describe your store and get a visual mockup of every page you need.",
+};
+
+/* ==========================================================================
+   Without this a phone renders the page at a virtual width of about 980px and
+   then zooms the whole thing out to fit. Everything is laid out for a desktop
+   and displayed at a third of its size: text is unreadable, and every tap
+   target is small enough that taps land beside it — which reads as the app
+   simply not responding.
+
+   `maximumScale` is deliberately not set. Locking zoom would stop a merchant
+   pinching into a mockup, which is the one thing they most want to do on a
+   phone, and it fails accessibility guidance for anyone who needs to magnify.
+   ========================================================================== */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
