@@ -260,7 +260,7 @@ export function createMemoryRepo(file: string): Repo {
             note: t.note,
             /* One image, same reason as the postgres driver: a card needs a
                cover, not the set. */
-            cover: t.images[0] ?? "",
+            cover: t.images[0]?.src ?? "",
             imageCount: t.images.length,
             createdAt: t.createdAt,
             updatedAt: t.updatedAt,

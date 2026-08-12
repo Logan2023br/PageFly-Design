@@ -1,6 +1,7 @@
 import { Pool } from "pg";
 import type {
   JobRecord,
+  TrainingImage,
   TrainingSummary,
   PhotoRecord,
   AdminStats,
@@ -140,6 +141,16 @@ alter table training_items alter column image drop not null;
 update training_items
    set images = jsonb_build_array(image)
  where jsonb_array_length(images) = 0 and image is not null and image <> '';
+
+/* Each screenshot grew a note of its own, so the array went from strings to
+   objects. Rows written under the older shape are converted in place — the
+   check is on the shape itself, so this is a no-op once it has run. */
+update training_items
+   set images = (
+     select jsonb_agg(jsonb_build_object('src', v, 'note', null))
+       from jsonb_array_elements_text(images) as v
+   )
+ where jsonb_array_length(images) > 0 and jsonb_typeof(images -> 0) = 'string';
 `;
 
 export function createPostgresRepo(url: string): Repo {
@@ -191,6 +202,25 @@ export function createPostgresRepo(url: string): Repo {
     styleLabel: String(r.style_label ?? ""),
     snapshot: r.snapshot ?? null,
   });
+
+/** Tolerates the older array-of-strings shape as well as the current one. The
+    DDL converts stored rows, but a row written by an instance still running the
+    previous build during a deploy would arrive here in the old shape. */
+function normalizeImages(value: unknown): TrainingImage[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((v) =>
+      typeof v === "string"
+        ? { src: v, note: null }
+        : v && typeof v === "object" && typeof (v as TrainingImage).src === "string"
+          ? {
+              src: (v as TrainingImage).src,
+              note: (v as TrainingImage).note ?? null,
+            }
+          : null,
+    )
+    .filter((v): v is TrainingImage => v !== null);
+}
 
 const toJob = (r: Record<string, unknown>): JobRecord => ({
   id: String(r.id),
@@ -472,7 +502,7 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
          an admin page weigh tens of megabytes. */
       const { rows } = await db.query(
         `select id, vertical, note, created_at, updated_at,
-                coalesce(images -> 0 #>> '{}', '') as cover,
+                coalesce(images -> 0 ->> 'src', '') as cover,
                 jsonb_array_length(images)         as image_count
            from training_items
           order by vertical, created_at desc`,
@@ -503,7 +533,7 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
         id: String(r.id),
         vertical: String(r.vertical),
         note: r.note === null || r.note === undefined ? null : String(r.note),
-        images: Array.isArray(r.images) ? (r.images as string[]) : [],
+        images: normalizeImages(r.images),
         createdAt: iso(r.created_at) ?? "",
         updatedAt: iso(r.updated_at) ?? "",
       };

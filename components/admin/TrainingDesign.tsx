@@ -6,7 +6,7 @@ import type {
   TrainingItemResponse,
   TrainingResponse,
 } from "@/app/api/admin/training/route";
-import type { TrainingItem, TrainingSummary } from "@/lib/db/types";
+import type { TrainingImage, TrainingItem, TrainingSummary } from "@/lib/db/types";
 import { VERTICAL_IDS, VERTICAL_LABELS, verticalLabel } from "@/lib/verticals";
 import { Button, Icon, Panel, Tag } from "../ui";
 
@@ -374,7 +374,7 @@ function EditDialog({
 }) {
   const [vertical, setVertical] = useState(item?.vertical ?? VERTICAL_IDS[0]);
   const [note, setNote] = useState(item?.note ?? "");
-  const [images, setImages] = useState<string[]>(item?.images ?? []);
+  const [images, setImages] = useState<TrainingImage[]>(item?.images ?? []);
   const [busy, setBusy] = useState(false);
   const [reading, setReading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -398,7 +398,7 @@ function EditDialog({
       if (picked.length < files.length)
         setError(`Only ${MAX_IMAGES} screenshots per reference — the rest were skipped.`);
       const encoded = await Promise.all(picked.map(downscale));
-      setImages((prev) => [...prev, ...encoded]);
+      setImages((prev) => [...prev, ...encoded.map((src) => ({ src, note: null }))]);
     } catch {
       setError("Couldn't read one of those files. PNG or JPEG works.");
     } finally {
@@ -501,27 +501,44 @@ function EditDialog({
               onChange={(e) => void add(e.target.files)}
             />
 
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {images.map((src, i) => (
-                <div
-                  key={i}
-                  className="group relative overflow-hidden rounded-pf-md border border-pf-border"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={src} alt="" className="aspect-[4/3] w-full object-cover object-top" />
-                  {i === 0 && (
-                    <span className="absolute left-1 top-1 rounded-pf-pill bg-pf-bg-deep/80 px-1.5 py-0.5 text-[10px] font-semibold text-pf-text">
-                      Cover
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
-                    aria-label="Remove screenshot"
-                    className="absolute inset-0 grid place-items-center bg-pf-bg-deep/70 text-pf-danger opacity-0 transition-opacity group-hover:opacity-100"
-                  >
-                    <Icon name="Trash2" size={16} />
-                  </button>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {images.map((image, i) => (
+                <div key={i} className="grid gap-1">
+                  <div className="group relative overflow-hidden rounded-pf-md border border-pf-border">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={image.src}
+                      alt=""
+                      className="aspect-[4/3] w-full object-cover object-top"
+                    />
+                    {i === 0 && (
+                      <span className="absolute left-1 top-1 rounded-pf-pill bg-pf-bg-deep/80 px-1.5 py-0.5 text-[10px] font-semibold text-pf-text">
+                        Cover
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
+                      aria-label="Remove screenshot"
+                      className="absolute inset-0 grid place-items-center bg-pf-bg-deep/70 text-pf-danger opacity-0 transition-opacity group-hover:opacity-100"
+                    >
+                      <Icon name="Trash2" size={16} />
+                    </button>
+                  </div>
+
+                  {/* One line per shot. The reference's own note says what the
+                      store does; this says what THIS picture is here for. */}
+                  <input
+                    value={image.note ?? ""}
+                    onChange={(e) =>
+                      setImages((prev) =>
+                        prev.map((p, j) => (j === i ? { ...p, note: e.target.value } : p)),
+                      )
+                    }
+                    maxLength={200}
+                    placeholder="What this shot shows"
+                    className="rounded-pf-md border border-pf-border bg-pf-bg-deep px-2 py-1 text-[11.5px] text-pf-text outline-none transition-colors placeholder:text-pf-faint focus:border-pf-primary-hi"
+                  />
                 </div>
               ))}
 
@@ -530,7 +547,7 @@ function EditDialog({
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   disabled={reading}
-                  className="grid aspect-[4/3] place-items-center gap-1 rounded-pf-md border border-dashed border-pf-border text-pf-muted transition-colors hover:border-pf-border-hi hover:text-pf-text disabled:opacity-60"
+                  className="grid aspect-[4/3] h-fit place-items-center gap-1 rounded-pf-md border border-dashed border-pf-border text-pf-muted transition-colors hover:border-pf-border-hi hover:text-pf-text disabled:opacity-60"
                 >
                   <Icon name={reading ? "Loader" : "Upload"} size={16} />
                   <span className="text-[11px] font-semibold">
@@ -615,9 +632,19 @@ function Lightbox({ item, onClose }: { item: TrainingItem; onClose: () => void }
 
       <div className="relative z-10 flex items-center gap-2 border-b border-pf-border px-4 py-2.5">
         <Tag>{verticalLabel(item.vertical)}</Tag>
-        {item.note && (
-          <span className="min-w-0 truncate text-[12.5px] text-pf-muted">{item.note}</span>
-        )}
+
+        {/* Both notes, and they are not the same thing: the reference's says
+            what the store does, the shot's says what this picture is for. The
+            shot's leads, because it is what is on screen. */}
+        <span className="min-w-0 truncate text-[12.5px]">
+          {item.images[index]?.note && (
+            <span className="text-pf-text">{item.images[index].note}</span>
+          )}
+          {item.images[index]?.note && item.note && (
+            <span className="text-pf-border"> · </span>
+          )}
+          {item.note && <span className="text-pf-muted">{item.note}</span>}
+        </span>
 
         {count > 1 && (
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
@@ -659,7 +686,7 @@ function Lightbox({ item, onClose }: { item: TrainingItem; onClose: () => void }
       <div className="relative z-10 min-h-0 flex-1 overflow-auto p-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={item.images[index]}
+          src={item.images[index]?.src}
           alt=""
           className="mx-auto w-full max-w-5xl rounded-pf-md"
         />

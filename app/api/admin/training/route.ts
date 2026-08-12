@@ -33,8 +33,16 @@ const saveSchema = z.object({
      accepted here without anyone remembering to update a second copy. */
   vertical: z.enum(VERTICAL_IDS),
   note: z.string().max(400).nullable().default(null),
-  /** data URLs — the pictures travel in the row */
-  images: z.array(z.string().max(MAX_IMAGE_BYTES)).min(1).max(MAX_IMAGES),
+  /** the pictures travel in the row, each with its own note */
+  images: z
+    .array(
+      z.object({
+        src: z.string().max(MAX_IMAGE_BYTES),
+        note: z.string().max(200).nullable().default(null),
+      }),
+    )
+    .min(1)
+    .max(MAX_IMAGES),
 });
 
 export type TrainingResponse =
@@ -104,7 +112,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!body.images.every((i) => i.startsWith("data:image/")))
+  if (!body.images.every((i) => i.src.startsWith("data:image/")))
     return Response.json(
       { ok: false, error: "One of those files isn't an image." } satisfies TrainingResponse,
       { status: 400 },
@@ -121,7 +129,10 @@ export async function POST(request: Request) {
     id: body.id ?? newId(),
     vertical: body.vertical,
     note: body.note?.trim() ? body.note.trim() : null,
-    images: body.images,
+    images: body.images.map((i) => ({
+      src: i.src,
+      note: i.note?.trim() ? i.note.trim() : null,
+    })),
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };

@@ -185,15 +185,23 @@ export type JobRecord = {
    roughly a few hundred KB rather than the several MB a screenshot arrives as.
    ========================================================================== */
 
+/** One screenshot, and what it in particular is worth looking at for. */
+export type TrainingImage = {
+  src: string;
+  /** specific to THIS shot — "the hero split", "how the price sits under the
+      title". The reference's own note says what the store does in general. */
+  note: string | null;
+};
+
 export type TrainingItem = {
   id: string;
   /** the industry this reference belongs to — one vertical, never several */
   vertical: string;
   /** what an operator should take from it: "serif headings, warm neutrals" */
   note: string | null;
-  /** the screenshots, as data URLs. One reference is usually several pages of
-      the same store, or the same page at several widths. */
-  images: string[];
+  /** the screenshots. One reference is usually several pages of the same store,
+      or the same page at several widths. */
+  images: TrainingImage[];
   createdAt: string;
   updatedAt: string;
 };
