@@ -38,7 +38,9 @@ const saveSchema = z.object({
     .array(
       z.object({
         src: z.string().max(MAX_IMAGE_BYTES),
-        note: z.string().max(200).nullable().default(null),
+        /* A note per shot can run to a few lines — what the hero does, how
+           the price sits, what the spacing is. 600 matches the field. */
+        note: z.string().max(600).nullable().default(null),
       }),
     )
     .min(1)

@@ -571,16 +571,17 @@ function EditDialog({
 
                   {/* One line per shot. The reference's own note says what the
                       store does; this says what THIS picture is here for. */}
-                  <input
+                  <textarea
                     value={image.note ?? ""}
                     onChange={(e) =>
                       setImages((prev) =>
                         prev.map((p, j) => (j === i ? { ...p, note: e.target.value } : p)),
                       )
                     }
-                    maxLength={200}
+                    rows={3}
+                    maxLength={600}
                     placeholder="What this shot shows"
-                    className="rounded-pf-md border border-pf-border bg-pf-bg-deep px-2 py-1 text-[11.5px] text-pf-text outline-none transition-colors placeholder:text-pf-faint focus:border-pf-primary-hi"
+                    className="resize-y rounded-pf-md border border-pf-border bg-pf-bg-deep px-2 py-1.5 text-[11.5px] leading-relaxed text-pf-text outline-none transition-colors placeholder:text-pf-faint focus:border-pf-primary-hi"
                   />
                 </div>
               ))}
@@ -679,7 +680,7 @@ function Lightbox({ item, onClose }: { item: TrainingItem; onClose: () => void }
         {/* Both notes, and they are not the same thing: the reference's says
             what the store does, the shot's says what this picture is for. The
             shot's leads, because it is what is on screen. */}
-        <span className="min-w-0 truncate text-[12.5px]">
+        <span className="min-w-0 whitespace-pre-wrap text-[12.5px] leading-snug [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] overflow-hidden">
           {item.images[index]?.note && (
             <span className="text-pf-text">{item.images[index].note}</span>
           )}
