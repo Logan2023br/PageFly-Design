@@ -105,9 +105,26 @@ export async function POST(request: Request) {
   let body: z.infer<typeof saveSchema>;
   try {
     body = saveSchema.parse(await request.json());
-  } catch {
+  } catch (err) {
+    /* Say which field, and say the size when that is what it was.
+
+       One message for every possible failure read as "pick an industry and an
+       image" to someone who had picked both — the real cause was a screenshot
+       over the size cap, and the message sent them looking at the two things
+       that were fine. */
+    const issue = err instanceof z.ZodError ? err.issues[0] : null;
+    const where = issue?.path.join(".") ?? "";
+    const tooBig = where.includes("src") && issue?.code === "too_big";
+
     return Response.json(
-      { ok: false, error: "Pick an industry and an image." } satisfies TrainingResponse,
+      {
+        ok: false,
+        error: tooBig
+          ? `That screenshot is too large even after resizing (limit ${Math.round(MAX_IMAGE_BYTES / 1_000_000)} MB). Try a shorter capture.`
+          : issue
+            ? `${where || "request"}: ${issue.message}`
+            : "Malformed request.",
+      } satisfies TrainingResponse,
       { status: 400 },
     );
   }

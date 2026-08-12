@@ -379,6 +379,15 @@ function EditDialog({
   const [reading, setReading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  /* Which slot the next file lands in: an index replaces that screenshot,
+     null appends. One input serves both so there is one code path reading
+     files and one place that downscales them. */
+  const replacing = useRef<number | null>(null);
+
+  const openPicker = (index: number | null) => {
+    replacing.current = index;
+    fileRef.current?.click();
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -390,9 +399,21 @@ function EditDialog({
 
   const add = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    const slot = replacing.current;
+    replacing.current = null;
     setError(null);
     setReading(true);
+
     try {
+      if (slot !== null) {
+        /* Replacing keeps the note. The note describes what the shot is FOR,
+           and swapping in a better capture of the same thing does not change
+           that. */
+        const src = await downscale(files[0]);
+        setImages((prev) => prev.map((p, j) => (j === slot ? { ...p, src } : p)));
+        return;
+      }
+
       const room = MAX_IMAGES - images.length;
       const picked = [...files].slice(0, Math.max(0, room));
       if (picked.length < files.length)
@@ -505,24 +526,46 @@ function EditDialog({
               {images.map((image, i) => (
                 <div key={i} className="grid gap-1">
                   <div className="group relative overflow-hidden rounded-pf-md border border-pf-border">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={image.src}
-                      alt=""
-                      className="aspect-[4/3] w-full object-cover object-top"
-                    />
+                    {/* The picture itself REPLACES rather than deletes.
+
+                        Delete used to be an invisible button across the whole
+                        thumbnail, so clicking a screenshot to look at it threw
+                        it away. Destructive actions do not get the largest
+                        target on screen; they get a small one, in a corner,
+                        that says what it is. */}
+                    <button
+                      type="button"
+                      onClick={() => openPicker(i)}
+                      aria-label="Replace this screenshot"
+                      className="block w-full"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={image.src}
+                        alt=""
+                        className="aspect-[4/3] w-full object-cover object-top"
+                      />
+                      <span className="pointer-events-none absolute inset-0 grid place-items-center bg-pf-bg-deep/60 opacity-0 transition-opacity group-hover:opacity-100">
+                        <span className="rounded-pf-pill bg-pf-card px-2.5 py-1 text-[11px] font-semibold text-pf-text">
+                          Replace
+                        </span>
+                      </span>
+                    </button>
+
                     {i === 0 && (
-                      <span className="absolute left-1 top-1 rounded-pf-pill bg-pf-bg-deep/80 px-1.5 py-0.5 text-[10px] font-semibold text-pf-text">
+                      <span className="pointer-events-none absolute left-1 top-1 rounded-pf-pill bg-pf-bg-deep/80 px-1.5 py-0.5 text-[10px] font-semibold text-pf-text">
                         Cover
                       </span>
                     )}
+
                     <button
                       type="button"
                       onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
                       aria-label="Remove screenshot"
-                      className="absolute inset-0 grid place-items-center bg-pf-bg-deep/70 text-pf-danger opacity-0 transition-opacity group-hover:opacity-100"
+                      title="Remove"
+                      className="absolute right-1 top-1 grid size-7 place-items-center rounded-pf-md bg-pf-bg-deep/85 text-pf-muted opacity-0 backdrop-blur-sm transition-all hover:text-pf-danger group-hover:opacity-100"
                     >
-                      <Icon name="Trash2" size={16} />
+                      <Icon name="Trash2" size={13} />
                     </button>
                   </div>
 
@@ -545,7 +588,7 @@ function EditDialog({
               {images.length < MAX_IMAGES && (
                 <button
                   type="button"
-                  onClick={() => fileRef.current?.click()}
+                  onClick={() => openPicker(null)}
                   disabled={reading}
                   className="grid aspect-[4/3] h-fit place-items-center gap-1 rounded-pf-md border border-dashed border-pf-border text-pf-muted transition-colors hover:border-pf-border-hi hover:text-pf-text disabled:opacity-60"
                 >
