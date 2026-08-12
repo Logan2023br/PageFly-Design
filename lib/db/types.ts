@@ -166,6 +166,37 @@ export type JobRecord = {
   error: string | null;
 };
 
+/* ==========================================================================
+   Training Design.
+
+   Reference material an operator collects: a screenshot of a page that got it
+   right, filed under the industry it belongs to. The intent is that a build for
+   that industry can look at what has worked before rather than inventing a look
+   from the brief alone.
+
+   Nothing reads these during a build yet, deliberately. They are collected
+   first and connected later, so the collection can be judged on its own before
+   it is allowed to change what merchants see.
+
+   The image lives in the row as a data URL rather than on disk. The app already
+   runs against two storage drivers and a VPS whose disk is not part of the
+   deploy; a row that carries its own picture cannot get separated from it.
+   Uploads are downscaled in the browser before they are sent, so a row is
+   roughly a few hundred KB rather than the several MB a screenshot arrives as.
+   ========================================================================== */
+
+export type TrainingItem = {
+  id: string;
+  /** the industry this reference belongs to — one vertical, never several */
+  vertical: string;
+  /** what an operator should take from it: "serif headings, warm neutrals" */
+  note: string | null;
+  /** the screenshot, as a data URL */
+  image: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type Repo = {
   /** Creates tables when missing. Safe to call on every request. */
   ready(): Promise<void>;
@@ -204,6 +235,11 @@ export type Repo = {
       a job lives in this process, so anything left running is from a process
       that no longer exists and would otherwise poll for ever. */
   failOrphanedJobs(): Promise<number>;
+
+  /* ---- training design ---- */
+  listTrainingItems(): Promise<TrainingItem[]>;
+  saveTrainingItem(item: TrainingItem): Promise<void>;
+  deleteTrainingItem(id: string): Promise<boolean>;
 
   /* ---- stock photos ---- */
   getPhotos(queries: string[]): Promise<PhotoRecord[]>;

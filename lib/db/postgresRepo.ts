@@ -1,6 +1,7 @@
 import { Pool } from "pg";
 import type {
   JobRecord,
+  TrainingItem,
   PhotoRecord,
   AdminStats,
   Repo,
@@ -117,6 +118,19 @@ create table if not exists jobs (
   error      text
 );
 create index if not exists jobs_domain_created on jobs (domain, created_at desc);
+
+/* Reference screenshots, filed by industry. The image is a data URL, so rows
+   are large by the standards of this schema — a few hundred KB — which is why
+   the listing query never selects it. */
+create table if not exists training_items (
+  id         text primary key,
+  vertical   text not null,
+  note       text,
+  image      text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists training_vertical on training_items (vertical, created_at desc);
 `;
 
 export function createPostgresRepo(url: string): Repo {
@@ -441,6 +455,48 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
           review.forwarded,
         ],
       );
+    },
+
+    async listTrainingItems() {
+      await ready();
+      const { rows } = await db.query(
+        `select id, vertical, note, image, created_at, updated_at
+           from training_items
+          order by vertical, created_at desc`,
+      );
+      return rows.map(
+        (r): TrainingItem => ({
+          id: String(r.id),
+          vertical: String(r.vertical),
+          note: r.note === null || r.note === undefined ? null : String(r.note),
+          image: String(r.image),
+          createdAt: iso(r.created_at) ?? "",
+          updatedAt: iso(r.updated_at) ?? "",
+        }),
+      );
+    },
+
+    async saveTrainingItem(item) {
+      await ready();
+      /* Upsert, so the same call adds and edits. An edit that only changes the
+         industry should not have to re-upload the picture, so the image column
+         keeps whatever it is given — the caller sends the existing one back. */
+      await db.query(
+        `insert into training_items (id,vertical,note,image,created_at,updated_at)
+         values ($1,$2,$3,$4,$5,$6)
+         on conflict (id) do update set
+           vertical = excluded.vertical,
+           note     = excluded.note,
+           image    = excluded.image,
+           updated_at = excluded.updated_at`,
+        [item.id, item.vertical, item.note, item.image, item.createdAt, item.updatedAt],
+      );
+    },
+
+    async deleteTrainingItem(id) {
+      await ready();
+      const { rowCount } = await db.query(`delete from training_items where id = $1`, [id]);
+      return (rowCount ?? 0) > 0;
     },
 
     async createJob(job) {

@@ -2,6 +2,7 @@ import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { buildStats } from "./postgresRepo";
 import type {
   JobRecord,
+  TrainingItem,
   PhotoRecord,
   Repo,
   ReviewRecord,
@@ -35,9 +36,10 @@ type Shape = {
   reviews: ReviewRecord[];
   photos: PhotoRecord[];
   jobs: JobRecord[];
+  training: TrainingItem[];
 };
 
-const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], photos: [], jobs: [] };
+const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], photos: [], jobs: [], training: [] };
 
 export function createMemoryRepo(file: string): Repo {
   /* Writes are best-effort: a read-only filesystem downgrades this to a plain
@@ -56,6 +58,7 @@ export function createMemoryRepo(file: string): Repo {
         reviews: parsed.reviews ?? [],
         photos: parsed.photos ?? [],
         jobs: parsed.jobs ?? [],
+        training: parsed.training ?? [],
       };
     } catch {
       return structuredClone(EMPTY);
@@ -239,6 +242,34 @@ export function createMemoryRepo(file: string): Repo {
       if (existing) existing.forwarded = review.forwarded;
       else data.reviews.push({ ...review });
       flush();
+    },
+
+    async listTrainingItems() {
+      sync();
+      return [...data.training]
+        .sort(
+          (a, b) =>
+            a.vertical.localeCompare(b.vertical) ||
+            b.createdAt.localeCompare(a.createdAt),
+        )
+        .map((t) => ({ ...t }));
+    },
+
+    async saveTrainingItem(item) {
+      sync();
+      const i = data.training.findIndex((t) => t.id === item.id);
+      if (i >= 0) data.training[i] = { ...item };
+      else data.training.push({ ...item });
+      flush();
+    },
+
+    async deleteTrainingItem(id) {
+      sync();
+      const before = data.training.length;
+      data.training = data.training.filter((t) => t.id !== id);
+      if (data.training.length === before) return false;
+      flush();
+      return true;
     },
 
     async createJob(job) {

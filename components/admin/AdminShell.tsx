@@ -13,11 +13,17 @@ import { Icon } from "../ui";
    between the two should not feel like they changed products.
    ========================================================================== */
 
-export type AdminSection = "stats" | "users";
+export type AdminSection = "stats" | "users" | "training";
 
 const NAV: { id: AdminSection; label: string; href: string; icon: IconName }[] = [
   { id: "stats", label: "Thống kê", href: "/design/admin", icon: "ChartColumn" },
   { id: "users", label: "Users", href: "/design/admin/users", icon: "Users" },
+  {
+    id: "training",
+    label: "Training Design",
+    href: "/design/admin/training",
+    icon: "Images",
+  },
 ];
 
 export function AdminShell({
