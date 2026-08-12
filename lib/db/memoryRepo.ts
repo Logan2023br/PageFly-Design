@@ -3,6 +3,7 @@ import { buildStats } from "./postgresRepo";
 import type {
   JobRecord,
   TrainingItem,
+  TrainingSummary,
   PhotoRecord,
   Repo,
   ReviewRecord,
@@ -252,7 +253,25 @@ export function createMemoryRepo(file: string): Repo {
             a.vertical.localeCompare(b.vertical) ||
             b.createdAt.localeCompare(a.createdAt),
         )
-        .map((t) => ({ ...t }));
+        .map(
+          (t): TrainingSummary => ({
+            id: t.id,
+            vertical: t.vertical,
+            note: t.note,
+            /* One image, same reason as the postgres driver: a card needs a
+               cover, not the set. */
+            cover: t.images[0] ?? "",
+            imageCount: t.images.length,
+            createdAt: t.createdAt,
+            updatedAt: t.updatedAt,
+          }),
+        );
+    },
+
+    async getTrainingItem(id) {
+      sync();
+      const found = data.training.find((t) => t.id === id);
+      return found ? { ...found, images: [...found.images] } : null;
     },
 
     async saveTrainingItem(item) {

@@ -1,7 +1,7 @@
 import { Pool } from "pg";
 import type {
   JobRecord,
-  TrainingItem,
+  TrainingSummary,
   PhotoRecord,
   AdminStats,
   Repo,
@@ -131,6 +131,15 @@ create table if not exists training_items (
   updated_at timestamptz not null default now()
 );
 create index if not exists training_vertical on training_items (vertical, created_at desc);
+
+/* A reference started as one screenshot and became several. The column is added
+   rather than replaced, and the rows written before it are folded into the new
+   shape, so nothing filed under the old one is lost. */
+alter table training_items add column if not exists images jsonb not null default '[]'::jsonb;
+alter table training_items alter column image drop not null;
+update training_items
+   set images = jsonb_build_array(image)
+ where jsonb_array_length(images) = 0 and image is not null and image <> '';
 `;
 
 export function createPostgresRepo(url: string): Repo {
@@ -459,37 +468,68 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
 
     async listTrainingItems() {
       await ready();
+      /* The first image only. Selecting the whole array here is what would make
+         an admin page weigh tens of megabytes. */
       const { rows } = await db.query(
-        `select id, vertical, note, image, created_at, updated_at
+        `select id, vertical, note, created_at, updated_at,
+                coalesce(images -> 0 #>> '{}', '') as cover,
+                jsonb_array_length(images)         as image_count
            from training_items
           order by vertical, created_at desc`,
       );
       return rows.map(
-        (r): TrainingItem => ({
+        (r): TrainingSummary => ({
           id: String(r.id),
           vertical: String(r.vertical),
           note: r.note === null || r.note === undefined ? null : String(r.note),
-          image: String(r.image),
+          cover: String(r.cover ?? ""),
+          imageCount: Number(r.image_count ?? 0),
           createdAt: iso(r.created_at) ?? "",
           updatedAt: iso(r.updated_at) ?? "",
         }),
       );
     },
 
+    async getTrainingItem(id) {
+      await ready();
+      const { rows } = await db.query(
+        `select id, vertical, note, images, created_at, updated_at
+           from training_items where id = $1`,
+        [id],
+      );
+      const r = rows[0];
+      if (!r) return null;
+      return {
+        id: String(r.id),
+        vertical: String(r.vertical),
+        note: r.note === null || r.note === undefined ? null : String(r.note),
+        images: Array.isArray(r.images) ? (r.images as string[]) : [],
+        createdAt: iso(r.created_at) ?? "",
+        updatedAt: iso(r.updated_at) ?? "",
+      };
+    },
+
     async saveTrainingItem(item) {
       await ready();
-      /* Upsert, so the same call adds and edits. An edit that only changes the
-         industry should not have to re-upload the picture, so the image column
-         keeps whatever it is given — the caller sends the existing one back. */
+      /* Upsert, so the same call adds and edits. `image` is written as null —
+         the column is only still here so rows written before this change could
+         be folded forward. */
       await db.query(
-        `insert into training_items (id,vertical,note,image,created_at,updated_at)
-         values ($1,$2,$3,$4,$5,$6)
+        `insert into training_items (id,vertical,note,image,images,created_at,updated_at)
+         values ($1,$2,$3,null,$4,$5,$6)
          on conflict (id) do update set
            vertical = excluded.vertical,
            note     = excluded.note,
-           image    = excluded.image,
+           images   = excluded.images,
            updated_at = excluded.updated_at`,
-        [item.id, item.vertical, item.note, item.image, item.createdAt, item.updatedAt],
+        [
+          item.id,
+          item.vertical,
+          item.note,
+          JSON.stringify(item.images),
+          item.createdAt,
+          item.updatedAt,
+        ],
       );
     },
 

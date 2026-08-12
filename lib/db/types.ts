@@ -191,8 +191,28 @@ export type TrainingItem = {
   vertical: string;
   /** what an operator should take from it: "serif headings, warm neutrals" */
   note: string | null;
-  /** the screenshot, as a data URL */
-  image: string;
+  /** the screenshots, as data URLs. One reference is usually several pages of
+      the same store, or the same page at several widths. */
+  images: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+/**
+ * A reference WITHOUT its pictures, save one.
+ *
+ * The listing has to exist separately because the images do not fit in it:
+ * twenty references at eight screenshots each is roughly fifty megabytes, and
+ * a grid of cards needs exactly one image per card to draw. The full set is
+ * fetched for the one reference being opened.
+ */
+export type TrainingSummary = {
+  id: string;
+  vertical: string;
+  note: string | null;
+  /** the first screenshot, which is what a card shows */
+  cover: string;
+  imageCount: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -237,7 +257,10 @@ export type Repo = {
   failOrphanedJobs(): Promise<number>;
 
   /* ---- training design ---- */
-  listTrainingItems(): Promise<TrainingItem[]>;
+  /** cards only — one image each, never the whole set */
+  listTrainingItems(): Promise<TrainingSummary[]>;
+  /** every screenshot on one reference, for the lightbox and the editor */
+  getTrainingItem(id: string): Promise<TrainingItem | null>;
   saveTrainingItem(item: TrainingItem): Promise<void>;
   deleteTrainingItem(id: string): Promise<boolean>;
 

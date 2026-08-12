@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getRepo } from "@/lib/db";
-import type { TrainingItem } from "@/lib/db/types";
+import type { TrainingItem, TrainingSummary } from "@/lib/db/types";
 import { readAdminSession } from "@/lib/session";
 import { VERTICAL_IDS } from "@/lib/verticals";
 
@@ -22,6 +22,9 @@ export const dynamic = "force-dynamic";
    Postgres will take far more; the reason to cap it is that the listing sends
    every image at once. */
 const MAX_IMAGE_BYTES = 3_000_000;
+/* Per reference, not per image. Eight screenshots of one store is a generous
+   reference; eighty is someone using this as a photo library. */
+const MAX_IMAGES = 8;
 
 const saveSchema = z.object({
   /** absent when adding, present when editing */
@@ -30,12 +33,18 @@ const saveSchema = z.object({
      accepted here without anyone remembering to update a second copy. */
   vertical: z.enum(VERTICAL_IDS),
   note: z.string().max(400).nullable().default(null),
-  /** a data URL — the picture travels in the row */
-  image: z.string().max(MAX_IMAGE_BYTES),
+  /** data URLs — the pictures travel in the row */
+  images: z.array(z.string().max(MAX_IMAGE_BYTES)).min(1).max(MAX_IMAGES),
 });
 
 export type TrainingResponse =
-  | { ok: true; items: TrainingItem[] }
+  | { ok: true; items: TrainingSummary[] }
+  | { ok: false; error: string };
+
+/** One reference with every screenshot on it. Separate from the listing
+    because the listing deliberately does not carry them. */
+export type TrainingItemResponse =
+  | { ok: true; item: TrainingItem }
   | { ok: false; error: string };
 
 async function guard(): Promise<Response | null> {
@@ -46,9 +55,29 @@ async function guard(): Promise<Response | null> {
   );
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const denied = await guard();
   if (denied) return denied;
+
+  /* `?id=` asks for one reference WITH its images — what the lightbox and the
+     editor need. Without it, the cards, which need one image each. */
+  const id = new URL(request.url).searchParams.get("id");
+  if (id) {
+    try {
+      const item = await getRepo().getTrainingItem(id);
+      if (!item)
+        return Response.json(
+          { ok: false, error: "That reference is gone." } satisfies TrainingItemResponse,
+          { status: 404 },
+        );
+      return Response.json({ ok: true, item } satisfies TrainingItemResponse);
+    } catch {
+      return Response.json(
+        { ok: false, error: "Couldn't read that reference." } satisfies TrainingItemResponse,
+        { status: 503 },
+      );
+    }
+  }
 
   try {
     const items = await getRepo().listTrainingItems();
@@ -75,9 +104,9 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!body.image.startsWith("data:image/"))
+  if (!body.images.every((i) => i.startsWith("data:image/")))
     return Response.json(
-      { ok: false, error: "That file isn't an image." } satisfies TrainingResponse,
+      { ok: false, error: "One of those files isn't an image." } satisfies TrainingResponse,
       { status: 400 },
     );
 
@@ -86,15 +115,13 @@ export async function POST(request: Request) {
 
   /* An edit keeps the id it arrived with, so the same endpoint adds and
      updates and the client does not have to know which it is doing. */
-  const existing = body.id
-    ? (await repo.listTrainingItems()).find((t) => t.id === body.id)
-    : undefined;
+  const existing = body.id ? await repo.getTrainingItem(body.id) : null;
 
   const item: TrainingItem = {
     id: body.id ?? newId(),
     vertical: body.vertical,
     note: body.note?.trim() ? body.note.trim() : null,
-    image: body.image,
+    images: body.images,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };

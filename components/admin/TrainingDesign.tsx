@@ -2,30 +2,41 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { TrainingResponse } from "@/app/api/admin/training/route";
-import type { TrainingItem } from "@/lib/db/types";
+import type {
+  TrainingItemResponse,
+  TrainingResponse,
+} from "@/app/api/admin/training/route";
+import type { TrainingItem, TrainingSummary } from "@/lib/db/types";
 import { VERTICAL_IDS, VERTICAL_LABELS, verticalLabel } from "@/lib/verticals";
 import { Button, Icon, Panel, Tag } from "../ui";
 
 /* ==========================================================================
    Training Design.
 
-   Reference screenshots an operator files by industry: a page that got the
+   Reference screenshots an operator files by industry: pages that got the
    structure, the type and the palette right, kept so a build for that industry
-   has something to look at other than the brief.
+   has something to look at other than the brief. A reference is several
+   screenshots, not one — usually the same store's home, product and about, or
+   one page at several widths.
 
    NOTHING IN A BUILD READS THESE YET, and that is deliberate rather than
    unfinished. The collection is being made first and connected second, so it
    can be judged on its own before it is allowed to change what a merchant sees.
+
+   The grid never loads the whole set. Twenty references at eight screenshots
+   each is roughly fifty megabytes, and a card only ever draws one image, so the
+   listing carries a cover and a count and the rest is fetched for the one
+   reference being opened.
    ========================================================================== */
+
+const MAX_EDGE = 1600;
+const QUALITY = 0.82;
+const MAX_IMAGES = 8;
 
 /* A screenshot arrives from a Retina display at two or three megabytes and the
    row carries it as a data URL, so it is re-encoded before it is sent. 1600px
-   is wider than anything in this grid ever renders and wide enough to read the
-   type in the lightbox. */
-const MAX_EDGE = 1600;
-const QUALITY = 0.82;
-
+   is wider than anything in this grid renders and wide enough to read the type
+   in the lightbox. */
 async function downscale(file: File): Promise<string> {
   const bitmap = await createImageBitmap(file);
   const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
@@ -40,27 +51,30 @@ async function downscale(file: File): Promise<string> {
   ctx.drawImage(bitmap, 0, 0, w, h);
   bitmap.close();
 
-  /* JPEG, not PNG. These are photographs of pages; a PNG screenshot of a
-     1600px page is several megabytes where a JPEG is a few hundred KB, and
-     nothing here needs a lossless pixel. */
+  /* JPEG, not PNG. These are pictures of pages; a PNG screenshot at 1600px is
+     several megabytes where a JPEG is a few hundred KB, and nothing here needs
+     a lossless pixel. */
   return canvas.toDataURL("image/jpeg", QUALITY);
 }
 
-function sizeOf(dataUrl: string): string {
-  /* base64 carries 3 bytes in every 4 characters. */
-  const bytes = Math.round((dataUrl.length - dataUrl.indexOf(",") - 1) * 0.75);
-  return bytes > 1_000_000
-    ? `${(bytes / 1_000_000).toFixed(1)} MB`
-    : `${Math.round(bytes / 1000)} KB`;
+async function fetchItem(id: string): Promise<TrainingItem | null> {
+  try {
+    const res = await fetch(`/api/admin/training?id=${encodeURIComponent(id)}`);
+    const body = (await res.json()) as TrainingItemResponse;
+    return body.ok ? body.item : null;
+  } catch {
+    return null;
+  }
 }
 
 /* ---- the screen --------------------------------------------------------- */
 
-export function TrainingDesign({ initial }: { initial: TrainingItem[] }) {
+export function TrainingDesign({ initial }: { initial: TrainingSummary[] }) {
   const [items, setItems] = useState(initial);
   const [filter, setFilter] = useState<string>("all");
   const [editing, setEditing] = useState<TrainingItem | "new" | null>(null);
   const [lightbox, setLightbox] = useState<TrainingItem | null>(null);
+  const [loadingId, setLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const shown = useMemo(
@@ -68,13 +82,28 @@ export function TrainingDesign({ initial }: { initial: TrainingItem[] }) {
     [items, filter],
   );
 
-  /* Only industries that actually have something filed. A dropdown of twelve
-     is a form control; a filter row of twelve when eleven are empty is noise. */
+  /* Only industries that actually have something filed. A dropdown of twelve is
+     a form control; a filter row of twelve when eleven are empty is noise. */
   const present = useMemo(() => {
     const counts = new Map<string, number>();
     for (const item of items) counts.set(item.vertical, (counts.get(item.vertical) ?? 0) + 1);
     return [...counts].sort((a, b) => b[1] - a[1]);
   }, [items]);
+
+  const totalImages = items.reduce((n, i) => n + i.imageCount, 0);
+
+  const open = useCallback(async (id: string, mode: "view" | "edit") => {
+    setError(null);
+    setLoadingId(id);
+    const item = await fetchItem(id);
+    setLoadingId(null);
+    if (!item) {
+      setError("Couldn't load that reference.");
+      return;
+    }
+    if (mode === "view") setLightbox(item);
+    else setEditing(item);
+  }, []);
 
   const remove = useCallback(async (id: string) => {
     setError(null);
@@ -99,7 +128,8 @@ export function TrainingDesign({ initial }: { initial: TrainingItem[] }) {
 
         <span className="text-[12.5px] text-pf-muted">
           {items.length} {items.length === 1 ? "reference" : "references"}
-          {present.length > 0 && ` across ${present.length} industries`}
+          {totalImages > 0 && ` · ${totalImages} screenshots`}
+          {present.length > 0 && ` · ${present.length} industries`}
         </span>
 
         <span className="ml-auto text-[11.5px] text-pf-faint">
@@ -133,13 +163,11 @@ export function TrainingDesign({ initial }: { initial: TrainingItem[] }) {
       {items.length === 0 ? (
         <Panel className="grid place-items-center gap-2 p-10 text-center">
           <Icon name="Images" size={22} />
-          <p className="text-[13.5px] font-semibold text-pf-text">
-            Nothing filed yet
-          </p>
+          <p className="text-[13.5px] font-semibold text-pf-text">Nothing filed yet</p>
           <p className="max-w-md text-[12.5px] leading-relaxed text-pf-muted">
-            Add a screenshot of a page that got it right, and say which industry
-            it belongs to. Structure, type and palette are what these are for —
-            not the products on them.
+            Add screenshots of pages that got it right, and say which industry they
+            belong to. Structure, type and palette are what these are for — not the
+            products on them.
           </p>
         </Panel>
       ) : (
@@ -156,9 +184,10 @@ export function TrainingDesign({ initial }: { initial: TrainingItem[] }) {
               >
                 <Card
                   item={item}
-                  onOpen={() => setLightbox(item)}
-                  onEdit={() => setEditing(item)}
-                  onDelete={() => remove(item.id)}
+                  busy={loadingId === item.id}
+                  onOpen={() => void open(item.id, "view")}
+                  onEdit={() => void open(item.id, "edit")}
+                  onDelete={() => void remove(item.id)}
                 />
               </motion.div>
             ))}
@@ -190,18 +219,19 @@ export function TrainingDesign({ initial }: { initial: TrainingItem[] }) {
 
 function Card({
   item,
+  busy,
   onOpen,
   onEdit,
   onDelete,
 }: {
-  item: TrainingItem;
+  item: TrainingSummary;
+  busy: boolean;
   onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  /* Two presses to delete, in place. A modal for one reference screenshot is
-     more ceremony than the act deserves; doing it silently on one press is
-     less than it deserves. */
+  /* Two presses to delete, in place. A modal for one reference is more ceremony
+     than the act deserves; doing it silently on one press is less. */
   const [confirming, setConfirming] = useState(false);
   useEffect(() => {
     if (!confirming) return;
@@ -217,16 +247,29 @@ function Card({
         aria-label={`Open ${verticalLabel(item.vertical)} reference`}
         className="relative block w-full cursor-zoom-in overflow-hidden bg-pf-bg-deep"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={item.image}
-          alt=""
-          className="aspect-[4/3] w-full object-cover object-top transition-transform duration-500 ease-out group-hover:scale-[1.04]"
-        />
+        {item.cover ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={item.cover}
+            alt=""
+            className="aspect-[4/3] w-full object-cover object-top transition-transform duration-500 ease-out group-hover:scale-[1.04]"
+          />
+        ) : (
+          <div className="grid aspect-[4/3] w-full place-items-center text-pf-faint">
+            <Icon name="Images" size={20} />
+          </div>
+        )}
+
+        {item.imageCount > 1 && (
+          <span className="absolute right-2 top-2 rounded-pf-pill bg-pf-bg-deep/80 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-pf-text backdrop-blur-sm">
+            {item.imageCount} shots
+          </span>
+        )}
+
         <span className="pointer-events-none absolute inset-0 grid place-items-center bg-pf-bg-deep/55 opacity-0 backdrop-blur-[1px] transition-opacity duration-200 group-hover:opacity-100">
           <span className="flex items-center gap-1.5 rounded-pf-pill bg-pf-card px-3 py-1.5 text-[12px] font-semibold text-pf-text">
-            <Icon name="Maximize" size={13} />
-            Preview
+            <Icon name={busy ? "Loader" : "Maximize"} size={13} />
+            {busy ? "Loading…" : "Preview"}
           </span>
         </span>
       </button>
@@ -234,9 +277,6 @@ function Card({
       <div className="grid gap-2 p-3">
         <div className="flex items-center gap-2">
           <Tag>{verticalLabel(item.vertical)}</Tag>
-          <span className="ml-auto shrink-0 text-[11px] tabular-nums text-pf-faint">
-            {sizeOf(item.image)}
-          </span>
         </div>
 
         {item.note && (
@@ -330,12 +370,13 @@ function EditDialog({
 }: {
   item: TrainingItem | null;
   onClose: () => void;
-  onSaved: (items: TrainingItem[]) => void;
+  onSaved: (items: TrainingSummary[]) => void;
 }) {
   const [vertical, setVertical] = useState(item?.vertical ?? VERTICAL_IDS[0]);
   const [note, setNote] = useState(item?.note ?? "");
-  const [image, setImage] = useState(item?.image ?? "");
+  const [images, setImages] = useState<string[]>(item?.images ?? []);
   const [busy, setBusy] = useState(false);
+  const [reading, setReading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -347,25 +388,35 @@ function EditDialog({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const pick = async (file: File | undefined) => {
-    if (!file) return;
+  const add = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
     setError(null);
+    setReading(true);
     try {
-      setImage(await downscale(file));
+      const room = MAX_IMAGES - images.length;
+      const picked = [...files].slice(0, Math.max(0, room));
+      if (picked.length < files.length)
+        setError(`Only ${MAX_IMAGES} screenshots per reference — the rest were skipped.`);
+      const encoded = await Promise.all(picked.map(downscale));
+      setImages((prev) => [...prev, ...encoded]);
     } catch {
-      setError("Couldn't read that file. PNG or JPEG works.");
+      setError("Couldn't read one of those files. PNG or JPEG works.");
+    } finally {
+      setReading(false);
+      /* Cleared so choosing the same file twice in a row still fires a change. */
+      if (fileRef.current) fileRef.current.value = "";
     }
   };
 
   const save = async () => {
-    if (!image || busy) return;
+    if (images.length === 0 || busy) return;
     setBusy(true);
     setError(null);
     try {
       const res = await fetch("/api/admin/training", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: item?.id, vertical, note: note.trim() || null, image }),
+        body: JSON.stringify({ id: item?.id, vertical, note: note.trim() || null, images }),
       });
       const body = (await res.json()) as TrainingResponse;
       if (body.ok) onSaved(body.items);
@@ -399,9 +450,9 @@ function EditDialog({
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.97, y: 8 }}
         transition={{ duration: 0.18 }}
-        className="relative z-10 w-full max-w-lg"
+        className="relative z-10 w-full max-w-2xl"
       >
-        <Panel className="grid max-h-[85vh] gap-3 overflow-y-auto p-4">
+        <Panel className="grid max-h-[86vh] gap-3 overflow-y-auto p-4">
           <div className="flex items-center gap-2">
             <h2 className="text-[15px] font-semibold text-pf-text">
               {item ? "Edit reference" : "Add reference"}
@@ -435,42 +486,64 @@ function EditDialog({
 
           <div className="grid gap-1.5">
             <span className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-pf-faint">
-              Screenshot
+              Screenshots{" "}
+              <span className="normal-case tracking-normal text-pf-faint">
+                {images.length}/{MAX_IMAGES}
+              </span>
             </span>
 
             <input
               ref={fileRef}
               type="file"
               accept="image/*"
+              multiple
               className="hidden"
-              onChange={(e) => void pick(e.target.files?.[0])}
+              onChange={(e) => void add(e.target.files)}
             />
 
-            {image ? (
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="group relative overflow-hidden rounded-pf-md border border-pf-border"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={image} alt="" className="max-h-64 w-full object-cover object-top" />
-                <span className="absolute inset-0 grid place-items-center bg-pf-bg-deep/60 text-[12px] font-semibold text-pf-text opacity-0 transition-opacity group-hover:opacity-100">
-                  Replace image
-                </span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="grid place-items-center gap-1.5 rounded-pf-md border border-dashed border-pf-border p-8 text-pf-muted transition-colors hover:border-pf-border-hi hover:text-pf-text"
-              >
-                <Icon name="Upload" size={18} />
-                <span className="text-[12.5px] font-semibold">Choose an image</span>
-                <span className="text-[11px] text-pf-faint">
-                  Resized to {MAX_EDGE}px before it is saved
-                </span>
-              </button>
-            )}
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {images.map((src, i) => (
+                <div
+                  key={i}
+                  className="group relative overflow-hidden rounded-pf-md border border-pf-border"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={src} alt="" className="aspect-[4/3] w-full object-cover object-top" />
+                  {i === 0 && (
+                    <span className="absolute left-1 top-1 rounded-pf-pill bg-pf-bg-deep/80 px-1.5 py-0.5 text-[10px] font-semibold text-pf-text">
+                      Cover
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
+                    aria-label="Remove screenshot"
+                    className="absolute inset-0 grid place-items-center bg-pf-bg-deep/70 text-pf-danger opacity-0 transition-opacity group-hover:opacity-100"
+                  >
+                    <Icon name="Trash2" size={16} />
+                  </button>
+                </div>
+              ))}
+
+              {images.length < MAX_IMAGES && (
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={reading}
+                  className="grid aspect-[4/3] place-items-center gap-1 rounded-pf-md border border-dashed border-pf-border text-pf-muted transition-colors hover:border-pf-border-hi hover:text-pf-text disabled:opacity-60"
+                >
+                  <Icon name={reading ? "Loader" : "Upload"} size={16} />
+                  <span className="text-[11px] font-semibold">
+                    {reading ? "Reading…" : images.length ? "Add more" : "Choose images"}
+                  </span>
+                </button>
+              )}
+            </div>
+
+            <span className="text-[11px] text-pf-faint">
+              Pick several at once. Each is resized to {MAX_EDGE}px before it is saved.
+              The first one is the card&apos;s cover.
+            </span>
           </div>
 
           <label className="grid gap-1.5">
@@ -497,7 +570,7 @@ function EditDialog({
             <Button variant="quiet" onClick={onClose}>
               Cancel
             </Button>
-            <Button onClick={save} disabled={!image || busy} icon="Check">
+            <Button onClick={save} disabled={images.length === 0 || busy} icon="Check">
               {busy ? "Saving…" : item ? "Save changes" : "Add reference"}
             </Button>
           </div>
@@ -510,13 +583,18 @@ function EditDialog({
 /* ---- lightbox ----------------------------------------------------------- */
 
 function Lightbox({ item, onClose }: { item: TrainingItem; onClose: () => void }) {
+  const [index, setIndex] = useState(0);
+  const count = item.images.length;
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
+      if (e.key === "ArrowRight") setIndex((i) => (i + 1) % count);
+      if (e.key === "ArrowLeft") setIndex((i) => (i - 1 + count) % count);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, count]);
 
   return (
     <motion.div
@@ -540,22 +618,48 @@ function Lightbox({ item, onClose }: { item: TrainingItem; onClose: () => void }
         {item.note && (
           <span className="min-w-0 truncate text-[12.5px] text-pf-muted">{item.note}</span>
         )}
+
+        {count > 1 && (
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setIndex((i) => (i - 1 + count) % count)}
+              aria-label="Previous screenshot"
+              className="grid size-9 place-items-center rounded-pf-md border border-pf-border text-pf-body transition-colors hover:border-pf-border-hi hover:text-pf-text"
+            >
+              <Icon name="ChevronLeft" size={15} />
+            </button>
+            <span className="text-[12px] tabular-nums text-pf-muted">
+              {index + 1} / {count}
+            </span>
+            <button
+              type="button"
+              onClick={() => setIndex((i) => (i + 1) % count)}
+              aria-label="Next screenshot"
+              className="grid size-9 place-items-center rounded-pf-md border border-pf-border text-pf-body transition-colors hover:border-pf-border-hi hover:text-pf-text"
+            >
+              <Icon name="ChevronRight" size={15} />
+            </button>
+          </div>
+        )}
+
         <button
           type="button"
           onClick={onClose}
           aria-label="Close preview"
-          className="ml-auto grid size-9 place-items-center rounded-pf-md border border-pf-border text-pf-body transition-colors hover:border-pf-border-hi hover:text-pf-text"
+          className={`${count > 1 ? "" : "ml-auto"} grid size-9 shrink-0 place-items-center rounded-pf-md border border-pf-border text-pf-body transition-colors hover:border-pf-border-hi hover:text-pf-text`}
         >
           <Icon name="X" size={15} />
         </button>
       </div>
 
-      {/* Scrolls rather than fits: these are full pages, and a whole page made
-          to fit a screen is a page nobody can read the type on. */}
+      {/* Scrolls rather than fits: these are whole pages, and a page made to fit
+          a screen is a page nobody can read the type on — which is the only
+          reason to look at one of these. */}
       <div className="relative z-10 min-h-0 flex-1 overflow-auto p-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={item.image}
+          src={item.images[index]}
           alt=""
           className="mx-auto w-full max-w-5xl rounded-pf-md"
         />

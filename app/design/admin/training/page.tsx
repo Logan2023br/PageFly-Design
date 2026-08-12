@@ -20,6 +20,7 @@ export default async function AdminTrainingPage() {
 
   /* An unreachable database should not be a crashed screen: the operator can
      still see where they are and what this is for. */
+  /* Covers and counts, never the whole set — see lib/db/types.ts. */
   const items = await getRepo().listTrainingItems().catch(() => []);
 
   return (
