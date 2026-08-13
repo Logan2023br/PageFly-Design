@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getProvider, isAiEnabled } from "./provider";
+import { getProvider, isAiEnabled, providerName } from "./provider";
 import { loadSkills } from "./skills";
 import { DESIGN_SYSTEM } from "./designPrompt";
 import { designTreeSchema, walk, type DesignTree } from "../design/schema";
@@ -50,6 +50,8 @@ export type DesignOutcome =
 
 const NOTHING = { input: 0, output: 0 };
 
+const TIMEOUT_MS = 420_000;
+
 export async function designPageTree(
   input: DesignInput,
   signal?: AbortSignal,
@@ -88,12 +90,21 @@ export async function designPageTree(
     completion = await provider.complete({
       system,
       user,
-      /* A full page tree runs 6-14k tokens. Cutting it short costs the whole
-         page, since a truncated tree is not parseable JSON. */
-      maxTokens: 16_000,
+      /* Measured, per provider, and not interchangeable. A truncated tree is
+         not parseable JSON, so running out of budget costs the whole page.
+
+         Haiku finishes a page in about 8,600 output tokens. DeepSeek v4-flash
+         is a reasoning model whose billed output includes its own thinking —
+         14k to 22k for the same page — so at 16,000 it hit the ceiling and
+         returned truncated JSON on every attempt. Three runs, three failures,
+         and the failure looks like the model being incapable rather than the
+         budget being wrong. */
+      maxTokens: providerName() === "deepseek" ? 32_000 : 16_000,
+      /* A DeepSeek page measured 100-172 seconds against Haiku's 45, so the
+         old 240s ceiling left almost no headroom on a slow one. */
       signal: signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(240_000)])
-        : AbortSignal.timeout(240_000),
+        ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])
+        : AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (err) {
     return { used: false, reason: (err as Error).message.slice(0, 200), usage: NOTHING };

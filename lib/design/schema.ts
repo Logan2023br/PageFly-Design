@@ -97,8 +97,18 @@ const button = z.object({
 const image = z.object({
   type: z.literal("image"),
   /** English search terms for the stock library — "potter shaping clay on a
-      wheel", not "image1". Resolved to a real photograph before render. */
-  query: z.string().min(2).max(120),
+      wheel", not "image1". Resolved to a real photograph before render.
+
+      Trimmed rather than rejected. This is a search phrase, never displayed, so
+      a model that writes a sentence where a phrase belongs should cost the
+      photograph at worst — and it used to cost the whole page: one over-long
+      query failed validation and the merchant got the deterministic layout
+      back instead. */
+  query: z
+    .string()
+    .max(400)
+    .catch("")
+    .transform((v) => v.trim().slice(0, 160)),
   /** height / width */
   ratio: z.number().min(0.2).max(4).default(1),
   ...styled,
