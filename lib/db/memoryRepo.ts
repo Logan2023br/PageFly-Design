@@ -180,9 +180,7 @@ export function createMemoryRepo(file: string): Repo {
       sync();
       /* Same rule as the postgres driver: the id comes from the brief, so a
          rebuild lands on the same record and must REPLACE what it holds.
-         Returning early kept the first build's snapshot for ever, which showed
-         up as a Library full of decks the merchant had already replaced.
-         created_at stays as it was — a re-post should not reorder the list. */
+         created_at stays as it was — a re-save should not reorder the list. */
       const existing = data.runs.find((r) => r.id === run.id);
       if (existing) {
         existing.snapshot = run.snapshot;
@@ -190,10 +188,16 @@ export function createMemoryRepo(file: string): Repo {
         existing.tokens = run.tokens;
         existing.sell = run.sell;
         existing.styleLabel = run.styleLabel;
-        flush();
-        return;
+      } else {
+        data.runs.push({ ...run });
       }
-      data.runs.push({ ...run });
+
+      /* Outside the branch, and that was a bug worth the trouble it caused:
+         updating an existing run returned before this ran, so a build
+         cancelled at two pages and then finished at five kept a page count of
+         two. The allowance under-charged and the Library's own count disagreed
+         with the deck it was showing. The postgres driver always ran both
+         statements; this one did not. */
       for (const p of pages) {
         if (!data.runPages.some((x) => x.runId === p.runId && x.pageId === p.pageId))
           data.runPages.push({ ...p });

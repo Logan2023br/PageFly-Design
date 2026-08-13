@@ -244,12 +244,24 @@ async function run(
       Array.from({ length: Math.min(CONCURRENCY, plan.length) }, worker),
     );
 
+    const ordered = inOrder(pages);
+
     if (signal.aborted) {
-      await repo.updateJob(job.id, { status: "cancelled" });
+      /* Cancelling stops the build; it does not throw away what the build
+         already produced. Five of eleven pages cost five pages' worth of model
+         time and the merchant waited for them — dropping them on the floor is
+         the one outcome nobody asked for. They go to the Library exactly as a
+         finished build's would, and the allowance is charged for them, because
+         they are pages the merchant can use. */
+      if (ordered.length > 0) await saveRun(job, brief, variants, ordered, tokens);
+      await repo.updateJob(job.id, {
+        status: "cancelled",
+        pages: ordered,
+        failures,
+        tokens,
+      });
       return;
     }
-
-    const ordered = inOrder(pages);
 
     /* The run is saved HERE, not by the browser. A merchant who closed the tab
        still finds the deck in their Library, which is the reason any of this
@@ -290,14 +302,15 @@ function inOrder(pages: PageMockup[]): PageMockup[] {
  * agree exactly: a build saved by the server and the same build re-posted by
  * a browser have to collapse onto one row, or one deck becomes two.
  */
-function runId(
-  domain: string,
-  payload: string,
-  pages: { pageId: string; index: number }[],
-): string {
-  const material = `${domain}|${payload}|${pages
-    .map((p) => `${p.index}:${p.pageId}`)
-    .join(",")}`;
+function runId(domain: string, payload: string): string {
+  /* The BRIEF alone, not the pages delivered.
+
+     Including the delivered list meant a build cancelled at five pages and the
+     same brief rebuilt to eleven were two different rows — so the Library
+     showed the five twice and the allowance was charged sixteen for eleven
+     pages. Keyed on the brief, the finished build lands on the same row and
+     replaces the partial one, and run_pages adds only what was missing. */
+  const material = `${domain}|${payload}`;
 
   let a = 0x811c9dc5;
   let b = 0x01000193;
@@ -324,7 +337,7 @@ async function saveRun(
     index: p.index,
   }));
 
-  const id = runId(job.domain, payload, rows);
+  const id = runId(job.domain, payload);
 
   const run: RunRecord = {
     id,

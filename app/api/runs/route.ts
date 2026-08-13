@@ -133,7 +133,7 @@ export async function POST(request: Request) {
      With a content id the database refuses the duplicate no matter how many
      times a client asks. Two builds of the identical brief collapsing into one
      row is correct — they are the same deck. */
-  const id = runId(account.domain, body.payload, body.pages);
+  const id = runId(account.domain, body.payload);
 
   const snapshot = body.snapshot ?? null;
   /* 1 MB was set when a page was blocks and a five-page deck was 19 KB. A page
@@ -183,14 +183,15 @@ export async function POST(request: Request) {
  * single 32-bit FNV over a store's runs would start colliding in the hundreds,
  * and a collision here silently drops someone's build.
  */
-function runId(
-  domain: string,
-  payload: string,
-  pages: { pageId: string; index: number }[],
-): string {
-  const material = `${domain}|${payload}|${pages
-    .map((p) => `${p.index}:${p.pageId}`)
-    .join(",")}`;
+function runId(domain: string, payload: string): string {
+  /* The BRIEF alone, not the pages delivered.
+
+     Including the delivered list meant a build cancelled at five pages and the
+     same brief rebuilt to eleven were two different rows — so the Library
+     showed the five twice and the allowance was charged sixteen for eleven
+     pages. Keyed on the brief, the finished build lands on the same row and
+     replaces the partial one, and run_pages adds only what was missing. */
+  const material = `${domain}|${payload}`;
 
   let a = 0x811c9dc5;
   let b = 0x01000193;
