@@ -37,10 +37,16 @@ export default async function AdminStorePagesPage({
 
   const rows = await repo.listRuns(domain);
   const runs: RunSummary[] = rows.map((r) => ({
-    /* Deliberately null. Admin lists a store's builds — page names, counts,
-       spend — and never renders a mockup, so shipping thirty page trees per
-       row would be megabytes of payload nothing on this screen reads. */
-    snapshot: null,
+    /* This screen renders LibraryContent — the same component the merchant's
+       own Library uses — so it draws every mockup. It was passed null on the
+       claim that admin never renders one, which was simply wrong, and the
+       effect was the same as the Library bug: with no snapshot the deck is
+       replayed through the deterministic generator, so an operator reviewing a
+       store saw generator pages and not what the merchant was actually shown.
+
+       Bounded by the page allowance rather than unbounded — a store can only
+       save as many pages as its limit. */
+    snapshot: Array.isArray(r.snapshot) ? r.snapshot : null,
     id: r.id,
     createdAt: r.createdAt,
     payload: r.payload,
