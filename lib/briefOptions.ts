@@ -144,12 +144,6 @@ export const PROMPT_SNIPPETS: {
   snippet: string;
 }[] = [
   {
-    id: "palette",
-    label: "Colors",
-    icon: "Palette",
-    snippet: "Colors: deep green, warm cream, a little brass.",
-  },
-  {
     id: "audience",
     label: "Audience",
     icon: "Star",
