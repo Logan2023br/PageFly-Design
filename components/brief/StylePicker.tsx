@@ -4,12 +4,11 @@ import { motion } from "framer-motion";
 import { VISUAL_STYLES, styleSwatch, type VisualStyleId } from "@/lib/styleTokens";
 import { useStore } from "@/lib/store";
 import { Icon, SectionCard } from "../ui";
-import { BrandColors } from "./BrandColors";
 
 /* The card preview: three palette dots plus a type sample rendered in the
    style's own display face. The point is that the choice reads visually — the
    word "Neubrutalist" tells a merchant much less than seeing it. */
-function Swatch({ id, overridden }: { id: VisualStyleId; overridden: boolean }) {
+function Swatch({ id }: { id: VisualStyleId }) {
   const s = styleSwatch(id);
   return (
     <div
@@ -29,14 +28,7 @@ function Swatch({ id, overridden }: { id: VisualStyleId; overridden: boolean }) 
       >
         Aa
       </span>
-      {/* The dots go quiet once brand colours exist, because they are no
-          longer what the page will use. The style still supplies the type and
-          the shape — which is why the card is not disabled, only its palette
-          is shown as spent. */}
-      <span
-        className="flex gap-1 transition-opacity duration-200"
-        style={{ opacity: overridden ? 0.22 : 1 }}
-      >
+      <span className="flex gap-1">
         {s.dots.map((d, i) => (
           <span
             key={i}
@@ -52,8 +44,6 @@ function Swatch({ id, overridden }: { id: VisualStyleId; overridden: boolean }) 
 export function StylePicker() {
   const selected = useStore((s) => s.draft.visualStyle);
   const setStyle = useStore((s) => s.setStyle);
-  const brandColors = useStore((s) => s.draft.brandColors);
-  const overridden = brandColors.length > 0;
 
   return (
     <SectionCard
@@ -62,7 +52,6 @@ export function StylePicker() {
       title="Pick a visual style"
       help="Sets the palette, type and shape of every page."
     >
-      <div className="grid gap-3.5">
       <div
         role="radiogroup"
         aria-label="Visual style"
@@ -86,7 +75,7 @@ export function StylePicker() {
                   : "border-pf-border bg-pf-card hover:border-pf-border-hi"
               }`}
             >
-              <Swatch id={style.id} overridden={overridden} />
+              <Swatch id={style.id} />
               {/* Label only. The swatch is the description — that was the point
                   of rendering a live preview rather than naming the style. The
                   written blurb is the card's tooltip. */}
@@ -108,18 +97,6 @@ export function StylePicker() {
             </motion.button>
           );
         })}
-      </div>
-
-      {/* Under the styles, because this is what overrules them. At the bottom
-          of the free-text prompt it read as a footnote to a description. */}
-      <BrandColors />
-
-      {overridden && (
-        <p className="text-[11.5px] leading-relaxed text-pf-faint">
-          Your colours are driving the palette. The style still sets the type
-          and the shape — remove every colour to hand the palette back.
-        </p>
-      )}
       </div>
     </SectionCard>
   );
