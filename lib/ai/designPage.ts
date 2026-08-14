@@ -1,6 +1,7 @@
 "use client";
 
 import { designTreeSchema } from "../design/schema";
+import { VISUAL_STYLES } from "../styleTokens";
 import type { Brief } from "../validation";
 import type { PageMockup } from "../generate/types";
 import type { AiDesignResponse } from "@/app/api/ai/design/route";
@@ -26,6 +27,8 @@ export type DesignResult = {
   reason?: string;
 };
 
+const styleDef = (id: string) => VISUAL_STYLES.find((s) => s.id === id);
+
 export async function designPage(
   page: PageMockup,
   brief: Brief,
@@ -41,6 +44,10 @@ export async function designPage(
         prompt: brief.prompt,
         storeType: brief.storeType,
         style: brief.visualStyle,
+        styleLabel: styleDef(brief.visualStyle)?.label ?? brief.visualStyle,
+        styleBlurb: styleDef(brief.visualStyle)?.blurb ?? "",
+        density: page.tokens.density,
+        reference: page.refHints,
         pageLabel: page.label,
         pageType: page.pageType,
         /* The palette the merchant already chose. Handing it over is what keeps

@@ -23,6 +23,21 @@ const bodySchema = z.object({
   prompt: z.string().max(4000).default(""),
   storeType: z.string().max(60).default(""),
   style: z.string().max(60).default(""),
+  styleLabel: z.string().max(60).default(""),
+  styleBlurb: z.string().max(200).default(""),
+  density: z.string().max(20).default("normal"),
+  reference: z
+    .object({
+      gridColumns: z.number().nullable(),
+      heroLayout: z.string().nullable(),
+      density: z.string().nullable(),
+      sectionCount: z.number().nullable(),
+      alternating: z.boolean(),
+      dark: z.boolean().nullable(),
+      present: z.boolean(),
+    })
+    .nullable()
+    .default(null),
   pageLabel: z.string().max(120).default(""),
   pageType: z.string().max(60).default("home"),
   /** the palette and faces the merchant already chose — the model works inside
@@ -86,6 +101,10 @@ export async function POST(request: Request) {
     prompt: body.prompt,
     storeType: body.storeType,
     style: body.style,
+    styleLabel: body.styleLabel,
+    styleBlurb: body.styleBlurb,
+    density: body.density,
+    reference: body.reference,
     pageLabel: body.pageLabel,
     pageType: body.pageType,
     tokens: { ...FALLBACK_TOKENS, ...body.tokens },

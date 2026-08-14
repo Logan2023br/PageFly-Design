@@ -5,6 +5,7 @@ import { getRepo } from "../db";
 import type { JobRecord, RunPageRecord, RunRecord } from "../db/types";
 import { buildPage, expandSelection } from "../generate/mock";
 import { CHROME_KINDS, INCLUDE_CHROME } from "../pageChrome";
+import { VISUAL_STYLES } from "../styleTokens";
 import type { GenerateFailure, PageMockup } from "../generate/types";
 import { PAGE_BY_ID } from "../pageCatalog";
 import { encodeRunPayload } from "../runPayload";
@@ -42,6 +43,9 @@ import type { Brief } from "../validation";
     Four keeps a five-page deck about as fast as it was while bounding the
     worst case. */
 const CONCURRENCY = 4;
+
+/** The card the merchant actually clicked, by id. */
+const styleDef = (id: string) => VISUAL_STYLES.find((s) => s.id === id);
 
 /** Jobs running in THIS process, so cancel has something to signal. */
 const live = new Map<string, AbortController>();
@@ -194,6 +198,12 @@ async function run(
             prompt: brief.prompt,
             storeType: brief.storeType,
             style: brief.visualStyle,
+            styleLabel: styleDef(brief.visualStyle)?.label ?? brief.visualStyle,
+            styleBlurb: styleDef(brief.visualStyle)?.blurb ?? "",
+            density: base.tokens.density,
+            /* Measured from the merchant's uploads. It was already on the page
+               and went no further than the deterministic generator. */
+            reference: base.refHints,
             pageLabel: base.label,
             pageType: base.pageType,
             tokens: {

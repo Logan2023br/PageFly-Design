@@ -25,7 +25,25 @@ export type DesignInput = {
   sell: string;
   prompt: string;
   storeType: string;
+  /** the style's id, kept for logging */
   style: string;
+  /** the name the merchant actually picked, e.g. "Neubrutalist" */
+  styleLabel: string;
+  /** the one line printed under that card, e.g. "Hard edges, flat colour" */
+  styleBlurb: string;
+  /** the style's spacing pressure: airy | normal | tight */
+  density: string;
+  /** what the merchant's reference screenshots turned out to be, or null when
+      they uploaded none */
+  reference: {
+    gridColumns: number | null;
+    heroLayout: string | null;
+    density: string | null;
+    sectionCount: number | null;
+    alternating: boolean;
+    dark: boolean | null;
+    present: boolean;
+  } | null;
   pageLabel: string;
   pageType: string;
   tokens: {
@@ -92,6 +110,14 @@ export async function designPageTree(
     input.storeType && `Store type: ${input.storeType}`,
     input.prompt && `Merchant's own words: ${input.prompt}`,
     ``,
+    /* The style has a NAME, and it was being withheld. The model received the
+       colours a style resolves to and never the word "Neubrutalist" — so it
+       had the palette of a hard-edged brutalist page and no reason to make one.
+       The name and its one-line description carry more design intent than five
+       hex codes do. */
+    `Visual style: ${input.styleLabel}${input.styleBlurb ? ` — ${input.styleBlurb}` : ""}`,
+    `Spacing pressure: ${input.density} (airy = generous padding, tight = dense)`,
+    ``,
     `Design this page: ${input.pageLabel || input.pageType}`,
     ``,
     `Palette and faces — work inside these, do not introduce others.`,
@@ -112,6 +138,11 @@ export async function designPageTree(
     t.fontBody && `  body font-family: ${t.fontBody}`,
     `  corner radius ${t.radius}px`,
     ``,
+    /* The merchant uploaded pages they liked and we measured them. Those
+       measurements used to stop at the server and only reach the deterministic
+       generator — so the whole Reference images step changed nothing about the
+       page the model designed. */
+    ...referenceLines(input.reference),
     `Return the JSON object now.`,
   ]
     .filter(Boolean)
@@ -192,6 +223,35 @@ export async function designPageTree(
     credits: [...byName].map(([name, link]) => ({ name, link })),
     usage: completion.usage,
   };
+}
+
+/**
+ * What the merchant's reference screenshots were measured to be.
+ *
+ * Stated as things that ARE true of the references rather than as orders, and
+ * the model is told they are a preference rather than a spec — a reference is a
+ * page the merchant liked, not a page they are asking to have copied.
+ */
+function referenceLines(ref: DesignInput["reference"]): string[] {
+  if (!ref?.present) return [];
+
+  const facts = [
+    ref.heroLayout && `the hero is ${ref.heroLayout}`,
+    ref.gridColumns && `grids run ${ref.gridColumns} columns`,
+    ref.density && `the spacing is ${ref.density}`,
+    ref.sectionCount && `the page has about ${ref.sectionCount} sections`,
+    ref.alternating && "sections alternate light and dark",
+    ref.dark === true && "the design is dark",
+    ref.dark === false && "the design is light",
+  ].filter(Boolean);
+
+  if (facts.length === 0) return [];
+
+  return [
+    `The merchant uploaded pages they like. Measured, those pages are: ${facts.join(", ")}.`,
+    `Follow them where they do not fight the brief or the rules above. They are a preference, not a specification.`,
+    ``,
+  ];
 }
 
 /** Models wrap JSON in prose or fences more often than they should. */
