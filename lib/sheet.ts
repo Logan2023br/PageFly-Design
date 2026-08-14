@@ -154,29 +154,17 @@ const DEFAULT_PAGE_LIMIT = Number(process.env.DEFAULT_PAGE_LIMIT ?? FALLBACK_PAG
 /**
  * "09/30" -> 30. A bare "12" is read as a limit, not as usage.
  *
- * Falls back to the plan column, because some sheets carry the allowance there
- * and nowhere else: a row whose Plan reads "10-slot" is a ten-page store, and
- * without this it silently became a thirty-page one — the sheet said ten, the
- * app said thirty, and nothing anywhere reported a disagreement.
- *
- * Matched against `<number> slot` specifically rather than "first number in the
- * cell". A plan named "Shopify Plus 2024" holds a number that is not an
- * allowance, and guessing wrong here hands out pages nobody paid for.
+ * The PLAN column is deliberately not consulted. A row reading "10-slot" or
+ * "30-slot" describes what the merchant bought in PageFly, which is a different
+ * thing from how many mockups this tool gives them — every plan gets the same
+ * allowance here. Inferring one from the other would hand a 30-slot merchant
+ * three times the quota on the strength of a label nobody meant that way.
  */
-function readPageLimit(cell: string | undefined, plan?: string): number {
-  if (cell) {
-    const parts = cell.split("/");
-    const limit = Number(parts[parts.length - 1]?.replace(/[^\d]/g, ""));
-    if (Number.isFinite(limit) && limit > 0) return limit;
-  }
-
-  const slots = /(\d+)\s*-?\s*slots?\b/i.exec(plan ?? "");
-  if (slots) {
-    const n = Number(slots[1]);
-    if (Number.isFinite(n) && n > 0) return n;
-  }
-
-  return DEFAULT_PAGE_LIMIT;
+function readPageLimit(cell: string | undefined): number {
+  if (!cell) return DEFAULT_PAGE_LIMIT;
+  const parts = cell.split("/");
+  const limit = Number(parts[parts.length - 1]?.replace(/[^\d]/g, ""));
+  return Number.isFinite(limit) && limit > 0 ? limit : DEFAULT_PAGE_LIMIT;
 }
 
 function readInt(cell: string | undefined): number | null {
@@ -218,7 +206,7 @@ export function rowsToStores(rows: string[][]): SheetRow[] {
         country: cell("country") ?? null,
         userType: cell("userType") ?? null,
         status: cell("status") ?? null,
-        pageLimit: readPageLimit(cell("pages"), cell("shopifyPlan")),
+        pageLimit: readPageLimit(cell("pages")),
         firstSeenAt: null,
         lastSeenAt: null,
         blocked: false,
