@@ -9,8 +9,8 @@ import { BrandColors } from "./BrandColors";
 /* The card preview: three palette dots plus a type sample rendered in the
    style's own display face. The point is that the choice reads visually — the
    word "Neubrutalist" tells a merchant much less than seeing it. */
-function Swatch({ id, overridden }: { id: VisualStyleId; overridden: boolean }) {
-  const s = styleSwatch(id);
+function Swatch({ id, brandColors }: { id: VisualStyleId; brandColors: string[] }) {
+  const s = styleSwatch(id, brandColors);
   return (
     <div
       className="flex h-[68px] items-end justify-between gap-2 rounded-pf-md px-3 pb-2.5 pt-3"
@@ -29,14 +29,11 @@ function Swatch({ id, overridden }: { id: VisualStyleId; overridden: boolean }) 
       >
         Aa
       </span>
-      {/* The dots go quiet once brand colours exist, because they are no
-          longer what the page will use. The style still supplies the type and
-          the shape — which is why the card is not disabled, only its palette
-          is shown as spent. */}
-      <span
-        className="flex gap-1 transition-opacity duration-200"
-        style={{ opacity: overridden ? 0.22 : 1 }}
-      >
+      {/* The colours the page will actually use, so the first dot becomes the
+          merchant's the moment they add one. Dimming these instead was the
+          wrong answer: it said the style's palette had been dropped when in
+          fact only its accent had, and it left the old colour on screen. */}
+      <span className="flex gap-1">
         {s.dots.map((d, i) => (
           <span
             key={i}
@@ -86,7 +83,7 @@ export function StylePicker() {
                   : "border-pf-border bg-pf-card hover:border-pf-border-hi"
               }`}
             >
-              <Swatch id={style.id} overridden={overridden} />
+              <Swatch id={style.id} brandColors={brandColors} />
               {/* Label only. The swatch is the description — that was the point
                   of rendering a live preview rather than naming the style. The
                   written blurb is the card's tooltip. */}
@@ -116,8 +113,9 @@ export function StylePicker() {
 
       {overridden && (
         <p className="text-[11.5px] leading-relaxed text-pf-faint">
-          Your colours are driving the palette. The style still sets the type
-          and the shape — remove every colour to hand the palette back.
+          Your first colour is the accent on every card above. A second one
+          tints the alternating band. Background, text and type stay with the
+          style — remove your colours to hand the accent back.
         </p>
       )}
       </div>
