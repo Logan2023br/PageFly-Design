@@ -32,7 +32,15 @@ import {
   hoverClass,
   motionClasses,
 } from "./motion";
-import { walk, type Anim, type Css, type DesignNode, type DesignSection, type DesignTree } from "./schema";
+import {
+  childrenOf,
+  walk,
+  type Anim,
+  type Css,
+  type DesignNode,
+  type DesignSection,
+  type DesignTree,
+} from "./schema";
 
 /* ==========================================================================
    Design tree → .pagefly, with no DOM in the path.
@@ -654,6 +662,31 @@ function splitBleed(css: Css | undefined): { bleed: Css; rest: Css | undefined }
   return { bleed, rest: Object.keys(rest).length ? rest : undefined };
 }
 
+/**
+ * Whether this band's own layout blocks have to be forced to full width.
+ *
+ * Only three things need it, and they need it for the same reason: `product`,
+ * `productList` and `accordion` expand into PageFly subtrees that size
+ * themselves from their own contents rather than from the block holding them,
+ * so the wrapper shrink-wraps and the grid lands narrow in the middle of the
+ * band.
+ *
+ * Everywhere else the force is wrong. A `width: 100% !important` on a block
+ * holding a centred headline overrides whatever width the tree asked for — and
+ * `!important` means the merchant cannot take it back from the editor's own
+ * width control, only by finding it in the CSS panel. Wrong, unremovable and
+ * hidden is a bad combination to apply to sections that never needed it.
+ */
+const FILL_TYPES = new Set(["product", "productList", "accordion"]);
+
+function needsFill(section: DesignSection): boolean {
+  /* The whole subtree, not the direct children: a product grid two columns deep
+     inside a row still drags the wrapper narrow. */
+  const has = (n: DesignNode | DesignSection): boolean =>
+    FILL_TYPES.has(n.type) || childrenOf(n).some(has);
+  return section.children.some(has);
+}
+
 export function pageflyFromTree(
   tree: DesignTree,
   page: { name: string; bg: string; ink: string; fontBody: string },
@@ -664,14 +697,15 @@ export function pageflyFromTree(
      state it rather than inherit whatever the merchant's theme sets. */
   opts = { ...opts, ink: opts.ink ?? page.ink };
   const sections = tree.sections.map((section) => {
+    const fills = needsFill(section);
     const kids = section.children
       .map((c) => {
         const emitted = emit(c, directionOf(section, styleAt(section, "all")), opts);
         /* A row or col sitting straight under the content block is the band's
-           own layout — it has to claim the full width or the block collapses to
-           its content. Leaves are left alone: a button forced to 100% stretches
-           across the page. */
-        return emitted && (c.type === "row" || c.type === "col")
+           own layout, and in a band built around a composite it has to claim the
+           full width or the block collapses to its content. Leaves are left
+           alone: a button forced to 100% stretches across the page. */
+        return emitted && fills && (c.type === "row" || c.type === "col")
           ? { ...emitted, styleData: filling(emitted.styleData) }
           : emitted;
       })
