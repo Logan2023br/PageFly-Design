@@ -809,19 +809,7 @@ export function styleToTokens(
 }
 
 /** The 3 dots + type sample shown on each style card in the brief form. */
-/**
- * What a style card should show — the colours the page will ACTUALLY use.
- *
- * Derived from `styleToTokens` rather than from the style's own tokens, so the
- * dots follow the merchant's brand colours the moment they add one. Showing the
- * style's raw palette alongside a brand colour picker was telling them their
- * choice had not been taken: the first dot is the accent, and the accent is
- * exactly what a brand colour replaces.
- */
-export function styleSwatch(
-  style: VisualStyleId,
-  brandColors: string[] = [],
-): {
+export function styleSwatch(style: VisualStyleId): {
   dots: [string, string, string];
   font: string;
   weight: number;
@@ -830,7 +818,7 @@ export function styleSwatch(
   bg: string;
   ink: string;
 } {
-  const t = styleToTokens(style, brandColors);
+  const t = STYLE_BY_ID[style].tokens;
   return {
     dots: [t.accent, t.surfaceAlt, t.ink],
     font: t.fontDisplay,
