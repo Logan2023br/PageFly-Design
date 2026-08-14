@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, MotionConfig } from "framer-motion";
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import type { Account } from "@/lib/account";
 import type { Brief } from "@/lib/validation";
@@ -199,9 +200,14 @@ export function LibraryScreen({
           <div className="relative mx-auto w-full max-w-[1600px] px-4 pb-8 pt-4 sm:px-6 sm:pt-6">
             <header className="flex items-center justify-between gap-4 border-b border-pf-border pb-3.5">
               <div className="flex min-w-0 items-center gap-2.5">
-                <span className="grid size-7 shrink-0 place-items-center rounded-pf-sm bg-pf-primary text-white">
-                  <Icon name="Layers" size={15} />
-                </span>
+                <Image
+                  src="/pagefly-icon.png"
+                  alt=""
+                  width={28}
+                  height={28}
+                  className="size-7 shrink-0 rounded-pf-sm"
+                  priority
+                />
                 <span className="hidden font-display text-[15px] font-semibold tracking-[-0.02em] text-pf-text sm:inline">
                   PageFly <span className="text-pf-muted">Design</span>
                 </span>

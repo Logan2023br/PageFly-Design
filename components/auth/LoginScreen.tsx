@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Image from "next/image";
 import { useState } from "react";
 import type { StoreAuthResponse } from "@/app/api/auth/store/route";
 import { Button, Eyebrow, GradientWord, Icon, Panel } from "../ui";
@@ -77,9 +78,14 @@ export function LoginScreen({ next }: { next: string }) {
 
       <div className="relative mx-auto w-full max-w-[1600px] px-4 pb-8 pt-4 sm:px-6 sm:pt-6">
         <header className="flex items-center gap-2 border-b border-pf-border pb-3.5">
-          <span className="grid size-7 place-items-center rounded-pf-sm bg-pf-primary text-white">
-            <Icon name="Layers" size={15} />
-          </span>
+          <Image
+            src="/pagefly-icon.png"
+            alt=""
+            width={28}
+            height={28}
+            className="size-7 rounded-pf-sm"
+            priority
+          />
           <span className="font-display text-[15px] font-semibold tracking-[-0.02em] text-pf-text">
             PageFly <span className="text-pf-muted">Design</span>
           </span>
