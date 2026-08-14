@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Image from "next/image";
 import Link from "next/link";
 import { useStore, type Screen } from "@/lib/store";
 import { useAccount } from "./AccountProvider";
@@ -105,9 +106,18 @@ export function ProgressSteps() {
       className="flex items-center justify-between gap-4 border-b border-pf-border pb-3.5"
     >
       <div className="flex min-w-0 items-center gap-2.5">
-        <span className="grid size-7 shrink-0 place-items-center rounded-pf-sm bg-pf-primary text-white">
-          <Icon name="Layers" size={15} />
-        </span>
+        {/* The real app icon, served from `public/`. It brings its own blue
+            field, so the primary background and white glyph this replaced would
+            only have stacked underneath it. `shrink-0` stays: this sits in a
+            flex row beside the store name, which is free to be long. */}
+        <Image
+          src="/pagefly-icon.png"
+          alt=""
+          width={28}
+          height={28}
+          className="size-7 shrink-0 rounded-pf-sm"
+          priority
+        />
         <span className="hidden font-display text-[15px] font-semibold tracking-[-0.02em] text-pf-text sm:inline">
           PageFly <span className="text-pf-muted">Design</span>
         </span>
