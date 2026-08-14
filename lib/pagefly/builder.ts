@@ -264,9 +264,16 @@ export function PRODUCT_SWATCHES(
 /** `text` is the button's label. Left unset it renders PageFly's default
     "Add to Cart", which is not necessarily what the mockup showed. */
 export function PRODUCT_ATC(styleData: StyleData, text?: string) {
-  const d: Record<string, unknown> = {};
-  if (text?.trim()) d.text = text.trim();
-  return node("ProductATC2", d, styleData, []);
+  /* Always written, never conditionally. Left unset when the model returned an
+     empty string, the button imported with no label at all — the field showed
+     its placeholder and the button rendered blank. "Add to Cart" is PageFly's
+     own default and the right thing to fall back to. */
+  return node(
+    "ProductATC2",
+    { text: text?.trim() || "Add to Cart", buttonType: "text" },
+    styleData,
+    [],
+  );
 }
 
 /** Four tiers, and the real content has to sit in the innermost one — content

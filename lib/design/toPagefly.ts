@@ -230,6 +230,11 @@ function styleDataFor(
  * `--pf-flex-layout-width: fill` does not save it, because the CSS rule wins.
  * An explicit 100% does.
  */
+/** `color: <ink>;` or nothing, so the caller can interpolate it unconditionally. */
+function inkRule(opts: EmitOptions): string {
+  return opts.ink ? `color: ${opts.ink};` : "";
+}
+
 function filling(sd: StyleData, extra = ""): StyleData {
   if (!sd) return sd;
   const out: Record<string, Record<string, string>> = {};
@@ -250,6 +255,15 @@ function filling(sd: StyleData, extra = ""): StyleData {
 export type EmitOptions = {
   /** query → resolved photo URL */
   images?: Record<string, string>;
+  /**
+   * The page's text colour.
+   *
+   * Composites need it stated. In the mockup a product title or an accordion
+   * row inherits `color` from the page surface React renders it on; in PageFly
+   * it inherits from the merchant's theme instead, which on a dark page meant
+   * dark text on a dark background — present, correct, and invisible.
+   */
+  ink?: string;
   /** icon name → raw <svg> markup; icons are dropped when this is absent */
   iconSvg?: (name: string) => string | null;
 };
@@ -291,13 +305,13 @@ function emit(
     }
 
     case "product":
-      return productBox(node, sd);
+      return productBox(node, sd, opts);
 
     case "productList":
-      return productGrid(node, sd);
+      return productGrid(node, sd, opts);
 
     case "accordion":
-      return accordionOf(node, sd);
+      return accordionOf(node, sd, opts);
 
     case "row":
     case "col": {
@@ -324,6 +338,7 @@ function withTag(n: PFNode, tag: string): PFNode {
 function productBox(
   node: Extract<DesignNode, { type: "product" }>,
   sd: StyleData,
+  opts: EmitOptions,
 ): PFNode {
   const stacked = node.layout === "stacked";
 
@@ -348,10 +363,12 @@ function productBox(
       },
     },
     [
-      PRODUCT_TITLE({ all: { "&": "font-size: 28px; font-weight: 600; line-height: 1.2;" } }),
+      PRODUCT_TITLE({
+        all: { "&": `font-size: 28px; font-weight: 600; line-height: 1.2; ${inkRule(opts)}` },
+      }),
       PRODUCT_PRICE(
         { all: { "&": "display: flex !important; gap: 10px; align-items: baseline;" } },
-        { all: { "&": "font-size: 20px;" } },
+        { all: { "&": `font-size: 20px; ${inkRule(opts)}` } },
         node.compareAt
           ? { all: { "&": "font-size: 16px; opacity: .5; text-decoration: line-through;" } }
           : { all: { "&": "display: none !important;" } },
@@ -384,7 +401,7 @@ function productBox(
                 all: {
                   "&":
                     "font-size: 11px; font-weight: 600; letter-spacing: .08em;" +
-                    " text-transform: uppercase; opacity: .55;",
+                    ` text-transform: uppercase; opacity: .55; ${inkRule(opts)}`,
                 },
               },
               { all: { "&": "display: flex !important; gap: 10px; flex-wrap: wrap;" } },
@@ -430,6 +447,7 @@ function productBox(
 function productGrid(
   node: Extract<DesignNode, { type: "productList" }>,
   sd: StyleData,
+  opts: EmitOptions,
 ): PFNode {
   const card = PRODUCT_BOX(
     PRODUCT_MEDIA(
@@ -450,10 +468,10 @@ function productGrid(
         },
       },
       [
-        PRODUCT_TITLE({ all: { "&": "font-size: 16px; font-weight: 600;" } }),
+        PRODUCT_TITLE({ all: { "&": `font-size: 16px; font-weight: 600; ${inkRule(opts)}` } }),
         PRODUCT_PRICE(
           { all: { "&": "display: flex !important; gap: 8px; align-items: baseline;" } },
-          { all: { "&": "font-size: 15px;" } },
+          { all: { "&": `font-size: 15px; ${inkRule(opts)}` } },
           { all: { "&": "display: none !important;" } },
         ),
       ],
@@ -482,6 +500,7 @@ function productGrid(
 function accordionOf(
   node: Extract<DesignNode, { type: "accordion" }>,
   sd: StyleData,
+  opts: EmitOptions,
 ): PFNode {
   const rows = node.items.map((item) => ({
     /* The question is the header's own `label`, not a Heading nested under it.
@@ -515,10 +534,11 @@ function accordionOf(
     all: {
       ...shell.all,
       "& .pf-header-item-wrapper":
-        "padding: 18px 0; font-size: 16px; font-weight: 600;" +
-        " border-bottom: 1px solid rgba(0,0,0,.12);",
-      "& .pf-accordion-body": "padding-bottom: 18px; line-height: 1.6; opacity: .72;",
-      "& .pf-accordion-icon": "font-size: 18px; opacity: .45;",
+        `padding: 18px 0; font-size: 16px; font-weight: 600; ${inkRule(opts)}` +
+        " border-bottom: 1px solid currentColor;",
+      "& .pf-accordion-body":
+        `padding-bottom: 18px; line-height: 1.6; opacity: .72; ${inkRule(opts)}`,
+      "& .pf-accordion-icon": `font-size: 18px; opacity: .5; ${inkRule(opts)}`,
     },
   };
 
@@ -591,9 +611,21 @@ export function pageflyFromTree(
   width: number,
   opts: EmitOptions = {},
 ): BuiltPage {
+  /* The page's own text colour travels with every emit, so composites can
+     state it rather than inherit whatever the merchant's theme sets. */
+  opts = { ...opts, ink: opts.ink ?? page.ink };
   const sections = tree.sections.map((section) => {
     const kids = section.children
-      .map((c) => emit(c, directionOf(section, styleAt(section, "all")), opts))
+      .map((c) => {
+        const emitted = emit(c, directionOf(section, styleAt(section, "all")), opts);
+        /* A row or col sitting straight under the content block is the band's
+           own layout — it has to claim the full width or the block collapses to
+           its content. Leaves are left alone: a button forced to 100% stretches
+           across the page. */
+        return emitted && (c.type === "row" || c.type === "col")
+          ? { ...emitted, styleData: filling(emitted.styleData) }
+          : emitted;
+      })
       .filter((n): n is PFNode => n !== null);
 
     /* A dark band has to reach both edges of the screen. Its background used to
