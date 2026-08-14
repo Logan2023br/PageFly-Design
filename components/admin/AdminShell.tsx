@@ -1,6 +1,7 @@
 "use client";
 
 import { MotionConfig, motion } from "framer-motion";
+import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { IconName } from "@/lib/icons";
@@ -51,9 +52,19 @@ export function AdminShell({
         <div className="relative mx-auto flex w-full max-w-[1600px] flex-col gap-0 px-4 pb-10 pt-4 sm:px-6 sm:pt-6 lg:flex-row lg:gap-6">
           <aside className="lg:w-[212px] lg:shrink-0">
             <div className="flex items-center gap-2 pb-4">
-              <span className="grid size-7 place-items-center rounded-pf-sm bg-pf-primary text-white">
-                <Icon name="Layers" size={15} />
-              </span>
+              {/* The real app icon, served from `public/` rather than hot-linked
+                  from Shopify's CDN: one fewer third party in the render path,
+                  and the mark still appears with the network blocked. It brings
+                  its own blue field, so the primary background and white glyph
+                  this replaced would only have stacked underneath it. */}
+              <Image
+                src="/pagefly-icon.png"
+                alt=""
+                width={28}
+                height={28}
+                className="size-7 rounded-pf-sm"
+                priority
+              />
               <span className="font-display text-[15px] font-semibold tracking-[-0.02em] text-pf-text">
                 PageFly <span className="text-pf-muted">Admin</span>
               </span>
