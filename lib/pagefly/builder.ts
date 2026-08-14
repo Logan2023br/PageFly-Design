@@ -232,10 +232,33 @@ export function PRODUCT_SWATCHES(
   labelStyle: StyleData,
   swatchStyle: StyleData,
 ) {
-  return node("ProductVariantSwatches", {}, styleData, [
-    node("OptionLabel", {}, labelStyle, []),
-    node("Swatch", {}, swatchStyle, []),
-  ]);
+  return node(
+    "ProductVariantSwatches",
+    {
+      /* `combined: true` is the default and it renders ONE selector listing
+         whole variants — "Red / S", "Red / M" — which is not what a mockup
+         showing a row of colour dots means. False gives one group per option,
+         which is what was drawn. */
+      combined: false,
+      /* Vertical is the default: option values stacked down the page. The
+         mockups put swatches in a row. */
+      layout: "horizontal",
+      label: true,
+      labelPosition: "top",
+      /* Each option takes the merchant's own configured swatch type, so a
+         Colour option renders as dots and a Size option as its own tiles. The
+         `display` fallback cannot do both at once — forcing "color" turns a
+         size value like "34" into a collapsed broken label. */
+      useOptionSwatches: true,
+      swatchesSpacing: { all: "10px" },
+      optionsSpacing: { all: "18px" },
+    },
+    styleData,
+    [
+      node("OptionLabel", {}, labelStyle, []),
+      node("Swatch", {}, swatchStyle, []),
+    ],
+  );
 }
 
 /** `text` is the button's label. Left unset it renders PageFly's default
@@ -260,14 +283,23 @@ export function ACCORDION(
       ]),
     ]),
   );
-  return node("Accordion3", {}, styleData, wrappers);
+  return node(
+    "Accordion3",
+    {
+      /* `headerIcon` defaults to unset, which is no glyph at all — every
+         imported FAQ arrived without the + the mockup drew. It lives on the
+         accordion, not on the header, and it syncs to every row. */
+      headerIcon: "plus",
+      /* Default is left. The mockups put it at the end of the row. */
+      arrowPos: "right",
+      activeInFront: -1,
+      multiple: false,
+    },
+    styleData,
+    wrappers,
+  );
 }
 
-/** The row's question.
-
-    `label` is a data field on the header — see MD Json PageFly/fields.md. It was
-    emitted as a Heading child instead, which the editor does not read: every
-    imported FAQ arrived with an empty header and the answer orphaned under it. */
 export function ACCORDION_HEADER(
   label: string,
   styleData: StyleData,

@@ -221,6 +221,30 @@ function styleDataFor(
   return out;
 }
 
+/**
+ * Force a block-level composite to fill its parent.
+ *
+ * A flex parent with `align-items: center` sizes its children by their content
+ * — so an accordion or a product grid inside a centred column arrived at a
+ * fraction of the width the mockup drew, floating in the middle of the band.
+ * `--pf-flex-layout-width: fill` does not save it, because the CSS rule wins.
+ * An explicit 100% does.
+ */
+function filling(sd: StyleData, extra = ""): StyleData {
+  if (!sd) return sd;
+  const out: Record<string, Record<string, string>> = {};
+  for (const [device, rules] of Object.entries(sd)) {
+    const css = rules["&"] ?? "";
+    out[device] = {
+      ...rules,
+      "&": /(^|[;\s])width\s*:/.test(css)
+        ? `${css} ${extra}`.trim()
+        : `${css} width: 100% !important; ${extra}`.trim(),
+    };
+  }
+  return out;
+}
+
 /* ---- emit --------------------------------------------------------------- */
 
 export type EmitOptions = {
@@ -334,10 +358,36 @@ function productBox(
       ),
       ...(node.swatches > 0
         ? [
+            /* Styled through the documented swatch selectors, not through the
+               child nodes: a colour option renders `.pf-vs-color`, a size grid
+               renders `.pf-vs-label`, and the OptionLabel/Swatch children carry
+               almost none of it. Round dots for colours, square tiles for
+               sizes, and the selected state marked — without it a merchant
+               cannot see which variant is chosen. */
             PRODUCT_SWATCHES(
-              { all: { "&": "display: flex !important; gap: 8px;" } },
-              { all: { "&": "font-size: 13px;" } },
-              { all: { "&": "width: 26px; height: 26px; border-radius: 999px;" } },
+              {
+                all: {
+                  "&": "display: flex !important; flex-direction: column !important; gap: 14px;",
+                  "& .pf-vs-color label":
+                    "width: 26px; height: 26px; border-radius: 999px;" +
+                    " border: 1px solid rgba(0,0,0,.14); cursor: pointer;",
+                  '& .pf-vs-color > input[type="radio"]:checked + label':
+                    "box-shadow: 0 0 0 2px #fff, 0 0 0 4px currentColor;",
+                  "& .pf-vs-label label":
+                    "min-width: 44px; padding: 8px 12px; border: 1px solid rgba(0,0,0,.18);" +
+                    " text-align: center; cursor: pointer;",
+                  '& .pf-vs-label > input[type="radio"]:checked + label':
+                    "border-color: currentColor;",
+                },
+              },
+              {
+                all: {
+                  "&":
+                    "font-size: 11px; font-weight: 600; letter-spacing: .08em;" +
+                    " text-transform: uppercase; opacity: .55;",
+                },
+              },
+              { all: { "&": "display: flex !important; gap: 10px; flex-wrap: wrap;" } },
             ),
           ]
         : []),
@@ -366,7 +416,7 @@ function productBox(
   const box = PRODUCT_BOX(media, info, form);
   /* The node's own declarations still apply, on a wrapper — ProductBox's
      styleData is spoken for by the form selector above. */
-  return FB(sd, [box]);
+  return FB(filling(sd), [box]);
 }
 
 /**
@@ -411,7 +461,22 @@ function productGrid(
     "display: flex; flex-direction: column; gap: 12px; width: 100%;",
   );
 
-  return PRODUCT_LIST(card, sd, { columns: node.columns, limit: node.limit });
+  /* `&` on ProductList2 takes spacing only — the grid itself is
+     `& .pf-r-dg`, which owns gap, direction and alignment. Putting the layout
+     on the root is valid CSS that changes nothing, and the cards came in
+     squeezed into a fraction of the row. */
+  const shell = filling(sd);
+  const withGrid: StyleData = shell && {
+    ...shell,
+    all: {
+      ...shell.all,
+      "& .pf-r-dg":
+        `display: grid !important; grid-template-columns: repeat(${node.columns}, minmax(0, 1fr)) !important;` +
+        " gap: 24px !important; width: 100% !important; align-items: start !important;",
+    },
+  };
+
+  return PRODUCT_LIST(card, withGrid, { columns: node.columns, limit: node.limit });
 }
 
 function accordionOf(
@@ -440,7 +505,24 @@ function accordionOf(
     style: { all: { "&": "border-bottom: 1px solid rgba(0,0,0,.12);" } },
   }));
 
-  return ACCORDION(rows, sd);
+  /* The clickable row and the answer panel are styled through the accordion's
+     own selectors — `& .pf-header-item-wrapper` and `& .pf-accordion-body`.
+     Styling the header node's `&` instead is valid CSS that reaches nothing,
+     which is why the imported rows carried none of the mockup's spacing. */
+  const shell = filling(sd);
+  const withParts: StyleData = shell && {
+    ...shell,
+    all: {
+      ...shell.all,
+      "& .pf-header-item-wrapper":
+        "padding: 18px 0; font-size: 16px; font-weight: 600;" +
+        " border-bottom: 1px solid rgba(0,0,0,.12);",
+      "& .pf-accordion-body": "padding-bottom: 18px; line-height: 1.6; opacity: .72;",
+      "& .pf-accordion-icon": "font-size: 18px; opacity: .45;",
+    },
+  };
+
+  return ACCORDION(rows, withParts);
 }
 
 /* ---- page --------------------------------------------------------------- */
