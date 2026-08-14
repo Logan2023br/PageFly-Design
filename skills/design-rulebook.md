@@ -1,5 +1,5 @@
 ---
-scope: design
+scope: export
 name: design-rulebook
 version: 1.0
 ---
