@@ -273,6 +273,42 @@ function Product({ node }: { node: Extract<DesignNode, { type: "product" }> }) {
   );
 }
 
+/* The mockup of a live grid: the same card repeated, so the merchant sees the
+   shape they will get. The photo is one stock image standing in for every
+   product, because the real ones only exist once this is in their store. */
+function ProductGrid({ node }: { node: Extract<DesignNode, { type: "productList" }> }) {
+  const { device, images } = useDesign();
+  const src = images[node.query];
+  const columns = device === "mobile" ? 1 : device === "tablet" ? Math.min(2, node.columns) : node.columns;
+  const shown = Math.min(node.limit, columns * 2);
+
+  return (
+    <div
+      data-pf="product-list"
+      style={{
+        display: "grid",
+        gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+        gap: 24,
+        width: "100%",
+        ...sx(node, device),
+      }}
+    >
+      {Array.from({ length: shown }, (_, i) => (
+        <div key={i} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ width: "100%", aspectRatio: "1 / 1", background: "#E8E8EC", overflow: "hidden" }}>
+            {src && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+            )}
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>Product name</div>
+          <div style={{ fontSize: 15, opacity: 0.75 }}>$00.00</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Accordion({ node }: { node: Extract<DesignNode, { type: "accordion" }> }) {
   const { device } = useDesign();
   return (
@@ -324,6 +360,8 @@ function Node({ node }: { node: DesignNode }) {
       return <Icon node={node} />;
     case "product":
       return <Product node={node} />;
+    case "productList":
+      return <ProductGrid node={node} />;
     case "accordion":
       return <Accordion node={node} />;
     case "row":

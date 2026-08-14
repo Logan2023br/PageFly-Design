@@ -741,8 +741,10 @@ function accordion(sources: Sources, parent: ParentLayout | null): PFNode | null
     const headEl = findRole(row, "accordion-header");
     const bodyEl = findRole(row, "accordion-body");
     const headSources = rowPart(i, "accordion-header");
+    /* The question goes in `label`. Emitted as children it vanished: the
+       editor reads the header's own field and shows nothing else. */
     const header = ACCORDION_HEADER(
-      headSources ? walkChildren(headSources, layoutFor(headEl!)) : [],
+      (headEl?.textContent ?? "").replace(/\s+/g, " ").trim(),
       headSources ? styleOfAll(headSources, STACK) : null,
     );
     /* Real content MUST land in Accordion3.Flex.Content — the builder nests the

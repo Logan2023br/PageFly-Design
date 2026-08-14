@@ -263,8 +263,53 @@ export function ACCORDION(
   return node("Accordion3", {}, styleData, wrappers);
 }
 
-export function ACCORDION_HEADER(kids: PFNode[], styleData: StyleData) {
-  return node("Accordion3.Header", {}, styleData, kids);
+/** The row's question.
+
+    `label` is a data field on the header — see MD Json PageFly/fields.md. It was
+    emitted as a Heading child instead, which the editor does not read: every
+    imported FAQ arrived with an empty header and the answer orphaned under it. */
+export function ACCORDION_HEADER(
+  label: string,
+  styleData: StyleData,
+  kids: PFNode[] = [],
+) {
+  return node("Accordion3.Header", { label, showIcon: false }, styleData, kids);
+}
+
+/**
+ * A grid of real products.
+ *
+ * Exactly ONE ProductBox goes inside: the renderer repeats that card for every
+ * product, so handing it N boxes ships N copies of the same card. Placement
+ * rules say it must be a direct child of FlexSection.
+ */
+export function PRODUCT_LIST(
+  card: PFNode,
+  styleData: StyleData,
+  opts: { columns?: number; limit?: number; gap?: number } = {},
+) {
+  const columns = Math.min(4, Math.max(1, opts.columns ?? 3));
+  return node(
+    "ProductList2",
+    {
+      source: "all",
+      tag: "h3",
+      limit: opts.limit ?? columns * 2,
+      listLayout: { all: "grid", laptop: "grid", tablet: "grid", mobile: "grid" },
+      slidesToShow: {
+        all: columns,
+        laptop: columns,
+        tablet: Math.min(2, columns),
+        mobile: 1,
+      },
+      spacing: { all: `${opts.gap ?? 24}px` },
+      maxHeight: true,
+      loadingMode: "none",
+      pagination: false,
+    },
+    styleData,
+    [card],
+  );
 }
 
 /* ---- flatten + validate ------------------------------------------------- */
@@ -312,6 +357,9 @@ const SLOT_RULES: Record<string, string[]> = {
   ProductVariantSwatches: ["OptionLabel", "Swatch"],
   "Accordion3.Content.Wrapper": ["Accordion3.Header", "Accordion3.Content"],
   "Accordion3.Content": ["Accordion3.Flex.Content"],
+  /* One card template, repeated. Two ProductBoxes here is two identical cards
+     stamped over every product in the grid. */
+  ProductList2: ["ProductBox"],
 };
 
 /** Parents whose children must ALL be one type (count is free). */

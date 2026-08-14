@@ -138,6 +138,24 @@ const product = z.object({
   ...styled,
 });
 
+/**
+ * A grid of the store's real products.
+ *
+ * Not a row of image + heading + text pretending to be one. Built by hand the
+ * cards are dead pictures with invented names; as ProductList2 the editor binds
+ * them to the collection and every card is a live product with its real title,
+ * price and photo.
+ */
+const productList = z.object({
+  type: z.literal("productList"),
+  columns: z.number().int().min(1).max(4).default(3),
+  /** how many cards the grid renders */
+  limit: z.number().int().min(1).max(24).default(6),
+  /** search phrase for the placeholder photo the mockup shows */
+  query: z.string().max(400).catch("").transform((v) => v.trim().slice(0, 160)),
+  ...styled,
+});
+
 const accordion = z.object({
   type: z.literal("accordion"),
   items: z
@@ -162,6 +180,7 @@ export type DesignNode =
   | z.infer<typeof divider>
   | z.infer<typeof icon>
   | z.infer<typeof product>
+  | z.infer<typeof productList>
   | z.infer<typeof accordion>
   | { type: "row"; css?: Css; mobile?: Css; children: DesignNode[] }
   | { type: "col"; css?: Css; mobile?: Css; children: DesignNode[] };
@@ -175,6 +194,7 @@ const node: z.ZodType<DesignNode> = z.lazy(() =>
     divider,
     icon,
     product,
+    productList,
     accordion,
     z.object({
       type: z.literal("row"),

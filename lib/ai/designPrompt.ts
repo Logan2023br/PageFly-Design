@@ -32,6 +32,7 @@ Node types — this is the ENTIRE vocabulary, there is nothing else:
   {"type":"icon","name":"truck","css":{}}
   {"type":"divider","css":{}}
   {"type":"product","title":"...","price":"...","atcText":"...","swatches":3,"query":"...","layout":"sideBySide"}
+  {"type":"productList","columns":3,"limit":6,"query":"..."}
   {"type":"accordion","items":[{"q":"...","a":"..."}]}
 
 icon names available: award check clock creditcard gift heart leaf lock mail mappin package phone refresh ruler scissors send shield shoppingbag sparkles star truck users wrench zap
@@ -76,7 +77,11 @@ These are the difference between a page and a wireframe. Follow them literally.
 
 A product page MUST use one {"type":"product"} node for the buy box — never a heading plus a text plus a button pretending to be one. An FAQ MUST use {"type":"accordion"}.
 
-{"type":"product"} is the BUY BOX, and a page has at most one. It renders a live add-to-cart form. Never use it to show off a product in a list — three of them on a home page is three checkout forms stacked down the page. A product grid is built from what you already have: a row of cols, each col an image then a heading then a text.
+{"type":"product"} is the BUY BOX, and a page has at most one. It renders a live add-to-cart form AND ITS OWN IMAGE GALLERY — the main shot and the thumbnail strip come with it. Do NOT put image nodes beside it for the product's own photos: they import as loose pictures that are not bound to the product, and the merchant ends up with a gallery that never changes when they pick a different item.
+
+{"type":"productList"} is EVERY grid of products — "shop the collection", "bestsellers", "the lineup", and the whole body of a collection page. It renders real products with their real names, prices and photos. NEVER build a product grid by hand out of image + heading + text: those are dead pictures with invented names that stay wrong for ever. "columns" is cards per row, 2 to 4.
+
+One image node is a photograph of something — a workshop, a person, a material. A product is a productList or a product, never an image.
 
 Show 4 to 8 photographs across a landing page, not one. Every product card, every story band and every full-bleed statement carries its own image, each with its own distinct query. A page with two pictures and six blocks of text is a document.
 

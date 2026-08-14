@@ -10,6 +10,7 @@ import {
   P4,
   PRODUCT_ATC,
   PRODUCT_BOX,
+  PRODUCT_LIST,
   PRODUCT_MEDIA,
   PRODUCT_PRICE,
   PRODUCT_SWATCHES,
@@ -268,6 +269,9 @@ function emit(
     case "product":
       return productBox(node, sd);
 
+    case "productList":
+      return productGrid(node, sd);
+
     case "accordion":
       return accordionOf(node, sd);
 
@@ -365,25 +369,67 @@ function productBox(
   return FB(sd, [box]);
 }
 
+/**
+ * A live product grid.
+ *
+ * Exactly one ProductBox goes in — the renderer stamps that card over every
+ * product, so handing it three is three identical cards on top of each other.
+ * The card's core is ProductMedia3 → ProductTitle → ProductPrice2; a card
+ * without the title ships a product with no name.
+ */
+function productGrid(
+  node: Extract<DesignNode, { type: "productList" }>,
+  sd: StyleData,
+): PFNode {
+  const card = PRODUCT_BOX(
+    PRODUCT_MEDIA(
+      MEDIA_MAIN({ all: { "&": "width: 100%; aspect-ratio: 1 / 1;" } }),
+      /* No thumbnail strip on a grid card — the gallery belongs on the product
+         page, and on a card it is noise under every tile. */
+      MEDIA_LIST(1, { all: { "&": "display: none !important;" } }, null),
+      { all: { "&": "width: 100%;" } },
+    ),
+    FB(
+      {
+        all: {
+          "&":
+            "display: flex !important; flex-direction: column !important;" +
+            " gap: 6px !important; width: 100% !important;" +
+            " --pf-flex-layout-width: fill; --pf-flex-layout-height: hug;" +
+            " --pf-flex-layout-direction: vertical;",
+        },
+      },
+      [
+        PRODUCT_TITLE({ all: { "&": "font-size: 16px; font-weight: 600;" } }),
+        PRODUCT_PRICE(
+          { all: { "&": "display: flex !important; gap: 8px; align-items: baseline;" } },
+          { all: { "&": "font-size: 15px;" } },
+          { all: { "&": "display: none !important;" } },
+        ),
+      ],
+    ),
+    "display: flex; flex-direction: column; gap: 12px; width: 100%;",
+  );
+
+  return PRODUCT_LIST(card, sd, { columns: node.columns, limit: node.limit });
+}
+
 function accordionOf(
   node: Extract<DesignNode, { type: "accordion" }>,
   sd: StyleData,
 ): PFNode {
   const rows = node.items.map((item) => ({
-    header: ACCORDION_HEADER(
-      [
-        H2(item.q, {
-          all: { "&": "font-size: 16px; font-weight: 600; margin: 0;" },
-        }),
-      ],
-      {
-        all: {
-          "&":
-            "display: flex !important; justify-content: space-between !important;" +
-            " align-items: center !important; gap: 16px; padding: 18px 0;",
-        },
+    /* The question is the header's own `label`, not a Heading nested under it.
+       Nested, the editor showed an empty header with the answer orphaned
+       beneath — the copy was in the file and nothing displayed it. */
+    header: ACCORDION_HEADER(item.q, {
+      all: {
+        "&":
+          "display: flex !important; justify-content: space-between !important;" +
+          " align-items: center !important; gap: 16px; padding: 18px 0;" +
+          " font-size: 16px; font-weight: 600;",
       },
-    ),
+    }),
     /* Four tiers, and the copy has to reach the innermost one — ACCORDION
        builds the wrappers, so this is only the body content. */
     body: [
@@ -428,6 +474,31 @@ export type BuiltPage = { blob: Blob; filename: string };
  * `page` supplies only the filename and the page-level background and type
  * face — everything with a shape comes from the tree.
  */
+/* Properties that paint the band itself rather than lay out its contents. They
+   belong on the FlexSection, which is full width; everything else belongs on
+   the content block inside it, which is capped at the page width. */
+const BLEED_PROPS = new Set([
+  "background",
+  "backgroundColor",
+  "backgroundImage",
+  "backgroundSize",
+  "backgroundPosition",
+  "backgroundRepeat",
+  "borderTop",
+  "borderBottom",
+]);
+
+function splitBleed(css: Css | undefined): { bleed: Css; rest: Css | undefined } {
+  const bleed: Css = {};
+  if (!css) return { bleed, rest: undefined };
+  const rest: Css = {};
+  for (const [k, v] of Object.entries(css)) {
+    if (BLEED_PROPS.has(k)) bleed[k] = v;
+    else rest[k] = v;
+  }
+  return { bleed, rest: Object.keys(rest).length ? rest : undefined };
+}
+
 export function pageflyFromTree(
   tree: DesignTree,
   page: { name: string; bg: string; ink: string; fontBody: string },
@@ -439,10 +510,29 @@ export function pageflyFromTree(
       .map((c) => emit(c, directionOf(section, styleAt(section, "all")), opts))
       .filter((n): n is PFNode => n !== null);
 
-    const inner = FB(styleDataFor(section, null), kids, "pf-design-export");
-    return FSECTION([inner], {
-      all: { "&": `padding: 0px; background-color: ${page.bg};` },
-    });
+    /* A dark band has to reach both edges of the screen. Its background used to
+       ride on the content block, which carries the page's max-width — so a
+       full-bleed section imported as an inset rectangle floating on the page
+       background, which is exactly what it looked like. The paint goes on the
+       section; the layout stays on the block inside it. */
+    const desktop = splitBleed(styleAt(section, "all")).bleed;
+    const mobile = splitBleed(styleAt(section, "mobile")).bleed;
+
+    const inner = FB(
+      styleDataFor({ ...section, css: splitBleed(section.css).rest, mobile: splitBleed(section.mobile).rest }, null),
+      kids,
+      "pf-design-export",
+    );
+
+    const bandCss = declarations(desktop);
+    const bandMobile = declarations(mobile);
+    const band: Record<string, Record<string, string>> = {
+      all: { "&": `padding: 0px; ${bandCss || `background-color: ${page.bg};`}` },
+    };
+    if (bandMobile && bandMobile !== bandCss)
+      band.mobile = { "&": `padding: 0px; ${bandMobile}` };
+
+    return FSECTION([inner], band);
   });
 
   if (sections.length === 0)
