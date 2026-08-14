@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { VISUAL_STYLES, styleSwatch, type VisualStyleId } from "@/lib/styleTokens";
 import { useStore } from "@/lib/store";
 import { Icon, SectionCard } from "../ui";
+import { BrandColors } from "./BrandColors";
 
 /* The card preview: three palette dots plus a type sample rendered in the
    style's own display face. The point is that the choice reads visually — the
@@ -52,6 +53,7 @@ export function StylePicker() {
       title="Pick a visual style"
       help="Sets the palette, type and shape of every page."
     >
+      <div className="grid gap-3.5">
       <div
         role="radiogroup"
         aria-label="Visual style"
@@ -97,6 +99,12 @@ export function StylePicker() {
             </motion.button>
           );
         })}
+      </div>
+
+      {/* Under the styles, because this is what overrides their palette. At the
+          bottom of the free-text prompt it read as a footnote to a
+          description. */}
+      <BrandColors />
       </div>
     </SectionCard>
   );
