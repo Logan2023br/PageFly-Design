@@ -1,4 +1,5 @@
 import type { StoreRecord } from "./db/types";
+import { DEFAULT_PAGE_LIMIT as FALLBACK_PAGE_LIMIT } from "./pageCatalog";
 import { normalizeDomain } from "./sheet";
 
 /* ==========================================================================
@@ -21,7 +22,7 @@ import { normalizeDomain } from "./sheet";
    here that has not agreed to be in the beta.
    ========================================================================== */
 
-const DEFAULT_PAGE_LIMIT = Number(process.env.DEFAULT_PAGE_LIMIT ?? 30);
+const DEFAULT_PAGE_LIMIT = Number(process.env.DEFAULT_PAGE_LIMIT ?? FALLBACK_PAGE_LIMIT);
 
 type Seed = Omit<StoreRecord, "firstSeenAt" | "lastSeenAt" | "blocked">;
 

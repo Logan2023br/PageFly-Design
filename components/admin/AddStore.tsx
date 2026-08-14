@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
+import { DEFAULT_PAGE_LIMIT } from "@/lib/pageCatalog";
 import { useState } from "react";
 import type { StoresResponse } from "@/app/api/admin/stores/route";
 import { Button, Icon, Panel } from "../ui";
@@ -18,7 +19,7 @@ export function AddStore() {
   const [domain, setDomain] = useState("");
   const [storeName, setStoreName] = useState("");
   const [email, setEmail] = useState("");
-  const [pageLimit, setPageLimit] = useState("30");
+  const [pageLimit, setPageLimit] = useState(String(DEFAULT_PAGE_LIMIT));
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);

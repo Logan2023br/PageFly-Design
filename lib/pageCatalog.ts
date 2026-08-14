@@ -8,6 +8,20 @@ import type { IconName } from "./icons";
 export const MAX_PER_PAGE = 10;
 export const MAX_TOTAL_PAGES = 30;
 
+/**
+ * Pages a store is given when nothing says otherwise.
+ *
+ * Lives here, and is imported by everything that creates a store, because the
+ * number was written out separately in six places — the sheet mapper, the
+ * environment seed, the admin API and the admin form among them — and a default
+ * that disagrees with itself is one nobody can change in one move. Distinct
+ * from MAX_TOTAL_PAGES, which caps a single build rather than an account.
+ *
+ * Not applied to stores that already exist: the read paths keep their own
+ * fallback, so lowering this never shrinks a quota a merchant is already using.
+ */
+export const DEFAULT_PAGE_LIMIT = 10;
+
 export type CategoryId =
   | "core"
   | "trust"

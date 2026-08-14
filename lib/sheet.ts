@@ -2,6 +2,7 @@ import "server-only";
 
 import { createSign } from "node:crypto";
 import type { StoreRecord } from "./db/types";
+import { DEFAULT_PAGE_LIMIT as FALLBACK_PAGE_LIMIT } from "./pageCatalog";
 
 /* ==========================================================================
    The allowlist sheet.
@@ -148,14 +149,34 @@ function indexHeaders(header: string[]): Partial<Record<ColumnKey, number>> {
   return out;
 }
 
-const DEFAULT_PAGE_LIMIT = Number(process.env.DEFAULT_PAGE_LIMIT ?? 30);
+const DEFAULT_PAGE_LIMIT = Number(process.env.DEFAULT_PAGE_LIMIT ?? FALLBACK_PAGE_LIMIT);
 
-/** "09/30" -> 30. A bare "12" is read as a limit, not as usage. */
-function readPageLimit(cell: string | undefined): number {
-  if (!cell) return DEFAULT_PAGE_LIMIT;
-  const parts = cell.split("/");
-  const limit = Number(parts[parts.length - 1]?.replace(/[^\d]/g, ""));
-  return Number.isFinite(limit) && limit > 0 ? limit : DEFAULT_PAGE_LIMIT;
+/**
+ * "09/30" -> 30. A bare "12" is read as a limit, not as usage.
+ *
+ * Falls back to the plan column, because some sheets carry the allowance there
+ * and nowhere else: a row whose Plan reads "10-slot" is a ten-page store, and
+ * without this it silently became a thirty-page one — the sheet said ten, the
+ * app said thirty, and nothing anywhere reported a disagreement.
+ *
+ * Matched against `<number> slot` specifically rather than "first number in the
+ * cell". A plan named "Shopify Plus 2024" holds a number that is not an
+ * allowance, and guessing wrong here hands out pages nobody paid for.
+ */
+function readPageLimit(cell: string | undefined, plan?: string): number {
+  if (cell) {
+    const parts = cell.split("/");
+    const limit = Number(parts[parts.length - 1]?.replace(/[^\d]/g, ""));
+    if (Number.isFinite(limit) && limit > 0) return limit;
+  }
+
+  const slots = /(\d+)\s*-?\s*slots?\b/i.exec(plan ?? "");
+  if (slots) {
+    const n = Number(slots[1]);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+
+  return DEFAULT_PAGE_LIMIT;
 }
 
 function readInt(cell: string | undefined): number | null {
@@ -197,7 +218,7 @@ export function rowsToStores(rows: string[][]): SheetRow[] {
         country: cell("country") ?? null,
         userType: cell("userType") ?? null,
         status: cell("status") ?? null,
-        pageLimit: readPageLimit(cell("pages")),
+        pageLimit: readPageLimit(cell("pages"), cell("shopifyPlan")),
         firstSeenAt: null,
         lastSeenAt: null,
         blocked: false,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEFAULT_PAGE_LIMIT } from "@/lib/pageCatalog";
 import { findBuiltinStore } from "@/lib/allowlist";
 import { getRepo } from "@/lib/db";
 import { readAdminSession } from "@/lib/session";
@@ -91,7 +92,7 @@ export async function POST(request: Request) {
       country: keep(body.country, existing?.country ?? null),
       userType: keep(body.userType, existing?.userType ?? "Beta"),
       status: keep(body.status, existing?.status ?? "Đang sử dụng"),
-      pageLimit: body.pageLimit ?? existing?.pageLimit ?? 30,
+      pageLimit: body.pageLimit ?? existing?.pageLimit ?? DEFAULT_PAGE_LIMIT,
       firstSeenAt: null,
       lastSeenAt: null,
       blocked: false,
