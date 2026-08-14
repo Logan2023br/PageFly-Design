@@ -24,7 +24,15 @@ import {
 } from "../pagefly/builder";
 import { WEBFONT_CSS_URL } from "../styleTokens";
 import { DEVICES, styleAt, type Device } from "./derive";
-import type { Css, DesignNode, DesignSection, DesignTree } from "./schema";
+import {
+  HOVER_NATIVE_TYPES,
+  MOTION_CSS,
+  MOTION_JS,
+  hasMotion,
+  hoverClass,
+  motionClasses,
+} from "./motion";
+import { walk, type Anim, type Css, type DesignNode, type DesignSection, type DesignTree } from "./schema";
 
 /* ==========================================================================
    Design tree → .pagefly, with no DOM in the path.
@@ -268,7 +276,43 @@ export type EmitOptions = {
   iconSvg?: (name: string) => string | null;
 };
 
-function emit(
+function emit(node: DesignNode, parentDir: Dir, opts: EmitOptions): PFNode | null {
+  const built = emitNode(node, parentDir, opts);
+  return built && hasMotion(node.anim) ? withMotion(built, node.anim) : built;
+}
+
+/**
+ * Attach the node's motion to the PageFly element it became.
+ *
+ * Hover takes whichever of two roads is open. On the four element types that
+ * carry `animationHover` it is written as that field, so the merchant opens the
+ * element in the editor and sees "Float" selected in a dropdown — a setting
+ * they can change, not CSS they would have to hunt for. Everywhere else the
+ * class carries it and the page stylesheet does the work, because the field
+ * would simply be ignored.
+ *
+ * Reveal is always the class: PageFly has nothing that fires on scroll.
+ */
+function withMotion(n: PFNode, anim: Anim): PFNode {
+  const classes = motionClasses(anim);
+
+  if (anim?.hover && HOVER_NATIVE_TYPES.has(n.type)) {
+    n.data.animationHover = anim.hover;
+    /* Dropping our class here matters. Left on, the element would carry
+       PageFly's transform and ours at once and travel twice as far. */
+    const ours = hoverClass(anim);
+    const i = classes.indexOf(ours!);
+    if (i >= 0) classes.splice(i, 1);
+  }
+
+  if (classes.length) {
+    const existing = typeof n.data.className === "string" ? n.data.className : "";
+    n.data.className = [existing, ...classes].filter(Boolean).join(" ");
+  }
+  return n;
+}
+
+function emitNode(
   node: DesignNode,
   parentDir: Dir,
   opts: EmitOptions,
@@ -547,7 +591,7 @@ function accordionOf(
 
 /* ---- page --------------------------------------------------------------- */
 
-function pageCss(width: number): string {
+function pageCss(width: number, motion: boolean): string {
   return [
     /* First — @import is only valid before any other rule. Without it the store
        has no reason to have these faces installed and every heading falls back
@@ -569,7 +613,12 @@ function pageCss(width: number): string {
        children all hug, and the page narrows to a column adrift in the
        middle of the screen. The max-width still bounds it. */
     `.pf-design-export { max-width: ${width}px; margin-left: auto; margin-right: auto; width: 100%; }`,
-  ].join("\n");
+    /* Only when something on the page moves. A page with no motion should not
+       ship a stylesheet for motion — the merchant reads this field. */
+    motion && `\n/* motion — matches the mockup */\n${MOTION_CSS}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export type BuiltPage = { blob: Blob; filename: string };
@@ -636,10 +685,14 @@ export function pageflyFromTree(
     const desktop = splitBleed(styleAt(section, "all")).bleed;
     const mobile = splitBleed(styleAt(section, "mobile")).bleed;
 
+    /* A section's reveal rides on the content block, not on the FlexSection.
+       The band's paint stays put and its contents rise into it — fading the
+       whole section would fade the background out of the page and back in,
+       which reads as a flicker rather than an entrance. */
     const inner = FB(
       styleDataFor({ ...section, css: splitBleed(section.css).rest, mobile: splitBleed(section.mobile).rest }, null),
       kids,
-      "pf-design-export",
+      ["pf-design-export", ...motionClasses(section.anim)].join(" "),
     );
 
     const bandCss = declarations(desktop);
@@ -656,7 +709,20 @@ export function pageflyFromTree(
   if (sections.length === 0)
     throw new Error("Nothing to export — the design has no sections");
 
-  const doc = new Page({ name: page.name, customCSS: pageCss(width) });
+  /* Asked of the tree, not of what was emitted: a node whose motion the
+     exporter turned into an `animationHover` field still needs the stylesheet
+     if some other node on the page reveals on scroll. */
+  const moves = walk(tree).some((n) => hasMotion((n as { anim?: Anim }).anim));
+  const reveals = walk(tree).some((n) => (n as { anim?: Anim }).anim?.reveal);
+
+  const doc = new Page({
+    name: page.name,
+    customCSS: pageCss(width, moves),
+    /* The observer only ships when something actually reveals. Hover needs no
+       JS, and a page that runs a MutationObserver for nothing is a page that
+       costs the storefront something for nothing. */
+    customJS: reveals ? MOTION_JS : "",
+  });
   for (const s of sections) doc.addSection(s);
 
   return { blob: doc.toBlob(), filename: `${page.name}.pagefly` };

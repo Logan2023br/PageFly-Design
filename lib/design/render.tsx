@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import { createContext, useContext, useEffect, useRef } from "react";
 import type { CSSProperties } from "react";
+import { MOTION_CSS, motionClasses } from "./motion";
 import {
   Award,
   Check,
@@ -91,29 +92,29 @@ function sx(node: { css?: Record<string, unknown>; mobile?: Record<string, unkno
 
 /* ---- leaves ------------------------------------------------------------- */
 
-function Heading({ node }: { node: Extract<DesignNode, { type: "heading" }> }) {
+function Heading({ node, cls }: { node: Extract<DesignNode, { type: "heading" }>; cls?: string }) {
   const { device } = useDesign();
   const Tag = `h${node.level}` as "h1";
   /* Browsers give headings a margin the tree never asked for, and PageFly's
      Heading2 has none. Zeroing it here is not a style decision, it is removing
      one the tree did not make. */
   return (
-    <Tag style={{ margin: 0, ...sx(node, device) }} data-pf="heading">
+    <Tag style={{ margin: 0, ...sx(node, device) }} data-pf="heading" className={cls}>
       {node.text}
     </Tag>
   );
 }
 
-function Text({ node }: { node: Extract<DesignNode, { type: "text" }> }) {
+function Text({ node, cls }: { node: Extract<DesignNode, { type: "text" }>; cls?: string }) {
   const { device } = useDesign();
   return (
-    <p style={{ margin: 0, ...sx(node, device) }} data-pf="text">
+    <p style={{ margin: 0, ...sx(node, device) }} data-pf="text" className={cls}>
       {node.text}
     </p>
   );
 }
 
-function Button({ node }: { node: Extract<DesignNode, { type: "button" }> }) {
+function Button({ node, cls }: { node: Extract<DesignNode, { type: "button" }>; cls?: string }) {
   const { device } = useDesign();
   /* A real <button> would inherit the UA's font and background. PageFly's
      Button2 is a styled anchor, so this matches that, not the browser. */
@@ -125,21 +126,21 @@ function Button({ node }: { node: Extract<DesignNode, { type: "button" }> }) {
         cursor: "pointer",
         ...sx(node, device),
       }}
-      data-pf="button"
+      data-pf="button" className={cls}
     >
       {node.text}
     </span>
   );
 }
 
-function Photo({ node }: { node: Extract<DesignNode, { type: "image" }> }) {
+function Photo({ node, cls }: { node: Extract<DesignNode, { type: "image" }>; cls?: string }) {
   const { device, images } = useDesign();
   const src = images[node.query];
   const style = sx(node, device);
 
   return (
     <div
-      data-pf="image"
+      data-pf="image" className={cls}
       style={{
         width: "100%",
         aspectRatio: `1 / ${node.ratio}`,
@@ -163,24 +164,24 @@ function Photo({ node }: { node: Extract<DesignNode, { type: "image" }> }) {
   );
 }
 
-function Divider({ node }: { node: Extract<DesignNode, { type: "divider" }> }) {
+function Divider({ node, cls }: { node: Extract<DesignNode, { type: "divider" }>; cls?: string }) {
   const { device } = useDesign();
   return (
     <div
-      data-pf="divider"
+      data-pf="divider" className={cls}
       style={{ width: "100%", height: 1, background: "currentColor", opacity: 0.14, ...sx(node, device) }}
     />
   );
 }
 
-function Icon({ node }: { node: Extract<DesignNode, { type: "icon" }> }) {
+function Icon({ node, cls }: { node: Extract<DesignNode, { type: "icon" }>; cls?: string }) {
   const { device } = useDesign();
   const style = sx(node, device);
   const Glyph = ICONS[node.name.toLowerCase().replace(/[^a-z]/g, "")];
   const size = Number(style.fontSize ?? 24) || 24;
 
   if (!Glyph)
-    return <span data-pf="icon" style={{ display: "inline-block", ...style }} />;
+    return <span data-pf="icon" className={cls} style={{ display: "inline-block", ...style }} />;
 
   /* `data-icon` is how the exporter gets the real SVG markup: lucide builds
      these components from data it does not re-expose, so the rendered element
@@ -188,7 +189,7 @@ function Icon({ node }: { node: Extract<DesignNode, { type: "icon" }> }) {
      is cheaper and more honest than shipping a second copy of the icon set. */
   return (
     <span
-      data-pf="icon"
+      data-pf="icon" className={cls}
       data-icon={node.name.toLowerCase().replace(/[^a-z]/g, "")}
       style={{ display: "inline-flex", ...style }}
     >
@@ -199,14 +200,14 @@ function Icon({ node }: { node: Extract<DesignNode, { type: "icon" }> }) {
 
 /* ---- composites --------------------------------------------------------- */
 
-function Product({ node }: { node: Extract<DesignNode, { type: "product" }> }) {
+function Product({ node, cls }: { node: Extract<DesignNode, { type: "product" }>; cls?: string }) {
   const { device, images } = useDesign();
   const stacked = node.layout === "stacked" || device === "mobile";
   const src = images[node.query];
 
   return (
     <div
-      data-pf="product"
+      data-pf="product" className={cls}
       style={{
         display: "flex",
         flexDirection: stacked ? "column" : "row",
@@ -276,7 +277,7 @@ function Product({ node }: { node: Extract<DesignNode, { type: "product" }> }) {
 /* The mockup of a live grid: the same card repeated, so the merchant sees the
    shape they will get. The photo is one stock image standing in for every
    product, because the real ones only exist once this is in their store. */
-function ProductGrid({ node }: { node: Extract<DesignNode, { type: "productList" }> }) {
+function ProductGrid({ node, cls }: { node: Extract<DesignNode, { type: "productList" }>; cls?: string }) {
   const { device, images } = useDesign();
   const src = images[node.query];
   const columns = device === "mobile" ? 1 : device === "tablet" ? Math.min(2, node.columns) : node.columns;
@@ -284,7 +285,7 @@ function ProductGrid({ node }: { node: Extract<DesignNode, { type: "productList"
 
   return (
     <div
-      data-pf="product-list"
+      data-pf="product-list" className={cls}
       style={{
         display: "grid",
         gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
@@ -309,10 +310,10 @@ function ProductGrid({ node }: { node: Extract<DesignNode, { type: "productList"
   );
 }
 
-function Accordion({ node }: { node: Extract<DesignNode, { type: "accordion" }> }) {
+function Accordion({ node, cls }: { node: Extract<DesignNode, { type: "accordion" }>; cls?: string }) {
   const { device } = useDesign();
   return (
-    <div data-pf="accordion" style={{ width: "100%", ...sx(node, device) }}>
+    <div data-pf="accordion" className={cls} style={{ width: "100%", ...sx(node, device) }}>
       {node.items.map((item, i) => (
         <div key={i} data-pf="accordion-item" style={{ borderBottom: "1px solid rgba(0,0,0,.12)" }}>
           <div
@@ -342,33 +343,45 @@ function Accordion({ node }: { node: Extract<DesignNode, { type: "accordion" }> 
 
 /* ---- containers --------------------------------------------------------- */
 
+/**
+ * The motion classes go into each component and land on its own root element.
+ *
+ * Not onto a wrapper: a wrapper div around a flex child changes which element
+ * the parent's `gap`, `flex` and `align-items` apply to, so the page would lay
+ * out differently the moment a node was given motion. Not by cloning either —
+ * these are components rather than DOM elements, so a cloned `className` would
+ * be a prop nobody reads, and the mockup would sit still while the exported
+ * page moved. That is the one failure this whole feature exists to prevent.
+ */
 function Node({ node }: { node: DesignNode }) {
   const { device } = useDesign();
+  const cls = motionClasses(node.anim).join(" ") || undefined;
 
   switch (node.type) {
     case "heading":
-      return <Heading node={node} />;
+      return <Heading node={node} cls={cls} />;
     case "text":
-      return <Text node={node} />;
+      return <Text node={node} cls={cls} />;
     case "button":
-      return <Button node={node} />;
+      return <Button node={node} cls={cls} />;
     case "image":
-      return <Photo node={node} />;
+      return <Photo node={node} cls={cls} />;
     case "divider":
-      return <Divider node={node} />;
+      return <Divider node={node} cls={cls} />;
     case "icon":
-      return <Icon node={node} />;
+      return <Icon node={node} cls={cls} />;
     case "product":
-      return <Product node={node} />;
+      return <Product node={node} cls={cls} />;
     case "productList":
-      return <ProductGrid node={node} />;
+      return <ProductGrid node={node} cls={cls} />;
     case "accordion":
-      return <Accordion node={node} />;
+      return <Accordion node={node} cls={cls} />;
     case "row":
     case "col":
       return (
         <div
           data-pf={node.type}
+          className={cls}
           style={{
             display: "flex",
             flexDirection: node.type === "row" ? "row" : "column",
@@ -385,13 +398,68 @@ function Node({ node }: { node: DesignNode }) {
 
 function Section({ section }: { section: DesignSection }) {
   const { device } = useDesign();
+  const classes = motionClasses(section.anim);
   return (
-    <section data-pf="section" data-role={section.role} style={{ width: "100%", ...sx(section, device) }}>
+    <section
+      data-pf="section"
+      data-role={section.role}
+      className={classes.join(" ") || undefined}
+      style={{ width: "100%", ...sx(section, device) }}
+    >
       {section.children.map((child, i) => (
         <Node key={i} node={child} />
       ))}
     </section>
   );
+}
+
+/**
+ * Runs the same reveal the exported page runs.
+ *
+ * Scoped to this preview's own subtree rather than the document, because four
+ * device frames are on screen at once and each one is a separate copy of the
+ * page — a document-wide observer would reveal the mobile frame's sections when
+ * the desktop frame's scrolled past.
+ *
+ * The timer is a safety net, not part of the effect. Reveal styles rest at
+ * `opacity: 0`, so anything the observer fails to reach — a frame clipped by
+ * the stage, a device the merchant has not scrolled to — would be an invisible
+ * page rather than a still one. After a second and a half, everything shows.
+ */
+function useReveal(root: React.RefObject<HTMLDivElement | null>, tree: DesignTree) {
+  useEffect(() => {
+    const host = root.current;
+    if (!host) return;
+
+    const targets = () => Array.from(host.querySelectorAll<HTMLElement>(".pfa-r:not(.pfa-in)"));
+    const showAll = () => targets().forEach((el) => el.classList.add("pfa-in"));
+
+    if (typeof IntersectionObserver === "undefined") {
+      showAll();
+      return;
+    }
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          e.target.classList.add("pfa-in");
+          io.unobserve(e.target);
+        }
+      },
+      { rootMargin: "0px 0px -12% 0px", threshold: 0.08 },
+    );
+
+    targets().forEach((el) => io.observe(el));
+    const net = window.setTimeout(showAll, 1500);
+
+    return () => {
+      io.disconnect();
+      window.clearTimeout(net);
+    };
+    /* Re-runs when the tree changes: regenerating one page replaces its nodes,
+       and the new ones were never observed. */
+  }, [root, tree]);
 }
 
 export function DesignRender({
@@ -403,11 +471,20 @@ export function DesignRender({
   device: Device;
   images?: Record<string, string>;
 }) {
+  const root = useRef<HTMLDivElement>(null);
+  useReveal(root, tree);
+
   return (
     <DesignCtx.Provider value={{ device, images }}>
-      {tree.sections.map((s, i) => (
-        <Section key={i} section={s} />
-      ))}
+      <div ref={root} style={{ display: "contents" }}>
+        {/* The exported page's stylesheet, verbatim. Injected per preview rather
+            than once globally so a preview that is unmounted takes its styles
+            with it; duplicate identical rules cost nothing. */}
+        <style>{MOTION_CSS}</style>
+        {tree.sections.map((s, i) => (
+          <Section key={i} section={s} />
+        ))}
+      </div>
     </DesignCtx.Provider>
   );
 }

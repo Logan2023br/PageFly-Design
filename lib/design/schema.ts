@@ -64,11 +64,51 @@ function clean(value: Css | undefined): Css | undefined {
   return Object.keys(out).length ? out : undefined;
 }
 
+/* ---- motion -------------------------------------------------------------
+
+   Two kinds, and they reach PageFly by different roads.
+
+   `hover` is PageFly's own: Button2, ContentListItem, Form2.Button2 and
+   ProductATC2 all carry an `animationHover` field taking exactly these six
+   values. Written as the field, it is a setting the merchant can see and change
+   in the editor rather than CSS they would have to find and edit.
+
+   `reveal` is not PageFly's. Nothing in the element model fires on scroll, so
+   the exporter ships it as a class plus page-level CSS and a few lines of
+   IntersectionObserver in the page's custom JS. That is the honest cost of an
+   effect the platform does not have, and it keeps the mockup and the live page
+   showing the same thing — which is the whole contract of this app.
+
+   Both are optional and both default to nothing. A page with no motion is a
+   page with no motion, not a page with broken motion. */
+
+const anim = z
+  .object({
+    /** PageFly's canned button motion */
+    hover: z
+      .enum(["float", "shadow", "grow", "glow", "float-shadow", "grow-shadow"])
+      .optional()
+      .catch(undefined),
+    /** ours: plays once when the element scrolls into view */
+    reveal: z
+      .enum(["fade", "fade-up", "slide-left", "slide-right", "zoom"])
+      .optional()
+      .catch(undefined),
+    /** stagger this element behind its siblings, in steps of 80ms */
+    delay: z.number().int().min(0).max(6).optional().catch(undefined),
+  })
+  .optional()
+  .catch(undefined);
+
+export type Anim = z.infer<typeof anim>;
+
 const styled = {
   /** desktop, and the base every other breakpoint inherits from */
   css: css.optional().transform(clean),
   /** only the properties that differ on phones */
   mobile: css.optional().transform(clean),
+  /** hover and scroll motion; see the note above */
+  anim,
 };
 
 /* ---- leaves ------------------------------------------------------------- */
@@ -182,8 +222,8 @@ export type DesignNode =
   | z.infer<typeof product>
   | z.infer<typeof productList>
   | z.infer<typeof accordion>
-  | { type: "row"; css?: Css; mobile?: Css; children: DesignNode[] }
-  | { type: "col"; css?: Css; mobile?: Css; children: DesignNode[] };
+  | { type: "row"; css?: Css; mobile?: Css; anim?: Anim; children: DesignNode[] }
+  | { type: "col"; css?: Css; mobile?: Css; anim?: Anim; children: DesignNode[] };
 
 const node: z.ZodType<DesignNode> = z.lazy(() =>
   z.discriminatedUnion("type", [

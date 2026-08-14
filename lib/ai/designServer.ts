@@ -4,6 +4,8 @@ import { getProvider, isAiEnabled, providerName } from "./provider";
 import { loadSkills } from "./skills";
 import { DESIGN_SYSTEM } from "./designPrompt";
 import { designTreeSchema, walk, type DesignTree } from "../design/schema";
+import { sectionPlanLine } from "../design/sectionPlan";
+import { detectVertical } from "../generate/content";
 import { resolvePhotos, stockProvider, urlsOf } from "../images/stock";
 
 /* ==========================================================================
@@ -119,6 +121,11 @@ export async function designPageTree(
     `Spacing pressure: ${input.density} (airy = generous padding, tight = dense)`,
     ``,
     `Design this page: ${input.pageLabel || input.pageType}`,
+    /* Resolved here rather than sent as a table. The rulebook's thirty-five page
+       types are about seven hundred tokens to tell the model thirty-four things
+       that do not apply to the page in front of it, and the page type is known
+       before the call goes out. */
+    sectionPlanLine(input.pageType, detectVertical(input.sell)),
     ``,
     `Palette and faces — work inside these, do not introduce others.`,
     `Each colour has a job. Use it for that job.`,
