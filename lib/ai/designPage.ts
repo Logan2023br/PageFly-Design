@@ -49,6 +49,8 @@ export async function designPage(
           bg: page.tokens.bg,
           ink: page.tokens.ink,
           accent: page.tokens.accent,
+          band: page.tokens.surfaceAlt,
+          border: page.tokens.border,
           fontHeading: page.tokens.fontDisplay,
           fontBody: page.tokens.fontBody,
           radius: page.tokens.radius,

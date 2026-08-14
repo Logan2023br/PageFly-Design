@@ -200,6 +200,8 @@ async function run(
               bg: base.tokens.bg,
               ink: base.tokens.ink,
               accent: base.tokens.accent,
+              band: base.tokens.surfaceAlt,
+              border: base.tokens.border,
               fontHeading: base.tokens.fontDisplay,
               fontBody: base.tokens.fontBody,
               radius: base.tokens.radius,

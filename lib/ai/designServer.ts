@@ -32,6 +32,10 @@ export type DesignInput = {
     bg: string;
     ink: string;
     accent: string;
+    /** background of sections that step away from `bg` */
+    band: string;
+    /** card and section outlines */
+    border: string;
     fontHeading: string;
     fontBody: string;
     radius: number;
@@ -51,6 +55,24 @@ export type DesignOutcome =
 const NOTHING = { input: 0, output: 0 };
 
 const TIMEOUT_MS = 420_000;
+
+/**
+ * `rgba(197, 78, 27, 0.34)` as `#C54E1B57`.
+ *
+ * Models copy a hex string reliably and an rgba string with spaces in it much
+ * less so — sent as rgba, the border colour came back unused in every section
+ * of a test page while the two hex colours were applied six and four times.
+ * Eight-digit hex keeps the alpha, which is the point: a solid border on every
+ * card shouts, and the alpha is what stops it.
+ */
+function asHex(value: string): string {
+  const m = /rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,/\s]+([\d.]+))?\s*\)/i.exec(value);
+  if (!m) return value;
+  const hex = (n: number) => n.toString(16).padStart(2, "0");
+  const a = m[4] === undefined ? 1 : Number(m[4]);
+  const alpha = a >= 1 ? "" : hex(Math.round(a * 255));
+  return `#${hex(+m[1])}${hex(+m[2])}${hex(+m[3])}${alpha}`.toUpperCase();
+}
 
 export async function designPageTree(
   input: DesignInput,
@@ -72,10 +94,20 @@ export async function designPageTree(
     ``,
     `Design this page: ${input.pageLabel || input.pageType}`,
     ``,
-    `Palette and faces — work inside these, do not introduce others:`,
-    `  background ${t.bg}`,
-    `  text ${t.ink}`,
-    `  accent ${t.accent}`,
+    `Palette and faces — work inside these, do not introduce others.`,
+    `Each colour has a job. Use it for that job.`,
+    ``,
+    `  background  ${t.bg}`,
+    `  text        ${t.ink}`,
+    `  accent      ${t.accent}   buttons, prices, badges, the one highlighted thing in a section`,
+    t.band && `  band        ${asHex(t.band)}   background of sections that step away from the page background`,
+    /* Stated as an instruction, not an offer. The system prompt tells the
+       model to prefer whitespace over borders, which is right in general and
+       wrong here: a border colour only reaches this line because the merchant
+       filled a slot labelled Borders. Without this the colour was handed over
+       and used zero times in a seventy-five node page. */
+    t.border &&
+      `  border      ${asHex(t.border)}   card and section outlines, dividers. The merchant chose this colour, so cards and bands DO carry a visible 1px outline in it — this overrides the general preference for whitespace over borders.`,
     t.fontHeading && `  heading font-family: ${t.fontHeading}`,
     t.fontBody && `  body font-family: ${t.fontBody}`,
     `  corner radius ${t.radius}px`,
