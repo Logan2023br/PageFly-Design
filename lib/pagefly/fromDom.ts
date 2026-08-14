@@ -983,7 +983,11 @@ function pageCss(width: number): string {
        sizing model; when that lands on a flex child the line breaks per
        character. The mockup's containers already carry their real widths. */
     `.pf-design-export [data-pf-type] { min-width: 0; }`,
-    `.pf-design-export { max-width: ${width}px; margin-left: auto; margin-right: auto; }`,
+    /* width:100% as well as the cap. Without it the block is free to shrink to
+       its content — a centred flex parent in the theme, or a section whose
+       children all hug, and the page narrows to a column adrift in the
+       middle of the screen. The max-width still bounds it. */
+    `.pf-design-export { max-width: ${width}px; margin-left: auto; margin-right: auto; width: 100%; }`,
   ].join("\n");
 }
 
