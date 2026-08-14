@@ -1,4 +1,5 @@
 import type { IconName } from "./icons";
+import { BRAND_COLOR_ROLES } from "./styleTokens";
 
 /* Store types (§4.3) ------------------------------------------------------ */
 
@@ -191,6 +192,7 @@ export const ACCEPTED_IMAGE_EXTENSIONS = [
 export const UPLOAD_REJECT_MESSAGE =
   "Only images work here — PNG, JPG, WebP, AVIF or GIF, up to 5 MB each.";
 
-export const MAX_BRAND_COLORS = 5;
+/* One slot per role — see BRAND_COLOR_ROLES. */
+export const MAX_BRAND_COLORS = BRAND_COLOR_ROLES.length;
 export const MAX_SELL_CHARS = 120;
 export const MAX_PROMPT_CHARS = 1500;

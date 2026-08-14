@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useRef, useState } from "react";
 import { MAX_BRAND_COLORS } from "@/lib/briefOptions";
-import { isValidHex } from "@/lib/styleTokens";
+import { BRAND_COLOR_ROLES, isValidHex } from "@/lib/styleTokens";
 import { useStore } from "@/lib/store";
 import { Icon, InlineError } from "../ui";
 
@@ -57,7 +57,7 @@ export function BrandColors() {
 
       <div className="flex flex-wrap items-center gap-2">
         <AnimatePresence mode="popLayout">
-          {colors.map((hex) => (
+          {colors.map((hex, i) => (
             <motion.span
               key={hex}
               layout
@@ -74,9 +74,13 @@ export function BrandColors() {
                   outline: "1px solid rgba(255,255,255,.18)",
                 }}
               />
-              <code className="font-mono-pf text-[12px] uppercase text-pf-body">
-                {hex}
-              </code>
+              {/* The job, then the colour. A merchant reading "Accent" knows
+                  what they just decided; reading only a hex code they do not. */}
+              <span className="text-[12px] leading-tight text-pf-body">
+                <span className="font-semibold">{BRAND_COLOR_ROLES[i]?.label}</span>
+                <span className="text-pf-faint"> · </span>
+                <code className="font-mono-pf uppercase">{hex}</code>
+              </span>
               <button
                 type="button"
                 onClick={() => removeColor(hex)}
@@ -96,7 +100,11 @@ export function BrandColors() {
           className="inline-flex items-center gap-1.5 rounded-pf-pill border border-dashed border-pf-border-hi px-3.5 py-2 text-[12.5px] font-medium text-pf-muted transition-colors hover:border-pf-primary-hi hover:text-pf-body disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Icon name="Plus" size={13} />
-          Add color
+          {/* Names the slot about to be filled, so the choice is made knowing
+              what it is for rather than discovered afterwards. */}
+          {full
+            ? "Add color"
+            : `Add ${BRAND_COLOR_ROLES[colors.length].label.toLowerCase()}`}
         </button>
 
         {/* Native color picker — hidden, opened by the button above. */}
@@ -146,6 +154,13 @@ export function BrandColors() {
           </button>
         )}
       </div>
+
+      {!full && (
+        <p className="text-[11px] leading-relaxed text-pf-faint">
+          {BRAND_COLOR_ROLES[colors.length].label} —{" "}
+          {BRAND_COLOR_ROLES[colors.length].hint.toLowerCase()}
+        </p>
+      )}
 
       <AnimatePresence>
         {error && (

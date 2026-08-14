@@ -9,8 +9,8 @@ import { BrandColors } from "./BrandColors";
 /* The card preview: three palette dots plus a type sample rendered in the
    style's own display face. The point is that the choice reads visually — the
    word "Neubrutalist" tells a merchant much less than seeing it. */
-function Swatch({ id }: { id: VisualStyleId }) {
-  const s = styleSwatch(id);
+function Swatch({ id, brandColors }: { id: VisualStyleId; brandColors: string[] }) {
+  const s = styleSwatch(id, brandColors);
   return (
     <div
       className="flex h-[68px] items-end justify-between gap-2 rounded-pf-md px-3 pb-2.5 pt-3"
@@ -45,6 +45,7 @@ function Swatch({ id }: { id: VisualStyleId }) {
 export function StylePicker() {
   const selected = useStore((s) => s.draft.visualStyle);
   const setStyle = useStore((s) => s.setStyle);
+  const brandColors = useStore((s) => s.draft.brandColors);
 
   return (
     <SectionCard
@@ -77,7 +78,8 @@ export function StylePicker() {
                   : "border-pf-border bg-pf-card hover:border-pf-border-hi"
               }`}
             >
-              <Swatch id={style.id} />
+              {/* Only the chosen card wears the merchant's colours. */}
+              <Swatch id={style.id} brandColors={on ? brandColors : []} />
               {/* Label only. The swatch is the description — that was the point
                   of rendering a live preview rather than naming the style. The
                   written blurb is the card's tooltip. */}

@@ -770,6 +770,22 @@ export function shiftHue(hex: string, deg: number): string {
  * a recognisably "Scandinavian" or "Neubrutalist" page rather than a generic
  * one wearing pink.
  */
+/**
+ * What each brand colour is for, in the order they are picked.
+ *
+ * Written down because the order was the only thing saying it, and a flat list
+ * of five swatches where two did anything promised more than it delivered. The
+ * merchant now reads the job off the chip before choosing the colour.
+ *
+ * The cap on brand colours is the length of this list — a slot without a job is
+ * a slot that should not exist.
+ */
+export const BRAND_COLOR_ROLES = [
+  { label: "Accent", hint: "Buttons, prices, badges, highlighted words" },
+  { label: "Alt band", hint: "Background of every other section" },
+  { label: "Borders", hint: "Card and section outlines" },
+] as const;
+
 export function styleToTokens(
   style: VisualStyleId,
   brandColors: string[] = [],
@@ -793,6 +809,18 @@ export function styleToTokens(
     }
   }
 
+  /* The third colour owns the border outright, on every style.
+
+     The guard above protects a hard-edged style from having its signature
+     black outline tinted by an accent it did not ask for — an incidental
+     derivation. A third colour is not incidental: the merchant filled a slot
+     labelled Borders. Honouring it everywhere is the only way that label is
+     not a lie on the two styles that happen to be hard-edged. */
+  if (valid.length > 2) {
+    tokens.border = withAlpha(valid[2], 0.34);
+    tokens.borderWidth = Math.max(tokens.borderWidth, 1);
+  }
+
   if (valid.length > 1) {
     const second = valid[1];
     // Only tint the alternating band if the second color is actually distinct,
@@ -809,7 +837,17 @@ export function styleToTokens(
 }
 
 /** The 3 dots + type sample shown on each style card in the brief form. */
-export function styleSwatch(style: VisualStyleId): {
+/**
+ * What a style card shows.
+ *
+ * `brandColors` is passed for the SELECTED card only, so that card previews the
+ * merchant's own palette while the other fourteen keep their own — the grid is
+ * a comparison, and fifteen cards wearing the same accent cannot be compared.
+ */
+export function styleSwatch(
+  style: VisualStyleId,
+  brandColors: string[] = [],
+): {
   dots: [string, string, string];
   font: string;
   weight: number;
@@ -818,9 +856,9 @@ export function styleSwatch(style: VisualStyleId): {
   bg: string;
   ink: string;
 } {
-  const t = STYLE_BY_ID[style].tokens;
+  const t = styleToTokens(style, brandColors);
   return {
-    dots: [t.accent, t.surfaceAlt, t.ink],
+    dots: [t.accent, t.surfaceAlt, t.border],
     font: t.fontDisplay,
     weight: t.displayWeight,
     tracking: t.tracking,
