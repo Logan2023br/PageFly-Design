@@ -15,7 +15,7 @@ import { PreviewOverlay } from "../preview/PreviewOverlay";
 import { ExportProvider } from "../results/ExportProvider";
 import { ResultsScreen } from "../results/ResultsScreen";
 import { PageQuota, WorkspaceNav } from "../ProgressSteps";
-import { ReviewPrompt } from "../review/ReviewPrompt";
+import { ReviewPrompt, openReviewPrompt } from "../review/ReviewPrompt";
 import { StoreMenu } from "../StoreMenu";
 import { Button, Icon, Panel } from "../ui";
 
@@ -222,6 +222,17 @@ export function LibraryScreen({
                 <p className="text-[12.5px] text-pf-muted">
                   {total} {total === 1 ? "page" : "pages"} from {runs.length}{" "}
                   {runs.length === 1 ? "build" : "builds"}
+                  {" · "}
+                  {/* Underlined, because in a line of plain muted text nothing
+                      else says this one phrase is clickable. Offset so the rule
+                      clears the descenders rather than cutting through them. */}
+                  <button
+                    type="button"
+                    onClick={openReviewPrompt}
+                    className="rounded-pf-sm underline decoration-pf-faint underline-offset-[3px] transition-colors hover:text-pf-body hover:decoration-pf-body focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-pf-primary-hi"
+                  >
+                    Leave feedback
+                  </button>
                 </p>
               )}
               <LibraryContent runs={runs} />

@@ -48,7 +48,29 @@ function sessionStartedAt(domain: string): number {
   }
 }
 
-type Phase = "hidden" | "asking" | "sending" | "thanks";
+type Phase = "hidden" | "asking" | "sending" | "thanks" | "already";
+
+/* ==========================================================================
+   Opening it by hand.
+
+   A window event rather than props or a store slice. The panel is mounted once,
+   at the root of the Library, and the link that opens it sits several
+   components away with no shared parent worth threading state through — and
+   whether the merchant is due an automatic prompt is a question this component
+   already answers for itself. An event lets the link say "open" and stay
+   ignorant of everything else.
+
+   Guarded on `typeof window`: the link is rendered on the server too, and a
+   bare `window` reference there is a build failure rather than a runtime one.
+   ========================================================================== */
+
+const OPEN_EVENT = "pfd:open-review";
+
+/** Open the review panel. Safe to call from anywhere on the client. */
+export function openReviewPrompt() {
+  if (typeof window !== "undefined")
+    window.dispatchEvent(new Event(OPEN_EVENT));
+}
 
 export function ReviewPrompt() {
   const { account } = useAccount();
@@ -58,6 +80,11 @@ export function ReviewPrompt() {
   const [hover, setHover] = useState(0);
   const [comment, setComment] = useState("");
   const [error, setError] = useState<string | null>(null);
+  /* `account` is server-rendered and never refetched, so its `hasReviewed` stays
+     false for the rest of a session in which the merchant just reviewed. Without
+     this, reopening the panel by hand would offer them the form a second time
+     and the server would quietly discard what they wrote. */
+  const [justReviewed, setJustReviewed] = useState(false);
 
   const lastRunAt = account?.lastRunAt ?? null;
   const eligible = Boolean(account && !account.hasReviewed && lastRunAt);
@@ -88,6 +115,19 @@ export function ReviewPrompt() {
     return () => clearTimeout(timer);
   }, [eligible, dismissed, lastRunAt, domain]);
 
+  /* Opening by hand ignores the timer, the dismissal and `eligible` — the
+     merchant asked. It does not ignore `hasReviewed`: the server refuses a
+     second review, so showing the form to someone who has already left one
+     would be inviting them to fill in something that cannot be sent. */
+  useEffect(() => {
+    const onOpen = () => {
+      setDismissed(false);
+      setPhase(account?.hasReviewed || justReviewed ? "already" : "asking");
+    };
+    window.addEventListener(OPEN_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_EVENT, onOpen);
+  }, [account?.hasReviewed, justReviewed]);
+
   const submit = async () => {
     if (stars < 1 || phase === "sending") return;
     setPhase("sending");
@@ -104,7 +144,11 @@ export function ReviewPrompt() {
         setPhase("asking");
         return;
       }
-      setPhase("thanks");
+      setJustReviewed(true);
+      /* The server accepts the request and reports that it kept the first
+         review. Saying "thanks for the feedback" here would be thanking them
+         for something that was not stored. */
+      setPhase(body.alreadyReviewed ? "already" : "thanks");
     } catch {
       setError("Could not send that. Please try again.");
       setPhase("asking");
@@ -126,7 +170,37 @@ export function ReviewPrompt() {
           transition={{ type: "spring", stiffness: 320, damping: 30 }}
           className="pfd-glass fixed bottom-4 right-4 z-50 w-[min(360px,calc(100vw-2rem))] rounded-pf-card border border-pf-border p-4 shadow-pf-float"
         >
-          {phase === "thanks" ? (
+          {phase === "already" ? (
+            /* Two ways in, and never the timer — the timer's `eligible` already
+               excludes a store that has reviewed. Either the merchant opened
+               the panel by hand having reviewed before, or they submitted one
+               the server declined to replace. Worded as a fact rather than a
+               refusal: they did the thing, and being told "you cannot" for
+               having done it reads as a scolding. */
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="grid gap-2 py-1 text-center"
+            >
+              <span className="mx-auto grid size-9 place-items-center rounded-full bg-pf-success/15 text-pf-success">
+                <Icon name="CircleCheck" size={18} />
+              </span>
+              <p className="text-[14px] font-semibold text-pf-text">
+                You already left a review
+              </p>
+              <p className="text-[12.5px] text-pf-muted">
+                Thanks — one per store is all we ask for.
+              </p>
+              <Button
+                variant="quiet"
+                size="sm"
+                className="mx-auto mt-1"
+                onClick={() => setPhase("hidden")}
+              >
+                Close
+              </Button>
+            </motion.div>
+          ) : phase === "thanks" ? (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
