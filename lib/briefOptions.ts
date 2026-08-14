@@ -46,16 +46,92 @@ export const STORE_TYPES: { id: StoreTypeId; label: string }[] = [
   { id: "nonprofit", label: "Nonprofit" },
 ];
 
-/* Example chips for "what do you sell" (§4.1) ----------------------------- */
+/* Industry chips for "what do you sell" (§4.1) --------------------------- */
 
+/**
+ * The industries a store can be, in the order they are offered.
+ *
+ * Grouped by trade rather than alphabetised — someone selling skincare scans
+ * for it among the other beauty lines, not between Meal kits and Smart home.
+ * The order is the grouping, so the first screenful reads as a shape rather
+ * than a list.
+ *
+ * Clicking one writes it into the field, which stays free text: a merchant
+ * whose trade is not on this list types their own, and always could.
+ */
 export const SELL_EXAMPLES = [
-  "handmade ceramic mugs",
-  "running shoes",
-  "skincare for men",
-  "single-origin coffee beans",
-  "linen bedding",
-  "vintage denim",
+  "Fashion & apparel",
+  "Footwear",
+  "Jewelry & watches",
+  "Bags & accessories",
+  "Eyewear",
+  "Kids & baby clothing",
+  "Skincare",
+  "Makeup & cosmetics",
+  "Hair care & styling",
+  "Fragrance",
+  "Supplements & nutrition",
+  "Personal care devices",
+  "Intimate & sexual wellness",
+  "Coffee & tea",
+  "Specialty & gourmet food",
+  "Snacks & confectionery",
+  "Bakery & desserts",
+  "Wine, beer & spirits",
+  "Meal kits & prepared food",
+  "Health & functional food",
+  "Furniture",
+  "Home decor & art",
+  "Bedding & textiles",
+  "Kitchen & tableware",
+  "Lighting",
+  "Garden & outdoor living",
+  "Home improvement & storage",
+  "Cleaning & household",
+  "Consumer electronics",
+  "Audio & headphones",
+  "Phone & tech accessories",
+  "Computers & gaming gear",
+  "Smart home & security",
+  "Drones, cameras & optics",
+  "Fitness equipment",
+  "Activewear & sportswear",
+  "Outdoor & camping",
+  "Cycling & e-bikes",
+  "EV & personal mobility",
+  "Water & snow sports",
+  "Hunting & fishing",
+  "Team sports & racket",
+  "Baby & maternity gear",
+  "Toys & games",
+  "Pet supplies",
+  "Art & craft supplies",
+  "Musical instruments",
+  "Books & stationery",
+  "Collectibles & hobby",
+  "Auto parts & accessories",
+  "Moto & powersports",
+  "Tools & hardware",
+  "Industrial & MRO supply",
+  "Medical & dental supply",
+  "Office & professional equipment",
+  "SaaS & app",
+  "Courses & coaching",
+  "Digital downloads & templates",
+  "Agency & professional services",
+  "Local & appointment services",
+  "Events & ticketing",
+  "Travel & hospitality",
+  "Membership & community",
+  "Nonprofit & cause",
+  "Real estate & property",
+  "Finance & insurance",
 ];
+
+/** How many are shown before the list asks to be opened. Thirty is about two
+    rows on a laptop and the point where a chip field stops reading as a set of
+    suggestions and starts reading as a wall. */
+export const SELL_EXAMPLES_VISIBLE = 30;
 
 /* Snippet chips that append to the textarea (§4.4) ------------------------ */
 
