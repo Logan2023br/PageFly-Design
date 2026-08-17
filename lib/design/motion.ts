@@ -9,9 +9,18 @@ import type { Anim } from "./schema";
    file's custom CSS and custom JS, and the preview injects the same CSS and
    runs the same observer. Not "equivalent" — the same source.
 
-   Everything is namespaced `pfa-` so nothing here can collide with the
-   merchant's theme, with PageFly's own classes, or with the `pf-` prefix the
-   platform uses.
+   NAMES ARE LONG ON PURPOSE. These were `pfa-r`, `pfa-in`, `pfa-h-float` —
+   short, tidy, and straight into PageFly's own namespace: `pfa-` is its icon
+   font (`pfa-arrow`, `pfa-plus`, `pfa-minus`, see fields.md on the accordion
+   icon), and every class in it carries a `:before{content}` glyph. `.pfa-r`
+   turned out to exist and to render `\52`, so every revealing section in the
+   editor grew a small letter R above it.
+
+   Nothing warned about that, and nothing could have: the collision only shows
+   up inside PageFly's own stylesheet, which is not in the reference and not in
+   this repo. So the defence is not cleverness but length — `pfd-reveal` and
+   `pfd-motion-ready` are hard to collide with by accident in a way that
+   `pfa-r` was not. Do not shorten them.
    ========================================================================== */
 
 /** Six values, and they are PageFly's, not ours — see fields.md → Button2. */
@@ -34,11 +43,11 @@ export const HOVER_NATIVE_TYPES = new Set([
 ]);
 
 export function hoverClass(a: Anim): string | null {
-  return a?.hover ? `pfa-h-${a.hover}` : null;
+  return a?.hover ? `pfd-hover-${a.hover}` : null;
 }
 
 export function revealClass(a: Anim): string | null {
-  return a?.reveal ? `pfa-r-${a.reveal}` : null;
+  return a?.reveal ? `pfd-reveal-${a.reveal}` : null;
 }
 
 /** Every class this node needs, ready to join with a space. */
@@ -48,8 +57,8 @@ export function motionClasses(a: Anim): string[] {
   const r = revealClass(a);
   if (h) out.push(h);
   if (r) {
-    out.push("pfa-r", r);
-    if (a?.delay) out.push(`pfa-d-${a.delay}`);
+    out.push("pfd-reveal", r);
+    if (a?.delay) out.push(`pfd-delay-${a.delay}`);
   }
   return out;
 }
@@ -89,36 +98,36 @@ export const HOVER_CSS: Record<string, string> = {
  */
 export const MOTION_CSS = [
   /* hover — every element gets a transition, the six variants set the target */
-  `.pfa-h-float,.pfa-h-shadow,.pfa-h-grow,.pfa-h-glow,.pfa-h-float-shadow,.pfa-h-grow-shadow{transition:transform .25s ease,box-shadow .25s ease;}`,
-  ...PAGEFLY_HOVERS.map((h) => `.pfa-h-${h}:hover{${HOVER_CSS[h]}}`),
+  `.pfd-hover-float,.pfd-hover-shadow,.pfd-hover-grow,.pfd-hover-glow,.pfd-hover-float-shadow,.pfd-hover-grow-shadow{transition:transform .25s ease,box-shadow .25s ease;}`,
+  ...PAGEFLY_HOVERS.map((h) => `.pfd-hover-${h}:hover{${HOVER_CSS[h]}}`),
 
-  /* reveal — EVERY rule below is gated behind `.pfa-ready` on <html>, which the
+  /* reveal — EVERY rule below is gated behind `.pfd-motion-ready` on <html>, which the
      script adds as its first act.
 
-     Ungated, `.pfa-r{opacity:0}` is a promise that some JavaScript will arrive
+     Ungated, `.pfd-reveal{opacity:0}` is a promise that some JavaScript will arrive
      to undo it. PageFly's editor does not run custom JS — its own animation
      panel says as much — so in the editor that promise is never kept and the
      section is simply gone: present in the layer tree, invisible on the canvas,
      with nothing to suggest why. The merchant sees a hole in the page they
      just built.
 
-     Gated, the failure mode inverts. No script, no `.pfa-ready`, no hiding:
+     Gated, the failure mode inverts. No script, no `.pfd-motion-ready`, no hiding:
      the page renders complete and still. Motion becomes something the page
      gains when the script runs rather than something it needs the script to
      survive. */
-  `.pfa-ready .pfa-r{opacity:0;transition:opacity .7s cubic-bezier(.22,.61,.36,1),transform .7s cubic-bezier(.22,.61,.36,1);will-change:opacity,transform;}`,
-  `.pfa-ready .pfa-r-fade-up{transform:translateY(28px);}`,
-  `.pfa-ready .pfa-r-slide-left{transform:translateX(-32px);}`,
-  `.pfa-ready .pfa-r-slide-right{transform:translateX(32px);}`,
-  `.pfa-ready .pfa-r-zoom{transform:scale(.94);}`,
-  `.pfa-ready .pfa-r.pfa-in{opacity:1;transform:none;}`,
+  `.pfd-motion-ready .pfd-reveal{opacity:0;transition:opacity .7s cubic-bezier(.22,.61,.36,1),transform .7s cubic-bezier(.22,.61,.36,1);will-change:opacity,transform;}`,
+  `.pfd-motion-ready .pfd-reveal-fade-up{transform:translateY(28px);}`,
+  `.pfd-motion-ready .pfd-reveal-slide-left{transform:translateX(-32px);}`,
+  `.pfd-motion-ready .pfd-reveal-slide-right{transform:translateX(32px);}`,
+  `.pfd-motion-ready .pfd-reveal-zoom{transform:scale(.94);}`,
+  `.pfd-motion-ready .pfd-reveal.pfd-revealed{opacity:1;transform:none;}`,
 
   /* stagger — 80ms a step, six steps at most. Past about half a second a
      visitor stops reading it as one group arriving and starts waiting. */
-  ...[1, 2, 3, 4, 5, 6].map((i) => `.pfa-d-${i}{transition-delay:${i * 80}ms;}`),
+  ...[1, 2, 3, 4, 5, 6].map((i) => `.pfd-delay-${i}{transition-delay:${i * 80}ms;}`),
 
-  `@media (prefers-reduced-motion: reduce){.pfa-ready .pfa-r,.pfa-ready .pfa-r.pfa-in{opacity:1;transform:none;transition:none;}` +
-    `.pfa-h-float,.pfa-h-shadow,.pfa-h-grow,.pfa-h-glow,.pfa-h-float-shadow,.pfa-h-grow-shadow{transition:none;}}`,
+  `@media (prefers-reduced-motion: reduce){.pfd-motion-ready .pfd-reveal,.pfd-motion-ready .pfd-reveal.pfd-revealed{opacity:1;transform:none;transition:none;}` +
+    `.pfd-hover-float,.pfd-hover-shadow,.pfd-hover-grow,.pfd-hover-glow,.pfd-hover-float-shadow,.pfd-hover-grow-shadow{transition:none;}}`,
 ].join("\n");
 
 /**
@@ -128,7 +137,7 @@ export const MOTION_CSS = [
  *
  * - runs once per page even if the snippet is injected twice (PageFly custom JS
  *   can re-run on editor preview refresh)
- * - arms the CSS by adding `.pfa-ready`, and only once it is certain it can
+ * - arms the CSS by adding `.pfd-motion-ready`, and only once it is certain it can
  *   also disarm it — so the page is never left hidden by a stylesheet whose
  *   script did not arrive
  * - if IntersectionObserver is missing, nothing is armed at all: the page
@@ -138,13 +147,13 @@ export const MOTION_CSS = [
  * - unobserves on reveal, so a long page does not keep hundreds of live entries
  */
 export const MOTION_JS = `(function(){
-  if (window.__pfaRevealed) return;
-  window.__pfaRevealed = 1;
-  var show = function(el){ el.classList.add('pfa-in'); };
-  /* Bail BEFORE arming. Adding .pfa-ready and then finding no way to reveal
+  if (window.__pfdMotion) return;
+  window.__pfdMotion = 1;
+  var show = function(el){ el.classList.add('pfd-revealed'); };
+  /* Bail BEFORE arming. Adding .pfd-motion-ready and then finding no way to reveal
      anything is the one outcome worse than no animation at all. */
   if (!('IntersectionObserver' in window)) return;
-  document.documentElement.classList.add('pfa-ready');
+  document.documentElement.classList.add('pfd-motion-ready');
   var io = new IntersectionObserver(function(entries){
     entries.forEach(function(e){
       if (!e.isIntersecting) return;
@@ -153,7 +162,7 @@ export const MOTION_JS = `(function(){
     });
   }, { rootMargin: '0px 0px -12% 0px', threshold: 0.08 });
   var scan = function(){
-    document.querySelectorAll('.pfa-r:not(.pfa-in)').forEach(function(el){ io.observe(el); });
+    document.querySelectorAll('.pfd-reveal:not(.pfd-revealed)').forEach(function(el){ io.observe(el); });
   };
   scan();
   new MutationObserver(scan).observe(document.documentElement, { childList: true, subtree: true });

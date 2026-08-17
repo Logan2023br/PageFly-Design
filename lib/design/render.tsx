@@ -477,7 +477,7 @@ function Section({ section }: { section: DesignSection }) {
  * page — a document-wide observer would reveal the mobile frame's sections when
  * the desktop frame's scrolled past.
  *
- * The timer is a safety net, not part of the effect. Once `.pfa-ready` is set,
+ * The timer is a safety net, not part of the effect. Once `.pfd-motion-ready` is set,
  * reveal styles rest at `opacity: 0`, so anything the observer fails to reach —
  * a frame clipped by the stage, a device the merchant has not scrolled to —
  * would be an invisible page rather than a still one. After a second and a
@@ -488,21 +488,21 @@ function useReveal(root: React.RefObject<HTMLDivElement | null>, tree: DesignTre
     const host = root.current;
     if (!host) return;
 
-    const targets = () => Array.from(host.querySelectorAll<HTMLElement>(".pfa-r:not(.pfa-in)"));
-    const showAll = () => targets().forEach((el) => el.classList.add("pfa-in"));
+    const targets = () => Array.from(host.querySelectorAll<HTMLElement>(".pfd-reveal:not(.pfd-revealed)"));
+    const showAll = () => targets().forEach((el) => el.classList.add("pfd-revealed"));
 
-    /* Nothing is hidden until `.pfa-ready` says so — the same gate the exported
+    /* Nothing is hidden until `.pfd-motion-ready` says so — the same gate the exported
        page uses, for the same reason. Set here rather than in the markup so a
        preview whose effects never run shows a complete page instead of an
        empty one. */
     if (typeof IntersectionObserver === "undefined") return;
-    document.documentElement.classList.add("pfa-ready");
+    document.documentElement.classList.add("pfd-motion-ready");
 
     const io = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
           if (!e.isIntersecting) continue;
-          e.target.classList.add("pfa-in");
+          e.target.classList.add("pfd-revealed");
           io.unobserve(e.target);
         }
       },
