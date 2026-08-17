@@ -74,7 +74,7 @@ export function ImageUpload() {
         setError(
           `${tooBig.length === 1 ? tooBig[0] : `${tooBig.length} files`} ${
             tooBig.length === 1 ? "is" : "are"
-          } over 5 MB. Resize and try again.`,
+          } over ${MAX_IMAGE_BYTES / 1024 / 1024} MB. Resize and try again.`,
         );
       else if (queue.length < files.length && room < files.length)
         setError(`Up to ${MAX_IMAGES} images — the extras were skipped.`);
@@ -101,6 +101,7 @@ export function ImageUpload() {
           accepted.push({
             ...base,
             dataUrl: prepared.dataUrl,
+            slices: prepared.slices,
             palette: prepared.palette,
           });
         } catch {
@@ -151,7 +152,7 @@ export function ImageUpload() {
       id="pfd-images"
       eyebrow="Step 5 · optional"
       title="Reference images"
-      help="Images only — up to six, 5 MB each."
+      help={`Images only — up to ${MAX_IMAGES}, ${MAX_IMAGE_BYTES / 1024 / 1024} MB each.`}
       aside={
         busy ? (
           <span className="text-[11.5px] text-pf-primary-hi">

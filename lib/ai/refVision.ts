@@ -40,10 +40,11 @@ export type RefReading = {
 const MODEL = "claude-haiku-4-5";
 const TIMEOUT_MS = 60_000;
 
-/* Four is already more than a designer needs to see a pattern, and each one is
-   another 600 tokens and another second of latency on a build the merchant is
-   waiting on. */
-const MAX_IMAGES = 4;
+/* Counts PICTURES SENT, not uploads — one tall screenshot arrives as up to four
+   slices, and six uploads at four slices each would be twenty-four images on a
+   call a merchant is waiting on. Six is enough to see a pattern: past that each
+   one costs another ~600 tokens to say what the first six already said. */
+const MAX_IMAGES = 6;
 
 /**
  * The question. Deliberately about STRUCTURE, not beauty.
@@ -55,6 +56,9 @@ const MAX_IMAGES = 4;
  */
 const PROMPT = [
   "These are screenshots of e-commerce pages a merchant wants their own page to resemble.",
+  "A tall page arrives as consecutive vertical slices of ONE page, in order —",
+  "read them as a single continuous page and list each section once. A section",
+  "cut across two slices is still one section.",
   "",
   "List every section, top to bottom, one line each, in this exact format:",
   "  <what it is> | <columns> | <light|dark> | <share of page height>",
@@ -95,8 +99,17 @@ export async function readReferences(
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return null;
 
+  /* `slices` first, `dataUrl` only as a fallback. The thumbnail is capped on its
+     long edge, so a tall page arrives too narrow to read — measured on a real
+     reference, the same image full-size named sixteen sections and quoted the
+     page's own headings, while the thumbnail missed the FAQ, called a light band
+     dark and guessed a section from its shape. Slices keep the width.
+
+     An upload from before this existed has no slices, and the thumbnail is a
+     poor read rather than no read. */
   const images = (brief.referenceImages ?? [])
-    .map((r) => (r.dataUrl ? toImagePart(r.dataUrl) : null))
+    .flatMap((r) => (r.slices?.length ? r.slices : r.dataUrl ? [r.dataUrl] : []))
+    .map(toImagePart)
     .filter((p): p is ImagePart => p !== null)
     .slice(0, MAX_IMAGES);
 

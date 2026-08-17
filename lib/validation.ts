@@ -24,6 +24,15 @@ export const referenceImageSchema = z.object({
    * contract, and needs no blob-fetch or CORS handling at PNG export.
    */
   dataUrl: z.string().optional(),
+  /**
+   * The same image cut into readable pieces for the vision pass, in order.
+   *
+   * Separate from `dataUrl` because they answer different questions. `dataUrl`
+   * is a thumbnail capped on its long edge, which is right for showing the
+   * upload back and useless for reading a tall page: a 1500x8000 capture ends
+   * up 192 wide. These keep the horizontal resolution and split the height.
+   */
+  slices: z.array(z.string()).max(4).optional(),
   /** dominant colours pulled off the image, most prominent first */
   palette: z.array(z.string()).default([]),
   /**

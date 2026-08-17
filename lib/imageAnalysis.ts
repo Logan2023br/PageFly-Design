@@ -31,6 +31,35 @@ import type {
    ========================================================================== */
 
 export const REF_MAX_EDGE = 1024;
+
+/* ==========================================================================
+   Slices for the vision pass.
+
+   `REF_MAX_EDGE` caps the LONG edge, which is right for the thumbnail and wrong
+   for reading. A page screenshot's long edge is its height, so a 1500x8000
+   capture arrives 192 wide — and measured against the same image at full size,
+   Haiku went from naming sixteen sections and quoting the page's own Polish
+   headings to missing the FAQ, calling a light band dark, and guessing "massage
+   device section" from a shape.
+
+   Enlarging the whole image does not fix it. Claude resizes any image to 1568px
+   on its long edge, so a 1:5.7 page is 275px wide however many megabytes were
+   uploaded. The only thing that raises the horizontal resolution is cutting the
+   page into pieces that are not extremely tall — four slices of that same page
+   are 1100px wide each.
+
+   Kept at the source resolution, capped only by what the API will use. */
+const SLICE_MAX_EDGE = 1568;
+
+/** Above this ratio a page is tall enough that one image cannot be read. */
+const SLICE_ABOVE_RATIO = 2;
+
+/** Each slice is about this tall relative to its width — near a photograph's
+    shape, which is what the resize budget is spent best on. */
+const SLICE_RATIO = 1.4;
+
+/** Four covers a long homepage. More is more tokens for less of the page each. */
+const MAX_SLICES = 4;
 /** Palette is sampled from a tiny canvas — accuracy past this is wasted work. */
 const SAMPLE_EDGE = 48;
 const MAX_PALETTE = 4;
@@ -39,6 +68,11 @@ export type PreparedImage = {
   /** bounded, serialisable copy. NOT rendered into mockups — kept so the real
       vision-capable generator has the image to send. */
   dataUrl: string;
+  /**
+   * The same picture cut into readable pieces, in order, for the model that
+   * reads it. One entry when the image is not tall; up to four when it is.
+   */
+  slices: string[];
   /** the structural read: section rhythm, columns, banding */
   layout: LayoutFingerprint | null;
   /** dominant colours, most prominent first */
@@ -179,6 +213,61 @@ function loadImage(src: string): Promise<HTMLImageElement> {
  * Prepare one uploaded file for use in the mockups.
  * Throws if the file cannot be decoded — the caller shows an inline message.
  */
+
+/**
+ * Cut a tall screenshot into pieces a vision model can read.
+ *
+ * Returns one entry — the whole picture — when the image is not tall enough to
+ * need it. Every slice keeps the source's own horizontal resolution up to what
+ * the API will use, because horizontal resolution is the entire point: it is
+ * what separates "reviews grid, 3 columns" from "some kind of section".
+ */
+function sliceForReading(img: HTMLImageElement): string[] {
+  const W = img.naturalWidth;
+  const H = img.naturalHeight;
+  if (!W || !H) return [];
+
+  const ratio = H / W;
+  /* Slices only cover the height. A wide image is downscaled by the API on its
+     width instead, and cutting it vertically would split a row of cards in
+     half — worse than reading it slightly smaller. */
+  const count =
+    ratio <= SLICE_ABOVE_RATIO
+      ? 1
+      : Math.min(MAX_SLICES, Math.ceil(ratio / SLICE_RATIO));
+
+  const sliceH = Math.ceil(H / count);
+  const scale = Math.min(1, SLICE_MAX_EDGE / Math.max(W, sliceH));
+  const outW = Math.max(1, Math.round(W * scale));
+  const outH = Math.max(1, Math.round(sliceH * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = outW;
+  canvas.height = outH;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return [];
+
+  const out: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const sy = i * sliceH;
+    /* The last slice is short when the height does not divide evenly. Drawing
+       the full slice height anyway would stretch it. */
+    const sh = Math.min(sliceH, H - sy);
+    if (sh <= 0) break;
+    const dh = Math.max(1, Math.round(sh * scale));
+
+    canvas.height = dh;
+    ctx.clearRect(0, 0, outW, dh);
+    ctx.drawImage(img, 0, sy, W, sh, 0, 0, outW, dh);
+
+    /* JPEG rather than WebP. Both are accepted, and a screenshot of a page is
+       mostly flat colour and text where JPEG at this quality is
+       indistinguishable and smaller — and these travel in a request body. */
+    out.push(canvas.toDataURL("image/jpeg", 0.85));
+  }
+  return out;
+}
+
 export async function prepareReferenceImage(
   file: File,
 ): Promise<PreparedImage> {
@@ -219,8 +308,11 @@ export async function prepareReferenceImage(
     );
 
     const layout = extractLayout(img);
+    /* Cut from the ORIGINAL image, not from the thumbnail above — the whole
+       reason these exist is that the thumbnail is too small to read. */
+    const slices = sliceForReading(img);
 
-    return { dataUrl, palette, layout, width: w, height: h, lightness, saturation };
+    return { dataUrl, slices, palette, layout, width: w, height: h, lightness, saturation };
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
