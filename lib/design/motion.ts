@@ -92,22 +92,32 @@ export const MOTION_CSS = [
   `.pfa-h-float,.pfa-h-shadow,.pfa-h-grow,.pfa-h-glow,.pfa-h-float-shadow,.pfa-h-grow-shadow{transition:transform .25s ease,box-shadow .25s ease;}`,
   ...PAGEFLY_HOVERS.map((h) => `.pfa-h-${h}:hover{${HOVER_CSS[h]}}`),
 
-  /* reveal — the resting state is the animated-out state, and `.pfa-in` is what
-     the observer adds. Elements start invisible, so the JS below is not
-     optional: if it never runs, nothing on the page is readable. The
-     `no-js` guard at the end of MOTION_JS is what covers that. */
-  `.pfa-r{opacity:0;transition:opacity .7s cubic-bezier(.22,.61,.36,1),transform .7s cubic-bezier(.22,.61,.36,1);will-change:opacity,transform;}`,
-  `.pfa-r-fade-up{transform:translateY(28px);}`,
-  `.pfa-r-slide-left{transform:translateX(-32px);}`,
-  `.pfa-r-slide-right{transform:translateX(32px);}`,
-  `.pfa-r-zoom{transform:scale(.94);}`,
-  `.pfa-r.pfa-in{opacity:1;transform:none;}`,
+  /* reveal — EVERY rule below is gated behind `.pfa-ready` on <html>, which the
+     script adds as its first act.
+
+     Ungated, `.pfa-r{opacity:0}` is a promise that some JavaScript will arrive
+     to undo it. PageFly's editor does not run custom JS — its own animation
+     panel says as much — so in the editor that promise is never kept and the
+     section is simply gone: present in the layer tree, invisible on the canvas,
+     with nothing to suggest why. The merchant sees a hole in the page they
+     just built.
+
+     Gated, the failure mode inverts. No script, no `.pfa-ready`, no hiding:
+     the page renders complete and still. Motion becomes something the page
+     gains when the script runs rather than something it needs the script to
+     survive. */
+  `.pfa-ready .pfa-r{opacity:0;transition:opacity .7s cubic-bezier(.22,.61,.36,1),transform .7s cubic-bezier(.22,.61,.36,1);will-change:opacity,transform;}`,
+  `.pfa-ready .pfa-r-fade-up{transform:translateY(28px);}`,
+  `.pfa-ready .pfa-r-slide-left{transform:translateX(-32px);}`,
+  `.pfa-ready .pfa-r-slide-right{transform:translateX(32px);}`,
+  `.pfa-ready .pfa-r-zoom{transform:scale(.94);}`,
+  `.pfa-ready .pfa-r.pfa-in{opacity:1;transform:none;}`,
 
   /* stagger — 80ms a step, six steps at most. Past about half a second a
      visitor stops reading it as one group arriving and starts waiting. */
   ...[1, 2, 3, 4, 5, 6].map((i) => `.pfa-d-${i}{transition-delay:${i * 80}ms;}`),
 
-  `@media (prefers-reduced-motion: reduce){.pfa-r,.pfa-r.pfa-in{opacity:1;transform:none;transition:none;}` +
+  `@media (prefers-reduced-motion: reduce){.pfa-ready .pfa-r,.pfa-ready .pfa-r.pfa-in{opacity:1;transform:none;transition:none;}` +
     `.pfa-h-float,.pfa-h-shadow,.pfa-h-grow,.pfa-h-glow,.pfa-h-float-shadow,.pfa-h-grow-shadow{transition:none;}}`,
 ].join("\n");
 
@@ -118,8 +128,11 @@ export const MOTION_CSS = [
  *
  * - runs once per page even if the snippet is injected twice (PageFly custom JS
  *   can re-run on editor preview refresh)
- * - if IntersectionObserver is missing, everything is revealed immediately
- *   rather than left at `opacity: 0` forever
+ * - arms the CSS by adding `.pfa-ready`, and only once it is certain it can
+ *   also disarm it — so the page is never left hidden by a stylesheet whose
+ *   script did not arrive
+ * - if IntersectionObserver is missing, nothing is armed at all: the page
+ *   renders complete and still rather than blank
  * - a MutationObserver picks up elements PageFly renders late — product grids
  *   and anything inside a slideshow arrive after first paint
  * - unobserves on reveal, so a long page does not keep hundreds of live entries
@@ -128,10 +141,10 @@ export const MOTION_JS = `(function(){
   if (window.__pfaRevealed) return;
   window.__pfaRevealed = 1;
   var show = function(el){ el.classList.add('pfa-in'); };
-  if (!('IntersectionObserver' in window)) {
-    document.querySelectorAll('.pfa-r').forEach(show);
-    return;
-  }
+  /* Bail BEFORE arming. Adding .pfa-ready and then finding no way to reveal
+     anything is the one outcome worse than no animation at all. */
+  if (!('IntersectionObserver' in window)) return;
+  document.documentElement.classList.add('pfa-ready');
   var io = new IntersectionObserver(function(entries){
     entries.forEach(function(e){
       if (!e.isIntersecting) return;
