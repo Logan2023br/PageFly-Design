@@ -236,18 +236,34 @@ async function run(
 
         tokens += outcome.usage.input + outcome.usage.output;
 
-        pages.push(
-          outcome.used
-            ? {
-                ...base,
-                design: {
-                  tree: outcome.tree,
-                  images: outcome.images,
-                  credits: outcome.credits,
-                },
-              }
-            : base,
-        );
+        /* A page the model did not design is not a page. It used to fall back
+           to the deterministic layout, which shipped a visibly poorer page
+           under the same label, spent a slot of the merchant's allowance on it,
+           and said nothing — so the merchant compared four pages, found one
+           obviously worse, and had no way to know it was a fallback rather than
+           the model's best attempt.
+
+           `buildPage` still runs: it resolves the palette, the label and the
+           reference measurements the designer needs. What stops here is that
+           layout ever BECOMING the delivered page. Reconnecting it is deleting
+           this branch. */
+        if (!outcome.used) {
+          failures.push({
+            pageId: entry.pageId,
+            label: entry.label,
+            reason: outcome.reason,
+          });
+          continue;
+        }
+
+        pages.push({
+          ...base,
+          design: {
+            tree: outcome.tree,
+            images: outcome.images,
+            credits: outcome.credits,
+          },
+        });
       } catch (err) {
         failures.push({
           pageId: entry.pageId,
@@ -289,10 +305,29 @@ async function run(
       return;
     }
 
+    /* Nothing designed at all is a failed build, not a finished one with an
+       empty deck. Now that the deterministic layout no longer stands in, this
+       is what a model outage looks like from here — and reporting it as "done"
+       would send the merchant to a Library page that shows nothing and explains
+       nothing. Marked failed, so the screen can say so and support has
+       something to look for. */
+    if (ordered.length === 0) {
+      await repo.updateJob(job.id, {
+        status: "failed",
+        pages: [],
+        failures,
+        tokens,
+        error:
+          failures[0]?.reason ??
+          "The page designer could not be reached. No pages were built.",
+      });
+      return;
+    }
+
     /* The run is saved HERE, not by the browser. A merchant who closed the tab
        still finds the deck in their Library, which is the reason any of this
        moved to the server. */
-    if (ordered.length > 0) await saveRun(job, brief, variants, ordered, tokens);
+    await saveRun(job, brief, variants, ordered, tokens);
 
     await repo.updateJob(job.id, {
       status: "done",

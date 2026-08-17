@@ -17,6 +17,10 @@ const OVER_LIMIT =
 export function StickyBar() {
   const draft = useStore((s) => s.draft);
   const start = useStore((s) => s.start);
+  /* Set by followBuild when a build ends with nothing designed. It was written
+     to the store and read by nobody: the merchant waited two minutes, landed
+     back on the brief, and was given no reason at all. */
+  const buildError = useStore((s) => s.buildError);
   const { account, refresh } = useAccount();
   const [checking, setChecking] = useState(false);
   const [blocked, setBlocked] = useState<string | null>(null);
@@ -83,6 +87,24 @@ export function StickyBar() {
               {total > 0 ? describeSelection(draft.pages) : "Pick what you need below"}
             </span>
           </div>
+          {/* Above the allowance warnings on purpose. A build that just failed is
+              the most recent thing that happened and the only one the merchant
+              cannot act on alone. */}
+          {buildError && (
+            <p
+              role="alert"
+              className="mb-1 flex items-start gap-1.5 text-[12px] font-semibold text-pf-danger"
+            >
+              <span className="mt-px shrink-0">
+                <Icon name="CircleAlert" size={13} />
+              </span>
+              <span>
+                The page designer is not responding right now — nothing was
+                built and no pages were charged. Please try again shortly, or
+                contact support if it keeps happening.
+              </span>
+            </p>
+          )}
           {blocked && (
             <p
               role="alert"
