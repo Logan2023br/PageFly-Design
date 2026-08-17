@@ -19,7 +19,13 @@ import Anthropic from "@anthropic-ai/sdk";
 
 export type Usage = { input: number; output: number };
 
-export type Completion = { text: string; usage: Usage };
+/**
+ * `truncated` is the difference between "the model could not do it" and "the
+ * model was not given room to finish", and those need different fixes. Without
+ * it a budget that ran out surfaces as "did not return JSON" — which sent this
+ * codebase looking at the prompt when the answer was the ceiling.
+ */
+export type Completion = { text: string; usage: Usage; truncated: boolean };
 
 export type Provider = {
   name: string;
@@ -99,6 +105,7 @@ function anthropicProvider(): Provider {
         .join("");
 
       return {
+        truncated: res.stop_reason === "max_tokens",
         text,
         usage: {
           /* Cache reads and writes are input tokens too. Reporting only
@@ -146,11 +153,12 @@ function deepseekProvider(): Provider {
         throw new Error(`DeepSeek returned ${res.status}: ${await res.text()}`);
 
       const body = (await res.json()) as {
-        choices: { message: { content: string } }[];
+        choices: { message: { content: string }; finish_reason?: string }[];
         usage?: { prompt_tokens?: number; completion_tokens?: number };
       };
 
       return {
+        truncated: body.choices[0]?.finish_reason === "length",
         text: body.choices[0]?.message?.content ?? "",
         usage: {
           input: body.usage?.prompt_tokens ?? 0,

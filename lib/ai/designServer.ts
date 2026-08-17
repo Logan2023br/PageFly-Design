@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getProvider, isAiEnabled, providerName } from "./provider";
+import { getProvider, isAiEnabled, providerName, type Completion } from "./provider";
 import { loadSkills } from "./skills";
 import { DESIGN_SYSTEM } from "./designPrompt";
 import { designTreeSchema, walk, type DesignTree } from "../design/schema";
@@ -135,7 +135,11 @@ export async function designPageTree(
        types are about seven hundred tokens to tell the model thirty-four things
        that do not apply to the page in front of it, and the page type is known
        before the call goes out. */
-    sectionPlanLine(input.pageType, detectVertical(input.sell)),
+    sectionPlanLine(
+      input.pageType,
+      detectVertical(input.sell),
+      Boolean(input.refSections?.length),
+    ),
     ``,
     `Palette and faces — work inside these, do not introduce others.`,
     `Each colour has a job. Use it for that job.`,
@@ -165,7 +169,7 @@ export async function designPageTree(
     .filter(Boolean)
     .join("\n");
 
-  let completion: { text: string; usage: { input: number; output: number } };
+  let completion: Completion;
   try {
     completion = await provider.complete({
       system,
@@ -178,8 +182,18 @@ export async function designPageTree(
          14k to 22k for the same page — so at 16,000 it hit the ceiling and
          returned truncated JSON on every attempt. Three runs, three failures,
          and the failure looks like the model being incapable rather than the
-         budget being wrong. */
-      maxTokens: providerName() === "deepseek" ? 32_000 : 16_000,
+         budget being wrong.
+
+         32,000 then held until the prompt grew. Adding the selling-page skill
+         and a sixteen-line reading of the merchant's reference took one page to
+         exactly 32,000 output tokens — of which about 26,000 were reasoning and
+         6,000 were the JSON, cut off mid-property. More to think about means
+         more thinking, and the thinking is billed against the same ceiling as
+         the answer.
+
+         64,000 is headroom rather than a new estimate: nothing has needed more
+         than about 38,000, and the API accepts far more than this. */
+      maxTokens: providerName() === "deepseek" ? 64_000 : 16_000,
       /* A DeepSeek page measured 100-172 seconds against Haiku's 45, so the
          old 240s ceiling left almost no headroom on a slow one. */
       signal: signal
@@ -192,7 +206,18 @@ export async function designPageTree(
 
   const raw = parseObject(completion.text);
   if (!raw)
-    return { used: false, reason: "model did not return JSON", usage: completion.usage };
+    return {
+      used: false,
+      /* Two different failures wore one message. `json_object` mode is on, so a
+         model that answers at all answers in JSON — an unparseable reply is
+         almost always a reply that stopped mid-object because the budget ran
+         out, and "did not return JSON" sends the next person to read the prompt
+         instead of the ceiling. */
+      reason: completion.truncated
+        ? `ran out of output budget at ${completion.usage.output} tokens — the tree was cut off mid-JSON`
+        : "model did not return JSON",
+      usage: completion.usage,
+    };
 
   const parsed = designTreeSchema.safeParse(raw);
   if (!parsed.success) {

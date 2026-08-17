@@ -106,7 +106,30 @@ const BY_VERTICAL: Record<Vertical, keyof typeof ARCHETYPES> = {
  * Returns the whole instruction, ready to drop into the prompt, so the caller
  * never assembles rules it does not own.
  */
-export function sectionPlanLine(pageType: string, vertical: string): string {
+export function sectionPlanLine(
+  pageType: string,
+  vertical: string,
+  /** true when a model has read the merchant's reference screenshots */
+  hasReading = false,
+): string {
+  const plan = PAGES[pageType] ?? FALLBACK;
+
+  /* A reference the merchant chose outranks an archetype we inferred.
+     Measured on a real one: the reading found fifteen bands, the homepage rule
+     said "exactly 7", and the model obeyed the rule — dropping the trust row,
+     the stats and the review carousel that were the reason the merchant
+     uploaded that page. The cap still holds, because it is what the export and
+     the token budget can carry; the floor and the fixed archetype length give
+     way. */
+  if (hasReading) {
+    return (
+      `Section count: follow the reference reading below — one section per band ` +
+      `it lists, in that order, minus its header, footer and announcement bar. ` +
+      `Never more than ${plan.cap}; if the reading holds more than that, keep ` +
+      `the ${plan.cap} that carry the most weight and drop the rest.`
+    );
+  }
+
   if (pageType === "home") {
     const arc = ARCHETYPES[BY_VERTICAL[vertical as Vertical] ?? "C"];
     return (
@@ -115,7 +138,6 @@ export function sectionPlanLine(pageType: string, vertical: string): string {
     );
   }
 
-  const plan = PAGES[pageType] ?? FALLBACK;
   const head = `Section count: ${plan.target}, never more than ${plan.cap}.`;
 
   /* The floor only needs defending where there is room to pad. On a login or a
