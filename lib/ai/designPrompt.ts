@@ -29,6 +29,9 @@ Node types — this is the ENTIRE vocabulary, there is nothing else:
   {"type":"text","text":"...","css":{}}
   {"type":"button","text":"...","css":{}}
   {"type":"image","query":"...","ratio":1,"css":{}}      query = English stock-photo search terms
+                                                         ratio = height/width. 0.4-0.6 full width,
+                                                         0.75-1.3 in a column. Never above 1.4 on a
+                                                         full-width image — that is taller than a screen.
   {"type":"icon","name":"truck","css":{}}
   {"type":"divider","css":{}}
   {"type":"product","title":"...","price":"...","atcText":"...","swatches":3,"query":"...","layout":"sideBySide"}

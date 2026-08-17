@@ -144,6 +144,11 @@ function Photo({ node, cls }: { node: Extract<DesignNode, { type: "image" }>; cl
       style={{
         width: "100%",
         aspectRatio: `1 / ${node.ratio}`,
+        /* The same cap the export applies. A ratio is a shape, not a size: the
+           2 that gives a neat portrait in a three-column grid gives nearly
+           three screens of one picture across a full-bleed band. The image
+           inside already covers, so the cap crops rather than squashes. */
+        maxHeight: "100vh",
         overflow: "hidden",
         /* Visible while the photo loads and if it never does. A grey box reads
            as "a photo belongs here", which is true, and it is what the merchant

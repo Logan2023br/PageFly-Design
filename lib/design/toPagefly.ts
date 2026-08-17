@@ -251,6 +251,39 @@ function inkRule(opts: EmitOptions): string {
   return opts.ink ? `color: ${opts.ink};` : "";
 }
 
+/**
+ * No photograph taller than the screen it is shown on.
+ *
+ * A ratio the model picks is a shape, not a size, and the two stop agreeing at
+ * full width: `ratio: 2` inside a three-column grid is a 400x800 portrait,
+ * while the same 2 on a full-bleed band is 1440x2880 — nearly three screens of
+ * one picture, which is what a merchant scrolls past wondering whether the page
+ * has broken. Capping the ratio instead would fix the band and ruin the grid,
+ * because the cap that is right depends on a width the tree never states.
+ *
+ * `100vh` is the honest bound: whatever the element's width turns out to be,
+ * the picture stops at one screen. `object-fit: cover` on the `<img>` is what
+ * makes the cap a crop rather than a squash — without it the image keeps its
+ * declared width against a clamped height and distorts. Anything already
+ * shorter than a screen is untouched.
+ */
+function capHeight(sd: StyleData): StyleData {
+  if (!sd) return sd;
+  const out: Record<string, Record<string, string>> = {};
+  for (const [device, rules] of Object.entries(sd)) {
+    const css = rules["&"] ?? "";
+    out[device] = {
+      ...rules,
+      /* Only when the tree did not state one itself — an explicit max-height is
+         a decision, and this is a backstop. */
+      "&": /(^|[;\s])max-height\s*:/.test(css) ? css : `${css} max-height: 100vh;`.trim(),
+      /* The documented sub-selector for Image5's own <img>; see fields.md. */
+      "& img": [rules["& img"], "object-fit: cover;"].filter(Boolean).join(" "),
+    };
+  }
+  return out;
+}
+
 function filling(sd: StyleData, extra = ""): StyleData {
   if (!sd) return sd;
   const out: Record<string, Record<string, string>> = {};
@@ -343,7 +376,7 @@ function emitNode(
 
     case "image": {
       const src = opts.images?.[node.query];
-      return IMG(src ?? "", sd);
+      return IMG(src ?? "", capHeight(sd));
     }
 
     case "divider":
