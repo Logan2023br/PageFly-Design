@@ -1,6 +1,7 @@
 import "server-only";
 
 import { designPageTree } from "../ai/designServer";
+import { readReferences } from "../ai/refVision";
 import { getRepo } from "../db";
 import type { JobRecord, RunPageRecord, RunRecord } from "../db/types";
 import { buildPage, expandSelection } from "../generate/mock";
@@ -167,6 +168,17 @@ async function run(
   const failures: GenerateFailure[] = [];
   let tokens = 0;
 
+  /* Read the merchant's reference screenshots ONCE, before any page is designed.
+     Once per build rather than once per page for two reasons: it is the same
+     answer every time, and every page seeing the same reading is part of what
+     makes four pages of one build look like one site.
+
+     Awaited rather than raced with the first page. It costs a second or two and
+     the whole point is that the designer has it — starting page one without it
+     would produce exactly the page this feature exists to replace. */
+  const reading = await readReferences(brief, signal);
+  if (reading) tokens += reading.usage.input + reading.usage.output;
+
   /* A simple index cursor rather than a queue library: every worker takes the
      next unclaimed entry, so a page that takes ninety seconds does not hold up
      three others behind it. */
@@ -204,6 +216,8 @@ async function run(
             /* Measured from the merchant's uploads. It was already on the page
                and went no further than the deterministic generator. */
             reference: base.refHints,
+            /* What a model that can see actually found in those screenshots. */
+            refSections: reading?.sections ?? null,
             pageLabel: base.label,
             pageType: base.pageType,
             tokens: {

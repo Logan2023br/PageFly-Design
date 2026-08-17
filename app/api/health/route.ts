@@ -1,4 +1,5 @@
 import { builtinStores } from "@/lib/allowlist";
+import { canReadReferences } from "@/lib/ai/refVision";
 import { modelName, providerName } from "@/lib/ai/provider";
 import { skillNames } from "@/lib/ai/skills";
 import { stockProvider } from "@/lib/images/stock";
@@ -37,6 +38,10 @@ export async function GET() {
     /* Push-only setups have no pull source, which is correct, not missing —
        hence reporting both rather than one "sheet ok" boolean. */
     syncSecret: Boolean(process.env.SYNC_SECRET),
+    /* Whether a Step 5 reference image can actually be READ. The page designer
+       cannot see images at all, so without this the whole step falls back to
+       signal processing and nothing anywhere says so. */
+    referenceVision: canReadReferences(),
     reviewWebhook: Boolean(process.env.REVIEW_WEBHOOK_URL),
     adminCredentialsOverridden: Boolean(
       process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD,

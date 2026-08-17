@@ -105,6 +105,14 @@ export async function POST(request: Request) {
     styleBlurb: body.styleBlurb,
     density: body.density,
     reference: body.reference,
+    /* Null on this path deliberately. This route regenerates ONE page from the
+       browser, and the browser holds the reference images as base64 — six of
+       them would be megabytes of request body per regenerate, to buy a reading
+       the build already did once. So a regenerated page falls back to the
+       measured hints. If it starts looking different from its neighbours, the
+       fix is to cache the build's reading against the job, not to ship the
+       images up again. */
+    refSections: null,
     pageLabel: body.pageLabel,
     pageType: body.pageType,
     tokens: { ...FALLBACK_TOKENS, ...body.tokens },

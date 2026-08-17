@@ -46,6 +46,16 @@ export type DesignInput = {
     dark: boolean | null;
     present: boolean;
   } | null;
+  /**
+   * The merchant's reference screenshots as a model that can SEE them described
+   * them — one line per section, in order. Null when they uploaded none, when
+   * there is no Anthropic key, or when that call declined.
+   *
+   * Separate from `reference` above, which is signal processing on the same
+   * images and cannot tell a testimonial from an FAQ. These are the sections by
+   * name. See lib/ai/refVision.ts for why it is a different provider.
+   */
+  refSections: string[] | null;
   pageLabel: string;
   pageType: string;
   tokens: {
@@ -149,7 +159,7 @@ export async function designPageTree(
        measurements used to stop at the server and only reach the deterministic
        generator — so the whole Reference images step changed nothing about the
        page the model designed. */
-    ...referenceLines(input.reference),
+    ...referenceLines(input.reference, input.refSections),
     `Return the JSON object now.`,
   ]
     .filter(Boolean)
@@ -239,7 +249,33 @@ export async function designPageTree(
  * the model is told they are a preference rather than a spec — a reference is a
  * page the merchant liked, not a page they are asking to have copied.
  */
-function referenceLines(ref: DesignInput["reference"]): string[] {
+function referenceLines(
+  ref: DesignInput["reference"],
+  seen: string[] | null,
+): string[] {
+  /* The read beats the measurement wherever both exist, and replaces it rather
+     than joining it: "grids run 3 columns" adds nothing next to a list that
+     already says which sections are 3-up, and two descriptions of one image
+     invite the model to reconcile them instead of building. */
+  if (seen && seen.length > 0) {
+    return [
+      `The merchant uploaded pages they want theirs to resemble. Read top to bottom, those pages are:`,
+      ...seen.map((s) => `  ${s}`),
+      ``,
+      /* Stated as structure-not-content because the reference is almost always
+         another shop selling something else — the merchant is pointing at its
+         shape, and a page that borrowed its subject would be worse than one
+         that ignored it entirely. */
+      `Follow that ORDER and that STRUCTURE: which sections appear, in what`,
+      `sequence, how many columns each runs, which ones are dark. Write your own`,
+      `words for this merchant's product — never carry over the reference's`,
+      `wording, its industry or its claims.`,
+      `Where a section in that list has no element in your vocabulary, build the`,
+      `nearest honest thing and move on.`,
+      ``,
+    ];
+  }
+
   if (!ref?.present) return [];
 
   const facts = [
