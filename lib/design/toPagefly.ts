@@ -2,6 +2,8 @@ import {
   BTN,
   CUSTOM_HTML,
   FB,
+  FORM,
+  FORM_FIELD,
   FSECTION,
   H2,
   IMG,
@@ -15,6 +17,7 @@ import {
   PRODUCT_PRICE,
   PRODUCT_SWATCHES,
   PRODUCT_TITLE,
+  SLIDESHOW,
   ACCORDION,
   ACCORDION_HEADER,
   Page,
@@ -284,6 +287,19 @@ function capHeight(sd: StyleData): StyleData {
   return out;
 }
 
+/**
+ * Attach documented sub-selectors to a node's `all` breakpoint.
+ *
+ * PageFly composites are styled through named parts — `& input`, `& button`,
+ * `& .pf-r-dg` — and a declaration meant for one of those is silently inert on
+ * `&`. This is the same shape the product grid and the accordion already build
+ * by hand, named once so the next one does not have to.
+ */
+function withParts(sd: StyleData, parts: Record<string, string>): StyleData {
+  if (!sd) return { all: { "&": "", ...parts } };
+  return { ...sd, all: { ...sd.all, ...parts } };
+}
+
 function filling(sd: StyleData, extra = ""): StyleData {
   if (!sd) return sd;
   const out: Record<string, Record<string, string>> = {};
@@ -313,6 +329,12 @@ export type EmitOptions = {
    * dark text on a dark background — present, correct, and invisible.
    */
   ink?: string;
+  /**
+   * The page's accent. Only the form needs it: Form2's submit button is
+   * unstyled by default and renders as a bare native control, which is the one
+   * element on an imported page that looks like it belongs to a different site.
+   */
+  accent?: string;
   /** icon name → raw <svg> markup; icons are dropped when this is absent */
   iconSvg?: (name: string) => string | null;
 };
@@ -397,6 +419,36 @@ function emitNode(
 
     case "accordion":
       return accordionOf(node, sd, opts);
+
+    case "form": {
+      /* Form2 styles its inputs and its button through documented
+         sub-selectors, not on itself: `& input`, `& button`. Left off, the
+         merchant gets PageFly's unstyled defaults — a native grey button in the
+         system font sitting inside a page that looks nothing like it. */
+      const styled = withParts(sd, {
+        "& > form": "display: flex; flex-direction: column; gap: 12px;",
+        "& input":
+          `border: 1px solid rgba(0,0,0,.16); border-radius: 6px; padding: 12px 14px; width: 100%;${inkRule(opts)}`,
+        "& button": `background-color: ${opts.accent ?? "#111111"}; color: #FFFFFF; border: 0; border-radius: 6px; padding: 13px 26px; cursor: pointer;`,
+      });
+      return FORM(
+        node.fields.map((f) => FORM_FIELD(f.label, f.kind, f.required)),
+        node.submitText,
+        node.intent,
+        styled,
+      );
+    }
+
+    case "slideshow": {
+      const dir = directionOf(node as never, styleAt(node, "all"));
+      const slides = node.slides
+        .map((c) => emit(c, dir, opts))
+        .filter((n): n is PFNode => n !== null);
+      /* Every slide dropped means an empty carousel with working arrows, which
+         is worse than the row it replaced. */
+      if (slides.length === 0) return CUSTOM_HTML("<div></div>", sd);
+      return SLIDESHOW(slides, { perView: node.perView, autoplay: node.autoplay }, sd);
+    }
 
     case "row":
     case "col": {

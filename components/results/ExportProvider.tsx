@@ -125,6 +125,9 @@ export function ExportProvider({ children }: { children: ReactNode }) {
         EXPORT_WIDTH,
         {
           images: page.design?.images ?? {},
+          /* Form2's submit button is unstyled by default — a grey native
+             control on an otherwise designed page. */
+          accent: page.tokens.accent,
           iconSvg: (name) => iconMarkup(stageRef.current, name),
         },
       );

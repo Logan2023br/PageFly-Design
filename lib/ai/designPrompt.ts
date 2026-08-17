@@ -37,6 +37,17 @@ Node types — this is the ENTIRE vocabulary, there is nothing else:
   {"type":"product","title":"...","price":"...","atcText":"...","swatches":3,"query":"...","layout":"sideBySide"}
   {"type":"productList","columns":3,"limit":6,"query":"..."}
   {"type":"accordion","items":[{"q":"...","a":"..."}]}
+  {"type":"form","intent":"contact","fields":[{"label":"Name","kind":"text","required":true},
+                                              {"label":"Email","kind":"email","required":true},
+                                              {"label":"Message","kind":"message"}],"submitText":"Send"}
+                                                         kind = text | email | phone | message
+                                                         intent = contact (shop inbox) | signup (subscriber)
+                                                         A REAL Shopify form. Only for a contact or signup
+                                                         section — never as decoration.
+  {"type":"slideshow","perView":3,"autoplay":false,"slides":[ …nodes… ]}
+                                                         Only when the brief or the reference asks for a
+                                                         carousel. Three cards that fit on screen are a row,
+                                                         not a slider — a slider hides two of them.
 
 icon names available: award check clock creditcard gift heart leaf lock mail mappin package phone refresh ruler scissors send shield shoppingbag sparkles star truck users wrench zap
 

@@ -388,6 +388,92 @@ export function flatten(root: PFNode): FlatNode[] {
   });
 }
 
+
+/* ---- form ---------------------------------------------------------------
+
+   Form2 posts to Shopify's own endpoint, so what a visitor types reaches the
+   merchant. That is the whole reason to emit one rather than draw input-shaped
+   rectangles: the two are indistinguishable in a mockup and only one of them
+   collects anything.
+
+   The submit button is a slot, not a child of the field collection — Form2
+   requires exactly `Form2.Field`(1..n) then `Form2.Button2`(1), in that order. */
+
+/** FormInput.inputType is a NUMBER, not a name. From fields.md: 0 text, 1
+    multi-line, 2 email, 6 number. Phone has no type of its own; single-line
+    text is what PageFly's own contact forms use for it. */
+const INPUT_TYPE: Record<string, number> = {
+  text: 0,
+  message: 1,
+  email: 2,
+  phone: 0,
+};
+
+export function FORM_FIELD(
+  label: string,
+  kind: string,
+  required: boolean,
+  styleData: StyleData = null,
+) {
+  return node("Form2.Field", { label, required }, styleData, [
+    node("FormLabel", {}, null, []),
+    node("FormInput", { required, inputType: INPUT_TYPE[kind] ?? 0 }, null, []),
+  ]);
+}
+
+export function FORM(
+  fields: PFNode[],
+  submit: string,
+  intent: "contact" | "signup",
+  styleData: StyleData,
+) {
+  return node(
+    "Form2",
+    {
+      /* `contact` reaches the shop's contact inbox; `customer` is the endpoint
+         that creates a subscriber, which is what a signup box is for. */
+      formType: intent === "contact" ? "contact" : "customer",
+      showConfirm: true,
+    },
+    styleData,
+    [
+      ...fields,
+      /* Unstyled by default it renders as a bare native button — grey, system
+         font, nothing like the page around it. fields.md says so outright. */
+      node("Form2.Button2", { value: submit, buttonType: "text" }, null, []),
+    ],
+  );
+}
+
+/* ---- slideshow ---------------------------------------------------------- */
+
+export function SLIDESHOW(
+  slides: PFNode[],
+  opts: { perView: number; autoplay: boolean },
+  styleData: StyleData,
+) {
+  const per = Math.max(1, Math.min(4, opts.perView));
+  return node(
+    "Slideshow",
+    {
+      autoPlay: opts.autoplay,
+      autoPlayDelay: 4000,
+      loop: true,
+      pauseOnHover: true,
+      /* Per breakpoint, and a phone shows one whatever the desktop shows —
+         three testimonials side by side on a 390px screen is three unreadable
+         columns. */
+      slidesToShow: { all: per, laptop: per, tablet: Math.min(2, per), mobile: 1 },
+      slidesToScroll: { all: 1, laptop: 1, tablet: 1, mobile: 1 },
+      maxHeight: true,
+      navStyle: "nav-style-1",
+      paginationStyle: "pagination-style-1",
+    },
+    styleData,
+    slides.map((s) => node("SlideshowSlide", {}, null, [s])),
+  );
+}
+
 const SLOT_RULES: Record<string, string[]> = {
   ProductBox: ["ProductMedia3", "FlexBlock"],
   ProductMedia3: ["MediaMain3", "MediaList2"],
@@ -396,6 +482,7 @@ const SLOT_RULES: Record<string, string[]> = {
   ProductVariantSwatches: ["OptionLabel", "Swatch"],
   "Accordion3.Content.Wrapper": ["Accordion3.Header", "Accordion3.Content"],
   "Accordion3.Content": ["Accordion3.Flex.Content"],
+  "Form2.Field": ["FormLabel", "FormInput"],
   /* One card template, repeated. Two ProductBoxes here is two identical cards
      stamped over every product in the grid. */
   ProductList2: ["ProductBox"],
@@ -404,6 +491,7 @@ const SLOT_RULES: Record<string, string[]> = {
 /** Parents whose children must ALL be one type (count is free). */
 const UNIFORM_CHILDREN: Record<string, string> = {
   Accordion3: "Accordion3.Content.Wrapper",
+  Slideshow: "SlideshowSlide",
   MediaList2: "MediaItem2",
   ContentList2: "ContentListItem",
 };

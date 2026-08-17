@@ -397,6 +397,91 @@ function Accordion({ node, cls }: { node: Extract<DesignNode, { type: "accordion
   );
 }
 
+/**
+ * The form, drawn as it will behave.
+ *
+ * Inert on purpose: the mockup is a picture, and a form that accepted a click
+ * here would suggest it had sent something. The exported Form2 is the live one.
+ */
+function Form({ node, cls }: { node: Extract<DesignNode, { type: "form" }>; cls?: string }) {
+  const { device } = useDesign();
+  return (
+    <div
+      data-pf="form"
+      className={cls}
+      style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%", ...sx(node, device) }}
+    >
+      {node.fields.map((f, i) => (
+        <label key={i} style={{ display: "grid", gap: 6 }}>
+          <span style={{ fontSize: 13, opacity: 0.75 }}>
+            {f.label}
+            {f.required && <span style={{ opacity: 0.5 }}> *</span>}
+          </span>
+          <div
+            style={{
+              border: "1px solid rgba(0,0,0,.16)",
+              borderRadius: 6,
+              padding: "12px 14px",
+              /* A message field is taller in PageFly too — inputType 1 is the
+                 multi-line control, not a styling choice made here. */
+              minHeight: f.kind === "message" ? 96 : undefined,
+            }}
+          />
+        </label>
+      ))}
+      <div
+        data-pf="form-submit"
+        style={{
+          alignSelf: "flex-start",
+          borderRadius: 6,
+          padding: "13px 26px",
+          background: "currentColor",
+          fontSize: 14,
+          fontWeight: 600,
+        }}
+      >
+        <span style={{ mixBlendMode: "difference", color: "#FFFFFF" }}>{node.submitText}</span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The carousel, showing its first `perView` slides side by side.
+ *
+ * Static. Arrows and dots are drawn because the exported Slideshow has them and
+ * a mockup without them would understate the height the section takes, but they
+ * do not move: a mockup that could be scrolled invites the merchant to check
+ * slide four instead of approving the page.
+ */
+function Slides({ node, cls }: { node: Extract<DesignNode, { type: "slideshow" }>; cls?: string }) {
+  const { device } = useDesign();
+  const per = device === "mobile" ? 1 : device === "tablet" ? Math.min(2, node.perView) : node.perView;
+  const shown = node.slides.slice(0, per);
+
+  return (
+    <div data-pf="slideshow" className={cls} style={{ width: "100%", ...sx(node, device) }}>
+      <div style={{ display: "flex", gap: 24, alignItems: "stretch" }}>
+        {shown.map((slide, i) => (
+          <div key={i} style={{ flex: 1, minWidth: 0 }}>
+            <Node node={slide} />
+          </div>
+        ))}
+      </div>
+      {node.slides.length > per && (
+        <div style={{ display: "flex", justifyContent: "center", gap: 7, paddingTop: 22 }}>
+          {node.slides.slice(0, Math.ceil(node.slides.length / per)).map((_, i) => (
+            <span
+              key={i}
+              style={{ width: 7, height: 7, borderRadius: 999, background: "currentColor", opacity: i === 0 ? 0.75 : 0.22 }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ---- containers --------------------------------------------------------- */
 
 /**
@@ -432,6 +517,10 @@ function Node({ node }: { node: DesignNode }) {
       return <ProductGrid node={node} cls={cls} />;
     case "accordion":
       return <Accordion node={node} cls={cls} />;
+    case "form":
+      return <Form node={node} cls={cls} />;
+    case "slideshow":
+      return <Slides node={node} cls={cls} />;
     case "row":
     case "col":
       return (

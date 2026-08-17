@@ -196,6 +196,41 @@ const productList = z.object({
   ...styled,
 });
 
+/**
+ * A Shopify form — contact, or an email capture.
+ *
+ * Real, not drawn. It exports as Form2, which posts to Shopify's own endpoint,
+ * so the merchant receives what visitors type. Drawing one out of inputs-shaped
+ * rectangles would look identical in the mockup and collect nothing.
+ *
+ * The field list is deliberately small. PageFly's FormInput supports nine input
+ * types including radio and dropdown, and both of those need a `choices` array
+ * that a page-design model has no way to invent for someone else's shop.
+ */
+const form = z.object({
+  type: z.literal("form"),
+  /** `contact` reaches the shop's contact inbox; `customer` creates a subscriber */
+  intent: z.enum(["contact", "signup"]).default("contact"),
+  fields: z
+    .array(
+      z.object({
+        label: z.string().min(1).max(60),
+        /** text = one line, email, phone, message = multi-line */
+        kind: z.enum(["text", "email", "phone", "message"]).default("text"),
+        required: z.boolean().default(false),
+      }),
+    )
+    .min(1)
+    .max(8),
+  submitText: z.string().min(1).max(40).default("Send"),
+  ...styled,
+});
+
+/* `slideshow` is NOT declared here. It holds design nodes, so it has to be
+   built inside the `z.lazy` below alongside `row` and `col` — declared out
+   here it would reference `node` before `node` exists, and TypeScript reports
+   that as the whole union silently becoming `any`. */
+
 const accordion = z.object({
   type: z.literal("accordion"),
   items: z
@@ -221,7 +256,17 @@ export type DesignNode =
   | z.infer<typeof icon>
   | z.infer<typeof product>
   | z.infer<typeof productList>
+  | z.infer<typeof form>
   | z.infer<typeof accordion>
+  | {
+      type: "slideshow";
+      perView: number;
+      autoplay: boolean;
+      css?: Css;
+      mobile?: Css;
+      anim?: Anim;
+      slides: DesignNode[];
+    }
   | { type: "row"; css?: Css; mobile?: Css; anim?: Anim; children: DesignNode[] }
   | { type: "col"; css?: Css; mobile?: Css; anim?: Anim; children: DesignNode[] };
 
@@ -235,7 +280,20 @@ const node: z.ZodType<DesignNode> = z.lazy(() =>
     icon,
     product,
     productList,
+    form,
     accordion,
+    /* Only when the brief or the reference asks for a carousel. A row of three
+       cards that fits on the screen is a row of three cards; turning it into a
+       slider hides two thirds of it behind an arrow nobody presses. PageFly's
+       own note on the element says the same. */
+    z.object({
+      type: z.literal("slideshow"),
+      /** visible slides on desktop; one on mobile either way */
+      perView: z.number().int().min(1).max(4).default(3),
+      autoplay: z.boolean().default(false),
+      ...styled,
+      slides: z.array(node).min(1).max(12),
+    }),
     z.object({
       type: z.literal("row"),
       ...styled,
