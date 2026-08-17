@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { MOTION_CSS, motionClasses } from "./motion";
 import {
@@ -310,33 +310,84 @@ function ProductGrid({ node, cls }: { node: Extract<DesignNode, { type: "product
   );
 }
 
+/**
+ * The same accordion the merchant will get, not a picture of one.
+ *
+ * It used to render every answer open and inert — readable, but a lie in both
+ * directions: the exported Accordion3 carries `activeInFront: -1`, so on the
+ * real page nothing is open until it is clicked, and `multiple: false`, so
+ * opening one closes the last. A merchant approving a mockup where all four
+ * answers sit visible was approving a page that does not exist.
+ *
+ * Both of those defaults are read from the exporter rather than chosen here.
+ * If they change there, this has to change with them.
+ */
 function Accordion({ node, cls }: { node: Extract<DesignNode, { type: "accordion" }>; cls?: string }) {
   const { device } = useDesign();
+  /* `null` rather than a number: -1 would work, but the exporter's -1 means
+     "none" and reusing it here invites the two to be compared as if they were
+     the same kind of value. */
+  const [open, setOpen] = useState<number | null>(null);
+
   return (
     <div data-pf="accordion" className={cls} style={{ width: "100%", ...sx(node, device) }}>
-      {node.items.map((item, i) => (
-        <div key={i} data-pf="accordion-item" style={{ borderBottom: "1px solid rgba(0,0,0,.12)" }}>
-          <div
-            data-pf="accordion-header"
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 16,
-              padding: "18px 0",
-              fontWeight: 600,
-            }}
-          >
-            <span>{item.q}</span>
-            <span style={{ opacity: 0.4 }}>+</span>
+      {node.items.map((item, i) => {
+        const isOpen = open === i;
+        return (
+          <div key={i} data-pf="accordion-item" style={{ borderBottom: "1px solid rgba(0,0,0,.12)" }}>
+            <button
+              type="button"
+              data-pf="accordion-header"
+              aria-expanded={isOpen}
+              /* One at a time, because the export says `multiple: false`.
+                 Clicking the open one closes it — the same as on the page. */
+              onClick={() => setOpen(isOpen ? null : i)}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 16,
+                padding: "18px 0",
+                /* A <button> brings the UA's font, colour, background and
+                   alignment with it, and every one of those is wrong here: this
+                   has to look exactly like the row it replaced. */
+                width: "100%",
+                border: 0,
+                background: "none",
+                color: "inherit",
+                font: "inherit",
+                fontWeight: 600,
+                textAlign: "left",
+                cursor: "pointer",
+              }}
+            >
+              <span>{item.q}</span>
+              <span style={{ opacity: 0.4, transition: "transform .2s ease", transform: isOpen ? "rotate(45deg)" : "none" }}>
+                +
+              </span>
+            </button>
+
+            {/* Height animated through grid rather than max-height: a guessed
+                max-height either clips a long answer or coasts through empty
+                space on a short one, and PageFly's own accordion animates the
+                same way (see fields.md on `& .pf-accordion-body`). */}
+            <div
+              data-pf="accordion-body"
+              style={{
+                display: "grid",
+                gridTemplateRows: isOpen ? "1fr" : "0fr",
+                transition: "grid-template-rows .28s cubic-bezier(.22,1,.36,1)",
+              }}
+            >
+              <div style={{ overflow: "hidden" }}>
+                <div style={{ paddingBottom: 18, opacity: 0.72, lineHeight: 1.6 }}>
+                  {item.a}
+                </div>
+              </div>
+            </div>
           </div>
-          {/* Open, because a mockup of a closed accordion is a list of one-line
-              rows and tells the merchant nothing about the answer copy. */}
-          <div data-pf="accordion-body" style={{ paddingBottom: 18, opacity: 0.72, lineHeight: 1.6 }}>
-            {item.a}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
