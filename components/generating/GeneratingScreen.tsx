@@ -21,11 +21,18 @@ function statusLine(done: number, total: number): string {
   return total === 1 ? "Designing your page" : `Designing ${total} pages`;
 }
 
-/* Measured, not guessed: a page takes about 45 seconds and four are designed
-   at once, so a deck costs roughly one round of that per four pages. Used only
-   to say "about a minute" — never to draw a countdown, because a countdown
-   that runs out while the bar has not moved is worse than no number at all. */
-const SECONDS_PER_ROUND = 55;
+/* Measured against the model actually in production, and four pages are
+   designed at once, so a deck costs roughly one round of this per four pages.
+   Used only to say "about two minutes" — never to draw a countdown, because a
+   countdown that runs out while the bar has not moved is worse than no number.
+
+   This was 55, which was Haiku's number and was left behind when the app moved
+   to DeepSeek v4-flash. v4-flash is a reasoning model: it spends 15,000-16,000
+   output tokens thinking before it writes any JSON, and one page measured
+   125-134 seconds against Haiku's 20-25. So the screen promised 55 seconds
+   while the work took over two minutes, and a merchant watching it had every
+   reason to think the build had hung. */
+const SECONDS_PER_ROUND = 115;
 const AT_ONCE = 4;
 
 function estimate(total: number): number {
