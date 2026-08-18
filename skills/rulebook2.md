@@ -36,6 +36,40 @@ Every button that leads somewhere gets a hover. Which one depends on what is bei
 
 Cards in a grid that a visitor clicks — a product card, a blog card, a category tile — get the same hover as the buttons. Nothing else does. A hover on a heading, a paragraph, an icon or a static photograph is noise.
 
+### When PageFly has no such animation
+
+The two fields above are the ones PageFly ships. They are not the ceiling.
+
+**If an effect belongs on the page and neither field can express it, write it.**
+A `custom` node takes `html`, `stylesheet` and `js`, and all three reach the
+real page — the markup as a Custom.HTML element, the stylesheet on the page's
+own stylesheet, the script in its custom JS. That is how a wave divider between
+bands, a count-up from 0 to 92%, a marquee of logos, a progress ring or a
+gradient border gets built.
+
+```json
+{"type":"custom","label":"wave divider",
+ "html":"<svg class='w' viewBox='0 0 1200 120' preserveAspectRatio='none'><path d='…'/></svg>",
+ "stylesheet":".w{width:200%;animation:drift 18s linear infinite} @keyframes drift{from{transform:translateX(0)}to{transform:translateX(-50%)}}"}
+```
+
+Four things to know before writing one:
+
+- **The stylesheet is scoped for you.** Write `.w`, never `.pfd-c-1 .w`. An `&`
+  on its own means the block's own element. Two blocks may both call something
+  `.card` without colliding.
+- **`js` runs once, with `root` already bound** to this block's element. Do not
+  query the document — four device frames render the same page at once.
+- **CSS animation beats JS animation.** `@keyframes` runs in the PageFly editor,
+  on the live page, and with JavaScript disabled. A script does not run in the
+  editor at all.
+- **No `<script>` tags, no `onclick`, no `<iframe>`.** They are stripped, and
+  the block ships without them rather than failing — so the effect quietly
+  breaks instead of announcing itself.
+
+Do not reach for `custom` when a field exists. A hover written by hand where
+`hover: "float"` would do is a hover the merchant cannot change in the editor.
+
 ### When to use reveal
 
 Give `reveal` to **sections below the fold only**. Never to the first section: it is on screen before the observer runs, so a hero that reveals is a hero that flickers.

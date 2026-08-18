@@ -26,6 +26,7 @@ import {
   type StyleData,
 } from "../pagefly/builder";
 import { WEBFONT_CSS_URL } from "../styleTokens";
+import { cleanBlock, type CleanBlock } from "./customBlock";
 import { DEVICES, styleAt, type Device } from "./derive";
 import {
   HOVER_NATIVE_TYPES,
@@ -337,6 +338,11 @@ export type EmitOptions = {
   accent?: string;
   /** icon name → raw <svg> markup; icons are dropped when this is absent */
   iconSvg?: (name: string) => string | null;
+  /* Custom blocks write their own CSS and JS, and both belong on the PAGE
+     rather than the element — PageFly has one stylesheet and one script per
+     page. These collect what each block contributed on the way past. */
+  customBlocks?: CleanBlock[];
+  customCount?: { value: number };
 };
 
 function emit(node: DesignNode, parentDir: Dir, opts: EmitOptions): PFNode | null {
@@ -419,6 +425,15 @@ function emitNode(
 
     case "accordion":
       return accordionOf(node, sd, opts);
+
+    case "custom": {
+      /* Numbered per page so two blocks cannot collide, and stable within a
+         page so the CSS and the JS agree on which element they mean. */
+      const n = (opts.customCount!.value += 1);
+      const clean = cleanBlock(node, n);
+      opts.customBlocks!.push(clean);
+      return CUSTOM_HTML(clean.html, filling(sd), clean.className);
+    }
 
     case "form": {
       /* Form2 styles its inputs and its button through documented
@@ -780,7 +795,13 @@ export function pageflyFromTree(
 ): BuiltPage {
   /* The page's own text colour travels with every emit, so composites can
      state it rather than inherit whatever the merchant's theme sets. */
-  opts = { ...opts, ink: opts.ink ?? page.ink };
+  const customBlocks: CleanBlock[] = [];
+  opts = {
+    ...opts,
+    ink: opts.ink ?? page.ink,
+    customBlocks,
+    customCount: { value: 0 },
+  };
   const sections = tree.sections.map((section) => {
     const fills = needsFill(section);
     const kids = section.children
@@ -834,13 +855,19 @@ export function pageflyFromTree(
   const moves = walk(tree).some((n) => hasMotion((n as { anim?: Anim }).anim));
   const reveals = walk(tree).some((n) => (n as { anim?: Anim }).anim?.reveal);
 
+  /* Block CSS goes after the page's own so a block can override a base rule if
+     it means to, and block JS after the reveal observer so `root` is findable —
+     PageFly runs custom JS once, after the page is in the DOM. */
+  const blockCss = customBlocks.map((b) => b.css).filter(Boolean).join("\n");
+  const blockJs = customBlocks.map((b) => b.js).filter(Boolean).join("\n");
+
   const doc = new Page({
     name: page.name,
-    customCSS: pageCss(width, moves),
+    customCSS: [pageCss(width, moves), blockCss].filter(Boolean).join("\n\n"),
     /* The observer only ships when something actually reveals. Hover needs no
        JS, and a page that runs a MutationObserver for nothing is a page that
        costs the storefront something for nothing. */
-    customJS: reveals ? MOTION_JS : "",
+    customJS: [reveals ? MOTION_JS : "", blockJs].filter(Boolean).join("\n"),
   });
   for (const s of sections) doc.addSection(s);
 

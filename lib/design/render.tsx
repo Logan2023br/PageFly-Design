@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import { cleanBlock } from "./customBlock";
 import { MOTION_CSS, motionClasses } from "./motion";
 import {
   Award,
@@ -398,6 +399,58 @@ function Accordion({ node, cls }: { node: Extract<DesignNode, { type: "accordion
 }
 
 /**
+ * A block the model wrote itself — markup, style and script.
+ *
+ * The mockup runs it. Showing a grey box labelled "custom" would tell the
+ * merchant nothing about whether to approve the page, and this is the one node
+ * type whose whole purpose is to look like something the vocabulary cannot
+ * describe.
+ *
+ * Sanitised through the same module the export uses, so what runs here and what
+ * runs on the storefront came from one decision about what is allowed.
+ */
+function CustomBlock({ node, cls }: { node: Extract<DesignNode, { type: "custom" }>; cls?: string }) {
+  const { device } = useDesign();
+  const ref = useRef<HTMLDivElement>(null);
+
+  /* Index is per-render rather than per-page here: the preview only needs the
+     block's own styles to be distinct from its neighbours', and useId gives
+     that without threading a counter through every component. */
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const clean = useMemo(() => cleanBlock(node, 0), [node]);
+  const className = `pfd-c-${uid}`;
+  const css = useMemo(
+    () => clean.css.replaceAll(".pfd-c-0", `.${className}`),
+    [clean.css, className],
+  );
+
+  useEffect(() => {
+    if (!node.js?.trim() || !ref.current) return;
+    /* Run against THIS element rather than a document query: four device frames
+       render the same page at once, and a document-wide lookup would find the
+       desktop one from inside the phone. */
+    try {
+      new Function("root", node.js)(ref.current);
+    } catch {
+      /* A decoration that throws must not take the preview with it. */
+    }
+  }, [node.js]);
+
+  return (
+    <div
+      ref={ref}
+      data-pf="custom"
+      data-label={node.label}
+      className={[className, cls].filter(Boolean).join(" ")}
+      style={{ width: "100%", ...sx(node, device) }}
+    >
+      {css && <style>{css}</style>}
+      <div dangerouslySetInnerHTML={{ __html: clean.html }} />
+    </div>
+  );
+}
+
+/**
  * The form, drawn as it will behave.
  *
  * Inert on purpose: the mockup is a picture, and a form that accepted a click
@@ -519,6 +572,8 @@ function Node({ node }: { node: DesignNode }) {
       return <Accordion node={node} cls={cls} />;
     case "form":
       return <Form node={node} cls={cls} />;
+    case "custom":
+      return <CustomBlock node={node} cls={cls} />;
     case "slideshow":
       return <Slides node={node} cls={cls} />;
     case "row":

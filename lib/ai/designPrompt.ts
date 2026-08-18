@@ -44,6 +44,13 @@ Node types — this is the ENTIRE vocabulary, there is nothing else:
                                                          intent = contact (shop inbox) | signup (subscriber)
                                                          A REAL Shopify form. Only for a contact or signup
                                                          section — never as decoration.
+  {"type":"custom","label":"wave divider","html":"<div class='w'>…</div>",
+                    "stylesheet":".w{…} @keyframes drift{…}","js":"root.querySelector(…)"}
+                                                         Anything the list above cannot express.
+                                                         stylesheet is scoped to this block — write
+                                                         .w — never .pfd-c-1 .w. An & means the
+                                                         block itself. js runs once with root
+                                                         bound to it. No <script>, no onclick.
   {"type":"slideshow","perView":3,"autoplay":false,"slides":[ …nodes… ]}
                                                          Only when the brief or the reference asks for a
                                                          carousel. Three cards that fit on screen are a row,

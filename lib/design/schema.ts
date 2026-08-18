@@ -226,6 +226,52 @@ const form = z.object({
   ...styled,
 });
 
+/**
+ * Anything PageFly has no element for.
+ *
+ * A wave divider between bands, an SVG progress ring, a marquee, a count-up —
+ * these are real parts of real pages and the element model has none of them.
+ * Without this the designer's only options were to approximate with a box or to
+ * leave the section out, and both make the page less like the reference the
+ * merchant pointed at.
+ *
+ * It exports as Custom.HTML with the CSS on the page's stylesheet and the JS in
+ * the page's custom JS, which is the same road the scroll-reveal already
+ * travels. Nothing new is being invented; the model is being handed a road that
+ * was already there.
+ *
+ * WHAT IS STRIPPED, and why it is stripped rather than rejected: a page that
+ * loses one decoration is better than a page that fails to build.
+ *
+ * - `<script>` inside `html`. Script belongs in `js`, where it is wrapped and
+ *   scoped. Inline script in markup runs before anything can look at it.
+ * - `on*` attributes — `onclick`, `onerror`, `onload`. Same reason, and
+ *   `onerror` on an img is the oldest way to run code by accident.
+ * - `<iframe>`, `<object>`, `<embed>`, `<form>`. A form here would not post
+ *   anywhere; use the `form` node, which is a real Shopify form.
+ * - `javascript:` and `data:text/html` URLs.
+ *
+ * The model writes this on a merchant's behalf, and the merchant imports it into
+ * their own storefront. Neither of them is in a position to audit it.
+ */
+const custom = z.object({
+  type: z.literal("custom"),
+  /** what this is, in three or four words — shown to nobody, read by whoever
+      debugs the page later */
+  label: z.string().min(1).max(60),
+  /** markup only; no script, no event attributes */
+  html: z.string().min(1).max(4000),
+  /* Named `stylesheet`, not `css`: every other node already has a `css` and it
+     means something different — a style object for the node itself. Two keys
+     one letter apart with different shapes is a bug waiting for a tired
+     evening. */
+  /** scoped to this node automatically — write `.wave`, not `.pfd-c-3 .wave` */
+  stylesheet: z.string().max(2000).optional(),
+  /** runs once, wrapped, with `root` bound to this node's element */
+  js: z.string().max(1500).optional(),
+  ...styled,
+});
+
 /* `slideshow` is NOT declared here. It holds design nodes, so it has to be
    built inside the `z.lazy` below alongside `row` and `col` — declared out
    here it would reference `node` before `node` exists, and TypeScript reports
@@ -257,6 +303,7 @@ export type DesignNode =
   | z.infer<typeof product>
   | z.infer<typeof productList>
   | z.infer<typeof form>
+  | z.infer<typeof custom>
   | z.infer<typeof accordion>
   | {
       type: "slideshow";
@@ -281,6 +328,7 @@ const node: z.ZodType<DesignNode> = z.lazy(() =>
     product,
     productList,
     form,
+    custom,
     accordion,
     /* Only when the brief or the reference asks for a carousel. A row of three
        cards that fits on the screen is a row of three cards; turning it into a
