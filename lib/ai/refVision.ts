@@ -40,11 +40,14 @@ export type RefReading = {
 const MODEL = "claude-haiku-4-5";
 const TIMEOUT_MS = 60_000;
 
-/* Counts PICTURES SENT, not uploads — one tall screenshot arrives as up to four
-   slices, and six uploads at four slices each would be twenty-four images on a
-   call a merchant is waiting on. Six is enough to see a pattern: past that each
-   one costs another ~600 tokens to say what the first six already said. */
-const MAX_IMAGES = 6;
+/* Pictures sent to the model, across every upload. One tall screenshot is up to
+   four slices, so six uploads could be twenty-four — each about 600 tokens and
+   a moment of latency on a build the merchant is waiting on.
+
+   Twelve is the budget. It is spent EVENLY rather than first-come: taking the
+   first twelve in order meant six uploads were read as three, and the merchant
+   who uploaded a reference for their FAQ page never found out it was ignored. */
+const SLICE_BUDGET = 12;
 
 /**
  * The question. Deliberately about STRUCTURE, not beauty.
@@ -107,11 +110,20 @@ export async function readReferences(
 
      An upload from before this existed has no slices, and the thumbnail is a
      poor read rather than no read. */
-  const images = (brief.referenceImages ?? [])
-    .flatMap((r) => (r.slices?.length ? r.slices : r.dataUrl ? [r.dataUrl] : []))
+  const uploads = (brief.referenceImages ?? [])
+    .map((r) => (r.slices?.length ? r.slices : r.dataUrl ? [r.dataUrl] : []))
+    .filter((parts) => parts.length > 0);
+
+  /* At least one slice each, so no upload is silently dropped, and the top of a
+     page is the half that says what kind of page it is — so when an upload has
+     to give something up it gives up its foot. */
+  const perUpload = Math.max(1, Math.floor(SLICE_BUDGET / Math.max(1, uploads.length)));
+
+  const images = uploads
+    .flatMap((parts) => parts.slice(0, perUpload))
     .map(toImagePart)
     .filter((p): p is ImagePart => p !== null)
-    .slice(0, MAX_IMAGES);
+    .slice(0, SLICE_BUDGET);
 
   if (images.length === 0) return null;
 

@@ -171,18 +171,23 @@ export const PROMPT_PLACEHOLDER =
 
 export const MAX_IMAGES = 6;
 /**
- * 20 MB, because a full-page screenshot is genuinely that large.
+ * 50 MB, because a full-page screenshot is genuinely that large.
  *
- * Raised for one specific reason: the vision pass now cuts a tall reference into
+ * Raised for one specific reason: the vision pass cuts a tall reference into
  * slices at up to 1568px wide, and a slice can only be as sharp as the file it
- * came from. A 1500x8000 PNG of a real homepage is 6-12 MB, so 5 MB was
- * rejecting exactly the uploads this feature was built to read.
+ * came from. A 1500x8000 PNG of a real homepage is 6-12 MB and a retina capture
+ * several times that, so the old 5 MB was rejecting exactly the uploads this
+ * feature was built to read.
  *
  * Nothing this large is stored or sent anywhere: the browser downscales to a
  * thumbnail and a handful of JPEG slices before the brief leaves the page, so
  * the request body is unaffected by what was picked.
+ *
+ * Bytes are not the real ceiling — see MAX_SOURCE_PIXELS in lib/imageAnalysis.ts.
+ * A browser canvas gives up well before a file this size does, and it does it
+ * silently.
  */
-export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+export const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
 
 export const ACCEPTED_IMAGE_TYPES = [
   "image/png",
@@ -202,7 +207,7 @@ export const ACCEPTED_IMAGE_EXTENSIONS = [
 ] as const;
 
 export const UPLOAD_REJECT_MESSAGE =
-  "Only images work here — PNG, JPG, WebP, AVIF or GIF, up to 20 MB each.";
+  "Only images work here — PNG, JPG, WebP, AVIF or GIF, up to 50 MB each.";
 
 /* One slot per role — see BRAND_COLOR_ROLES. */
 export const MAX_BRAND_COLORS = BRAND_COLOR_ROLES.length;

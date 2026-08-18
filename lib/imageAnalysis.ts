@@ -60,6 +60,20 @@ const SLICE_RATIO = 1.4;
 
 /** Four covers a long homepage. More is more tokens for less of the page each. */
 const MAX_SLICES = 4;
+
+/**
+ * The ceiling that actually bites, and it is not the file size.
+ *
+ * A canvas has a pixel budget, and browsers differ sharply: Safari gives up
+ * around 16.7M pixels, Chrome much later. Past it `drawImage` does not throw —
+ * it produces a blank canvas, so the upload looks accepted and every slice comes
+ * back empty. A 50 MB retina capture of a long page is easily 60M pixels.
+ *
+ * 12M keeps the whole range safe. Anything larger is scaled down before it is
+ * ever drawn, which costs sharpness the API would have taken anyway: each slice
+ * is capped at 1568px regardless.
+ */
+const MAX_SOURCE_PIXELS = 12_000_000;
 /** Palette is sampled from a tiny canvas — accuracy past this is wasted work. */
 const SAMPLE_EDGE = 48;
 const MAX_PALETTE = 4;
@@ -227,6 +241,11 @@ function sliceForReading(img: HTMLImageElement): string[] {
   const H = img.naturalHeight;
   if (!W || !H) return [];
 
+  /* Scale the SOURCE rectangle rather than the canvas. drawImage reads from the
+     image at whatever size it decoded to; the budget is on what we draw into. */
+  const overBudget = Math.sqrt(MAX_SOURCE_PIXELS / (W * H));
+  const fit = Math.min(1, overBudget);
+
   const ratio = H / W;
   /* Slices only cover the height. A wide image is downscaled by the API on its
      width instead, and cutting it vertically would split a row of cards in
@@ -237,7 +256,7 @@ function sliceForReading(img: HTMLImageElement): string[] {
       : Math.min(MAX_SLICES, Math.ceil(ratio / SLICE_RATIO));
 
   const sliceH = Math.ceil(H / count);
-  const scale = Math.min(1, SLICE_MAX_EDGE / Math.max(W, sliceH));
+  const scale = Math.min(fit, SLICE_MAX_EDGE / Math.max(W, sliceH));
   const outW = Math.max(1, Math.round(W * scale));
   const outH = Math.max(1, Math.round(sliceH * scale));
 
