@@ -209,12 +209,28 @@ export async function designPageTree(
          pages beside it put together. The ceiling is not headroom, it is the
          bill for every failure.
 
-         32,000 against a measured 25,335 for a normal page. Tight on purpose:
-         the prompt was cut by 57% in the same change, so the thinking that used
-         to overflow has less to think about. If pages start truncating again
-         the fix is the prompt, not this number — raising it just makes each
-         failure cost more. */
-      maxTokens: providerName() === "deepseek" ? 32_000 : 16_000,
+         32,000 was then tried, to stop a failure costing 71,000. It cut the
+         wrong thing. Two pages of a three-page build truncated where the same
+         build had produced ten pages at the higher ceiling, and the arithmetic
+         of that is worse, not better:
+
+           64,000, one page in three fails:  2x32k + 71k = 135k for two pages
+           32,000, two in three fail:        1x32k + 2x38k = 108k for one page
+
+         Twenty per cent cheaper for half the output, and a failed page returns
+         nothing at all — the merchant is charged nothing but receives nothing,
+         which is the expensive outcome however few tokens it burned.
+
+         The thing I had wrong: a high ceiling does not make a working page cost
+         more. A page that needs 25,000 is billed 25,000 whether the ceiling is
+         32,000 or 64,000. The ceiling only prices FAILURES — so it must sit
+         above what a page genuinely needs, and the way to spend less is to make
+         pages fail less often, not to cut them off sooner.
+
+         48,000: comfortably above the 26,726 measured on the heaviest page
+         there is, and still 25% below the 64,000 that made one failure cost
+         more than two successes. */
+      maxTokens: providerName() === "deepseek" ? 48_000 : 16_000,
       /* A DeepSeek page measured 100-172 seconds against Haiku's 45, so the
          old 240s ceiling left almost no headroom on a slow one. */
       signal: signal
