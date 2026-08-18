@@ -4,6 +4,7 @@ import { getProvider, isAiEnabled, providerName, type Completion } from "./provi
 import { loadSkills } from "./skills";
 import { DESIGN_SYSTEM } from "./designPrompt";
 import { designTreeSchema, walk, type DesignTree } from "../design/schema";
+import { animationLines } from "../design/animationPicker";
 import { sectionPlanLine } from "../design/sectionPlan";
 import { detectVertical } from "../generate/content";
 import { resolvePhotos, stockProvider, urlsOf } from "../images/stock";
@@ -56,6 +57,14 @@ export type DesignInput = {
    * name. See lib/ai/refVision.ts for why it is a different provider.
    */
   refSections: string[] | null;
+  /**
+   * How many pages this build is producing.
+   *
+   * The designer needs it to pace itself: one page can carry a signature effect
+   * the merchant remembers, while the same effect on all ten is wallpaper — and
+   * ten pages that each invented their own motion do not look like one site.
+   */
+  deckSize?: number;
   pageLabel: string;
   pageType: string;
   tokens: {
@@ -163,6 +172,9 @@ export async function designPageTree(
        measurements used to stop at the server and only reach the deterministic
        generator — so the whole Reference images step changed nothing about the
        page the model designed. */
+    /* Chosen in code from the 162-pattern reference, by page type. Sending the
+       file whole is 18,000 tokens for a page that will use two of them. */
+    animationLines(input.pageType, detectVertical(input.sell), input.deckSize ?? 1),
     ...referenceLines(input.reference, input.refSections),
     `Return the JSON object now.`,
   ]

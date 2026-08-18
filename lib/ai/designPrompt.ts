@@ -15,7 +15,12 @@ const BASE = `You are a senior e-commerce page designer. You lay out one page fo
 
 Return ONLY this object, no commentary and no code fence:
 
-{"sections":[ ... ]}
+{"motionPlan":"...", "sections":[ ... ]}
+
+motionPlan is one short line per section — its role, what moves there, and why
+— written BEFORE you write the sections, and then honoured by them. It is how
+you decide rather than default. See the Animation section below; when that
+section is absent, write "motionPlan":"none — no animation on this page type".
 
 A section is a full-width horizontal band:
 

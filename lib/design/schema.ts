@@ -367,6 +367,20 @@ const section = z.object({
 });
 
 export const designTreeSchema = z.object({
+  /**
+   * One line per section saying what moves there and why, written BEFORE the
+   * sections themselves.
+   *
+   * This exists to make the model look. Told to choose motion freely it reached
+   * for the same two fields on every page; told to justify nothing, it justified
+   * nothing. Made to name a decision per section — including "none, dense text"
+   * — it has to visit each one, and a page that genuinely wants no animation
+   * still reads as a page someone considered.
+   *
+   * Optional in the schema and required in the prompt. A model that forgets it
+   * should cost a line of reasoning, never the whole page.
+   */
+  motionPlan: z.string().max(600).optional(),
   sections: z.array(section).min(1).max(24),
 });
 
