@@ -30,6 +30,20 @@ import { join } from "node:path";
 
 const FILE = "animation-mechanics.md";
 
+/**
+ * Off while the token cost is being reviewed.
+ *
+ * Set to false to turn it back on — nothing else changes, and the file, the
+ * candidates and the vertical registers all stay exactly where they are. The
+ * whole feature costs about 6,000 tokens a page: roughly 1,000 of prompt, and
+ * the rest in what a reasoning model spends weighing it.
+ *
+ * Paused here rather than by deleting the file, because deleting it is also a
+ * valid off switch and the two would be indistinguishable later — a missing
+ * file reads as an accident, this reads as a decision.
+ */
+const PAUSED = true;
+
 /* Patterns needing a WebGL context, a shader pipeline or a physics engine.
    The exporter can carry html, css and js — it cannot carry three.js. Offering
    these is inviting the model to write something that cannot ship. */
@@ -205,6 +219,8 @@ export function animationLines(
   /** how many pages this build is producing, for pacing across the deck */
   deckSize: number,
 ): string {
+  if (PAUSED) return "";
+
   const all = patterns();
   if (all.size === 0 || NO_ANIMATION.has(pageType)) return "";
 
