@@ -55,15 +55,15 @@ const UNBUILDABLE = new Set([
  * not want the same motion, and a merchant building one page can afford a
  * signature effect that would be noise repeated across ten.
  *
- * So this narrows; the model decides. It gets the full catalogue of names, the
- * detail for these candidates, its own vertical and how many pages are being
- * built — and it is told outright that the list is a starting point.
+ * So this narrows; the model decides. It gets its own vertical, how many pages
+ * are being built, and the mechanics of these candidates — enough to choose
+ * between them and to skip them all.
  */
 const CANDIDATES: Record<string, string[]> = {
-  home: ["fade-up", "stagger-reveal", "hover-lift", "counter-up", "wave-divider", "logo-marquee", "clip-reveal", "shine-sweep"],
-  product: ["fade-up", "image-zoom-on-hover", "sticky-buy-box", "thumbnail-sync-gallery", "variant-swatch-swap", "hover-lift", "counter-up"],
-  collection: ["stagger-reveal", "hover-lift", "image-zoom-on-hover", "filter-morph-grid", "fade-up", "masonry-load-in"],
-  about: ["fade-up", "clip-reveal", "parallax-background", "line-draw", "counter-up", "split-text-reveal"],
+  home: ["fade-up", "stagger-reveal", "hover-lift", "counter-up", "wave-divider"],
+  product: ["fade-up", "image-zoom-on-hover", "sticky-buy-box", "thumbnail-sync-gallery", "hover-lift"],
+  collection: ["stagger-reveal", "hover-lift", "image-zoom-on-hover", "fade-up"],
+  about: ["fade-up", "clip-reveal", "parallax-background", "counter-up"],
   reviews: ["stagger-reveal", "fade-up", "testimonial-rotator", "hover-lift", "star-rating-fill"],
   faq: ["accordion", "fade-up"],
   contact: ["fade-up", "inline-validation", "button-loading-state"],
@@ -71,7 +71,7 @@ const CANDIDATES: Record<string, string[]> = {
   quiz: ["fade-up", "progress-bar-fill", "segmented-progress"],
   upsell: ["fade-up", "hover-lift", "add-to-cart-fly", "countdown-timer"],
   sale: ["countdown-timer", "counter-up", "stagger-reveal", "hover-lift", "shine-sweep"],
-  "lp-launch": ["fade-up", "stagger-reveal", "counter-up", "parallax-background", "sticky-buy-box", "wave-divider", "curtain-reveal"],
+  "lp-launch": ["fade-up", "stagger-reveal", "counter-up", "parallax-background", "wave-divider"],
   "lp-bfcm": ["countdown-timer", "counter-up", "stagger-reveal", "hover-lift", "marquee", "stock-urgency-pulse"],
   "lp-lead-gen": ["fade-up", "inline-validation", "progress-bar-fill", "button-loading-state"],
   "lp-app": ["fade-up", "parallax-layers", "sticky-scroll-section", "stagger-reveal", "phone-mockup-scroll"],
@@ -234,23 +234,18 @@ export function animationLines(
     `the durations and easings that make it read correctly. Those values are`,
     `measured — use them rather than rounding to something plainer.`,
     ``,
+    /* Trigger, Mechanism and Values only. The Note on each pattern explains
+       when NOT to use it, which is judgement the model already applies from the
+       vertical line above — and every line of it is a line reasoned over. */
     ...names.map(
       (n) =>
-        `### ${n}  [${NATIVE_FIELD.has(n) ? 'use the "anim" field' : 'write a "custom" node'}]\n${all.get(n)!}`,
+        `### ${n}  [${NATIVE_FIELD.has(n) ? 'use the "anim" field' : 'write a "custom" node'}]\n${trim(all.get(n)!)}`,
     ),
     ``,
-    /* The catalogue exists because the candidate list is a starting point, not
-       a menu. A pet-supplies homepage that wants `wishlist-heart-pop` should
-       take it — but it cannot ask for what it has never been shown, and the
-       full detail for 162 patterns is 18,000 tokens. Names are 800. */
-    `You are not limited to those. The full catalogue, by name:`,
-    ``,
-    ...catalogue(all),
-    ``,
-    `Pick from the catalogue when this store or this page genuinely calls for`,
-    `something the candidates above do not cover, and write it from what the`,
-    `name describes.`,
-    ``,
+    /* The full 162-name catalogue used to sit here, about 800 tokens on every
+       page. Across four measured builds the model never once reached past the
+       candidates — it costs a page of prompt to offer a door nobody opens, and
+       on a reasoning model an unused option is still an option weighed. */
     /* Not a quota. An earlier version said "pick at least two", which is an
        instruction to decorate rather than to decide — and a page that did not
        need motion got it anyway. What is required is the judgement, not the
@@ -280,46 +275,13 @@ export function animationLines(
   ].join("\n");
 }
 
-/**
- * Every pattern name, grouped as the file groups them.
- *
- * Names only. The model knows roughly what `ken-burns` or `text-scramble` mean,
- * and a name it recognises is enough to write from — where full detail for all
- * 162 would be 18,000 tokens and most of it about patterns this page will never
- * use.
- */
-function catalogue(all: Map<string, string>): string[] {
-  const groups = groupNames();
-  return [...groups.entries()]
-    .map(([group, names]) => {
-      const usable = names.filter((n) => all.has(n) && !UNBUILDABLE.has(n));
-      return usable.length ? `  ${group}: ${usable.join(", ")}` : "";
-    })
-    .filter(Boolean);
-}
-
-/** `## 3. HOVER & MICRO-INTERACTION` -> its pattern names. Read from the file
-    so a section added by hand appears without touching this code. */
-function groupNames(): Map<string, string[]> {
-  const map = new Map<string, string[]>();
-  let text: string;
-  try {
-    text = readFileSync(
-      join(process.env.PFD_SKILLS_DIR ?? join(process.cwd(), "skills"), FILE),
-      "utf8",
-    );
-  } catch {
-    return map;
-  }
-
-  for (const chunk of text.split(/^## /m).slice(1)) {
-    const title = chunk.split("\n")[0].replace(/^\d+\.\s*/, "").trim();
-    const names = [...chunk.matchAll(/^### (.+)$/gm)].map((m) =>
-      m[1].trim().replace(/^`|`$/g, ""),
-    );
-    if (names.length) map.set(title, names);
-  }
-  return map;
+/** Drop the `**Note:**` line — see the comment where this is called. */
+function trim(body: string): string {
+  return body
+    .split("\n")
+    .filter((l) => !/^\*\*Note:\*\*/.test(l.trim()))
+    .join("\n")
+    .trim();
 }
 
 /** Exposed for tests. */

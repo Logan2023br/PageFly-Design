@@ -25,7 +25,21 @@ export type Usage = { input: number; output: number };
  * it a budget that ran out surfaces as "did not return JSON" — which sent this
  * codebase looking at the prompt when the answer was the ceiling.
  */
-export type Completion = { text: string; usage: Usage; truncated: boolean };
+export type Completion = {
+  text: string;
+  usage: Usage;
+  truncated: boolean;
+  /**
+   * Of the output tokens, how many were the model thinking rather than
+   * answering. Null where the provider does not separate them.
+   *
+   * This is the number that explains a truncated page. A reasoning model bills
+   * its thinking against the same ceiling as its answer, so a page that ran out
+   * of budget did not fail at writing — it spent the budget before it started.
+   * Without this the two are indistinguishable and the fix is a guess.
+   */
+  reasoning: number | null;
+};
 
 export type Provider = {
   name: string;
@@ -106,6 +120,8 @@ function anthropicProvider(): Provider {
 
       return {
         truncated: res.stop_reason === "max_tokens",
+        /* Anthropic does not report a thinking count on a non-thinking model. */
+        reasoning: null,
         text,
         usage: {
           /* Cache reads and writes are input tokens too. Reporting only
@@ -154,11 +170,16 @@ function deepseekProvider(): Provider {
 
       const body = (await res.json()) as {
         choices: { message: { content: string }; finish_reason?: string }[];
-        usage?: { prompt_tokens?: number; completion_tokens?: number };
+        usage?: {
+          prompt_tokens?: number;
+          completion_tokens?: number;
+          completion_tokens_details?: { reasoning_tokens?: number };
+        };
       };
 
       return {
         truncated: body.choices[0]?.finish_reason === "length",
+        reasoning: body.usage?.completion_tokens_details?.reasoning_tokens ?? null,
         text: body.choices[0]?.message?.content ?? "",
         usage: {
           input: body.usage?.prompt_tokens ?? 0,

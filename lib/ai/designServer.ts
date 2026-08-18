@@ -203,9 +203,18 @@ export async function designPageTree(
          more thinking, and the thinking is billed against the same ceiling as
          the answer.
 
-         64,000 is headroom rather than a new estimate: nothing has needed more
-         than about 38,000, and the API accepts far more than this. */
-      maxTokens: providerName() === "deepseek" ? 64_000 : 16_000,
+         64,000 then turned out to be the wrong lesson. A page that goes wrong
+         spends the WHOLE ceiling before anyone can see it has gone wrong — a
+         single failed page cost 71,000 tokens, more than the two successful
+         pages beside it put together. The ceiling is not headroom, it is the
+         bill for every failure.
+
+         32,000 against a measured 25,335 for a normal page. Tight on purpose:
+         the prompt was cut by 57% in the same change, so the thinking that used
+         to overflow has less to think about. If pages start truncating again
+         the fix is the prompt, not this number — raising it just makes each
+         failure cost more. */
+      maxTokens: providerName() === "deepseek" ? 32_000 : 16_000,
       /* A DeepSeek page measured 100-172 seconds against Haiku's 45, so the
          old 240s ceiling left almost no headroom on a slow one. */
       signal: signal
@@ -225,8 +234,16 @@ export async function designPageTree(
          almost always a reply that stopped mid-object because the budget ran
          out, and "did not return JSON" sends the next person to read the prompt
          instead of the ceiling. */
+      /* The thinking count is what tells the two failures apart: budget spent
+         before the answer started, or an answer that genuinely could not fit.
+         Without it the next person guesses, which is what happened here. */
       reason: completion.truncated
-        ? `ran out of output budget at ${completion.usage.output} tokens — the tree was cut off mid-JSON`
+        ? `ran out of output budget at ${completion.usage.output} tokens` +
+          (completion.reasoning
+            ? ` — ${completion.reasoning} of them spent thinking, leaving ${
+                completion.usage.output - completion.reasoning
+              } for the JSON`
+            : " — the tree was cut off mid-JSON")
         : "model did not return JSON",
       usage: completion.usage,
     };
