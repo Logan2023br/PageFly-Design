@@ -64,6 +64,33 @@ function clean(value: Css | undefined): Css | undefined {
   return Object.keys(out).length ? out : undefined;
 }
 
+/**
+ * A whole number, taken from whatever the model wrote.
+ *
+ * `z.number().int()` rejects 2.5, and a rejected field rejects the whole tree —
+ * one fractional `perView` cost a complete page and 34,961 output tokens, and
+ * the page was otherwise fine. A column count is not a place to be strict:
+ * rounding 2.5 to 3 loses nothing a merchant would notice, and clamping an
+ * out-of-range value beats discarding the page it appeared on.
+ *
+ * The same reasoning as `image.query`, which used to fail validation when the
+ * model wrote a sentence where a phrase belonged.
+ */
+function whole(min: number, max: number, fallback: number) {
+  return z
+    .number()
+    .catch(fallback)
+    .transform((v) => Math.min(max, Math.max(min, Math.round(v))));
+}
+
+/** The same, for values that are meant to be fractional. */
+function within(min: number, max: number, fallback: number) {
+  return z
+    .number()
+    .catch(fallback)
+    .transform((v) => Math.min(max, Math.max(min, v)));
+}
+
 /* ---- motion -------------------------------------------------------------
 
    Two kinds, and they reach PageFly by different roads.
@@ -95,7 +122,7 @@ const anim = z
       .optional()
       .catch(undefined),
     /** stagger this element behind its siblings, in steps of 80ms */
-    delay: z.number().int().min(0).max(6).optional().catch(undefined),
+    delay: z.number().optional().catch(undefined).transform((v) => (v === undefined ? undefined : Math.min(6, Math.max(0, Math.round(v))))),
   })
   .optional()
   .catch(undefined);
@@ -117,7 +144,7 @@ const heading = z.object({
   type: z.literal("heading"),
   /** h1..h6 — the merchant's SEO outline, which is why the model must choose it
       rather than us guessing from font size after the fact */
-  level: z.number().int().min(1).max(6).default(2),
+  level: whole(1, 6, 2).default(2),
   text: z.string().min(1).max(300),
   ...styled,
 });
@@ -150,7 +177,7 @@ const image = z.object({
     .catch("")
     .transform((v) => v.trim().slice(0, 160)),
   /** height / width */
-  ratio: z.number().min(0.2).max(4).default(1),
+  ratio: within(0.2, 4, 1).default(1),
   ...styled,
 });
 
@@ -173,7 +200,7 @@ const product = z.object({
   compareAt: z.string().max(24).optional(),
   /** must read exactly as it does in the mockup — merchants check this one */
   atcText: z.string().max(40).default("Add to cart"),
-  swatches: z.number().int().min(0).max(8).default(0),
+  swatches: whole(0, 8, 0).default(0),
   query: z.string().max(120).default("product photography"),
   ...styled,
 });
@@ -188,9 +215,9 @@ const product = z.object({
  */
 const productList = z.object({
   type: z.literal("productList"),
-  columns: z.number().int().min(1).max(4).default(3),
+  columns: whole(1, 4, 3).default(3),
   /** how many cards the grid renders */
-  limit: z.number().int().min(1).max(24).default(6),
+  limit: whole(1, 24, 6).default(6),
   /** search phrase for the placeholder photo the mockup shows */
   query: z.string().max(400).catch("").transform((v) => v.trim().slice(0, 160)),
   ...styled,
@@ -297,7 +324,7 @@ const overlay = z.object({
   type: z.literal("overlay"),
   /** English stock-photo search terms, as `image` */
   query: z.string().max(400).catch("").transform((v) => v.trim().slice(0, 160)),
-  ratio: z.number().min(0.2).max(4).default(0.62),
+  ratio: within(0.2, 4, 0.62).default(0.62),
   scrim: z.enum(["left", "bottom", "full", "none"]).default("left"),
   align: z.enum(["bottom-left", "center", "top-left"]).default("bottom-left"),
   ...styled,
@@ -442,7 +469,7 @@ const node: z.ZodType<DesignNode> = z.lazy(() =>
     z.object({
       type: z.literal("slideshow"),
       /** visible slides on desktop; one on mobile either way */
-      perView: z.number().int().min(1).max(4).default(3),
+      perView: whole(1, 4, 3).default(3),
       autoplay: z.boolean().default(false),
       ...styled,
       slides: z.array(node).min(1).max(12),
@@ -453,7 +480,7 @@ const node: z.ZodType<DesignNode> = z.lazy(() =>
     z.object({
       type: z.literal("overlay"),
       query: z.string().max(400).catch("").transform((v) => v.trim().slice(0, 160)),
-      ratio: z.number().min(0.2).max(4).default(0.62),
+      ratio: within(0.2, 4, 0.62).default(0.62),
       scrim: z.enum(["left", "bottom", "full", "none"]).default("left"),
       align: z.enum(["bottom-left", "center", "top-left"]).default("bottom-left"),
       ...styled,
@@ -462,7 +489,7 @@ const node: z.ZodType<DesignNode> = z.lazy(() =>
     z.object({
       type: z.literal("marquee"),
       /** seconds for one full pass; lower is faster */
-      speed: z.number().min(8).max(120).default(28),
+      speed: within(8, 120, 28).default(28),
       ...styled,
       children: z.array(node).min(1).max(24),
     }),

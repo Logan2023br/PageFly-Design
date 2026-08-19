@@ -257,6 +257,14 @@ async function run(
            layout ever BECOMING the delivered page. Reconnecting it is deleting
            this branch. */
         if (!outcome.used) {
+          /* Logged as well as recorded. The reason reaches the browser through
+             the job row, but a page that failed at three in the morning is
+             diagnosed from the log — and without this line the log showed
+             nothing but successful polls. */
+          console.warn(
+            `[build] ${entry.label} (${entry.pageType}) failed: ${outcome.reason}` +
+              ` · in ${outcome.usage.input} out ${outcome.usage.output}`,
+          );
           failures.push({
             pageId: entry.pageId,
             label: entry.label,
@@ -264,6 +272,11 @@ async function run(
           });
           continue;
         }
+
+        console.log(
+          `[build] ${entry.label} ok · ${outcome.tree.sections.length} sections · ` +
+            `audit ${outcome.auditFailures} · in ${outcome.usage.input} out ${outcome.usage.output}`,
+        );
 
         pages.push({
           ...base,

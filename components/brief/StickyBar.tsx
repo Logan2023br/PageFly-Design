@@ -99,8 +99,8 @@ export function StickyBar() {
                 <Icon name="CircleAlert" size={13} />
               </span>
               <span>
-                The page designer is not responding right now — nothing was
-                built and no pages were charged. Please try again shortly, or
+                The page designer could not finish — nothing was built, and
+                none of your page allowance was used. Please try again, or
                 contact support if it keeps happening.
               </span>
             </p>
