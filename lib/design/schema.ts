@@ -31,10 +31,48 @@ import { z } from "zod";
       goes here"; the builder — which already gets this right — says how.
       ========================================================================== */
 
-/** A CSS declaration block, camelCase keys, exactly as React wants them. */
-const css = z.record(z.string(), z.union([z.string(), z.number()]));
+/* ==========================================================================
+   NOTHING BELOW THIS LINE MAY REJECT.
 
-export type Css = z.infer<typeof css>;
+   This schema validates a document a language model wrote in one pass, and for
+   most of its life it was strict: a field that did not match its type failed,
+   a failed field failed its node, and a failed node failed the tree. The whole
+   page was thrown away and the merchant was told the designer did not respond.
+
+   Three times now that has happened over one leaf:
+
+     image.query   a search phrase two words too long   — page lost
+     perView       2.5 where an integer was wanted      — page lost, 34,961 tokens
+     fields[].kind "textarea", not in the enum          — page lost, 30,268 tokens
+
+   Every one of those pages was otherwise complete and every one of them was
+   thrown away over a value nobody would have noticed being corrected. Strictness
+   was buying nothing: there is no second author to catch, and no downstream
+   reader that a rounded column count or a truncated search phrase would break.
+
+   So the rule for this file is now: COERCE, CLAMP, TRUNCATE, DROP — in that
+   order — and never reject. Every helper below is built on `loose()`, which
+   accepts anything including nothing, so the coercion runs where a type check
+   used to fail. A malformed value costs itself; a malformed node costs itself;
+   only a document with no sections left is a failure, and that is the one check
+   kept at the bottom of the file.
+   ========================================================================== */
+
+/**
+ * The base every helper in this file is built on.
+ *
+ * `z.unknown()` alone is not enough: zod 4 treats a key whose schema is piped
+ * through a transform as required, so a node that simply omitted `level` was
+ * rejected — the exact failure this file exists to prevent, reintroduced by the
+ * fix for it. `.optional()` hands the transform an `undefined` to deal with
+ * instead of failing before it runs, and every helper below deals with it.
+ */
+function loose() {
+  return z.unknown().optional();
+}
+
+/** A CSS declaration block, camelCase keys, exactly as React wants them. */
+export type Css = Record<string, string | number>;
 
 /* Properties that would let a node escape its section and land somewhere the
    mockup never showed it. A mockup that lies about where things sit is worse
@@ -51,45 +89,159 @@ const BANNED = new Set([
   "transform",
 ]);
 
-/** Drop banned declarations rather than rejecting the node that carried them:
-    one stray `position: absolute` should cost that property, not the page. */
-function clean(value: Css | undefined): Css | undefined {
-  if (!value) return undefined;
+/**
+ * A style object, keeping the declarations that make sense and dropping the
+ * rest.
+ *
+ * Banned properties, empty strings, nulls, nested objects, arrays — all
+ * dropped. One stray `position: absolute` or one `padding: null` costs that
+ * property; it used to cost the node, which cost the section, which cost the
+ * page.
+ */
+const css = loose().transform((value): Css | undefined => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const out: Css = {};
-  for (const [k, v] of Object.entries(value)) {
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
     if (BANNED.has(k)) continue;
-    if (v === "" || v === null || v === undefined) continue;
-    out[k] = v;
+    if (typeof v === "string" && v !== "") out[k] = v;
+    else if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
   }
   return Object.keys(out).length ? out : undefined;
+});
+
+/** A number out of whatever was written — `"3"` and `3` both read as 3. */
+function numberish(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v.trim());
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
 }
 
-/**
- * A whole number, taken from whatever the model wrote.
- *
- * `z.number().int()` rejects 2.5, and a rejected field rejects the whole tree —
- * one fractional `perView` cost a complete page and 34,961 output tokens, and
- * the page was otherwise fine. A column count is not a place to be strict:
- * rounding 2.5 to 3 loses nothing a merchant would notice, and clamping an
- * out-of-range value beats discarding the page it appeared on.
- *
- * The same reasoning as `image.query`, which used to fail validation when the
- * model wrote a sentence where a phrase belonged.
- */
+/** A whole number, rounded and clamped into range. */
 function whole(min: number, max: number, fallback: number) {
-  return z
-    .number()
-    .catch(fallback)
-    .transform((v) => Math.min(max, Math.max(min, Math.round(v))));
+  return loose().transform((v) => {
+    const n = numberish(v);
+    return n === null ? fallback : Math.min(max, Math.max(min, Math.round(n)));
+  });
 }
 
 /** The same, for values that are meant to be fractional. */
 function within(min: number, max: number, fallback: number) {
-  return z
-    .number()
-    .catch(fallback)
-    .transform((v) => Math.min(max, Math.max(min, v)));
+  return loose().transform((v) => {
+    const n = numberish(v);
+    return n === null ? fallback : Math.min(max, Math.max(min, n));
+  });
 }
+
+/**
+ * One of a fixed set of values.
+ *
+ * A model reaching for a word the enum does not have — `textarea` where
+ * `message` was wanted, `subscribe` where `signup` was — is picking a synonym,
+ * not describing something else. Falling back to the sane member loses a
+ * nuance. Rejecting loses the page.
+ */
+function choice<const T extends readonly [string, ...string[]]>(
+  values: T,
+  fallback: T[number],
+) {
+  return loose().transform((v) =>
+      typeof v === "string" && (values as readonly string[]).includes(v)
+        ? (v as T[number])
+        : fallback,
+    );
+}
+
+/** A boolean, out of `true`, `"true"`, `"yes"` or `1`. */
+function flag(fallback: boolean) {
+  return loose().transform((v) => {
+    if (typeof v === "boolean") return v;
+    if (typeof v === "number") return v !== 0;
+    if (typeof v === "string") return /^(true|yes|on|1)$/i.test(v.trim());
+    return fallback;
+  });
+}
+
+/**
+ * Text, cut to fit rather than refused for being long.
+ *
+ * The limits here are generous — 300 characters is already four times any
+ * heading worth writing — so anything hitting one is a model that has run on,
+ * and the first 300 characters of a run-on heading are still the heading.
+ */
+function words(max: number, fallback = "") {
+  return loose().transform((v) => {
+    const s = typeof v === "string" ? v : typeof v === "number" ? String(v) : fallback;
+    /* A non-empty fallback is how this file says "this has to read as
+       something" — an add-to-cart button labelled "" is a bug on a real
+       storefront, so an empty value there takes the fallback too. */
+    if (s.trim() === "") return fallback;
+    return s.length > max ? s.slice(0, max).trimEnd() : s;
+  });
+}
+
+/**
+ * Text a node exists to show, which therefore cannot be empty.
+ *
+ * This is the one place a leaf is still allowed to fail, and it fails on
+ * purpose: a heading with no words is not a heading, and letting it through
+ * puts an empty `<h2>` on the merchant's page, which is worse than not putting
+ * anything there. Because every list drops the items that fail, an empty
+ * heading now costs one heading — the sentence above the rule, applied.
+ */
+function saying(max: number) {
+  return words(max).refine((s) => s.trim() !== "");
+}
+
+/**
+ * Text that is allowed to be absent, and reads as absent when it is blank.
+ *
+ * The `.optional()` is not decoration: zod treats a transform that returns
+ * `undefined` at a required key as an error, so without it every one of these
+ * would fail its node — which is the exact bug this file exists to prevent.
+ */
+function spare(max: number) {
+  return words(max).transform((v) => v || undefined).optional();
+}
+
+/** A stock-photo search phrase. Never displayed, so trimming costs nothing. */
+const query = words(400).transform((v) => v.trim().slice(0, 160));
+
+/**
+ * A list, keeping the items that parse and dropping the ones that do not.
+ *
+ * This is the single most important helper in the file. Without it one node the
+ * model invented — a `video`, a `map`, a `type` it half-remembered — takes its
+ * parent down, and the parent takes the section, and the section takes the
+ * page. With it, an unknown node costs exactly itself and the merchant gets the
+ * other thirty.
+ *
+ * Items beyond `max` are dropped for the same reason: a slideshow with fifteen
+ * slides should lose three, not become nothing.
+ */
+function list<T>(item: z.ZodType<T>, max: number): z.ZodType<T[], unknown> {
+  return loose().transform((value) => {
+    if (!Array.isArray(value)) return [];
+    const out: T[] = [];
+    for (const raw of value) {
+      if (out.length >= max) break;
+      const parsed = item.safeParse(raw);
+      if (parsed.success) out.push(parsed.data);
+      else if (DEBUG) {
+        const what = (raw as { type?: string })?.type ?? typeof raw;
+        console.warn(`[schema] dropped ${what}: ${JSON.stringify(parsed.error.issues[0])}`);
+      }
+    }
+    return out;
+  });
+}
+
+/* Dropping quietly is right in production — a merchant does not need to hear
+   that one node was discarded — and useless the moment something is dropped
+   that should not have been. `PFD_SCHEMA_DEBUG=1` says what went and why. */
+const DEBUG = process.env.PFD_SCHEMA_DEBUG === "1";
 
 /* ---- motion -------------------------------------------------------------
 
@@ -109,31 +261,40 @@ function within(min: number, max: number, fallback: number) {
    Both are optional and both default to nothing. A page with no motion is a
    page with no motion, not a page with broken motion. */
 
-const anim = z
-  .object({
-    /** PageFly's canned button motion */
-    hover: z
-      .enum(["float", "shadow", "grow", "glow", "float-shadow", "grow-shadow"])
-      .optional()
-      .catch(undefined),
-    /** ours: plays once when the element scrolls into view */
-    reveal: z
-      .enum(["fade", "fade-up", "slide-left", "slide-right", "zoom"])
-      .optional()
-      .catch(undefined),
-    /** stagger this element behind its siblings, in steps of 80ms */
-    delay: z.number().optional().catch(undefined).transform((v) => (v === undefined ? undefined : Math.min(6, Math.max(0, Math.round(v))))),
-  })
-  .optional()
-  .catch(undefined);
+/** PageFly's canned button motion */
+const HOVERS = ["float", "shadow", "grow", "glow", "float-shadow", "grow-shadow"] as const;
+/** ours: plays once when the element scrolls into view */
+const REVEALS = ["fade", "fade-up", "slide-left", "slide-right", "zoom"] as const;
 
-export type Anim = z.infer<typeof anim>;
+type Hover = (typeof HOVERS)[number];
+type Reveal = (typeof REVEALS)[number];
+
+const anim = loose().transform((v): Anim => {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return undefined;
+  const o = v as Record<string, unknown>;
+  const hover = (HOVERS as readonly string[]).includes(o.hover as string)
+    ? (o.hover as Hover)
+    : undefined;
+  const reveal = (REVEALS as readonly string[]).includes(o.reveal as string)
+    ? (o.reveal as Reveal)
+    : undefined;
+  const n = numberish(o.delay);
+  const delay = n === null ? undefined : Math.min(6, Math.max(0, Math.round(n)));
+  /* Nothing recognised is no motion, not an empty motion object — the renderer
+     and the exporter both branch on the property being absent. */
+  if (!hover && !reveal && delay === undefined) return undefined;
+  return { hover, reveal, delay };
+});
+
+export type Anim =
+  | { hover?: Hover; reveal?: Reveal; delay?: number }
+  | undefined;
 
 const styled = {
   /** desktop, and the base every other breakpoint inherits from */
-  css: css.optional().transform(clean),
+  css,
   /** only the properties that differ on phones */
-  mobile: css.optional().transform(clean),
+  mobile: css,
   /** hover and scroll motion; see the note above */
   anim,
 };
@@ -144,20 +305,20 @@ const heading = z.object({
   type: z.literal("heading"),
   /** h1..h6 — the merchant's SEO outline, which is why the model must choose it
       rather than us guessing from font size after the fact */
-  level: whole(1, 6, 2).default(2),
-  text: z.string().min(1).max(300),
+  level: whole(1, 6, 2),
+  text: saying(300),
   ...styled,
 });
 
 const text = z.object({
   type: z.literal("text"),
-  text: z.string().min(1).max(2000),
+  text: saying(2000),
   ...styled,
 });
 
 const button = z.object({
   type: z.literal("button"),
-  text: z.string().min(1).max(80),
+  text: saying(80),
   ...styled,
 });
 
@@ -171,13 +332,9 @@ const image = z.object({
       photograph at worst — and it used to cost the whole page: one over-long
       query failed validation and the merchant got the deterministic layout
       back instead. */
-  query: z
-    .string()
-    .max(400)
-    .catch("")
-    .transform((v) => v.trim().slice(0, 160)),
+  query,
   /** height / width */
-  ratio: within(0.2, 4, 1).default(1),
+  ratio: within(0.2, 4, 1),
   ...styled,
 });
 
@@ -186,7 +343,7 @@ const divider = z.object({ type: z.literal("divider"), ...styled });
 const icon = z.object({
   type: z.literal("icon"),
   /** a lucide name; unknown names render as a dot rather than nothing */
-  name: z.string().max(40),
+  name: words(40),
   ...styled,
 });
 
@@ -194,14 +351,14 @@ const icon = z.object({
 
 const product = z.object({
   type: z.literal("product"),
-  layout: z.enum(["sideBySide", "stacked"]).default("sideBySide"),
-  title: z.string().max(120).default("Product name"),
-  price: z.string().max(24).default("$48.00"),
-  compareAt: z.string().max(24).optional(),
+  layout: choice(["sideBySide", "stacked"] as const, "sideBySide"),
+  title: words(120, "Product name"),
+  price: words(24, "$48.00"),
+  compareAt: spare(24),
   /** must read exactly as it does in the mockup — merchants check this one */
-  atcText: z.string().max(40).default("Add to cart"),
-  swatches: whole(0, 8, 0).default(0),
-  query: z.string().max(120).default("product photography"),
+  atcText: words(40, "Add to cart"),
+  swatches: whole(0, 8, 0),
+  query: words(120, "product photography"),
   ...styled,
 });
 
@@ -215,11 +372,11 @@ const product = z.object({
  */
 const productList = z.object({
   type: z.literal("productList"),
-  columns: whole(1, 4, 3).default(3),
+  columns: whole(1, 4, 3),
   /** how many cards the grid renders */
-  limit: whole(1, 24, 6).default(6),
+  limit: whole(1, 24, 6),
   /** search phrase for the placeholder photo the mockup shows */
-  query: z.string().max(400).catch("").transform((v) => v.trim().slice(0, 160)),
+  query,
   ...styled,
 });
 
@@ -233,23 +390,50 @@ const productList = z.object({
  * The field list is deliberately small. PageFly's FormInput supports nine input
  * types including radio and dropdown, and both of those need a `choices` array
  * that a page-design model has no way to invent for someone else's shop.
+ *
+ * `kind` is the field that cost a finished page and 30,268 tokens by being an
+ * enum the model reached past — it wrote `textarea`, which is what the thing is
+ * called everywhere except here. It now reads as `text` instead of failing, and
+ * the synonyms the model is most likely to try are mapped to what they mean.
  */
+const FIELD_KIND: Record<string, "text" | "email" | "phone" | "message"> = {
+  text: "text",
+  email: "email",
+  phone: "phone",
+  message: "message",
+  /* what a model calls these when it is not reading our enum */
+  tel: "phone",
+  telephone: "phone",
+  number: "phone",
+  textarea: "message",
+  multiline: "message",
+  comment: "message",
+  name: "text",
+  string: "text",
+};
+
 const form = z.object({
   type: z.literal("form"),
-  /** `contact` reaches the shop's contact inbox; `customer` creates a subscriber */
-  intent: z.enum(["contact", "signup"]).default("contact"),
-  fields: z
-    .array(
-      z.object({
-        label: z.string().min(1).max(60),
-        /** text = one line, email, phone, message = multi-line */
-        kind: z.enum(["text", "email", "phone", "message"]).default("text"),
-        required: z.boolean().default(false),
-      }),
-    )
-    .min(1)
-    .max(8),
-  submitText: z.string().min(1).max(40).default("Send"),
+  /** `contact` reaches the shop's contact inbox; `signup` creates a subscriber */
+  intent: choice(["contact", "signup"] as const, "contact"),
+  fields: list(
+    z.object({
+      label: saying(60),
+      /** text = one line, email, phone, message = multi-line */
+      kind: z
+        .unknown()
+        .transform((v) =>
+          typeof v === "string" ? (FIELD_KIND[v.trim().toLowerCase()] ?? "text") : "text",
+        ),
+      required: flag(false),
+    }),
+    8,
+  ).transform((fields) =>
+    /* A form with no usable fields is a Send button over nothing. One email
+       input is the honest minimum and is what both intents want anyway. */
+    fields.length ? fields : [{ label: "Email", kind: "email" as const, required: true }],
+  ),
+  submitText: words(40, "Send"),
   ...styled,
 });
 
@@ -285,17 +469,17 @@ const custom = z.object({
   type: z.literal("custom"),
   /** what this is, in three or four words — shown to nobody, read by whoever
       debugs the page later */
-  label: z.string().min(1).max(60),
+  label: words(60, "custom"),
   /** markup only; no script, no event attributes */
-  html: z.string().min(1).max(4000),
+  html: saying(4000),
   /* Named `stylesheet`, not `css`: every other node already has a `css` and it
      means something different — a style object for the node itself. Two keys
      one letter apart with different shapes is a bug waiting for a tired
      evening. */
   /** scoped to this node automatically — write `.wave`, not `.pfd-c-3 .wave` */
-  stylesheet: z.string().max(2000).optional(),
+  stylesheet: spare(2000),
   /** runs once, wrapped, with `root` bound to this node's element */
-  js: z.string().max(1500).optional(),
+  js: spare(1500),
   ...styled,
 });
 
@@ -323,10 +507,10 @@ const custom = z.object({
 const overlay = z.object({
   type: z.literal("overlay"),
   /** English stock-photo search terms, as `image` */
-  query: z.string().max(400).catch("").transform((v) => v.trim().slice(0, 160)),
-  ratio: within(0.2, 4, 0.62).default(0.62),
-  scrim: z.enum(["left", "bottom", "full", "none"]).default("left"),
-  align: z.enum(["bottom-left", "center", "top-left"]).default("bottom-left"),
+  query,
+  ratio: within(0.2, 4, 0.62),
+  scrim: choice(["left", "bottom", "full", "none"] as const, "left"),
+  align: choice(["bottom-left", "center", "top-left"] as const, "bottom-left"),
   ...styled,
 });
 
@@ -339,18 +523,18 @@ const overlay = z.object({
  */
 const sticky = z.object({
   type: z.literal("sticky"),
-  edge: z.enum(["bottom", "top"]).default("bottom"),
-  mobileOnly: z.boolean().default(false),
+  edge: choice(["bottom", "top"] as const, "bottom"),
+  mobileOnly: flag(false),
   ...styled,
 });
 
 /** Two photographs and a handle. PageFly has a native element for this. */
 const beforeAfter = z.object({
   type: z.literal("beforeAfter"),
-  beforeQuery: z.string().max(400).catch("").transform((v) => v.trim().slice(0, 160)),
-  afterQuery: z.string().max(400).catch("").transform((v) => v.trim().slice(0, 160)),
-  beforeLabel: z.string().max(40).default("Before"),
-  afterLabel: z.string().max(40).default("After"),
+  beforeQuery: query,
+  afterQuery: query,
+  beforeLabel: words(40, "Before"),
+  afterLabel: words(40, "After"),
   ...styled,
 });
 
@@ -365,10 +549,10 @@ const beforeAfter = z.object({
  */
 const counter = z.object({
   type: z.literal("counter"),
-  value: z.string().max(12),
-  suffix: z.string().max(12).default(""),
-  prefix: z.string().max(12).default(""),
-  label: z.string().max(80).default(""),
+  value: saying(12),
+  suffix: words(12),
+  prefix: words(12),
+  label: words(80),
   ...styled,
 });
 
@@ -379,15 +563,12 @@ const counter = z.object({
 
 const accordion = z.object({
   type: z.literal("accordion"),
-  items: z
-    .array(
-      z.object({
-        q: z.string().min(1).max(200),
-        a: z.string().min(1).max(1200),
-      }),
-    )
-    .min(1)
-    .max(12),
+  /* No fallback row here, unlike `form`: an accordion whose questions all
+     failed has nothing to ask, and inventing one for a merchant's FAQ would be
+     putting words in their mouth. It fails, and the list above it drops it. */
+  items: list(z.object({ q: saying(200), a: saying(1200) }), 12).refine(
+    (v) => v.length > 0,
+  ),
   ...styled,
 });
 
@@ -469,46 +650,46 @@ const node: z.ZodType<DesignNode> = z.lazy(() =>
     z.object({
       type: z.literal("slideshow"),
       /** visible slides on desktop; one on mobile either way */
-      perView: whole(1, 4, 3).default(3),
-      autoplay: z.boolean().default(false),
+      perView: whole(1, 4, 3),
+      autoplay: flag(false),
       ...styled,
-      slides: z.array(node).min(1).max(12),
+      slides: list(node, 12).refine((v) => v.length > 0),
     }),
     /* Both hold children, so both are built here rather than above — declared
        outside the lazy union they would reference `node` before it exists, and
        TypeScript reports that as the whole union silently becoming `any`. */
     z.object({
       type: z.literal("overlay"),
-      query: z.string().max(400).catch("").transform((v) => v.trim().slice(0, 160)),
-      ratio: within(0.2, 4, 0.62).default(0.62),
-      scrim: z.enum(["left", "bottom", "full", "none"]).default("left"),
-      align: z.enum(["bottom-left", "center", "top-left"]).default("bottom-left"),
+      query,
+      ratio: within(0.2, 4, 0.62),
+      scrim: choice(["left", "bottom", "full", "none"] as const, "left"),
+      align: choice(["bottom-left", "center", "top-left"] as const, "bottom-left"),
       ...styled,
-      children: z.array(node).max(24),
+      children: list(node, 24),
     }),
     z.object({
       type: z.literal("marquee"),
       /** seconds for one full pass; lower is faster */
-      speed: within(8, 120, 28).default(28),
+      speed: within(8, 120, 28),
       ...styled,
-      children: z.array(node).min(1).max(24),
+      children: list(node, 24).refine((v) => v.length > 0),
     }),
     z.object({
       type: z.literal("sticky"),
-      edge: z.enum(["bottom", "top"]).default("bottom"),
-      mobileOnly: z.boolean().default(false),
+      edge: choice(["bottom", "top"] as const, "bottom"),
+      mobileOnly: flag(false),
       ...styled,
-      children: z.array(node).max(12),
+      children: list(node, 12),
     }),
     z.object({
       type: z.literal("row"),
       ...styled,
-      children: z.array(node).max(24),
+      children: list(node, 24),
     }),
     z.object({
       type: z.literal("col"),
       ...styled,
-      children: z.array(node).max(24),
+      children: list(node, 24),
     }),
   ]),
 );
@@ -524,12 +705,12 @@ const section = z.object({
    * tree built without a resolver still parses — `USE_PLAN=false` is the
    * rollback and must not start rejecting pages.
    */
-  pattern: z.string().max(60).optional(),
+  pattern: spare(60),
   /** what this band is for — nav, hero, footer… Not rendered; it is how the
       renderer knows a nav from a footer and how failures name themselves. */
-  role: z.string().max(40).default("section"),
+  role: words(40, "section"),
   ...styled,
-  children: z.array(node).max(32),
+  children: list(node, 32),
 });
 
 export const designTreeSchema = z.object({
@@ -546,16 +727,39 @@ export const designTreeSchema = z.object({
    * Optional in the schema and required in the prompt. A model that forgets it
    * should cost a line of reasoning, never the whole page.
    */
-  motionPlan: z.string().max(600).optional(),
-  sections: z.array(section).min(1).max(24),
+  motionPlan: spare(600),
+  /**
+   * The one check in this file that is still allowed to reject the document.
+   *
+   * Everything above drops what it cannot use, so reaching here with no
+   * sections means the model returned something that was not a page at all —
+   * the wrong shape, or an apology, or an empty object. That is worth failing
+   * on and worth saying out loud, because it is the only remaining failure that
+   * a merchant could hit, and the log line names it.
+   */
+  sections: list(section, 24).refine((v) => v.length > 0, {
+    message: "no usable sections",
+  }),
 });
 
 export type DesignSection = z.infer<typeof section>;
 export type DesignTree = z.infer<typeof designTreeSchema>;
 
-/** Containers, for the walkers that need to recurse without a type switch. */
+/**
+ * Containers, for the walkers that need to recurse without a type switch.
+ *
+ * `slides` counts. Slideshow is the one container that does not call its
+ * children `children`, and leaving it out made this function quietly lie: the
+ * exporter asks it whether the page contains any scroll-reveal before deciding
+ * to emit the observer script, so a reveal inside a carousel produced an
+ * element marked to animate and nothing to animate it. `needsFill` and the
+ * node count in `designServer` read it too, and were undercounting for the
+ * same reason.
+ */
 export function childrenOf(n: DesignNode | DesignSection): DesignNode[] {
-  return "children" in n && Array.isArray(n.children) ? n.children : [];
+  if ("children" in n && Array.isArray(n.children)) return n.children;
+  if ("slides" in n && Array.isArray(n.slides)) return n.slides;
+  return [];
 }
 
 /** Every node in document order, parents before children. */
