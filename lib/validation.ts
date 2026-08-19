@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isKnownVertical } from "./verticals";
 import {
   MAX_BRAND_COLORS,
   MAX_IMAGES,
@@ -51,6 +52,23 @@ export const briefSchema = z.object({
     .trim()
     .min(2, "Tell us what you sell")
     .max(MAX_SELL_CHARS, `Keep this under ${MAX_SELL_CHARS} characters`),
+
+  /**
+   * The vertical slug, set only when the merchant clicked a Step 1 chip.
+   *
+   * `null` for free text, and that is the point: the resolver looks a slug up
+   * in `30-verticals.md` exactly, and only free text has to be guessed at. A
+   * slug invented from typed words is how `Team sports & racket` used to
+   * resolve to `food`.
+   *
+   * Validated against the real list rather than as a loose string — a slug with
+   * no block would silently produce a page built from nothing.
+   */
+  verticalSlug: z
+    .string()
+    .nullable()
+    .default(null)
+    .refine((v) => v === null || isKnownVertical(v), "Unknown vertical"),
 
   visualStyle: z.enum(VISUAL_STYLE_IDS),
 

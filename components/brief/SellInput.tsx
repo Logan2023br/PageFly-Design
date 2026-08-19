@@ -41,8 +41,12 @@ export function SellInput() {
         />
         <div className="flex flex-wrap gap-2">
           {shown.map((ex) => (
-            <Chip key={ex} selected={value === ex} onClick={() => setSell(ex)}>
-              {ex}
+            <Chip
+              key={ex.slug}
+              selected={value === ex.label}
+              onClick={() => setSell(ex.label, ex.slug)}
+            >
+              {ex.label}
             </Chip>
           ))}
 

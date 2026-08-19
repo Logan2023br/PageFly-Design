@@ -96,7 +96,15 @@ type State = {
 };
 
 type Actions = {
-  setSell: (v: string) => void;
+  /**
+   * The trade, and its slug when the merchant clicked a chip rather than typed.
+   *
+   * Two values because they answer different questions: the label is what the
+   * copywriter reads, the slug is what the resolver looks up in
+   * `30-verticals.md`. Typing free text clears the slug — a merchant who edits
+   * "Footwear" into "Footwear for nurses" has stopped being on the chip.
+   */
+  setSell: (v: string, verticalSlug?: string) => void;
   setStyle: (v: VisualStyleId) => void;
   setStoreType: (v: StoreTypeId) => void;
   setPrompt: (v: string) => void;
@@ -177,7 +185,10 @@ export const useStore = create<State & Actions>((set, get) => ({
 
   /* ---- brief fields --------------------------------------------------- */
 
-  setSell: (v) => set((s) => ({ draft: { ...s.draft, whatYouSell: v } })),
+  setSell: (v, verticalSlug) =>
+    set((s) => ({
+      draft: { ...s.draft, whatYouSell: v, verticalSlug: verticalSlug ?? null },
+    })),
   setStyle: (v) => set((s) => ({ draft: { ...s.draft, visualStyle: v } })),
   setStoreType: (v) => set((s) => ({ draft: { ...s.draft, storeType: v } })),
   setPrompt: (v) => set((s) => ({ draft: { ...s.draft, prompt: v } })),
