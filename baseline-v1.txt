@@ -1,0 +1,9 @@
+NO DATABASE
+
+No DATABASE_URL, POSTGRES_URL or PG_URL in the environment, so
+there is nothing to score. This script is read-only and safe to
+point at production:
+
+  DATABASE_URL='postgres://…' npx tsx scripts/baseline.ts > baseline-v1.txt
+
+Or run it on the host that already has the variable set.
