@@ -789,9 +789,40 @@ export const BRAND_COLOR_ROLES = [
 export function styleToTokens(
   style: VisualStyleId,
   brandColors: string[] = [],
+  /**
+   * The page background and ink read off a reference screenshot.
+   *
+   * Applied FIRST, before anything derived, so that everything computed from
+   * `bg` below — the alternating band, the muted ink, the card surface, the
+   * accent's readable ink — is computed against the background the page will
+   * actually have. Setting it afterwards would leave a page whose band tint was
+   * mixed for white sitting on near-black.
+   *
+   * The style card still owns everything that is not a colour. A merchant who
+   * uploaded a dark reference and picked "Editorial" gets Editorial's faces,
+   * type scale, radius and border weight on their reference's dark ground —
+   * which is what picking a card next to uploading a screenshot should mean.
+   */
+  surface?: { bg: string; ink: string } | null,
 ): MockupTokens {
   const base = STYLE_BY_ID[style]?.tokens ?? STYLE_BY_ID.minimal.tokens;
   const tokens: MockupTokens = { ...base };
+
+  const refBg = surface ? normalizeHex(surface.bg) : null;
+  const refInk = surface ? normalizeHex(surface.ink) : null;
+
+  if (refBg && refInk && contrastRatio(refBg, refInk) >= 3) {
+    tokens.bg = refBg;
+    tokens.ink = refInk;
+    tokens.inkMuted = mix(refInk, refBg, 0.42);
+    /* A card has to be findable against the page without a second colour being
+       introduced: a small step toward the ink, in the direction that works on
+       both a light and a dark ground. */
+    tokens.surface = mix(refBg, refInk, 0.05);
+    tokens.surfaceAlt = mix(refBg, refInk, 0.09);
+    tokens.border = withAlpha(refInk, 0.16);
+    tokens.borderWidth = Math.max(tokens.borderWidth, 1);
+  }
 
   const valid = brandColors
     .map((c) => normalizeHex(c))

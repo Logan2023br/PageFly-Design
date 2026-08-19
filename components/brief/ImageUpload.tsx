@@ -103,6 +103,17 @@ export function ImageUpload() {
             dataUrl: prepared.dataUrl,
             slices: prepared.slices,
             palette: prepared.palette,
+            /* The page background and ink. When present these decide the
+               colour of the built page — see the precedence block in
+               `lib/generate/mock.ts`. */
+            surface: prepared.surface,
+            /* `layout` was computed on every upload and then dropped here,
+               which made `refHints` in the generator permanently empty: the
+               column counts, the band rhythm and the density measured off the
+               merchant's screenshot reached nothing. Little was lost while
+               Haiku's read covered the same ground, and it is what the
+               no-Anthropic-key path falls back to, so it is attached now. */
+            layout: prepared.layout,
           });
         } catch {
           // Keep the thumbnail, lose the palette: better than dropping a file

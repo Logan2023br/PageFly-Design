@@ -69,11 +69,10 @@ function paddingTop(css: Record<string, unknown> | undefined): string | null {
   return String(raw).trim().split(/\s+/)[0] || null;
 }
 
-/** Luminance rather than a list of names: dark is `#0A0A0A`, `#111` and `rgb(12,12,14)`. */
-function isDark(css: Record<string, unknown> | undefined): boolean {
-  if (!css) return false;
-  const raw = String(css.background ?? css.backgroundColor ?? "").trim();
-  if (!raw) return false;
+/** Perceptual lightness of a CSS colour, or null when there is no colour. */
+function lightnessOf(value: unknown): number | null {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
 
   let r = 0;
   let g = 0;
@@ -85,9 +84,39 @@ function isDark(css: Record<string, unknown> | undefined): boolean {
     [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
   } else if (rgb) {
     [r, g, b] = [+rgb[1], +rgb[2], +rgb[3]];
-  } else return false;
+  } else return null;
 
-  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 < 0.35;
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+}
+
+/**
+ * Does this section step away from the page in tone?
+ *
+ * This used to ask a simpler question — "is the background dark" — and the
+ * simpler question is wrong on a page whose own background is dark. A merchant's
+ * reference on near-black now sets the page background (see `styleToTokens`), and
+ * on such a page BOTH tonal checks below misfired: sections that inherit the page
+ * ground set no background at all, so "no dark section" fired; sections that did
+ * paint themselves dark were adjacent, so "two dark bands in a row" fired. Every
+ * dark page would have failed the audit and bought a repair call that had nothing
+ * to repair.
+ *
+ * What the checks were ever about is CONTRAST — a page in one tone reads flat,
+ * whichever tone that is. So the question is asked against the page's own ground,
+ * and a band is a band when it is far enough from it to be seen as one.
+ *
+ * The 0.25 threshold keeps the old behaviour where the old behaviour was right:
+ * white against near-black is 0.95 and counts; white against a #F4F1EC tint is
+ * 0.07 and does not, which is correct — a barely-tinted band is not the tonal
+ * relief the check exists to require.
+ */
+function isBand(
+  css: Record<string, unknown> | undefined,
+  pageLightness: number,
+): boolean {
+  const own = lightnessOf(css?.background ?? css?.backgroundColor);
+  if (own === null) return false;
+  return Math.abs(own - pageLightness) >= 0.25;
 }
 
 function isFullBleed(section: DesignSection): boolean {
@@ -102,9 +131,22 @@ function isFullBleed(section: DesignSection): boolean {
  * Empty means the page is buildable — not that it is beautiful, which is not
  * something code can tell.
  */
-export function audit(tree: DesignTree, order: Order): string[] {
+export function audit(
+  tree: DesignTree,
+  order: Order,
+  /**
+   * The page's own background.
+   *
+   * Defaults to white, which is what every caller meant before a reference
+   * screenshot could set it: the tonal checks below compare against this, and
+   * comparing against white on a near-black page is how a correct page gets
+   * told it is wrong.
+   */
+  pageBg = "#FFFFFF",
+): string[] {
   const problems: string[] = [];
   const sections = tree.sections ?? [];
+  const pageLightness = lightnessOf(pageBg) ?? 1;
 
   if (sections.length === 0) return ["The page has no sections. Build the order."];
 
@@ -154,16 +196,20 @@ export function audit(tree: DesignTree, order: Order): string[] {
         `on the same node.`,
     );
 
-  const darkIndexes = sections.map((s, i) => (isDark(s.css) ? i : -1)).filter((i) => i >= 0);
-  if (sections.length >= 3 && darkIndexes.length === 0)
+  const bandIndexes = sections
+    .map((s, i) => (isBand(s.css, pageLightness) ? i : -1))
+    .filter((i) => i >= 0);
+  if (sections.length >= 3 && bandIndexes.length === 0)
     problems.push(
-      `No dark section. A page in one tone reads flat. The order line marks which sections ` +
-        `are dark — give those a near-black background and light text.`,
+      `No section steps away from the page background in tone. A page in one tone reads ` +
+        `flat. The order line gives each section its background colour — build the ones ` +
+        `that differ from the page.`,
     );
-  const adjacentDark = darkIndexes.some((i) => darkIndexes.includes(i + 1));
-  if (adjacentDark)
+  const adjacentBands = bandIndexes.some((i) => bandIndexes.includes(i + 1));
+  if (adjacentBands)
     problems.push(
-      `Two dark sections are adjacent, which reads as one tall dark band. Make the second one light.`,
+      `Two inverted bands are adjacent, which reads as one tall band. Give the second one ` +
+        `the page background.`,
     );
 
   const ratios = new Set(

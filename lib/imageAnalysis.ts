@@ -75,7 +75,17 @@ const MAX_SLICES = 4;
  */
 const MAX_SOURCE_PIXELS = 12_000_000;
 /** Palette is sampled from a tiny canvas — accuracy past this is wasted work. */
-const SAMPLE_EDGE = 48;
+/* The downsample the colour pass reads.
+
+   48 was enough for its original job — four dominant colours out of a product
+   photo survive almost any amount of shrinking. It is not enough for finding a
+   page BACKGROUND: the long edge is what gets capped, so a 1500x8000 capture
+   arrived as 9x48, and 432 pixels is a thin basis for a decision that sets the
+   colour of every section on the page.
+
+   96 is 4x the pixels, up to about 9,000, which is still a fraction of a
+   millisecond in a browser that has just decoded a 20MB PNG. */
+const SAMPLE_EDGE = 96;
 const MAX_PALETTE = 4;
 
 export type PreparedImage = {
@@ -91,6 +101,22 @@ export type PreparedImage = {
   layout: LayoutFingerprint | null;
   /** dominant colours, most prominent first */
   palette: string[];
+  /**
+   * The reference's own page background and text colour.
+   *
+   * Deliberately NOT taken from `palette`, which cannot answer this question:
+   * its first pass throws away everything under 16% saturation, because it was
+   * built to find three or four brand-ish colours and a white background is not
+   * a brand colour. So a merchant who uploaded a page on near-black handed us
+   * that fact and it reached nothing — the accent came off their reference and
+   * the page underneath it stayed whatever Step 2's style card said.
+   *
+   * A page background is not the most VIVID colour in a screenshot, it is the
+   * most COMMON one, and usually a neutral. That is a different question and
+   * this is the answer to it. Null when no colour holds enough of the image to
+   * be a background — a single full-bleed photograph with no page around it.
+   */
+  surface: { bg: string; ink: string } | null;
   width: number;
   height: number;
   /** 0..1 average perceptual lightness — used to pick the image treatment */
@@ -138,8 +164,87 @@ function distance(a: [number, number, number], b: [number, number, number]) {
  * buckets gets the same answer far more cheaply, and — being arithmetic rather
  * than iterative — gives the same answer every time.
  */
+/**
+ * How far from grey, 0–255.
+ *
+ * Not HSL saturation, which is unstable at the two ends of the lightness range:
+ * `#FAFAF8` is white to any eye and computes as 17% saturated, because the
+ * formula divides a two-point spread by a denominator that has gone almost to
+ * zero. That is exactly the range a page background lives in, so the neutral
+ * test below read every off-white as a colour and preferred a photograph's
+ * beige over the page it sat on.
+ */
+function chroma([r, g, b]: [number, number, number]): number {
+  return Math.max(r, g, b) - Math.min(r, g, b);
+}
+
+/** Clean up the extremes. A 16-level bucket averages #F0F0F0 and #FFFFFF into
+    something like #FAFAFA, and a page whose background is "nearly white" but not
+    white puts every card on a shade nobody chose. */
+function snap(rgb: [number, number, number]): [number, number, number] {
+  if (rgb.every((v) => v >= 244)) return [255, 255, 255];
+  if (rgb.every((v) => v <= 14)) return [10, 10, 10];
+  return rgb;
+}
+
+/**
+ * The reference's page background, and the ink that sits on it.
+ *
+ * `bg` is the most common bucket, with one bias: among the top few, a neutral is
+ * preferred over a saturated one that is close behind it. Pages have grey, white
+ * and near-black backgrounds far more often than they have orange ones, and the
+ * biggest bucket in a screenshot with a large photograph is sometimes the
+ * photograph. The bias is a nudge, not a veto — a genuinely coloured background
+ * that dominates the image still wins.
+ *
+ * `ink` is then the most common bucket far enough away from `bg` in lightness to
+ * be readable on it, which is what body text is. Falling back to a flat invert
+ * rather than to null: a background with no ink is not usable by the caller, and
+ * black-on-white is never wrong.
+ *
+ * Exported for `scripts/test-surface.ts`. It takes buckets rather than pixels
+ * precisely so it can be tested without a canvas — this decides the colour of
+ * every section on the page, and a browser-only function is a function nobody
+ * checks.
+ */
+export function extractSurface(
+  ranked: { rgb: [number, number, number]; n: number }[],
+  counted: number,
+): { bg: string; ink: string } | null {
+  if (counted === 0 || ranked.length === 0) return null;
+
+  const share = (n: number) => n / counted;
+
+  /* Under this, nothing in the image is acting as a background — a single
+     full-bleed photograph, or a collage. Better to say so than to paint the
+     merchant's page the colour of a concrete floor. */
+  if (share(ranked[0].n) < 0.15) return null;
+
+  let bg = ranked[0];
+  const neutral = ranked
+    .slice(0, 6)
+    .find((c) => chroma(c.rgb) < 24 && c.n >= ranked[0].n * 0.6);
+  if (neutral) bg = neutral;
+
+  const bgRgb = snap(bg.rgb);
+  const bgLum = luminance(...bgRgb);
+
+  const inkBucket = ranked.find(
+    (c) => Math.abs(luminance(...c.rgb) - bgLum) >= 0.45 && chroma(c.rgb) < 60,
+  );
+
+  const inkRgb: [number, number, number] = inkBucket
+    ? snap(inkBucket.rgb)
+    : bgLum > 0.5
+      ? [20, 22, 26]
+      : [246, 246, 244];
+
+  return { bg: toHex(...bgRgb), ink: toHex(...inkRgb) };
+}
+
 function extractPalette(data: Uint8ClampedArray): {
   palette: string[];
+  surface: { bg: string; ink: string } | null;
   lightness: number;
   saturation: number;
 } {
@@ -207,7 +312,10 @@ function extractPalette(data: Uint8ClampedArray): {
   if (chosen.length < 2) chosen = pick(0.06, 0.05, 0.96);
   if (chosen.length === 0) chosen = pick(0, 0, 1);
 
+  const surface = extractSurface(ranked, counted);
+
   return {
+    surface,
     palette: chosen.map(([r, g, b]) => toHex(r, g, b)),
     lightness,
     saturation,
@@ -322,7 +430,7 @@ export async function prepareReferenceImage(
     const sctx = sc.getContext("2d", { willReadFrequently: true });
     if (!sctx) throw new Error("Canvas is unavailable");
     sctx.drawImage(img, 0, 0, sc.width, sc.height);
-    const { palette, lightness, saturation } = extractPalette(
+    const { palette, surface, lightness, saturation } = extractPalette(
       sctx.getImageData(0, 0, sc.width, sc.height).data,
     );
 
@@ -331,7 +439,7 @@ export async function prepareReferenceImage(
        reason these exist is that the thumbnail is too small to read. */
     const slices = sliceForReading(img);
 
-    return { dataUrl, slices, palette, layout, width: w, height: h, lightness, saturation };
+    return { dataUrl, slices, palette, surface, layout, width: w, height: h, lightness, saturation };
   } finally {
     URL.revokeObjectURL(objectUrl);
   }

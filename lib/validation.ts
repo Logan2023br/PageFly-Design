@@ -37,6 +37,22 @@ export const referenceImageSchema = z.object({
   /** dominant colours pulled off the image, most prominent first */
   palette: z.array(z.string()).default([]),
   /**
+   * The reference's own page background and text colour.
+   *
+   * Separate from `palette`, which cannot carry them: it filters out everything
+   * unsaturated, so a white or near-black background never appears in it. When
+   * a merchant uploads a reference, THESE are what the page is built on — see
+   * the precedence note in `lib/generate/mock.ts`.
+   *
+   * Optional and nullable for two different reasons: absent means an upload
+   * from before this existed, null means the analyser looked and found no
+   * colour holding enough of the image to be a background.
+   */
+  surface: z
+    .object({ bg: z.string(), ink: z.string() })
+    .nullish()
+    .catch(null),
+  /**
    * The structural read of the reference: section rhythm, column counts,
    * banding. Loose on purpose — this is produced by our own analyser, and the
    * generator treats every field as a hint it may ignore.

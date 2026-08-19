@@ -159,9 +159,11 @@ function styleLines(style: import("./refVision").RefStyle | null): string[] {
 
   return [
     `The merchant's reference LOOKS like this: ${facts.join(", ")}.`,
-    /* Stated as a limit rather than an instruction: the palette and the faces
-       are the merchant's own choice from Step 2, and a reference that disagrees
-       with them does not get to overrule them. */
+    /* Stated as a limit rather than an instruction. It no longer reads as
+       "the merchant's choice outranks the reference" — since the reference now
+       SETS the palette when there is one, the palette above already is the
+       reference's. What this still prevents is the model inventing a ninth
+       colour because a one-word style note suggested one. */
     `Match that treatment inside the palette and faces above — never by changing them.`,
     ``,
   ];
@@ -184,7 +186,7 @@ const PADDING_PX: Record<string, string> = {
  * already made — which pattern, how dark, how much room, what moves — so there
  * is nothing here to weigh, only to build.
  */
-function orderLines(order: Order): string[] {
+function orderLines(order: Order, bg: string, ink: string): string[] {
   return [
     `THE ORDER — build exactly these sections, in this order, one section each.`,
     `Copy the pattern id into the section's "pattern" field verbatim.`,
@@ -193,7 +195,15 @@ function orderLines(order: Order): string[] {
       [
         `${i + 1} · ${s.role}`,
         s.pattern || "(no pattern — build the role plainly)",
-        s.dark ? "dark" : "light",
+        /* The literal colours, not the words "dark" and "light".
+
+           Those words were written when the page was always on white, and they
+           stop meaning anything the moment it is not: told "dark" on a page whose
+           background is already near-black, a model can only produce black on
+           black. Inverting is what was ever meant, and the two hex codes say it
+           without the model having to work out which way round it is — the same
+           reason the padding is given in pixels rather than as "statement". */
+        s.dark ? `background ${ink}, text ${bg}` : `background ${bg}`,
         PADDING_PX[s.padding] ?? "96px 56px",
         s.signature ? "SIGNATURE — the most room and the best photograph on the page" : "",
         s.motion ? `motion:${s.motion}` : "",
@@ -288,7 +298,7 @@ export async function designPageTree(
     t.fontBody && `  body font-family: ${t.fontBody}`,
     `  corner radius ${t.radius}px`,
     ``,
-    ...(order ? orderLines(order) : [sectionPlanLine(input.pageType, detectVertical(input.sell), Boolean(input.refSections?.length))]),
+    ...(order ? orderLines(order, t.bg, t.ink) : [sectionPlanLine(input.pageType, detectVertical(input.sell), Boolean(input.refSections?.length))]),
     ...(order ? [] : [animationLines(input.pageType, detectVertical(input.sell), input.deckSize ?? 1)]),
     ...referenceLines(input.reference, input.refSections),
     ...styleLines(input.refStyle),
@@ -417,7 +427,7 @@ export async function designPageTree(
      prefix is reused and a repair costs roughly the output of the fixes.
      ========================================================================== */
   if (order) {
-    const problems = audit(tree, order);
+    const problems = audit(tree, order, input.tokens.bg);
     auditFailures = problems.length;
 
     if (problems.length > 0) {

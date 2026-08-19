@@ -26,3 +26,19 @@ export function mergePalettes(
   }
   return out;
 }
+
+/**
+ * The page background and ink the references agree on.
+ *
+ * The FIRST upload that produced one wins outright rather than the colours
+ * being averaged. Averaging is what you would reach for and it is wrong here:
+ * a merchant who uploads a white page and a black page does not want a grey
+ * one. The first upload is the one they reached for first, which is the closest
+ * thing to a stated preference available.
+ */
+export function firstSurface(
+  images: { surface?: { bg: string; ink: string } | null }[],
+): { bg: string; ink: string } | null {
+  for (const img of images) if (img.surface) return img.surface;
+  return null;
+}

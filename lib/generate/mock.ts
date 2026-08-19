@@ -2,7 +2,7 @@ import type { StoreTypeId } from "../briefOptions";
 import { CATEGORY_BY_ID, PAGE_BY_ID } from "../pageCatalog";
 import { styleToTokens, type VisualStyleId } from "../styleTokens";
 import type { Brief } from "../validation";
-import { mergePalettes } from "../palette";
+import { firstSurface, mergePalettes } from "../palette";
 import {
   fitRecipeToSections,
   layoutToHints,
@@ -1062,17 +1062,57 @@ export function buildPage(args: {
   );
   const signals = readPromptSignals(brief.prompt);
 
-  /* Colour precedence, most authoritative first:
-       1. swatches the merchant added deliberately
-       2. hex codes they typed into the prompt
-       3. palettes extracted from their reference images
-     Explicit choices always outrank anything we inferred from a photo. */
+  /* ==========================================================================
+     COLOUR PRECEDENCE — the reference wins when there is one.
+
+     It used to be the other way round, and the reasoning was sound as far as it
+     went: an explicit choice should outrank something inferred from a photo. So
+     the order was swatches, then typed hex codes, then the reference — and the
+     reference reached only the accent, the band tint and the border, because
+     `bg` and `ink` are not in `palette` at all.
+
+     What that produced: a merchant uploads a page on near-black, picks "Minimal
+     & clean" because it was the closest card to click, and gets a white page
+     with an accent borrowed from their reference. Every strong signal they gave
+     was outranked by a card they picked from a grid of fifteen.
+
+     A reference screenshot is the most specific thing a merchant can hand over.
+     Where one exists it is now the whole answer for colour:
+
+       1. the reference's own background, ink and palette
+       2. swatches the merchant added deliberately
+       3. hex codes they typed into the prompt
+       4. the visual style card — which now sets colour only when NO reference
+          was uploaded
+
+     THE COST OF THIS, stated because it is real: the reference is usually
+     another shop, so its colours are another brand's colours, and a merchant who
+     typed their own brand hex into Step 2 will see it lose to a screenshot. That
+     is the instruction — see the precedence question in the commit message — and
+     it is why the style card keeps everything that is not a colour: the faces,
+     the radius, the type scale, the border weight are still the merchant's pick.
+     ========================================================================== */
   const refPalette = mergePalettes(brief.referenceImages, 4);
-  const brandColors = [
-    ...brief.brandColors,
-    ...signals.hexes,
-    ...refPalette,
-  ].slice(0, 5);
+  const refSurface = firstSurface(brief.referenceImages);
+  const hasReference = refPalette.length > 0 || refSurface !== null;
+
+  /* Resolved PER ROLE, not by concatenating two lists.
+
+     `BRAND_COLOR_ROLES` makes the position meaningful — 1 is the accent, 2 tints
+     the alternating band, 3 owns the borders. Concatenating scrambles that: put
+     three extracted colours in front of the merchant's and their Accent swatch
+     lands in position four, which has no role at all, so a colour they chose
+     deliberately would silently do nothing. Aligned by index, the reference wins
+     each role it has an answer for and the merchant fills the rest. */
+  const own = [...brief.brandColors, ...signals.hexes];
+  const brandColors = (
+    hasReference
+      ? Array.from(
+          { length: Math.max(refPalette.length, own.length) },
+          (_, i) => refPalette[i] ?? own[i],
+        ).filter(Boolean)
+      : [...own, ...refPalette]
+  ).slice(0, 5);
 
   /* The structural read of the references. Product imagery is NOT taken from
      the uploads — a reference is a picture of a layout the merchant likes, so
@@ -1082,7 +1122,7 @@ export function buildPage(args: {
       (i) => (i as { layout?: LayoutFingerprint }).layout,
     ),
   );
-  const tokens = styleToTokens(brief.visualStyle as VisualStyleId, brandColors);
+  const tokens = styleToTokens(brief.visualStyle as VisualStyleId, brandColors, refSurface);
 
   // Brand name is stable across every page in a run, so the deck reads as one
   // store rather than 30 unrelated ones.
