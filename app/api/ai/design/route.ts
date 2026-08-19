@@ -26,6 +26,10 @@ const bodySchema = z.object({
   styleLabel: z.string().max(60).default(""),
   styleBlurb: z.string().max(200).default(""),
   density: z.string().max(20).default("normal"),
+  /* The Step 1 chip slug, so a regenerated page resolves to the same vertical
+     the build did. Optional: an older client does not send it, and the resolver
+     falls back to reading the label. */
+  verticalSlug: z.string().nullable().optional(),
   reference: z
     .object({
       gridColumns: z.number().nullable(),
@@ -113,6 +117,10 @@ export async function POST(request: Request) {
        fix is to cache the build's reading against the job, not to ship the
        images up again. */
     refSections: null,
+    /* Regenerating one page must land on the same plan the build used, or the
+       replacement is a different page wearing the same label. */
+    storeDomain: account.domain,
+    verticalSlug: body.verticalSlug ?? null,
     pageLabel: body.pageLabel,
     pageType: body.pageType,
     tokens: { ...FALLBACK_TOKENS, ...body.tokens },

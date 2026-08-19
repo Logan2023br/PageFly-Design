@@ -88,8 +88,25 @@ export function onlyOn(target: PFNode, devices: DeviceKey[]): PFNode {
 
 /* ---- node constructors -------------------------------------------------- */
 
-export function FB(styleData: StyleData, kids: PFNode[] = [], cls?: string) {
-  return node("FlexBlock", cls ? { className: cls } : {}, styleData, kids);
+export function FB(
+  styleData: StyleData,
+  kids: PFNode[] = [],
+  cls?: string,
+  /* Only `overlay` uses this. The picture rides in styleData as CSS rather than
+     in `data`, because a FlexBlock has no image field — and that is the point:
+     no new element type means nothing new that can fail to import. */
+  bg?: { backgroundSrc: string; scrim: string },
+) {
+  const d: Record<string, unknown> = {};
+  if (cls) d.className = cls;
+  if (bg) {
+    /* Written into data as well as into CSS. PageFly's own sections carry a
+       `src` for their background; whether the editor picks the image up from
+       there or from the stylesheet is the one thing the probe import has to
+       answer, and setting both means the page looks right either way. */
+    d.src = bg.backgroundSrc;
+  }
+  return node("FlexBlock", d, styleData, kids);
 }
 
 export function FSECTION(kids: PFNode[] = [], styleData: StyleData = null) {
@@ -388,6 +405,80 @@ export function flatten(root: PFNode): FlatNode[] {
   });
 }
 
+
+
+/* ---- the five that make a designed page possible ------------------------
+
+   Each maps to something PageFly already renders. Where the element model has
+   a native answer it is used; where it does not, the fallback is named and the
+   condition for switching is written down, because none of this can be proven
+   without importing into a real store.
+   ------------------------------------------------------------------------ */
+
+/**
+ * Text on a photograph.
+ *
+ * A FlexBlock with the picture as a CSS background and the scrim as a gradient
+ * in the same stack — NOT a new element type. FlexBlock is what every container
+ * in every exported page already is, so this cannot fail to import; a novel
+ * element could.
+ *
+ * The gradient goes FIRST in the background shorthand because CSS paints the
+ * first layer on top, and a scrim under the photograph is a scrim doing
+ * nothing.
+ */
+export function OVERLAY(
+  src: string,
+  scrim: "left" | "bottom" | "full" | "none",
+  styleData: StyleData,
+  kids: PFNode[] = [],
+) {
+  return FB(styleData, kids, undefined, src ? { backgroundSrc: src, scrim } : undefined);
+}
+
+/** The gradient for each scrim, as a CSS background layer. */
+export const SCRIM_CSS: Record<string, string> = {
+  /* Strong at the edge the text sits on, gone by the middle — the photograph
+     stays a photograph everywhere the text is not. */
+  left: "linear-gradient(90deg, rgba(0,0,0,.72) 0%, rgba(0,0,0,.45) 38%, rgba(0,0,0,0) 68%)",
+  bottom: "linear-gradient(0deg, rgba(0,0,0,.75) 0%, rgba(0,0,0,.35) 34%, rgba(0,0,0,0) 62%)",
+  full: "linear-gradient(0deg, rgba(0,0,0,.45) 0%, rgba(0,0,0,.45) 100%)",
+  none: "",
+};
+
+/**
+ * Before/after, on PageFly's own element.
+ *
+ * `ImageComparison` is real and documented — beforeImageUrl, afterImageUrl,
+ * initialPosition, handleStyle. Nothing is invented here, so there is no
+ * fallback to leave behind.
+ */
+export function BEFORE_AFTER(
+  before: string,
+  after: string,
+  beforeLabel: string,
+  afterLabel: string,
+  styleData: StyleData,
+) {
+  return node(
+    "ImageComparison",
+    {
+      beforeImageUrl: before,
+      afterImageUrl: after,
+      /* `alt` doubles as the image-search query in PageFly, so the label is the
+         better value than a description of the label. */
+      beforeImageAlt: beforeLabel,
+      afterImageAlt: afterLabel,
+      initialPosition: 50,
+      handleStyle: "circle",
+      direction: "horizontal",
+      imgQuality: "auto",
+      loading: "lazy",
+    },
+    styleData,
+    [],
+  );
+}
 
 /* ---- form ---------------------------------------------------------------
 

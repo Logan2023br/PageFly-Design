@@ -272,6 +272,79 @@ const custom = z.object({
   ...styled,
 });
 
+/* ==========================================================================
+   The five that make a designed page possible.
+
+   `position` and `transform` are banned in plain `css` and stay banned — a
+   model that can position anything produces pages where things land on top of
+   each other in ways the mockup never showed. But the ban also made the pages
+   in every reference screenshot impossible to build: there was no way to put
+   text on a photograph, so every generated hero was a text column beside an
+   image column, and none of them looked like the pages merchants point at.
+
+   These five own their positioning inside the builder, where it is written once
+   and tested once instead of invented per page.
+   ========================================================================== */
+
+/**
+ * Text ON a photograph. The node that makes a page look art-directed.
+ *
+ * `scrim` is a gradient, never a flat wash: a flat overlay greys the photograph
+ * evenly and reads as a mistake, while a gradient from one edge keeps the image
+ * intact where there is no text.
+ */
+const overlay = z.object({
+  type: z.literal("overlay"),
+  /** English stock-photo search terms, as `image` */
+  query: z.string().max(400).catch("").transform((v) => v.trim().slice(0, 160)),
+  ratio: z.number().min(0.2).max(4).default(0.62),
+  scrim: z.enum(["left", "bottom", "full", "none"]).default("left"),
+  align: z.enum(["bottom-left", "center", "top-left"]).default("bottom-left"),
+  ...styled,
+});
+
+/**
+ * A bar that stays put while the page scrolls past it.
+ *
+ * `mobileOnly` because that is the honest default for a buy bar: on a desktop
+ * the buy box is usually still on screen, and a second one pinned to the bottom
+ * is the same offer twice.
+ */
+const sticky = z.object({
+  type: z.literal("sticky"),
+  edge: z.enum(["bottom", "top"]).default("bottom"),
+  mobileOnly: z.boolean().default(false),
+  ...styled,
+});
+
+/** Two photographs and a handle. PageFly has a native element for this. */
+const beforeAfter = z.object({
+  type: z.literal("beforeAfter"),
+  beforeQuery: z.string().max(400).catch("").transform((v) => v.trim().slice(0, 160)),
+  afterQuery: z.string().max(400).catch("").transform((v) => v.trim().slice(0, 160)),
+  beforeLabel: z.string().max(40).default("Before"),
+  afterLabel: z.string().max(40).default("After"),
+  ...styled,
+});
+
+/* `marquee` is declared inside the lazy union below — it holds children, so
+   out here it would reference `node` before `node` exists. */
+
+/**
+ * A number that counts up when it arrives on screen.
+ *
+ * `suffix` and `prefix` are what make it a fact rather than a digit: `92` says
+ * nothing, `92%` and `£92` say something. The audit rejects a bare one.
+ */
+const counter = z.object({
+  type: z.literal("counter"),
+  value: z.string().max(12),
+  suffix: z.string().max(12).default(""),
+  prefix: z.string().max(12).default(""),
+  label: z.string().max(80).default(""),
+  ...styled,
+});
+
 /* `slideshow` is NOT declared here. It holds design nodes, so it has to be
    built inside the `z.lazy` below alongside `row` and `col` — declared out
    here it would reference `node` before `node` exists, and TypeScript reports
@@ -304,6 +377,36 @@ export type DesignNode =
   | z.infer<typeof productList>
   | z.infer<typeof form>
   | z.infer<typeof custom>
+  | z.infer<typeof beforeAfter>
+  | z.infer<typeof counter>
+  | {
+      type: "overlay";
+      query: string;
+      ratio: number;
+      scrim: "left" | "bottom" | "full" | "none";
+      align: "bottom-left" | "center" | "top-left";
+      css?: Css;
+      mobile?: Css;
+      anim?: Anim;
+      children: DesignNode[];
+    }
+  | {
+      type: "marquee";
+      speed: number;
+      css?: Css;
+      mobile?: Css;
+      anim?: Anim;
+      children: DesignNode[];
+    }
+  | {
+      type: "sticky";
+      edge: "bottom" | "top";
+      mobileOnly: boolean;
+      css?: Css;
+      mobile?: Css;
+      anim?: Anim;
+      children: DesignNode[];
+    }
   | z.infer<typeof accordion>
   | {
       type: "slideshow";
@@ -329,6 +432,8 @@ const node: z.ZodType<DesignNode> = z.lazy(() =>
     productList,
     form,
     custom,
+    beforeAfter,
+    counter,
     accordion,
     /* Only when the brief or the reference asks for a carousel. A row of three
        cards that fits on the screen is a row of three cards; turning it into a
@@ -341,6 +446,32 @@ const node: z.ZodType<DesignNode> = z.lazy(() =>
       autoplay: z.boolean().default(false),
       ...styled,
       slides: z.array(node).min(1).max(12),
+    }),
+    /* Both hold children, so both are built here rather than above — declared
+       outside the lazy union they would reference `node` before it exists, and
+       TypeScript reports that as the whole union silently becoming `any`. */
+    z.object({
+      type: z.literal("overlay"),
+      query: z.string().max(400).catch("").transform((v) => v.trim().slice(0, 160)),
+      ratio: z.number().min(0.2).max(4).default(0.62),
+      scrim: z.enum(["left", "bottom", "full", "none"]).default("left"),
+      align: z.enum(["bottom-left", "center", "top-left"]).default("bottom-left"),
+      ...styled,
+      children: z.array(node).max(24),
+    }),
+    z.object({
+      type: z.literal("marquee"),
+      /** seconds for one full pass; lower is faster */
+      speed: z.number().min(8).max(120).default(28),
+      ...styled,
+      children: z.array(node).min(1).max(24),
+    }),
+    z.object({
+      type: z.literal("sticky"),
+      edge: z.enum(["bottom", "top"]).default("bottom"),
+      mobileOnly: z.boolean().default(false),
+      ...styled,
+      children: z.array(node).max(12),
     }),
     z.object({
       type: z.literal("row"),
@@ -359,6 +490,14 @@ const node: z.ZodType<DesignNode> = z.lazy(() =>
     PageFly accepts as a direct child of the page body. */
 const section = z.object({
   type: z.literal("section"),
+  /**
+   * The pattern id this section was ordered to build, copied back verbatim.
+   *
+   * It is how the audit knows what to check a section against. Optional so a
+   * tree built without a resolver still parses — `USE_PLAN=false` is the
+   * rollback and must not start rejecting pages.
+   */
+  pattern: z.string().max(60).optional(),
   /** what this band is for — nav, hero, footer… Not rendered; it is how the
       renderer knows a nav from a footer and how failures name themselves. */
   role: z.string().max(40).default("section"),

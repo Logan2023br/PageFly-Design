@@ -221,6 +221,11 @@ async function run(
             /* The whole deck, so a page can pace itself against its siblings
                rather than each one deciding in isolation. */
             deckSize: plan.length,
+            /* The seed's material. Two stores in one vertical must roll
+               different patterns, and the domain is the one thing that reliably
+               differs — without it every store in a trade gets one page. */
+            storeDomain: job.domain,
+            verticalSlug: brief.verticalSlug ?? null,
             pageLabel: base.label,
             pageType: base.pageType,
             tokens: {

@@ -1,10 +1,12 @@
 import "server-only";
 
 import { getProvider, isAiEnabled, providerName, type Completion } from "./provider";
-import { loadSkills } from "./skills";
+import { loadSkills, sliceSkill } from "./skills";
 import { DESIGN_SYSTEM } from "./designPrompt";
 import { designTreeSchema, walk, type DesignTree } from "../design/schema";
 import { animationLines } from "../design/animationPicker";
+import { planPage, seedFor, type Order } from "../design/plan";
+import { audit } from "../design/audit";
 import { sectionPlanLine } from "../design/sectionPlan";
 import { detectVertical } from "../generate/content";
 import { resolvePhotos, stockProvider, urlsOf } from "../images/stock";
@@ -57,6 +59,16 @@ export type DesignInput = {
    * name. See lib/ai/refVision.ts for why it is a different provider.
    */
   refSections: string[] | null;
+  /** Step 1 chip slug, when the merchant clicked one. Exact; null for free text. */
+  verticalSlug?: string | null;
+  /**
+   * The store this is for.
+   *
+   * Only the resolver uses it, and only as seed material: two stores in the same
+   * vertical must roll different patterns, and the domain is the one thing that
+   * reliably differs. Never sent to the model.
+   */
+  storeDomain?: string | null;
   /**
    * How many pages this build is producing.
    *
@@ -85,6 +97,14 @@ export type DesignOutcome =
   | {
       used: true;
       tree: DesignTree;
+      /**
+       * How many problems the audit found on the FIRST pass.
+       *
+       * Recorded because it is the number that says which skill file is
+       * unclear: every repeated failure is a sentence a model could not act on.
+       * Zero after a repair is not the same as zero before one.
+       */
+      auditFailures: number;
       images: Record<string, string>;
       credits: { name: string; link: string }[];
       usage: { input: number; output: number };
@@ -113,6 +133,44 @@ function asHex(value: string): string {
   return `#${hex(+m[1])}${hex(+m[2])}${hex(+m[3])}${alpha}`.toUpperCase();
 }
 
+/* The padding names the resolver uses, in the pixels the model writes. Kept
+   here rather than in the order line's vocabulary because the model should not
+   have to learn a second word for a number it is about to type. */
+const PADDING_PX: Record<string, string> = {
+  statement: "140px 56px",
+  standard: "96px 56px",
+  dense: "72px 56px",
+  utility: "56px 56px",
+};
+
+/**
+ * The order, as the model reads it.
+ *
+ * One line per section and nothing else. Everything on the line is a decision
+ * already made — which pattern, how dark, how much room, what moves — so there
+ * is nothing here to weigh, only to build.
+ */
+function orderLines(order: Order): string[] {
+  return [
+    `THE ORDER — build exactly these sections, in this order, one section each.`,
+    `Copy the pattern id into the section's "pattern" field verbatim.`,
+    ``,
+    ...order.sections.map((s, i) =>
+      [
+        `${i + 1} · ${s.role}`,
+        s.pattern || "(no pattern — build the role plainly)",
+        s.dark ? "dark" : "light",
+        PADDING_PX[s.padding] ?? "96px 56px",
+        s.signature ? "SIGNATURE — the most room and the best photograph on the page" : "",
+        s.motion ? `motion:${s.motion}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    ),
+    ``,
+  ];
+}
+
 export async function designPageTree(
   input: DesignInput,
   signal?: AbortSignal,
@@ -122,8 +180,52 @@ export async function designPageTree(
   const provider = getProvider();
   if (!provider) return { used: false, reason: "no model configured", usage: NOTHING };
 
-  const skills = loadSkills("design");
-  const system = skills ? `${DESIGN_SYSTEM}\n\n${skills}` : DESIGN_SYSTEM;
+  /* ==========================================================================
+     THE ORDER. Decided in code, before the model is asked anything.
+
+     This is the change the rebuild turns on. v1 described a good page in the
+     prompt and asked the model to produce one — and a description of a good
+     page IS a template, so every page came back with the same skeleton. The
+     structure is now resolved deterministically and the model is left the work
+     it is good at: this store's words and this store's pictures.
+
+     Behind USE_PLAN so it can be turned off without a deploy. That is the
+     rollback, and it is why the v1 path below is kept rather than deleted.
+     ========================================================================== */
+  const usePlan = process.env.USE_PLAN !== "false";
+
+  const order = usePlan
+    ? planPage(
+        {
+          whatYouSell: input.sell,
+          verticalSlug: input.verticalSlug ?? null,
+          visualStyle: input.style as never,
+        },
+        input.pageType,
+        seedFor(input.storeDomain ?? input.sell, input.pageType, input.style),
+      )
+    : null;
+
+  /* §7 — CONCATENATION ORDER IS NOT COSMETIC. DeepSeek caches by prefix, and
+     the cached prefix ends at the first byte that differs. `00-contract` and
+     `10-composition` are byte-identical on every page ever built, so they come
+     first and stay cached for ever; the slices change with the page type and go
+     after. A slice placed before them would throw the whole prefix away — it
+     would look like it works, and the bill would be several times what it
+     should be. Measured in v1: 4,864 of 4,892 input tokens were cache hits. */
+  const system = order
+    ? [
+        loadSkills("design"),
+        sliceSkill("patterns", order.patternIds),
+        sliceSkill("verticals", [order.vertical]),
+        sliceSkill("motion", order.motionIds),
+      ]
+        .filter(Boolean)
+        .join("\n\n")
+    : (() => {
+        const skills = loadSkills("design");
+        return skills ? `${DESIGN_SYSTEM}\n\n${skills}` : DESIGN_SYSTEM;
+      })();
 
   const t = input.tokens;
   const user = [
@@ -131,24 +233,9 @@ export async function designPageTree(
     input.storeType && `Store type: ${input.storeType}`,
     input.prompt && `Merchant's own words: ${input.prompt}`,
     ``,
-    /* The style has a NAME, and it was being withheld. The model received the
-       colours a style resolves to and never the word "Neubrutalist" — so it
-       had the palette of a hard-edged brutalist page and no reason to make one.
-       The name and its one-line description carry more design intent than five
-       hex codes do. */
     `Visual style: ${input.styleLabel}${input.styleBlurb ? ` — ${input.styleBlurb}` : ""}`,
-    `Spacing pressure: ${input.density} (airy = generous padding, tight = dense)`,
     ``,
     `Design this page: ${input.pageLabel || input.pageType}`,
-    /* Resolved here rather than sent as a table. The rulebook's thirty-five page
-       types are about seven hundred tokens to tell the model thirty-four things
-       that do not apply to the page in front of it, and the page type is known
-       before the call goes out. */
-    sectionPlanLine(
-      input.pageType,
-      detectVertical(input.sell),
-      Boolean(input.refSections?.length),
-    ),
     ``,
     `Palette and faces — work inside these, do not introduce others.`,
     `Each colour has a job. Use it for that job.`,
@@ -157,24 +244,17 @@ export async function designPageTree(
     `  text        ${t.ink}`,
     `  accent      ${t.accent}   buttons, prices, badges, the one highlighted thing in a section`,
     t.band && `  band        ${asHex(t.band)}   background of sections that step away from the page background`,
-    /* Stated as an instruction, not an offer. The system prompt tells the
-       model to prefer whitespace over borders, which is right in general and
-       wrong here: a border colour only reaches this line because the merchant
-       filled a slot labelled Borders. Without this the colour was handed over
-       and used zero times in a seventy-five node page. */
+    /* Stated as an instruction, not an offer. A border colour only reaches this
+       line because the merchant filled a slot labelled Borders — without saying
+       so outright it was handed over and used zero times in a 75-node page. */
     t.border &&
-      `  border      ${asHex(t.border)}   card and section outlines, dividers. The merchant chose this colour, so cards and bands DO carry a visible 1px outline in it — this overrides the general preference for whitespace over borders.`,
+      `  border      ${asHex(t.border)}   card and section outlines, dividers. The merchant chose this colour, so cards and bands DO carry a visible 1px outline in it.`,
     t.fontHeading && `  heading font-family: ${t.fontHeading}`,
     t.fontBody && `  body font-family: ${t.fontBody}`,
     `  corner radius ${t.radius}px`,
     ``,
-    /* The merchant uploaded pages they liked and we measured them. Those
-       measurements used to stop at the server and only reach the deterministic
-       generator — so the whole Reference images step changed nothing about the
-       page the model designed. */
-    /* Chosen in code from the 162-pattern reference, by page type. Sending the
-       file whole is 18,000 tokens for a page that will use two of them. */
-    animationLines(input.pageType, detectVertical(input.sell), input.deckSize ?? 1),
+    ...(order ? orderLines(order) : [sectionPlanLine(input.pageType, detectVertical(input.sell), Boolean(input.refSections?.length))]),
+    ...(order ? [] : [animationLines(input.pageType, detectVertical(input.sell), input.deckSize ?? 1)]),
     ...referenceLines(input.reference, input.refSections),
     `Return the JSON object now.`,
   ]
@@ -274,8 +354,10 @@ export async function designPageTree(
     };
   }
 
-  const tree = parsed.data;
-  const nodes = walk(tree);
+  let tree = parsed.data;
+  let nodes = walk(tree);
+  let usage = completion.usage;
+  let auditFailures = 0;
 
   /* A model that returns one empty section satisfies the schema and would
      replace a working page with a blank one. */
@@ -283,8 +365,64 @@ export async function designPageTree(
     return {
       used: false,
       reason: `tree too thin (${tree.sections.length} sections, ${nodes.length} nodes)`,
-      usage: completion.usage,
+      usage,
     };
+
+  /* ==========================================================================
+     ONE repair call, and never two.
+
+     The audit is deterministic and free; the repair is neither. A page the
+     first repair could not fix is a page whose instruction the model does not
+     understand, and spending a third call on it buys a differently wrong page.
+     What should change then is the sentence in `skills/` the failure names —
+     which is why the failure count is recorded rather than swallowed.
+
+     The system prompt is byte-identical to the first call, so the whole cached
+     prefix is reused and a repair costs roughly the output of the fixes.
+     ========================================================================== */
+  if (order) {
+    const problems = audit(tree, order);
+    auditFailures = problems.length;
+
+    if (problems.length > 0) {
+      try {
+        const repair = await provider.complete({
+          system,
+          user: [
+            `You returned this page:`,
+            ``,
+            JSON.stringify(tree),
+            ``,
+            `It has ${problems.length} problem${problems.length === 1 ? "" : "s"}:`,
+            ...problems.map((p, i) => `${i + 1}. ${p}`),
+            ``,
+            `Return the SAME page with those fixed and nothing else changed.`,
+            `Same JSON shape. Do not rewrite copy that was not named above.`,
+          ].join("\n"),
+          maxTokens: providerName() === "deepseek" ? 48_000 : 16_000,
+          signal: signal
+            ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])
+            : AbortSignal.timeout(TIMEOUT_MS),
+        });
+
+        usage = {
+          input: usage.input + repair.usage.input,
+          output: usage.output + repair.usage.output,
+        };
+
+        /* A repair that comes back unparseable or thinner than what it replaced
+           is a repair that made things worse. Keep the first tree — it had
+           named problems, which beats an unknown one. */
+        const repaired = designTreeSchema.safeParse(parseObject(repair.text));
+        if (repaired.success && repaired.data.sections.length >= tree.sections.length) {
+          tree = repaired.data;
+          nodes = walk(tree);
+        }
+      } catch {
+        /* A failed repair costs the page nothing: the first tree still stands. */
+      }
+    }
+  }
 
   const wants = nodes
     .filter((n): n is Extract<typeof n, { type: "image" }> => n.type === "image")
@@ -306,9 +444,13 @@ export async function designPageTree(
   return {
     used: true,
     tree,
+    auditFailures,
     images: urlsOf(photos),
     credits: [...byName].map(([name, link]) => ({ name, link })),
-    usage: completion.usage,
+    /* Both calls, when there were two. Reporting only the first would show a
+       spend below the real one, which is the mistake the cache accounting in
+       provider.ts already exists to avoid. */
+    usage,
   };
 }
 

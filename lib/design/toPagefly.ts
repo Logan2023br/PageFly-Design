@@ -1,4 +1,5 @@
 import {
+  BEFORE_AFTER,
   BTN,
   CUSTOM_HTML,
   FB,
@@ -9,6 +10,8 @@ import {
   IMG,
   MEDIA_LIST,
   MEDIA_MAIN,
+  OVERLAY,
+  SCRIM_CSS,
   P4,
   PRODUCT_ATC,
   PRODUCT_BOX,
@@ -288,6 +291,65 @@ function capHeight(sd: StyleData): StyleData {
   return out;
 }
 
+/** Where the text sits inside an overlay, as flex alignment. */
+const OVERLAY_ALIGN: Record<string, string> = {
+  "bottom-left": "align-items: flex-end !important; justify-content: flex-start !important;",
+  center: "align-items: center !important; justify-content: center !important;",
+  "top-left": "align-items: flex-start !important; justify-content: flex-start !important;",
+};
+
+/* One class for every sticky bar on a page. Two sticky bars would overlap
+   whatever the class, so there is nothing to gain from numbering them. */
+const STICKY_CLASS = "pfd-sticky";
+
+function stickyCss(edge: "bottom" | "top", mobileOnly: boolean): string {
+  const rules = [
+    `.${STICKY_CLASS}{position:fixed;left:0;right:0;${edge}:0;z-index:60;}`,
+    /* The page needs room for it or the bar covers the last section's content
+       for ever, which is the failure everyone ships once. */
+    `.${STICKY_CLASS}::after{content:"";display:block;}`,
+  ];
+  if (mobileOnly)
+    rules.push(`@media (min-width: 768px){.${STICKY_CLASS}{position:static;}}`);
+  return rules.join("\n");
+}
+
+function marqueeCss(cls: string, speed: number): string {
+  return [
+    `.${cls}{overflow:hidden;display:flex !important;flex-wrap:nowrap !important;}`,
+    `.${cls} > *{flex:0 0 auto;display:flex;animation:${cls}-run ${speed}s linear infinite;}`,
+    `@keyframes ${cls}-run{from{transform:translateX(0)}to{transform:translateX(-100%)}}`,
+    /* A visitor who asked for less motion gets a static row rather than a row
+       that never stops. */
+    `@media (prefers-reduced-motion: reduce){.${cls} > *{animation:none;}}`,
+  ].join("\n");
+}
+
+function counterJs(cls: string, value: string): string {
+  /* The digits only. A value of "1,240" animates to 1240 and is written back
+     with its separators intact by the format below. */
+  const target = Number(String(value).replace(/[^\d.]/g, "")) || 0;
+  return `
+var el=document.querySelector(".${cls} [data-pf-type]");
+if(el&&"IntersectionObserver" in window){
+  var done=false;
+  var io=new IntersectionObserver(function(es){es.forEach(function(e){
+    if(!e.isIntersecting||done)return; done=true; io.disconnect();
+    var t=${target},s=null,txt=el.textContent||"",pre=txt.split(/[0-9]/)[0],suf=txt.slice(txt.search(/[0-9][^0-9]*$/)+1);
+    function step(now){ if(!s)s=now; var p=Math.min(1,(now-s)/900);
+      el.textContent=pre+Math.round(t*(1-Math.pow(1-p,3))).toLocaleString()+suf;
+      if(p<1)requestAnimationFrame(step); }
+    requestAnimationFrame(step);
+  });},{threshold:.4});
+  io.observe(el);
+}`.trim();
+}
+
+/** A fresh id for every node in a duplicated subtree. */
+function cloneNode(n: PFNode): PFNode {
+  return { ...n, _kids: n._kids.map(cloneNode) };
+}
+
 /**
  * Attach documented sub-selectors to a node's `all` breakpoint.
  *
@@ -452,6 +514,113 @@ function emitNode(
         node.intent,
         styled,
       );
+    }
+
+    case "overlay": {
+      const src = opts.images?.[node.query] ?? "";
+      const scrim = SCRIM_CSS[node.scrim] ?? "";
+      /* The gradient first, then the photograph: CSS paints the first layer on
+         top, and a scrim under the image is a scrim doing nothing. */
+      const layers = [scrim, src ? `url("${src}")` : ""].filter(Boolean).join(", ");
+      const align = OVERLAY_ALIGN[node.align] ?? OVERLAY_ALIGN["bottom-left"];
+
+      return OVERLAY(
+        src,
+        node.scrim,
+        withParts(
+          filling(sd, [
+            layers && `background-image: ${layers};`,
+            "background-size: cover;",
+            "background-position: center;",
+            /* The ratio is the shape the model asked for; `min-height` rather
+               than `aspect-ratio` because the text inside must be able to make
+               it taller, and an aspect-ratio box clips instead. */
+            `min-height: ${Math.round(node.ratio * 100)}vw;`,
+            "max-height: 100vh;",
+            `display: flex !important; ${align}`,
+          ]
+            .filter(Boolean)
+            .join(" ")),
+          {},
+        ),
+        node.children
+          .map((c) => emit(c, "vertical", opts))
+          .filter((n): n is PFNode => n !== null),
+      );
+    }
+
+    case "sticky": {
+      /* Custom.HTML with a fixed bar, NOT FlexSection's isStickyBar.
+         `isStickyBar` is a property of a SECTION, and this is a node inside
+         one — promoting it would mean restructuring the tree around a child,
+         which is the kind of rewrite that breaks the section it was inside.
+
+         SWITCH TO NATIVE when the probe import confirms a nested sticky section
+         survives: then emit the parent section with isStickyBar/stickyPosition
+         instead and delete this branch. */
+      const kids = node.children
+        .map((c) => emit(c, "horizontal", opts))
+        .filter((n): n is PFNode => n !== null);
+      if (kids.length === 0) return null;
+
+      opts.customBlocks?.push({
+        className: STICKY_CLASS,
+        html: "",
+        css: stickyCss(node.edge, node.mobileOnly),
+        js: "",
+      });
+      return FB(filling(sd), kids, STICKY_CLASS);
+    }
+
+    case "beforeAfter":
+      return BEFORE_AFTER(
+        opts.images?.[node.beforeQuery] ?? "",
+        opts.images?.[node.afterQuery] ?? "",
+        node.beforeLabel,
+        node.afterLabel,
+        filling(sd),
+      );
+
+    case "marquee": {
+      /* The track is duplicated AT BUILD TIME rather than by script: a marquee
+         that needs JavaScript to look right is a marquee that shows one static
+         row in the PageFly editor, which does not run custom JS. */
+      const kids = node.children
+        .map((c) => emit(c, "horizontal", opts))
+        .filter((n): n is PFNode => n !== null);
+      if (kids.length === 0) return null;
+
+      const n = (opts.customCount!.value += 1);
+      const cls = `pfd-mq-${n}`;
+      opts.customBlocks?.push({
+        className: cls,
+        html: "",
+        css: marqueeCss(cls, node.speed),
+        js: "",
+      });
+      /* Two copies of the row, so the second arrives as the first leaves. */
+      return FB(filling(sd), [FB(null, kids), FB(null, kids.map(cloneNode))], cls);
+    }
+
+    case "counter": {
+      /* A text node plus one line of page JS, next to the reveal observer that
+         is already there. The number is written into the markup so the page
+         reads correctly with no JavaScript at all — the script only animates a
+         value that is already correct. */
+      const n = (opts.customCount!.value += 1);
+      const cls = `pfd-count-${n}`;
+      opts.customBlocks?.push({
+        className: cls,
+        html: "",
+        css: "",
+        js: counterJs(cls, node.value),
+      });
+
+      const shown = `${node.prefix}${node.value}${node.suffix}`;
+      return FB(filling(sd), [
+        withTag(H2(shown, styleDataFor({ ...node, type: "heading" } as never, parentDir)), "div"),
+        ...(node.label ? [P4(node.label, null)] : []),
+      ], cls);
     }
 
     case "slideshow": {

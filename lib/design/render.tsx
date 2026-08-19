@@ -535,6 +535,181 @@ function Slides({ node, cls }: { node: Extract<DesignNode, { type: "slideshow" }
   );
 }
 
+/**
+ * Text on a photograph — the node the whole schema change exists for.
+ *
+ * The scrim is a gradient over the image in the same background stack, not a
+ * separate overlay div: one element means the mockup and the export are the
+ * same construction rather than two things that happen to look alike.
+ */
+function Overlay({ node, cls }: { node: Extract<DesignNode, { type: "overlay" }>; cls?: string }) {
+  const { device, images } = useDesign();
+  const src = images[node.query];
+  const scrim = SCRIM[node.scrim] ?? "";
+  const align = ALIGN[node.align] ?? ALIGN["bottom-left"];
+
+  return (
+    <div
+      data-pf="overlay"
+      className={cls}
+      style={{
+        display: "flex",
+        width: "100%",
+        minHeight: `${Math.round(node.ratio * 100)}vw`,
+        maxHeight: "100vh",
+        backgroundImage: [scrim, src ? `url("${src}")` : ""].filter(Boolean).join(", "),
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        /* Visible while the photograph loads and if it never does. Light text
+           on nothing is invisible; light text on grey is legible. */
+        backgroundColor: "#3A3A42",
+        ...align,
+        ...sx(node, device),
+      }}
+    >
+      {node.children.map((child, i) => (
+        <Node key={i} node={child} />
+      ))}
+    </div>
+  );
+}
+
+const SCRIM: Record<string, string> = {
+  left: "linear-gradient(90deg, rgba(0,0,0,.72) 0%, rgba(0,0,0,.45) 38%, rgba(0,0,0,0) 68%)",
+  bottom: "linear-gradient(0deg, rgba(0,0,0,.75) 0%, rgba(0,0,0,.35) 34%, rgba(0,0,0,0) 62%)",
+  full: "linear-gradient(0deg, rgba(0,0,0,.45) 0%, rgba(0,0,0,.45) 100%)",
+  none: "",
+};
+
+const ALIGN: Record<string, CSSProperties> = {
+  "bottom-left": { alignItems: "flex-end", justifyContent: "flex-start" },
+  center: { alignItems: "center", justifyContent: "center" },
+  "top-left": { alignItems: "flex-start", justifyContent: "flex-start" },
+};
+
+/**
+ * A bar pinned to an edge.
+ *
+ * `sticky` rather than `fixed` in the mockup: four device frames render the
+ * same page at once, and a fixed bar would pin itself to the browser window
+ * rather than to the frame it belongs to — one bar over all four pages.
+ */
+function Sticky({ node, cls }: { node: Extract<DesignNode, { type: "sticky" }>; cls?: string }) {
+  const { device } = useDesign();
+  if (node.mobileOnly && device !== "mobile") return null;
+
+  return (
+    <div
+      data-pf="sticky"
+      className={cls}
+      style={{
+        position: "sticky",
+        [node.edge]: 0,
+        zIndex: 40,
+        display: "flex",
+        alignItems: "center",
+        gap: 16,
+        width: "100%",
+        ...sx(node, device),
+      }}
+    >
+      {node.children.map((child, i) => (
+        <Node key={i} node={child} />
+      ))}
+    </div>
+  );
+}
+
+/** Two photographs and a handle. Static — the handle shows where it sits. */
+function BeforeAfter({ node, cls }: { node: Extract<DesignNode, { type: "beforeAfter" }>; cls?: string }) {
+  const { device, images } = useDesign();
+  const before = images[node.beforeQuery];
+  const after = images[node.afterQuery];
+
+  return (
+    <div
+      data-pf="before-after"
+      className={cls}
+      style={{ display: "flex", width: "100%", gap: 2, ...sx(node, device) }}
+    >
+      {[
+        [before, node.beforeLabel],
+        [after, node.afterLabel],
+      ].map(([src, label], i) => (
+        <div key={i} style={{ flex: 1, minWidth: 0, position: "relative" }}>
+          <div style={{ width: "100%", aspectRatio: "1 / 0.75", background: "#E8E8EC", overflow: "hidden" }}>
+            {src && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+            )}
+          </div>
+          <span
+            style={{
+              display: "inline-block",
+              marginTop: 8,
+              fontSize: 12,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              opacity: 0.7,
+            }}
+          >
+            {label}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * A row that travels sideways.
+ *
+ * The track is duplicated here as it is in the export, so the loop has
+ * something to arrive as the first copy leaves. A marquee built from one copy
+ * shows a gap once per pass and the gap is the thing people notice.
+ */
+function Marquee({ node, cls }: { node: Extract<DesignNode, { type: "marquee" }>; cls?: string }) {
+  const { device } = useDesign();
+  const track = (
+    <div style={{ display: "flex", flex: "0 0 auto", gap: 48 }}>
+      {node.children.map((child, i) => (
+        <Node key={i} node={child} />
+      ))}
+    </div>
+  );
+  return (
+    <div
+      data-pf="marquee"
+      className={cls}
+      style={{ display: "flex", overflow: "hidden", width: "100%", ...sx(node, device) }}
+    >
+      {track}
+      {track}
+    </div>
+  );
+}
+
+/**
+ * A number, shown at its final value.
+ *
+ * Static in the mockup on purpose: a counter that animates every time the
+ * merchant scrolls past it makes the page feel busy in a way the live page will
+ * not, because there it runs once.
+ */
+function Counter({ node, cls }: { node: Extract<DesignNode, { type: "counter" }>; cls?: string }) {
+  const { device } = useDesign();
+  return (
+    <div data-pf="counter" className={cls} style={{ ...sx(node, device) }}>
+      <div style={{ fontSize: 44, fontWeight: 700, lineHeight: 1, letterSpacing: "-0.03em" }}>
+        {node.prefix}
+        {node.value}
+        {node.suffix}
+      </div>
+      {node.label && <div style={{ marginTop: 8, fontSize: 13, opacity: 0.7 }}>{node.label}</div>}
+    </div>
+  );
+}
+
 /* ---- containers --------------------------------------------------------- */
 
 /**
@@ -576,6 +751,16 @@ function Node({ node }: { node: DesignNode }) {
       return <CustomBlock node={node} cls={cls} />;
     case "slideshow":
       return <Slides node={node} cls={cls} />;
+    case "overlay":
+      return <Overlay node={node} cls={cls} />;
+    case "sticky":
+      return <Sticky node={node} cls={cls} />;
+    case "beforeAfter":
+      return <BeforeAfter node={node} cls={cls} />;
+    case "marquee":
+      return <Marquee node={node} cls={cls} />;
+    case "counter":
+      return <Counter node={node} cls={cls} />;
     case "row":
     case "col":
       return (
