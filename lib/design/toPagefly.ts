@@ -569,7 +569,7 @@ function emitNode(
         css: stickyCss(node.edge, node.mobileOnly),
         js: "",
       });
-      return FB(filling(sd), kids, STICKY_CLASS);
+      return FB(filling(sd, "display: flex !important; flex-direction: row !important;"), kids, STICKY_CLASS);
     }
 
     case "beforeAfter":
@@ -599,7 +599,7 @@ function emitNode(
         js: "",
       });
       /* Two copies of the row, so the second arrives as the first leaves. */
-      return FB(filling(sd), [FB(null, kids), FB(null, kids.map(cloneNode))], cls);
+      return FB(filling(sd, "display: flex !important; flex-direction: row !important;"), [FB(null, kids), FB(null, kids.map(cloneNode))], cls);
     }
 
     case "counter": {
@@ -617,10 +617,31 @@ function emitNode(
       });
 
       const shown = `${node.prefix}${node.value}${node.suffix}`;
-      return FB(filling(sd), [
-        withTag(H2(shown, styleDataFor({ ...node, type: "heading" } as never, parentDir)), "div"),
-        ...(node.label ? [P4(node.label, null)] : []),
-      ], cls);
+      /* THE DIRECTION IS STATED, and it has to be.
+
+         `cssAt` only writes a flex-direction for the types in `HAS_KIDS` —
+         section, row, col — because those are the types that have children in
+         the schema. This one does not have children in the schema and grows two
+         of them here, so it fell through to PageFly's own FlexBlock default,
+         which is `row`. The mockup stacks the number over its label; the
+         imported page put them side by side and they collided: "14oz" running
+         into "denim weight" on a real storefront.
+
+         That is precisely the failure the one-tree design exists to prevent, so
+         it is fixed here rather than in the mockup — the mockup was right.
+
+         `sticky`, `marquee` and `overlay` reach FlexBlock the same way and are
+         all genuinely `row`, which is why the default has been getting away with
+         it; each of them states it too, so the next person does not have to know
+         that a leaf's direction comes from somewhere else. */
+      return FB(
+        filling(sd, "display: flex !important; flex-direction: column !important;"),
+        [
+          withTag(H2(shown, styleDataFor({ ...node, type: "heading" } as never, parentDir)), "div"),
+          ...(node.label ? [P4(node.label, null)] : []),
+        ],
+        cls,
+      );
     }
 
     case "slideshow": {

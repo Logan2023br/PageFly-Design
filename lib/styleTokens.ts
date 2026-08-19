@@ -852,6 +852,31 @@ export function styleToTokens(
     tokens.borderWidth = Math.max(tokens.borderWidth, 1);
   }
 
+  /* ---- the accent has to be visible on the page it is on ------------------
+
+     A merchant's page shipped with a `#24150D` Buy button on a `#0A0A0A` ground:
+     1.17:1, a button nobody can see. The colour was faithfully taken from their
+     reference and the page was unusable, which is the wrong trade — faithful to
+     a screenshot is not the goal, the goal is their page.
+
+     The extractor no longer offers a colour like that, and this is the net under
+     it, because an accent can also arrive from a swatch the merchant typed or
+     from a style card that was designed against white. Only the LIGHTNESS moves:
+     the hue and the saturation are whoever chose them, so the button stays
+     recognisably their colour and becomes a button. */
+  if (contrastRatio(tokens.accent, tokens.bg) < 2.6) {
+    const towardInk = luminance(tokens.bg) < 0.5 ? "#FFFFFF" : "#000000";
+    for (const amount of [0.2, 0.35, 0.5, 0.65]) {
+      const lifted = mix(tokens.accent, towardInk, amount);
+      if (contrastRatio(lifted, tokens.bg) >= 2.6) {
+        tokens.accent = lifted;
+        tokens.accentInk = readableInk(lifted, "#FFFFFF", mix(lifted, "#000000", 0.78));
+        tokens.accentSoft = withAlpha(lifted, 0.14);
+        break;
+      }
+    }
+  }
+
   if (valid.length > 1) {
     const second = valid[1];
     // Only tint the alternating band if the second color is actually distinct,

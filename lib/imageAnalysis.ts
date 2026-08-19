@@ -75,17 +75,24 @@ const MAX_SLICES = 4;
  */
 const MAX_SOURCE_PIXELS = 12_000_000;
 /** Palette is sampled from a tiny canvas — accuracy past this is wasted work. */
-/* The downsample the colour pass reads.
+/* How many pixels the colour pass gets to look at.
 
-   48 was enough for its original job — four dominant colours out of a product
-   photo survive almost any amount of shrinking. It is not enough for finding a
-   page BACKGROUND: the long edge is what gets capped, so a 1500x8000 capture
-   arrived as 9x48, and 432 pixels is a thin basis for a decision that sets the
-   colour of every section on the page.
+   A BUDGET, not an edge length, and that distinction is the whole point. The
+   sample used to be capped on its LONG edge at 48px, which is fine for a square
+   photograph and close to useless for a page: a 1500x8000 screenshot came out
+   9x48, or 432 pixels. Raising the cap to 96 only made it 15x96 — 1,440 pixels,
+   fifteen of them across — and a page's ACCENT is small by nature, so at that
+   width the buttons and rules that carry it are gone entirely. Measured on a real
+   reference: the extractor found the dark panels and never saw the orange.
 
-   96 is 4x the pixels, up to about 9,000, which is still a fraction of a
-   millisecond in a browser that has just decoded a 20MB PNG. */
-const SAMPLE_EDGE = 96;
+   Capping total area instead keeps the aspect ratio and spends the pixels where a
+   tall page needs them. The same 1500x8000 becomes about 86x462 — 86 across
+   rather than 15 — for the same arithmetic cost, because the cost is the pixel
+   count and the pixel count is what is being held constant.
+
+   40,000 is a loop of forty thousand additions in a browser that has just
+   decoded a 20MB PNG. It does not register. */
+const SAMPLE_PIXELS = 40_000;
 const MAX_PALETTE = 4;
 
 export type PreparedImage = {
@@ -178,6 +185,24 @@ function chroma([r, g, b]: [number, number, number]): number {
   return Math.max(r, g, b) - Math.min(r, g, b);
 }
 
+/** Position on the colour wheel, 0–360. Grey returns 0 and is filtered out by
+    `chroma` before this is ever asked. */
+function hue([r, g, b]: [number, number, number]): number {
+  const max = Math.max(r, g, b);
+  const d = max - Math.min(r, g, b);
+  if (d === 0) return 0;
+  const h =
+    max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return ((h * 60) % 360 + 360) % 360;
+}
+
+/** `#0A0A0A` back to numbers, for comparing an accent against the background. */
+function hexToRgb(hex: string): [number, number, number] | null {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  return [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)) as [number, number, number];
+}
+
 /** Clean up the extremes. A 16-level bucket averages #F0F0F0 and #FFFFFF into
     something like #FAFAFA, and a page whose background is "nearly white" but not
     white puts every card on a shade nobody chose. */
@@ -207,6 +232,76 @@ function snap(rgb: [number, number, number]): [number, number, number] {
  * every section on the page, and a browser-only function is a function nobody
  * checks.
  */
+/**
+ * The one colour on the reference that is doing the shouting.
+ *
+ * `extractPalette` ranks by AREA, and for the background that is exactly right —
+ * a background is the most common colour on a page. For the accent it is exactly
+ * backwards, because AN ACCENT IS SMALL BY DEFINITION. It is a button, a rule,
+ * one word in a headline.
+ *
+ * Measured on a real case: a reference on near-black with bright orange buttons
+ * and orange underlines throughout. Ranked by area the biggest saturated buckets
+ * were the dark brown panels behind the content, so the accent came out `#24150D`
+ * — and on a `#0A0A0A` page a dark brown button is a button nobody can see. The
+ * orange, being small, never got near the front of the list.
+ *
+ * So this ranks by chroma instead, over anything holding at least half a percent
+ * of the image, and it requires a real lightness gap from the background. An
+ * accent that cannot be seen against the page is not an accent, whatever the
+ * reference did with it.
+ */
+function pickAccent(
+  ranked: { rgb: [number, number, number]; n: number }[],
+  counted: number,
+  bg: [number, number, number] | null,
+): [number, number, number] | null {
+  if (counted === 0) return null;
+  const bgLum = bg ? luminance(...bg) : null;
+
+  const usable = ranked.filter((c) => {
+    if (chroma(c.rgb) < 40) return false;
+    if (bgLum !== null && Math.abs(luminance(...c.rgb) - bgLum) < 0.18) return false;
+    return true;
+  });
+  if (usable.length === 0) return null;
+
+  /* GROUPED BY HUE, then the purest member of the winning group.
+
+     An area floor on a single bucket does not work here and two attempts at
+     tuning one proved it. A 16-level bucket AVERAGES what falls into it, so one
+     orange on a dark page arrives as a family: the pure `#E5671D` of a button
+     face, the muddy `#773A18` where an orange rule is antialiased against black,
+     and several shades between. Every one of them is small. Judged individually
+     the muddy ones win on area and the pure one is rejected as noise, which is
+     how the accent came out `#773A18` at 2.27:1 against the page.
+
+     Asked as "which hue family does this page use for emphasis, and what is its
+     purest form", both problems go away: the family is big enough to trust, and
+     its most chromatic member is the colour the designer actually chose — the
+     others are that colour blended with whatever it sat on.
+
+     The floor moves to the family, at 0.2%. A whole hue family under a fifth of
+     a percent of a page is not that page's accent. */
+  const families = new Map<
+    number,
+    { n: number; best: { rgb: [number, number, number]; n: number } }
+  >();
+  for (const c of usable) {
+    const bin = Math.floor(hue(c.rgb) / 30);
+    const cur = families.get(bin);
+    if (!cur) families.set(bin, { n: c.n, best: c });
+    else {
+      cur.n += c.n;
+      if (chroma(c.rgb) > chroma(cur.best.rgb)) cur.best = c;
+    }
+  }
+
+  const winner = [...families.values()].sort((a, b) => b.n - a.n)[0];
+  if (!winner || winner.n / counted < 0.002) return null;
+  return winner.best.rgb;
+}
+
 export function extractSurface(
   ranked: { rgb: [number, number, number]; n: number }[],
   counted: number,
@@ -229,9 +324,28 @@ export function extractSurface(
   const bgRgb = snap(bg.rgb);
   const bgLum = luminance(...bgRgb);
 
-  const inkBucket = ranked.find(
-    (c) => Math.abs(luminance(...c.rgb) - bgLum) >= 0.45 && chroma(c.rgb) < 60,
+  /* The FARTHEST from the background, not the most common far-enough one.
+
+     Taking the most common was wrong in a way that only showed up once the
+     sample got big enough to see it: on a near-black page the most frequent
+     bucket clearing the gap is the mid-grey of antialiased text EDGES, not the
+     text. That produced `#878686` at 5.45:1 where the page's real ink is
+     near-white at 18:1 — legible, and not what the merchant uploaded.
+
+     Text sits at the far end; its edges sit between. So the extreme is the
+     answer, with an area floor to keep a stray white speck out of it. */
+  const inkCandidates = ranked.filter(
+    (c) =>
+      c.n / counted >= 0.002 &&
+      chroma(c.rgb) < 60 &&
+      Math.abs(luminance(...c.rgb) - bgLum) >= 0.45,
   );
+  inkCandidates.sort(
+    (a, b) =>
+      Math.abs(luminance(...b.rgb) - bgLum) - Math.abs(luminance(...a.rgb) - bgLum) ||
+      b.n - a.n,
+  );
+  const inkBucket = inkCandidates[0];
 
   const inkRgb: [number, number, number] = inkBucket
     ? snap(inkBucket.rgb)
@@ -242,7 +356,11 @@ export function extractSurface(
   return { bg: toHex(...bgRgb), ink: toHex(...inkRgb) };
 }
 
-function extractPalette(data: Uint8ClampedArray): {
+/* Exported for `scripts/check-colours.ts`, which runs it on a real reference
+   image and prints what it found. This function decides the colour of every
+   section of the built page; verifying it by eye on a screenshot after a
+   ten-minute build is not verifying it. */
+export function extractPalette(data: Uint8ClampedArray): {
   palette: string[];
   surface: { bg: string; ink: string } | null;
   lightness: number;
@@ -314,12 +432,43 @@ function extractPalette(data: Uint8ClampedArray): {
 
   const surface = extractSurface(ranked, counted);
 
+  /* Position 0 of `palette` is the ACCENT — `BRAND_COLOR_ROLES` says so and
+     `styleToTokens` reads it that way. It used to be whatever had the most area,
+     which is the wrong question for an accent; `pickAccent` asks the right one
+     and its answer is promoted to the front. The rest of the list keeps its
+     area order, because "alt band" and "borders" genuinely do want the colours
+     the reference used most. */
+  const bgRgb = surface ? hexToRgb(surface.bg) : null;
+  const accent = pickAccent(ranked, counted, bgRgb);
+
+  /* Anything that cannot be told apart from the page is not usable in ANY of the
+     three roles — accent, alt band and borders all sit on this background — so it
+     is dropped rather than left to become one of them by position.
+
+     This is what shipped the invisible Buy button in the end: even after
+     `pickAccent` correctly declined a dark brown for having no lightness gap, the
+     brown was still first in the area-ranked list, and first in the list IS the
+     accent. Dropping it lets the merchant's own swatch, or failing that the style
+     card, fill a role the reference has no answer for. */
+  const usableChosen = chosen.filter((c) => {
+    if (!bgRgb) return true;
+    return Math.abs(luminance(...c) - luminance(...bgRgb)) >= 0.12;
+  });
+
+  if (accent) {
+    const hex = toHex(...accent);
+    const rest = usableChosen.map((c) => toHex(...c)).filter((h) => h !== hex);
+    return { surface, palette: [hex, ...rest].slice(0, MAX_PALETTE), lightness, saturation };
+  }
+
   return {
     surface,
-    palette: chosen.map(([r, g, b]) => toHex(r, g, b)),
+    palette: usableChosen.map((c) => toHex(...c)).slice(0, MAX_PALETTE),
     lightness,
     saturation,
   };
+
+
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -422,11 +571,11 @@ export async function prepareReferenceImage(
       canvas.toDataURL("image/webp", 0.82) ||
       canvas.toDataURL("image/jpeg", 0.82);
 
-    // Palette from a tiny second pass.
+    // Palette from a tiny second pass, area-budgeted — see SAMPLE_PIXELS.
     const sc = document.createElement("canvas");
-    const sEdge = Math.min(SAMPLE_EDGE, Math.max(w, h));
-    sc.width = Math.max(1, Math.round((w / Math.max(w, h)) * sEdge));
-    sc.height = Math.max(1, Math.round((h / Math.max(w, h)) * sEdge));
+    const sScale = Math.min(1, Math.sqrt(SAMPLE_PIXELS / (w * h)));
+    sc.width = Math.max(1, Math.round(w * sScale));
+    sc.height = Math.max(1, Math.round(h * sScale));
     const sctx = sc.getContext("2d", { willReadFrequently: true });
     if (!sctx) throw new Error("Canvas is unavailable");
     sctx.drawImage(img, 0, 0, sc.width, sc.height);
