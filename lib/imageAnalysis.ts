@@ -58,8 +58,24 @@ const SLICE_ABOVE_RATIO = 2;
     shape, which is what the resize budget is spent best on. */
 const SLICE_RATIO = 1.4;
 
-/** Four covers a long homepage. More is more tokens for less of the page each. */
-const MAX_SLICES = 4;
+/* How many pieces one upload may be cut into.
+​
+   Six, not four, and the difference is whether uploading one screenshot is as
+   good as uploading seven. Measured on a real product page, 1140px wide and
+   about 7,500 tall:
+
+     4 slices   1875px tall each, over the 1568 ceiling → downscaled to 953px wide
+     6 slices   1500px tall each, under the ceiling     → kept at 1140px wide
+
+   The same page hand-cut into seven screenshots arrives at 1140px. So at four
+   the merchant was rewarded for doing the cutting themselves, and at six the two
+   ways of giving us the same page are worth the same. Cutting it up by hand also
+   costs them the page's continuity — see `layoutToHints`.
+
+   Each extra slice is about 600 Haiku tokens, once per build, so the ceiling on
+   this is judgement rather than money: past six, slices get short enough that a
+   section is regularly split across two of them. */
+const MAX_SLICES = 6;
 
 /**
  * The ceiling that actually bites, and it is not the file size.

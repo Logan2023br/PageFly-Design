@@ -68,7 +68,42 @@ const TIMEOUT_MS = 60_000;
    Twelve is the budget. It is spent EVENLY rather than first-come: taking the
    first twelve in order meant six uploads were read as three, and the merchant
    who uploaded a reference for their FAQ page never found out it was ignored. */
-const SLICE_BUDGET = 12;
+const SLICE_BUDGET = 16;
+
+/**
+ * Which slices get sent, when there are more than the budget allows.
+ *
+ * ROUND-ROBIN, not an equal division, and the difference is a silent one.
+ * Dividing equally gives every upload `floor(budget / uploads)` — fair when the
+ * uploads are the same length and wasteful the moment they are not. One tall
+ * screenshot beside three short ones used to get 3 slices of its 6 while the
+ * short ones took 1 each: nine slices' worth of budget spent on six, and half of
+ * the tall page never read. Nobody was told.
+ *
+ * Handing out one slice at a time, in passes, keeps the guarantee that mattered —
+ * no upload is dropped entirely, because everyone is served in pass one — and
+ * spends what is left on the uploads that actually have more to show.
+ */
+function allocate(uploads: string[][], budget: number): string[] {
+  const taken = uploads.map(() => 0);
+  let total = 0;
+
+  for (let pass = 0; total < budget; pass++) {
+    let gave = 0;
+    for (let i = 0; i < uploads.length && total < budget; i++) {
+      if (taken[i] > pass) continue;
+      if (taken[i] >= uploads[i].length) continue;
+      taken[i]++;
+      total++;
+      gave++;
+    }
+    if (gave === 0) break;
+  }
+
+  /* Flattened in upload order, and within an upload in slice order, because the
+     model is told these are one page read top to bottom. */
+  return uploads.flatMap((parts, i) => parts.slice(0, taken[i]));
+}
 
 /**
  * The question. Deliberately about STRUCTURE, not beauty.
@@ -80,9 +115,20 @@ const SLICE_BUDGET = 12;
  */
 const PROMPT = [
   "These are screenshots of e-commerce pages a merchant wants their own page to resemble.",
-  "A tall page arrives as consecutive vertical slices of ONE page, in order —",
-  "read them as a single continuous page and list each section once. A section",
-  "cut across two slices is still one section.",
+  "",
+  /* Both ways of handing over one page have to work, because merchants do both:
+     some upload a full-page capture, which we cut into slices ourselves, and some
+     scroll and screenshot seven times. The images arrive identically either way —
+     in order, top to bottom — so the instruction covers both rather than trying
+     to tell them apart. It is stated at the top because getting it wrong doubles
+     the section list, and a doubled list is a page built twice. */
+  "THEY MAY BE ONE PAGE OR SEVERAL. Read the images in the order given. Where one",
+  "image continues the previous one — same width, same background, the content",
+  "picking up where it left off — they are consecutive parts of a SINGLE page:",
+  "read them as one continuous page and list each section ONCE. A section cut",
+  "across two images is still one section, and a heading repeated at the top of",
+  "the next image is still one heading. Only start a new page's sections when an",
+  "image plainly begins a different page — its own announcement bar or header.",
   "",
   "List every section, top to bottom, one line each, in this exact format:",
   "  <what it is> | <columns> | <light|dark> | <share of page height>",
@@ -194,16 +240,9 @@ export async function readReferences(
     .map((r) => (r.slices?.length ? r.slices : r.dataUrl ? [r.dataUrl] : []))
     .filter((parts) => parts.length > 0);
 
-  /* At least one slice each, so no upload is silently dropped, and the top of a
-     page is the half that says what kind of page it is — so when an upload has
-     to give something up it gives up its foot. */
-  const perUpload = Math.max(1, Math.floor(SLICE_BUDGET / Math.max(1, uploads.length)));
-
-  const images = uploads
-    .flatMap((parts) => parts.slice(0, perUpload))
+  const images = allocate(uploads, SLICE_BUDGET)
     .map(toImagePart)
-    .filter((p): p is ImagePart => p !== null)
-    .slice(0, SLICE_BUDGET);
+    .filter((p): p is ImagePart => p !== null);
 
   if (images.length === 0) return null;
 

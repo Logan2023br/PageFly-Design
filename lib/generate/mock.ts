@@ -2,7 +2,7 @@ import type { StoreTypeId } from "../briefOptions";
 import { CATEGORY_BY_ID, PAGE_BY_ID } from "../pageCatalog";
 import { styleToTokens, type VisualStyleId } from "../styleTokens";
 import type { Brief } from "../validation";
-import { firstSurface, mergePalettes } from "../palette";
+import { mergeReferenceColour } from "../palette";
 import {
   fitRecipeToSections,
   layoutToHints,
@@ -1092,8 +1092,9 @@ export function buildPage(args: {
      it is why the style card keeps everything that is not a colour: the faces,
      the radius, the type scale, the border weight are still the merchant's pick.
      ========================================================================== */
-  const refPalette = mergePalettes(brief.referenceImages, 4);
-  const refSurface = firstSurface(brief.referenceImages);
+  const refColour = mergeReferenceColour(brief.referenceImages, 4);
+  const refPalette = refColour.palette;
+  const refSurface = refColour.surface;
   const hasReference = refPalette.length > 0 || refSurface !== null;
 
   /* Resolved PER ROLE, not by concatenating two lists.

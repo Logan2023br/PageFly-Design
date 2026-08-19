@@ -109,16 +109,22 @@ export function layoutToHints(
           (a, b) => b[1] - a[1] || b[0] - a[0],
         )[0][0];
 
-  /* ---- hero: read the first substantial band --------------------------- */
-  const firstBands = fps
-    .map((f) => f.bands.find((b) => b.height > 0.06) ?? f.bands[0])
-    .filter(Boolean);
+  /* ---- hero: the first substantial band OF THE FIRST UPLOAD -------------
+​
+     Of the first upload only, which used to be every upload averaged together.
+     A merchant who screenshots a page in seven passes while scrolling hands over
+     seven images whose first band is, in six cases, whatever section happened to
+     start that screenshot — so the hero was read as the mean of one real hero and
+     six mid-page bands, and came out `centered` on a page with a full-bleed one.
 
-  const heroHeights = firstBands.map((b) => b.height);
-  const heroHeight = mean(heroHeights) ?? 0;
-  const heroKinds = firstBands.map((b) => b.kind);
-  const mediaLed =
-    heroKinds.filter((k) => k === "media").length > heroKinds.length / 2;
+     There is only ever one hero, and it is at the top of the first thing they
+     uploaded. Averaging was never right; it only looked harmless while the common
+     case was a single upload. */
+  const lead = fps[0];
+  const heroBand = lead.bands.find((b) => b.height > 0.06) ?? lead.bands[0];
+
+  const heroHeight = heroBand?.height ?? 0;
+  const mediaLed = heroBand?.kind === "media";
 
   let heroLayout: RefHints["heroLayout"] = null;
   if (mediaLed && heroHeight > 0.22) heroLayout = "fullBleed";

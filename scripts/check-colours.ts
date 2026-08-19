@@ -49,7 +49,7 @@ function verdict(r: number, floor: number): string {
   return r >= floor ? `\x1b[32mok\x1b[0m` : `\x1b[31mtoo low\x1b[0m`;
 }
 
-async function one(file: string): Promise<void> {
+async function one(file: string) {
   const { extractPalette } = await import("../lib/imageAnalysis");
 
   const meta = await sharp(file).metadata();
@@ -102,6 +102,43 @@ async function one(file: string): Promise<void> {
         `  requires a lightness gap, rather than taking whatever had most area.`,
     );
   }
+
+  return read;
+}
+
+/** Every file read, then merged the way a build merges them. */
+async function all(files: string[]): Promise<void> {
+  const { mergeReferenceColour } = await import("../lib/palette");
+  const reads: { palette?: string[]; surface?: { bg: string; ink: string } | null }[] = [];
+
+  for (const f of files) {
+    try {
+      reads.push(await one(f));
+    } catch (err) {
+      console.log(`\n${f}\n  could not be read — ${(err as Error).message}`);
+    }
+  }
+
+  if (reads.length === 0) return;
+
+  /* The number that matters when a merchant hands over seven screenshots of one
+     page: what the BUILD ends up with, not what each image said on its own. */
+  const merged = mergeReferenceColour(reads, 4);
+  console.log(`\n${"═".repeat(58)}`);
+  console.log(`MERGED — what the build would use for ${reads.length} upload(s)`);
+  if (!merged.surface) console.log(`  surface: \x1b[33mnull\x1b[0m`);
+  else {
+    console.log(`  background  ${swatch(merged.surface.bg)} ${merged.surface.bg}`);
+    console.log(`  text        ${swatch(merged.surface.ink)} ${merged.surface.ink}`);
+  }
+  merged.palette.forEach((hex, i) => {
+    const role = ["accent", "alt band", "borders", "(unused)"][i] ?? "(unused)";
+    console.log(`  ${role.padEnd(11)} ${swatch(hex)} ${hex}`);
+  });
+  if (merged.surface && merged.palette[0]) {
+    const r = ratio(merged.palette[0], merged.surface.bg);
+    console.log(`\n  accent on background  ${r.toFixed(2)}:1   ${verdict(r, 3)}`);
+  }
 }
 
 async function main(): Promise<void> {
@@ -111,13 +148,7 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  for (const f of files) {
-    try {
-      await one(f);
-    } catch (err) {
-      console.log(`\n${f}\n  could not be read — ${(err as Error).message}`);
-    }
-  }
+  await all(files);
   console.log();
 }
 

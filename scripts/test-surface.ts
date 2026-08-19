@@ -55,7 +55,7 @@ function band(bg: string | null) {
 
 async function main(): Promise<void> {
   const { styleToTokens } = await import("../lib/styleTokens");
-  const { firstSurface } = await import("../lib/palette");
+  const { mergeReferenceColour } = await import("../lib/palette");
   const { audit } = await import("../lib/design/audit");
   const { planPage, seedFor } = await import("../lib/design/plan");
 
@@ -231,16 +231,57 @@ async function main(): Promise<void> {
     `${lifted.accent} on ${lifted.bg} = ${cr(lifted.accent, lifted.bg).toFixed(2)}:1`,
   );
 
-  /* ---- 2 · first upload wins, not an average --------------------------- */
+  /* ---- 2 · several uploads are ONE page --------------------------------- */
 
-  console.log("\nseveral uploads");
-  const merged = firstSurface([
-    { surface: null },
-    { surface: dark },
-    { surface: { bg: "#FFFFFF", ink: "#111111" } },
+  console.log("\nseven screenshots of one page");
+
+  /* What a merchant scrolling and screenshotting a dark page with an orange
+     accent actually hands over: every crop reports the same ground and the same
+     accent, and one crop is a full-bleed photograph that could name no ground. */
+  const crops = [
+    { surface: { bg: "#0a0a0a", ink: "#f6f6f4" }, palette: ["#f97324", "#241b17"] },
+    { surface: null, palette: ["#e5671d"] },
+    { surface: { bg: "#0a0a0a", ink: "#f6f6f4" }, palette: ["#f97324", "#1a1a1c"] },
+    { surface: { bg: "#0a0a0a", ink: "#f6f6f4" }, palette: ["#fb8b3c", "#242426"] },
+    { surface: { bg: "#0a0a0a", ink: "#f6f6f4" }, palette: ["#f97324"] },
+    { surface: { bg: "#111113", ink: "#f0f0ee" }, palette: ["#d95f18"] },
+    { surface: { bg: "#0a0a0a", ink: "#f6f6f4" }, palette: ["#f97324", "#2b2b2e"] },
+  ];
+
+  const merged = mergeReferenceColour(crops, 4);
+  check(merged.surface?.bg === "#0a0a0a", "the ground the crops agree on wins by count", merged.surface?.bg);
+  check(merged.surface?.ink === "#f6f6f4", "and the ink that came with it", merged.surface?.ink);
+
+  /* THE REGRESSION THIS EXISTS FOR. Round-robin gave the accent to role 1, then
+     the next crop's accent to role 2, then the next to role 3 — three oranges,
+     no neutral band anywhere on the page. */
+  const oranges = merged.palette.filter((hex) => {
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(1 + i, 3 + i), 16));
+    return Math.max(r, g, b) - Math.min(r, g, b) >= 40;
+  });
+  console.log(`  roles: ${merged.palette.join(" · ")}`);
+  check(oranges.length === 1, "exactly one role gets the accent hue", `${oranges.length} chromatic`);
+  check(merged.palette[0] === "#f97324", "the most chromatic accent across all crops", merged.palette[0]);
+  /* Two, and two is the right answer: #241B17, #1A1A1C, #242426 and #2B2B2E are
+     all within 29 units of each other, so they are one colour reported four
+     times, not four colours. The borders role falls through to an alpha of the
+     accent, which is what it does on any two-colour reference. */
+  check(merged.palette.length === 2, "one colour reported four times counts once", `${merged.palette.length} roles`);
+
+  /* A crop that could name no ground must not be able to veto the others. */
+  check(
+    mergeReferenceColour([{ surface: null, palette: ["#f97324"] }, crops[0]]).surface?.bg === "#0a0a0a",
+    "an upload with no ground does not stop the ones that have one",
+  );
+  check(mergeReferenceColour([{ surface: null }, {}]).surface === null, "no ground anywhere → null");
+
+  /* Two genuinely different pages: the first one the merchant reached for wins,
+     rather than the two being blended into a colour neither of them had. */
+  const twoPages = mergeReferenceColour([
+    { surface: { bg: "#0a0a0a", ink: "#f6f6f4" }, palette: ["#f97324"] },
+    { surface: { bg: "#ffffff", ink: "#111114" }, palette: ["#3f6b5b"] },
   ]);
-  check(merged?.bg === "#0B0B0C", "first upload that produced one wins outright", merged?.bg);
-  check(firstSurface([{ surface: null }, {}]) === null, "no surface anywhere → null");
+  check(twoPages.surface?.bg === "#0a0a0a", "a tie goes to the first upload", twoPages.surface?.bg);
 
   /* ---- 3 · the audit on a dark page ------------------------------------ */
 
