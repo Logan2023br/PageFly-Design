@@ -117,6 +117,10 @@ export async function POST(request: Request) {
        fix is to cache the build's reading against the job, not to ship the
        images up again. */
     refSections: null,
+    /* Same reason as refSections: the browser holds the images, and shipping
+       them up per regenerate to re-buy a reading the build already did is
+       megabytes for one page. */
+    refStyle: null,
     /* Regenerating one page must land on the same plan the build used, or the
        replacement is a different page wearing the same label. */
     storeDomain: account.domain,

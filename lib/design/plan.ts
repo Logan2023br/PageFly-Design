@@ -371,10 +371,28 @@ export function verticalOf(brief: Pick<Brief, "whatYouSell" | "verticalSlug">): 
  * role — degrades to something buildable, because the caller's alternative is
  * a page that does not get built.
  */
+/**
+ * The hero the reference actually uses, as a pattern id.
+ *
+ * The one field of the style read that changes STRUCTURE rather than
+ * appearance, which is why it comes into the resolver and the other seven go
+ * straight to the model as facts. A merchant who uploads a page with a
+ * full-bleed hero and gets a split one has been given a different page.
+ */
+const HERO_FOR_KIND: Record<string, string> = {
+  "full-bleed-overlay": "hero-full-bleed-scrim",
+  split: "hero-split-asymmetric",
+  centered: "hero-centered-statement",
+  "product-lead": "hero-product-lead",
+  "type-only": "hero-type-only",
+};
+
 export function planPage(
   brief: Pick<Brief, "whatYouSell" | "verticalSlug" | "visualStyle">,
   pageType: string,
   seed: string,
+  /** `heroKind` from the reference style read, when there was one */
+  heroKind?: string | null,
 ): Order {
   const vertical = verticalOf(brief);
   const row = parseVertical(vertical);
@@ -429,6 +447,16 @@ export function planPage(
          it — the audit names it, which is more useful than a short page with no
          explanation. */
       chosen.push({ role, pattern: "" });
+      return;
+    }
+
+    /* A hero the reference actually uses beats both the seed and the vertical.
+       The merchant pointed at that page; rolling a different opening is
+       answering a question they did not ask. */
+    const fromReference = heroKind ? HERO_FOR_KIND[heroKind] : undefined;
+    if (role === "hero" && fromReference && list.includes(fromReference)) {
+      used.add(fromReference);
+      chosen.push({ role, pattern: fromReference });
       return;
     }
 

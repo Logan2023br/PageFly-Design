@@ -29,9 +29,30 @@ import type { Brief } from "../validation";
    ========================================================================== */
 
 /** What one reference screenshot turned out to contain, top to bottom. */
+/**
+ * What a reference page LOOKS like, as eight fields.
+ *
+ * The section list says which sections a page has and in what order. It does
+ * not say why the page looks the way it does — and "the output does not
+ * resemble the page I uploaded" is a complaint about the look, not the running
+ * order. Eight fields, about eighty tokens, from the same Haiku call.
+ */
+export type RefStyle = {
+  heroKind: "full-bleed-overlay" | "split" | "centered" | "product-lead" | "type-only" | null;
+  displayScale: string | null;
+  fontMood: string | null;
+  accentUse: string | null;
+  imageMood: string | null;
+  surface: string | null;
+  density: string | null;
+  corner: string | null;
+};
+
 export type RefReading = {
   /** one line per section, in document order */
   sections: string[];
+  /** how the reference looks, or null when the model did not answer in shape */
+  style: RefStyle | null;
   /** how many images were actually read */
   images: number;
   usage: { input: number; output: number };
@@ -74,8 +95,67 @@ const PROMPT = [
   "the list above does not carry — a struck-through price, star ratings, a",
   "countdown, badges, how many cards a repeating grid holds.",
   "",
+  "",
+  /* Asked for last and as JSON, so it is trivially separable from the lines
+     above — a style block written as prose would have to be parsed out of a
+     list that is also prose. */
+  "Finally, on ONE line, a JSON object describing how the page LOOKS:",
+  'STYLE: {"heroKind":"full-bleed-overlay|split|centered|product-lead|type-only",',
+  '        "displayScale":"very-large|large|medium",',
+  '        "fontMood":"grotesk|serif-display|mono|rounded",',
+  '        "accentUse":"one-word-in-headline|buttons-only|widespread",',
+  '        "imageMood":"lifestyle|studio-white|macro|documentary",',
+  '        "surface":"light|dark|alternating",',
+  '        "density":"airy|normal|tight",',
+  '        "corner":"square|soft|pill"}',
+  "",
   "No preamble, no summary, no markdown headings. Lines only.",
 ].join("\n");
+
+/**
+ * The STYLE line, if the model wrote one in shape.
+ *
+ * Returns null rather than a half-filled object when it did not: a caller that
+ * gets `heroKind: null` inside a real object cannot tell "the model said
+ * nothing" from "the model said none of these", and those want different
+ * behaviour — the first should fall back to the resolver, the second is data.
+ */
+function parseStyle(text: string): RefStyle | null {
+  const line = /STYLE:\s*(\{[\s\S]*?\})/.exec(text);
+  if (!line) return null;
+
+  let raw: Record<string, unknown>;
+  try {
+    raw = JSON.parse(line[1]) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+
+  const pick = (key: string, allowed: string[]): string | null => {
+    const v = String(raw[key] ?? "").trim().toLowerCase();
+    return allowed.includes(v) ? v : null;
+  };
+
+  const style: RefStyle = {
+    heroKind: pick("heroKind", [
+      "full-bleed-overlay",
+      "split",
+      "centered",
+      "product-lead",
+      "type-only",
+    ]) as RefStyle["heroKind"],
+    displayScale: pick("displayScale", ["very-large", "large", "medium"]),
+    fontMood: pick("fontMood", ["grotesk", "serif-display", "mono", "rounded"]),
+    accentUse: pick("accentUse", ["one-word-in-headline", "buttons-only", "widespread"]),
+    imageMood: pick("imageMood", ["lifestyle", "studio-white", "macro", "documentary"]),
+    surface: pick("surface", ["light", "dark", "alternating"]),
+    density: pick("density", ["airy", "normal", "tight"]),
+    corner: pick("corner", ["square", "soft", "pill"]),
+  };
+
+  /* All eight unreadable means the model answered in some other shape. */
+  return Object.values(style).some((v) => v !== null) ? style : null;
+}
 
 type ImagePart = {
   type: "image";
@@ -171,8 +251,14 @@ export async function readReferences(
      drift — the model was asked for `a | b | c | d` and if it answers in
      sentences those sentences are still useful. Only the shape is enforced:
      something with content, short enough to be a line. */
+  const style = parseStyle(text);
+
   const sections = text
     .split("\n")
+    /* The STYLE line is not a section. Without this it would arrive in the
+       prompt twice — once as data and once as a band the page must build. */
+    .filter((l) => !/^\s*STYLE:/.test(l))
+    
     .map((l) => l.replace(/^[-*\d.\s]+/, "").trim())
     .filter((l) => l.length > 3 && l.length < 200)
     .filter((l) => !/^#{1,6}\s/.test(l))
@@ -180,5 +266,5 @@ export async function readReferences(
 
   if (sections.length === 0) return null;
 
-  return { sections, images: images.length, usage };
+  return { sections, style, images: images.length, usage };
 }

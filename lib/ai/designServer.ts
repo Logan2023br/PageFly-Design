@@ -59,6 +59,8 @@ export type DesignInput = {
    * name. See lib/ai/refVision.ts for why it is a different provider.
    */
   refSections: string[] | null;
+  /** the eight-field style read from the same Haiku call, when there was one */
+  refStyle: import("./refVision").RefStyle | null;
   /** Step 1 chip slug, when the merchant clicked one. Exact; null for free text. */
   verticalSlug?: string | null;
   /**
@@ -133,6 +135,38 @@ function asHex(value: string): string {
   return `#${hex(+m[1])}${hex(+m[2])}${hex(+m[3])}${alpha}`.toUpperCase();
 }
 
+/**
+ * How the reference looks, as facts the model can act on.
+ *
+ * Seven fields; `heroKind` is missing on purpose — it went into the resolver,
+ * because it changes which section gets built rather than how it looks. Sending
+ * it here too would give the model a second opinion on a decision already made.
+ */
+function styleLines(style: import("./refVision").RefStyle | null): string[] {
+  if (!style) return [];
+
+  const facts = [
+    style.displayScale && `display type is ${style.displayScale}`,
+    style.fontMood && `the faces are ${style.fontMood}`,
+    style.accentUse && `the accent colour is used ${style.accentUse.replace(/-/g, " ")}`,
+    style.imageMood && `the photography is ${style.imageMood}`,
+    style.surface && `the surface is ${style.surface}`,
+    style.density && `the spacing is ${style.density}`,
+    style.corner && `corners are ${style.corner}`,
+  ].filter(Boolean);
+
+  if (facts.length === 0) return [];
+
+  return [
+    `The merchant's reference LOOKS like this: ${facts.join(", ")}.`,
+    /* Stated as a limit rather than an instruction: the palette and the faces
+       are the merchant's own choice from Step 2, and a reference that disagrees
+       with them does not get to overrule them. */
+    `Match that treatment inside the palette and faces above — never by changing them.`,
+    ``,
+  ];
+}
+
 /* The padding names the resolver uses, in the pixels the model writes. Kept
    here rather than in the order line's vocabulary because the model should not
    have to learn a second word for a number it is about to type. */
@@ -203,6 +237,7 @@ export async function designPageTree(
         },
         input.pageType,
         seedFor(input.storeDomain ?? input.sell, input.pageType, input.style),
+        input.refStyle?.heroKind ?? null,
       )
     : null;
 
@@ -256,6 +291,7 @@ export async function designPageTree(
     ...(order ? orderLines(order) : [sectionPlanLine(input.pageType, detectVertical(input.sell), Boolean(input.refSections?.length))]),
     ...(order ? [] : [animationLines(input.pageType, detectVertical(input.sell), input.deckSize ?? 1)]),
     ...referenceLines(input.reference, input.refSections),
+    ...styleLines(input.refStyle),
     `Return the JSON object now.`,
   ]
     .filter(Boolean)

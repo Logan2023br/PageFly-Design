@@ -218,6 +218,7 @@ async function run(
             reference: base.refHints,
             /* What a model that can see actually found in those screenshots. */
             refSections: reading?.sections ?? null,
+            refStyle: reading?.style ?? null,
             /* The whole deck, so a page can pace itself against its siblings
                rather than each one deciding in isolation. */
             deckSize: plan.length,
