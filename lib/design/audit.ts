@@ -239,19 +239,50 @@ export function audit(tree: DesignTree, order: Order): string[] {
         `a material, a duration, a place, a person or a named process.`,
     );
 
-  /* The substitution test, as much of it as code can do. A heading of a few
-     words with no number, no unit and no capitalised noun says nothing that
-     could not be said about a different product in the same trade. Deliberately
-     narrow: it is better to miss a vague heading than to flag a good short one
-     and send the model to rewrite something that was right. */
+  /* The substitution test, as much of it as code can honestly do.
+
+     The heuristic in the SPEC — under six words, no digit, no proper noun —
+     was implemented first and flagged real output that was right:
+     "fragrance-reactive skin" and "Ceramide science, not spam." are exactly
+     what `50-copy.md` asks for, and both were reported as substitutable. One
+     had a technical compound instead of a number; the other's proper noun was
+     the first word, where a capital means nothing.
+
+     A false positive here is not free — it triggers a paid repair call and asks
+     a model to rewrite a heading that was already good. So this is inverted:
+     rather than guess whether a heading is specific, flag only headings made
+     ENTIRELY of words that could introduce anything. High precision, low
+     recall, which is the right trade for a check that spends money.
+
+     What it cannot do is the real test — swap the product and see if the
+     sentence survives. That is semantic, and a regex is not going to do it. */
+  const GENERIC_WORDS = new Set([
+    "our", "your", "the", "a", "an", "and", "or", "for", "with", "of", "to", "in",
+    "why", "how", "what", "us", "you", "we", "it", "is", "are", "that", "this",
+    "quality", "results", "benefits", "features", "advantages", "solutions",
+    "story", "mission", "values", "promise", "difference", "experience",
+    "choose", "choice", "better", "best", "more", "great", "good", "perfect",
+    "designed", "crafted", "made", "built", "created", "care", "love",
+    "products", "product", "collection", "range", "selection", "everything",
+    "customers", "people", "everyone", "anyone", "life", "lifestyle",
+    "get", "started", "learn", "discover", "explore", "shop", "now", "today",
+    "can", "trust", "trusted", "know", "need", "want", "make", "makes", "made",
+    "simply", "truly", "really", "always", "every", "all", "new", "modern",
+  ]);
+
   const vague = texts.filter((t) => {
     if (t.type !== "heading") return false;
-    const words = t.text.trim().split(/\s+/);
-    if (words.length >= 6) return false;
+    const words = t.text
+      .toLowerCase()
+      .replace(/[^a-z\s-]/g, " ")
+      .split(/\s+/)
+      .filter(Boolean);
+    if (words.length === 0 || words.length > 8) return false;
     if (CARRIES_SUBSTANCE.test(t.text)) return false;
-    /* A capitalised word that is not the first is a proper noun — a place, a
-       material with a brand name, a person. */
-    return !words.slice(1).some((w) => /^[A-Z][a-z]/.test(w));
+    /* A hyphenated compound is technical vocabulary — "fragrance-reactive",
+       "cold-pressed", "double-stitched". Nothing generic is written that way. */
+    if (words.some((w) => w.includes("-"))) return false;
+    return words.every((w) => GENERIC_WORDS.has(w));
   });
   if (vague.length >= 2)
     problems.push(
