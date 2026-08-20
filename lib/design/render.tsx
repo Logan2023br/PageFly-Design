@@ -79,9 +79,11 @@ type Ctx = {
   device: Device;
   /** stock photo URL per image query, filled in before render */
   images: Record<string, string>;
+  /** background-video URL per query. At most one per page. */
+  videos: Record<string, string>;
 };
 
-const DesignCtx = createContext<Ctx>({ device: "all", images: {} });
+const DesignCtx = createContext<Ctx>({ device: "all", images: {}, videos: {} });
 
 function useDesign() {
   return useContext(DesignCtx);
@@ -788,16 +790,85 @@ function Node({ node }: { node: DesignNode }) {
   }
 }
 
+/** The scrim over a background photograph, matching FlexSection's filterColor. */
+const BAND_SCRIM: Record<string, string> = {
+  none: "rgba(0,0,0,0)",
+  soft: "rgba(0,0,0,0.42)",
+  strong: "rgba(0,0,0,0.62)",
+};
+
+/**
+ * A band, and its background photograph or video.
+ *
+ * The video is a real `<video>`, autoplaying, muted and looping, with the
+ * photograph as its poster — because that is exactly what the exported page
+ * does. A mockup that showed a still where the storefront plays a video would
+ * be the same class of lie as a mockup that showed thumbnails the import did
+ * not have.
+ *
+ * The scrim is a separate layer rather than a gradient in the background stack,
+ * because PageFly's `filterColor` is a flat wash over the whole band and the
+ * two have to agree. It sits under the content and over the media.
+ */
 function Section({ section }: { section: DesignSection }) {
-  const { device } = useDesign();
+  const { device, images, videos } = useDesign();
   const classes = motionClasses(section.anim);
+
+  const bg = section.bg;
+  const photo = bg?.query ? images[bg.query] : undefined;
+  const video = bg?.kind === "video" && bg.query ? videos?.[bg.query] : undefined;
+  const scrim = BAND_SCRIM[bg?.scrim ?? "soft"];
+  const hasMedia = Boolean(photo || video);
+
   return (
     <section
       data-pf="section"
       data-role={section.role}
       className={classes.join(" ") || undefined}
-      style={{ width: "100%", ...sx(section, device) }}
+      style={{
+        width: "100%",
+        ...(hasMedia
+          ? { position: "relative", overflow: "hidden", isolation: "isolate" as const }
+          : null),
+        ...sx(section, device),
+      }}
     >
+      {hasMedia && (
+        <>
+          {video ? (
+            <video
+              src={video}
+              poster={photo}
+              autoPlay
+              muted
+              loop
+              playsInline
+              aria-hidden
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                zIndex: 0,
+              }}
+            />
+          ) : (
+            <div
+              aria-hidden
+              style={{
+                position: "absolute",
+                inset: 0,
+                backgroundImage: `url("${photo}")`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                zIndex: 0,
+              }}
+            />
+          )}
+          <div aria-hidden style={{ position: "absolute", inset: 0, background: scrim, zIndex: 1 }} />
+        </>
+      )}
       {section.children.map((child, i) => (
         <Node key={i} node={child} />
       ))}
@@ -861,16 +932,18 @@ export function DesignRender({
   tree,
   device,
   images = {},
+  videos = {},
 }: {
   tree: DesignTree;
   device: Device;
   images?: Record<string, string>;
+  videos?: Record<string, string>;
 }) {
   const root = useRef<HTMLDivElement>(null);
   useReveal(root, tree);
 
   return (
-    <DesignCtx.Provider value={{ device, images }}>
+    <DesignCtx.Provider value={{ device, images, videos }}>
       <div ref={root} style={{ display: "contents" }}>
         {/* The exported page's stylesheet, verbatim. Injected per preview rather
             than once globally so a preview that is unmounted takes its styles

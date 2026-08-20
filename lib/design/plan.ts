@@ -60,6 +60,22 @@ export type OrderSection = {
   padding: Padding;
   /** block id in 40-motion.md, or null */
   motion: string | null;
+  /**
+   * May this band carry a photograph or a video behind it?
+   *
+   * DECIDED HERE, not by the model, and the reason is arithmetic before it is
+   * taste. Asking "does this section want a background?" of eight sections is
+   * eight judgements per page, and Phase 3 measured that building to a precise
+   * spec costs MORE reasoning than choosing freely — so the question would be
+   * paid for eight times. Worse, a model asked eight times says yes too often:
+   * a page with photographs behind six of eight bands is a worse page than one
+   * with two, and "every section is special" is how v1 produced one skeleton.
+   *
+   * At most two per page, and the model still chooses WHAT — a photograph, a
+   * video, a gradient, or nothing at all. Structure in code, content in the
+   * model, which is the whole shape of this rebuild.
+   */
+  mayHaveBg: boolean;
 };
 
 export type Order = {
@@ -711,7 +727,10 @@ export function planPage(
     dark: false,
     padding: "standard",
     motion: null,
+    mayHaveBg: false,
   }));
+
+  assignBackgrounds(sections, signatureIndex);
 
   assignDark(sections, seed);
   assignPadding(sections, signatureIndex);
@@ -734,6 +753,61 @@ export function planPage(
  * not automatically dark: a dark signature on a light page is strong, and on a
  * page whose whole register is stillness it is shouting.
  */
+/* ==========================================================================
+   WHICH BANDS MAY CARRY A BACKGROUND.
+
+   Two per page, and never more, because the failure mode is not subtlety — it
+   is a page where every band is shouting and none of it reads. A background
+   photograph is the loudest thing a section can do and it only works as a
+   contrast against bands that are not doing it.
+
+   The two are chosen structurally rather than by taste:
+
+     THE OPENING. A hero is the one band whose job is atmosphere before
+     information, and it is the band a merchant points at when they say the page
+     should feel like something. Skipped when the hero is `hero-type-only` or
+     `hero-product-lead`: the first is type as the whole image and a photograph
+     behind it fights the only thing on the screen, and the second is a buy box,
+     where a photograph behind the price is a photograph over the price.
+
+     ONE STATEMENT BAND, as far from the hero as the page allows. A full-bleed
+     quote, an origin story, a closing call — a band that is mood rather than
+     detail. Never a commerce, proof or utility slot: cards, tables, spec rows
+     and forms on a photograph are unreadable, and a `productList` on one is
+     nine product cards fighting a landscape.
+   ========================================================================== */
+
+/** Patterns whose whole design is that there is nothing behind the words. */
+const NO_BG_PATTERNS = new Set(["hero-type-only", "hero-product-lead"]);
+
+/** Roles that carry detail, and detail on a photograph is unreadable. */
+const NO_BG_ROLES = new Set<SectionRole>(["commerce", "proof", "utility"]);
+
+function assignBackgrounds(sections: OrderSection[], signatureIndex: number): void {
+  const eligible = (s: OrderSection) =>
+    !NO_BG_ROLES.has(s.role) && !NO_BG_PATTERNS.has(s.pattern);
+
+  let given = 0;
+
+  if (sections[0] && sections[0].role === "hero" && eligible(sections[0])) {
+    sections[0].mayHaveBg = true;
+    given++;
+  }
+
+  /* Searched from the end: the second background wants to be as far from the
+     first as the page allows, or the two read as one long picture with a strip
+     of page between them. The signature band is preferred when it qualifies,
+     because that is the band already given the most room. */
+  const rest = sections
+    .map((s, i) => ({ s, i }))
+    .filter(({ s, i }) => i > 0 && eligible(s) && !s.mayHaveBg);
+
+  const pick =
+    rest.find(({ i }) => i === signatureIndex) ?? rest[rest.length - 1];
+
+  if (pick && given < 2) pick.s.mayHaveBg = true;
+}
+
 function assignDark(sections: OrderSection[], seed: string): void {
   if (sections.length < 3) {
     /* A two-section page: dark would be half the page. */

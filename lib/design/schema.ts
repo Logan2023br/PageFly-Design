@@ -738,6 +738,32 @@ const section = z.object({
   /** what this band is for — nav, hero, footer… Not rendered; it is how the
       renderer knows a nav from a footer and how failures name themselves. */
   role: words(40, "section"),
+  /**
+   * A photograph or a video behind the whole band.
+   *
+   * A NEW FIELD RATHER THAN CSS, for the reason every other setting on this
+   * page is a setting: PageFly's FlexSection owns `src`, `videoBg`, `bgType`
+   * and `filterColor`, so a background written as CSS would be a background the
+   * merchant cannot change and a video that cannot exist at all.
+   *
+   * A GRADIENT IS NOT HERE. `css.backgroundImage` already takes one and the
+   * exporter already passes it through, so adding a third `kind` would be
+   * vocabulary that buys nothing. The skill says when a gradient is the right
+   * answer, which is more often than a photograph.
+   *
+   * `scrim` is the legibility layer, and it is not optional on a band with text
+   * over it: `filterColor` is what makes a heading readable on someone else's
+   * photograph, and the audit checks it.
+   */
+  bg: z
+    .object({
+      kind: choice(["photo", "video"] as const, "photo"),
+      /** English stock search terms, as `image.query` */
+      query,
+      scrim: choice(["none", "soft", "strong"] as const, "soft"),
+    })
+    .nullish()
+    .catch(null),
   ...styled,
   children: list(node, 32),
 });

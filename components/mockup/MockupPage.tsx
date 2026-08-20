@@ -161,6 +161,7 @@ export const MockupPage = memo(function MockupPage({
           tree={tree}
           device={deviceForWidth(width)}
           images={page.design?.images ?? {}}
+          videos={page.design?.videos ?? {}}
         />
       </div>
     );

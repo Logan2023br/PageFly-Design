@@ -88,6 +88,55 @@ async function fromPexels(
     : null;
 }
 
+/* ==========================================================================
+   A background video, for the one band on a page that earns one.
+
+   Pexels only. Unsplash has no video library, so a store configured with an
+   Unsplash key gets no video and the section falls back to its photograph —
+   which is the right failure: a missing background video is a page that looks
+   slightly quieter, and a broken one is a page that will not load.
+
+   `HD` rather than the largest file available. This is a decoration behind text
+   on a merchant's storefront and it autoplays: a 4K master is 40MB of someone
+   else's mobile data to show a field of wheat moving slowly. 1920 wide is more
+   than the band is ever displayed at.
+   ========================================================================== */
+const PEXELS_VIDEO = "https://api.pexels.com/videos/search";
+
+export async function findVideo(
+  query: string,
+  signal?: AbortSignal,
+): Promise<string | null> {
+  if (!process.env.PEXELS_API_KEY || !query.trim()) return null;
+  try {
+    const url = `${PEXELS_VIDEO}?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape&size=medium`;
+    const res = await fetch(url, {
+      headers: { Authorization: process.env.PEXELS_API_KEY },
+      signal: signal ?? AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+
+    const body = (await res.json()) as {
+      videos?: { video_files?: { link?: string; width?: number; file_type?: string }[] }[];
+    };
+    const files = (body.videos?.[0]?.video_files ?? []).filter(
+      (f) => f.link && f.file_type === "video/mp4" && (f.width ?? 0) > 0,
+    );
+    if (files.length === 0) return null;
+
+    /* The widest file at or under 1920, or the narrowest available if every
+       file is larger than that. */
+    const under = files.filter((f) => (f.width ?? 0) <= 1920);
+    const pick = under.length
+      ? under.reduce((a, b) => ((a.width ?? 0) > (b.width ?? 0) ? a : b))
+      : files.reduce((a, b) => ((a.width ?? 0) < (b.width ?? 0) ? a : b));
+    return pick.link ?? null;
+  } catch {
+    /* A background video is the most disposable thing on the page. */
+    return null;
+  }
+}
+
 async function fromUnsplash(
   query: string,
   landscape: boolean,

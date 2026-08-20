@@ -247,6 +247,42 @@ export function audit(
         `the page background.`,
     );
 
+  /* ==========================================================================
+     BACKGROUNDS: only where the order allows one, and readable where there is.
+
+     The order marks at most two bands. A `bg` anywhere else is not a matter of
+     taste — `commerce`, `proof` and `utility` bands carry cards, tables, spec
+     rows and forms, and those on a photograph are unreadable however good the
+     photograph is.
+     ========================================================================== */
+  const withBg = sections
+    .map((s, i) => ({ s: s as DesignSection & { bg?: { kind?: string; scrim?: string } }, i }))
+    .filter(({ s }) => Boolean(s.bg));
+
+  for (const { s, i } of withBg) {
+    const want = order.sections[i];
+    if (want && !want.mayHaveBg)
+      problems.push(
+        `Section ${i + 1} has a background but its order line does not say bg:allowed. ` +
+          `Remove it — cards, tables and forms on a photograph are unreadable, and a page ` +
+          `where every band carries one has no contrast left to spend.`,
+      );
+    /* A heading over someone else's landscape is unreadable about half the
+       time, depending on where the sky falls. */
+    if (s.bg?.scrim === "none" && walk(s).some((n) => n.type === "heading"))
+      problems.push(
+        `Section ${i + 1} puts a heading on a background photograph with scrim:"none". ` +
+          `Use "soft", or "strong" if the photograph has a bright sky in it.`,
+      );
+  }
+
+  const videos = withBg.filter(({ s }) => s.bg?.kind === "video").length;
+  if (videos > 1)
+    problems.push(
+      `${videos} background videos. One per page at most — two autoplaying videos on a ` +
+        `phone is the page's whole data budget spent on decoration.`,
+    );
+
   const ratios = new Set(
     all
       .filter((n): n is Extract<DesignNode, { type: "image" }> => n.type === "image")

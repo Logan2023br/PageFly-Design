@@ -478,6 +478,10 @@ function filling(sd: StyleData, extra = ""): StyleData {
 export type EmitOptions = {
   /** query → resolved photo URL */
   images?: Record<string, string>;
+  /** query → resolved background-video URL. At most one per page — see
+      `designServer`, where the cap lives so that two autoplaying videos cannot
+      reach a merchant's storefront whatever the prompt said. */
+  videos?: Record<string, string>;
   /**
    * The page's text colour.
    *
@@ -1390,7 +1394,15 @@ export function pageflyFromTree(
     if (bandMobile && bandMobile !== bandCss)
       band.mobile = { "&": `padding: 0px; ${bandMobile}` };
 
-    return FSECTION([inner], band);
+    /* The band's own background, as SETTINGS — see FSECTION. A photograph or a
+       video is not CSS here: it is `src` / `videoBg` / `filterColor`, which is
+       what a merchant can open and change afterwards. A gradient stays in `css`
+       and needs nothing, which is why the vocabulary has no `kind` for it. */
+    const wantsVideo = section.bg?.kind === "video";
+    const photo = section.bg?.query ? opts.images?.[section.bg.query] : undefined;
+    const video = wantsVideo && section.bg?.query ? opts.videos?.[section.bg.query] : undefined;
+
+    return FSECTION([inner], band, section.bg ? { photo, video, scrim: section.bg.scrim } : undefined);
   });
 
   if (sections.length === 0)

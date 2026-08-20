@@ -283,6 +283,7 @@ async function run(
           design: {
             tree: outcome.tree,
             images: outcome.images,
+            videos: outcome.videos,
             credits: outcome.credits,
           },
         });

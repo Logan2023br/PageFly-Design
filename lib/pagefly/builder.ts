@@ -161,13 +161,57 @@ export function CONTENT_LIST(
   );
 }
 
-export function FSECTION(kids: PFNode[] = [], styleData: StyleData = null) {
-  return node(
-    "FlexSection",
-    { classGlobalStyling: "pf-container-2" },
-    styleData,
-    kids,
-  );
+/** How dark the layer over a background photograph is. `filterColor` is the
+    field; these three are the only values the design vocabulary offers, because
+    a merchant does not need a slider to make a heading readable. */
+const SCRIM_FILTER = {
+  none: "rgba(0,0,0,0)",
+  soft: "rgba(0,0,0,0.42)",
+  strong: "rgba(0,0,0,0.62)",
+} as const;
+
+/**
+ * A full-bleed band, and its background if it has one.
+ *
+ * All three background mechanisms are FlexSection's own settings — `src` for a
+ * photograph, `videoBg` for a video, `bgType` to say which, `filterColor` for
+ * the layer over it. So a background belongs in DATA, not in CSS: written as CSS
+ * it is a background the merchant cannot change from the editor, and a video
+ * written as CSS cannot exist at all.
+ *
+ * `filterColor` is not decoration. A heading over someone else's landscape is
+ * unreadable about half the time depending on where the sky falls, and the
+ * section has no way to know which half it got. `soft` carries a dark
+ * photograph; `strong` is for anything with a bright sky in it.
+ *
+ * The photograph preloads, because a band background sits at or near the fold
+ * and a lazy one arrives as a flash of flat colour under text designed to sit on
+ * a picture. The video stays lazy — it is the thing on the page most worth
+ * making a visitor wait for least.
+ */
+export function FSECTION(
+  kids: PFNode[] = [],
+  styleData: StyleData = null,
+  bg?: { photo?: string; video?: string; scrim?: "none" | "soft" | "strong" },
+) {
+  const d: Record<string, unknown> = { classGlobalStyling: "pf-container-2" };
+
+  if (bg?.video) {
+    d.bgType = "video";
+    d.videoBg = bg.video;
+    /* A still underneath, so the band is not a black hole while the video loads
+       and is not empty for a visitor whose browser refuses autoplay. */
+    if (bg.photo) d.src = bg.photo;
+    d.backgroundVideoLoading = "lazy";
+    d.filterColor = SCRIM_FILTER[bg.scrim ?? "soft"];
+  } else if (bg?.photo) {
+    d.bgType = "standard";
+    d.src = bg.photo;
+    d.backgroundImageLoading = "preload";
+    d.filterColor = SCRIM_FILTER[bg.scrim ?? "soft"];
+  }
+
+  return node("FlexSection", d, styleData, kids);
 }
 
 export function H2(value: string, styleData: StyleData, cls?: string) {

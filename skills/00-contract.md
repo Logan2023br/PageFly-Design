@@ -54,6 +54,12 @@ This is the entire alphabet. There is nothing else.
 {"type":"custom","label":"","html":"","stylesheet":"","js":""}
 ```
 
+A section may also carry, when its order line says `bg:allowed`:
+
+```
+"bg":{"kind":"photo","query":"","scrim":"soft"}    photo or video behind the band
+```
+
 icons available: `award check clock creditcard gift heart leaf lock mail mappin
 package phone refresh ruler scissors send shield shoppingbag sparkles star truck
 users wrench zap`
@@ -147,6 +153,56 @@ mockup and collect nothing.
 Rule of thumb: if the platform has an element for the thing, use the node that
 becomes it. `custom` is for what has no element — a wave divider, a progress
 ring, a marquee of logos — and nothing else.
+
+## Backgrounds
+
+A band's background is the loudest thing a section can do, and it only works
+against bands that are not doing it. So the order decides WHERE — at most two
+lines per page carry `bg:allowed` — and you decide WHAT, or nothing at all.
+A line without `bg:allowed` must not have a `bg`.
+
+Three answers, cheapest first. Reach for the cheapest that does the job:
+
+**A gradient. Usually this one.** No `bg` field: write
+`"backgroundImage":"linear-gradient(160deg, #0F0F12 0%, #1C1A24 100%)"` in `css`.
+Two stops of the palette, one of them the band's own background colour so it
+reads as depth rather than as a second colour. Costs nothing, loads instantly,
+never fights the words. A gradient behind a closing CTA or a quote band is what
+"designed" looks like most of the time.
+
+**A photograph.** `"bg":{"kind":"photo","query":"…","scrim":"soft"}`. Earn it:
+the band has to be about a PLACE, a MATERIAL or a MOMENT — a workshop, a coast,
+the weave of a cloth, hands doing the work. Never behind detail. If the band
+contains a price, a spec, a form or cards, the photograph wins and the
+information loses.
+
+  - `query` is what you would type into a photo library, in English: `misty
+    highland coffee farm at dawn`, not `nice background`.
+  - `scrim` is `soft` normally and `strong` when the subject has a bright sky or
+    a pale wall in it. `none` is only for a band with no text over it at all —
+    the audit rejects a heading on `scrim:"none"`, because a heading over
+    someone else's landscape is unreadable about half the time and the page has
+    no way to know which half it got.
+
+**A video. At most one per page, and most pages want none.** Same field with
+`"kind":"video"`. It autoplays, muted, on a stranger's phone, on their data — so
+it has to be worth it: slow movement, one subject, no cuts. Steam off a cup,
+cloth moving, a wheel turning. A video of a busy street behind a headline is
+noise the visitor cannot turn off. If the movement is not the point, use the
+photograph.
+
+Which to reach for follows from the brief, not from a wish to decorate:
+
+  - the merchant uploaded references → match what those pages do. Photography
+    everywhere means a photograph; flat colour everywhere means a gradient.
+  - `imageMood` says `studio-white` → a gradient. That store's pictures are
+    products on white, and a landscape behind the words belongs to someone else.
+  - `imageMood` says `lifestyle` or `documentary` → a photograph reads as theirs.
+  - a dark page, `surface: dark` → a gradient almost always. Dark pages are
+    built on depth, and a photograph under near-black text needs a scrim so
+    strong the photograph stops being visible.
+  - no reference at all → gradient on both allowed bands, and a photograph only
+    where the words are plainly about a place or a material.
 
 ## What the exporter settles, so you do not have to
 

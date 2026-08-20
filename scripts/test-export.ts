@@ -46,13 +46,17 @@ type Item = {
 };
 
 /** The page JSON, out of the zip the app hands the merchant. */
-async function open(tree: unknown, name = "probe") {
+async function open(
+  tree: unknown,
+  name = "probe",
+  media: { images?: Record<string, string>; videos?: Record<string, string> } = {},
+) {
   const { pageflyFromTree } = await import("../lib/design/toPagefly");
   const { blob } = pageflyFromTree(
     tree as never,
     { name, bg: "#0A0A0A", ink: "#F6F6F4", fontBody: "Inter" },
     1180,
-    { images: {} },
+    { images: media.images ?? {}, videos: media.videos ?? {} },
   );
   const bytes = new Uint8Array(await blob.arrayBuffer());
   const files = unzipSync(bytes);
@@ -672,6 +676,116 @@ async function main(): Promise<void> {
     String(exact.items.find((i) => i.type === "Slideshow")?.data?.paginationStyle),
   );
 
+  /* ---- a band's background is settings, not CSS ------------------------- */
+
+  console.log("\na photograph behind a band");
+
+  const banded = await open({
+    sections: [
+      {
+        type: "section",
+        pattern: "hero-full-bleed-scrim",
+        role: "hero",
+        css: { padding: "140px 56px" },
+        bg: { kind: "photo", query: "misty highland coffee farm at dawn", scrim: "strong" },
+        children: [{ type: "heading", level: 1, text: "Where the cup begins" }],
+      },
+      {
+        type: "section",
+        pattern: "full-bleed-quote-band",
+        role: "media",
+        css: { padding: "120px 56px" },
+        bg: { kind: "video", query: "steam rising from a cup", scrim: "soft" },
+        children: [{ type: "heading", level: 2, text: "One harvest, one farm" }],
+      },
+    ],
+  },
+  "probe",
+  {
+    /* As a real build hands them over: resolved by the stock library before the
+       exporter ever runs. */
+    images: {
+      "misty highland coffee farm at dawn": "https://images.example/farm.jpg",
+      "steam rising from a cup": "https://images.example/steam.jpg",
+    },
+    videos: { "steam rising from a cup": "https://videos.example/steam.mp4" },
+  });
+
+  const bands = banded.items.filter((i) => i.type === "FlexSection");
+  check(bands.length === 2, "two bands", `${bands.length}`);
+
+  /* Photo: the URL is `src` and the mode is `standard`, both SETTINGS. Written
+     as CSS it would be a background the merchant cannot change from the editor. */
+  const photoBand = bands[0];
+  check(photoBand?.data?.bgType === "standard", "a photo band is bgType standard", String(photoBand?.data?.bgType));
+  check(
+    photoBand?.data?.src === "https://images.example/farm.jpg",
+    "the resolved photo is the src",
+    String(photoBand?.data?.src),
+  );
+  check(
+    photoBand?.data?.filterColor === "rgba(0,0,0,0.62)",
+    "scrim strong is a filterColor, not a CSS overlay",
+    String(photoBand?.data?.filterColor),
+  );
+  check(
+    photoBand?.data?.backgroundImageLoading === "preload",
+    "and it preloads, because a band background sits at the fold",
+  );
+
+  /* Video: a different mode and a different field, and it stays lazy. */
+  const videoBand = bands[1];
+  check(videoBand?.data?.bgType === "video", "a video band is bgType video", String(videoBand?.data?.bgType));
+  check(videoBand?.data?.backgroundVideoLoading === "lazy", "the video is lazy");
+  check(
+    videoBand?.data?.videoBg === "https://videos.example/steam.mp4",
+    "the video URL is videoBg",
+    String(videoBand?.data?.videoBg),
+  );
+  check(
+    videoBand?.data?.src === "https://images.example/steam.jpg",
+    "with the still underneath, for the browser that refuses autoplay",
+    String(videoBand?.data?.src),
+  );
+  check(
+    videoBand?.data?.filterColor === "rgba(0,0,0,0.42)",
+    "scrim soft",
+    String(videoBand?.data?.filterColor),
+  );
+
+  /* A band with no `bg` must carry none of those keys — an empty bgType on
+     every section is six dead settings a merchant has to read past. */
+  const plain = await open({
+    sections: [
+      section([{ type: "heading", level: 2, text: "The math" }], "price-math-band"),
+    ],
+  });
+  const plainBand = plain.items.find((i) => i.type === "FlexSection");
+  check(
+    plainBand?.data?.bgType === undefined && plainBand?.data?.filterColor === undefined,
+    "a band with no background carries no background settings",
+    JSON.stringify(plainBand?.data),
+  );
+
+  /* A band asking for a background the library could not resolve stays clean. A
+     bgType with an empty src is a broken background, not a background. */
+  const unresolved = await open({
+    sections: [
+      {
+        type: "section",
+        role: "media",
+        pattern: "full-bleed-quote-band",
+        css: { padding: "120px 56px" },
+        bg: { kind: "photo", query: "nothing matches this", scrim: "soft" },
+        children: [{ type: "heading", level: 2, text: "Quiet" }],
+      },
+    ],
+  });
+  check(
+    unresolved.items.find((i) => i.type === "FlexSection")?.data?.bgType === undefined,
+    "an unresolved background leaves no half-set settings behind",
+  );
+
   /* ---- and the class the form bug belonged to --------------------------- */
 
   console.log("\nevery element, every page above");
@@ -680,7 +794,7 @@ async function main(): Promise<void> {
     ...items, ...split, ...withProduct, ...pdp, ...grid, ...featured,
     ...carousel, ...stats.items, ...shaped.items, ...form.items,
     ...stacked.items, ...inRow.items, ...labelled.items,
-    ...slider.items, ...exact.items,
+    ...slider.items, ...exact.items, ...banded.items, ...plain.items, ...unresolved.items,
   ];
   /* Body and Layout are excluded: the format doc says both are required and
      carry no styles, they are built outside the element path, and neither has

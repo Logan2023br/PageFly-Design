@@ -9,7 +9,7 @@ import { planPage, seedFor, type Order } from "../design/plan";
 import { audit } from "../design/audit";
 import { sectionPlanLine } from "../design/sectionPlan";
 import { detectVertical } from "../generate/content";
-import { resolvePhotos, stockProvider, urlsOf } from "../images/stock";
+import { findVideo, resolvePhotos, stockProvider, urlsOf } from "../images/stock";
 
 /* ==========================================================================
    One page, designed.
@@ -108,6 +108,8 @@ export type DesignOutcome =
        */
       auditFailures: number;
       images: Record<string, string>;
+      /** background-video URLs by search phrase; at most one per page */
+      videos: Record<string, string>;
       credits: { name: string; link: string }[];
       usage: { input: number; output: number };
     }
@@ -206,6 +208,10 @@ function orderLines(order: Order, bg: string, ink: string): string[] {
         s.dark ? `background ${ink}, text ${bg}` : `background ${bg}`,
         PADDING_PX[s.padding] ?? "96px 56px",
         s.signature ? "SIGNATURE — the most room and the best photograph on the page" : "",
+        /* Two words, on at most two lines of the order. The whole background
+           feature costs the prompt about eight tokens; the decision it replaces
+           would have cost eight judgements. */
+        s.mayHaveBg ? "bg:allowed" : "",
         s.motion ? `motion:${s.motion}` : "",
       ]
         .filter(Boolean)
@@ -478,8 +484,32 @@ export async function designPageTree(
     .filter((n): n is Extract<typeof n, { type: "product" }> => n.type === "product")
     .map((n) => ({ query: n.query, ratio: 1 }));
 
+  /* A band's background photograph is resolved with the rest — it is the same
+     library and the same cache, and it is landscape by nature. */
+  const bands = tree.sections
+    .filter((s) => s.bg?.kind === "photo" && s.bg.query)
+    .map((s) => ({ query: s.bg!.query, ratio: 0.5 }));
+
   const photos =
-    stockProvider() === "none" ? {} : await resolvePhotos([...wants, ...shots], signal);
+    stockProvider() === "none"
+      ? {}
+      : await resolvePhotos([...wants, ...shots, ...bands], signal);
+
+  /* ==========================================================================
+     Background videos, one lookup each, and never more than one per page.
+
+     Capped here rather than trusted to the prompt, because the cost of getting
+     it wrong is not a design flaw — it is two autoplaying videos on a
+     merchant's storefront, on a phone, on someone else's data. The audit says so
+     as well; this is the belt.
+     ========================================================================== */
+  const videos: Record<string, string> = {};
+  const wantsVideo = tree.sections.filter((s) => s.bg?.kind === "video" && s.bg.query);
+  if (wantsVideo.length > 0 && stockProvider() === "pexels") {
+    const first = wantsVideo[0].bg!;
+    const url = await findVideo(first.query, signal);
+    if (url) videos[first.query] = url;
+  }
 
   /* One entry per photographer, not per photograph — a page using four
      pictures by the same person credits them once. */
@@ -492,6 +522,7 @@ export async function designPageTree(
     tree,
     auditFailures,
     images: urlsOf(photos),
+    videos,
     credits: [...byName].map(([name, link]) => ({ name, link })),
     /* Both calls, when there were two. Reporting only the first would show a
        spend below the real one, which is the mistake the cache accounting in
