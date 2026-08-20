@@ -219,6 +219,8 @@ and you should not fight them:
   - `maxWidth` on a container that stacks → also gets `width:100%`, because a
     max-width with no width fills in the mockup and hugs in PageFly
   - a `heading` or `text` inside a `row` → hugs its words, as it does in CSS
+  - a `sticky` node → `position: sticky` inside its container, and `fixed` only
+    for a phone buy bar. You never write either; the node is the whole answer.
 
 That last one is why you write `maxWidth` on a `col` INSIDE the section and never
 on the section itself: the section is full-bleed and the container inside it is
@@ -233,6 +235,15 @@ camelCase keys, string values, exactly a React style object.
 FORBIDDEN keys: `position` `top` `right` `bottom` `left` `zIndex` `float`
 `transform`. Layout is flex and grid only. Nothing overlaps anything — when you
 need overlap, that is what `overlay` and `sticky` are for.
+
+Why they are forbidden rather than discouraged: `position: fixed` takes a block
+out of the document and pins it to the SCREEN. It stops being inside its column,
+its section and the page — so it lands on top of the merchant's own header, at
+whatever width it had before it lost its parent, over the navigation. `sticky`
+stays in the flow and holds at its edge within its own container, which is what
+"stays put while the page scrolls" actually means. The `sticky` node handles
+both, and it picks: a bar with `mobileOnly` and `edge:"bottom"` is a phone buy
+bar and genuinely belongs to the screen; everything else stays in its column.
 
 Allowed and encouraged: `display:grid` with `gridTemplateColumns`,
 `aspectRatio`, `maxWidth`, `borderTop`, `mixBlendMode`, `backgroundImage` with a

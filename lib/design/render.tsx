@@ -607,14 +607,27 @@ function Sticky({ node, cls }: { node: Extract<DesignNode, { type: "sticky" }>; 
   const { device } = useDesign();
   if (node.mobileOnly && device !== "mobile") return null;
 
+  /* The buy-bar case, and only that case, belongs to the VIEWPORT: a bar pinned
+     across the bottom of a phone is meant to leave the flow. Everything else
+     belongs to its container — see `stickyCss` in toPagefly, which is the same
+     rule, because the two have to agree. Exported as `fixed`, a spec rail left
+     its column and landed on the store's own header. */
+  const pinned = node.mobileOnly && node.edge === "bottom";
+
   return (
     <div
       data-pf="sticky"
       className={cls}
       style={{
-        position: "sticky",
+        position: pinned ? "fixed" : "sticky",
         [node.edge]: 0,
-        zIndex: 40,
+        ...(pinned ? { left: 0, right: 0, zIndex: 60 } : { zIndex: 20 }),
+        /* A sticky flex child that is stretched cannot stick — it is already as
+           tall as the row, so it has nowhere to hold. This is the declaration
+           that makes `position: sticky` work at all inside a flex container, and
+           leaving it out is how a sticky rail silently behaves like a static
+           one. */
+        ...(pinned ? null : { alignSelf: "flex-start" as const }),
         display: "flex",
         alignItems: "center",
         gap: 16,

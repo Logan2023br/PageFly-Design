@@ -64,6 +64,7 @@ async function open(
   const page = JSON.parse(strFromU8(files[entry])) as {
     items: Item[];
     styles: { id: string; styles: string }[];
+    customCSS?: string;
   };
 
   /** The `&` rule for one item, at one breakpoint. Where the fidelity bugs are:
@@ -75,7 +76,7 @@ async function open(
     return parsed[device]?.[selector] ?? "";
   };
 
-  return { items: page.items, cssOf };
+  return { items: page.items, cssOf, customCSS: page.customCSS ?? "" };
 }
 
 async function build(tree: unknown, name = "probe"): Promise<Item[]> {
@@ -786,6 +787,71 @@ async function main(): Promise<void> {
     "an unresolved background leaves no half-set settings behind",
   );
 
+  /* ---- sticky, not fixed ------------------------------------------------ */
+
+  console.log("\na sticky spec rail");
+
+  /* The shape that shipped wrong: a rail inside a split, meant to hold beside
+     the specs while they scroll. Exported as `position: fixed` it left its
+     column, pinned itself to the viewport, and sat on the store's own header
+     with the heading, the price and the Add to bag button over the navigation. */
+  const rail = await open({
+    sections: [
+      section(
+        [
+          {
+            type: "row",
+            css: { gap: "64px" },
+            children: [
+              {
+                type: "sticky",
+                edge: "top",
+                mobileOnly: false,
+                css: { flexBasis: "40%" },
+                children: [{ type: "heading", level: 2, text: "Spec'd to be worn daily" }],
+              },
+              { type: "col", css: { flexBasis: "60%" }, children: [{ type: "text", text: "280gsm loopback cotton fleece." }] },
+            ],
+          },
+        ],
+        "spec-rail-sticky",
+      ),
+    ],
+  });
+
+  /* The rule lives in the page's own stylesheet, so it is read out of there. */
+  const sheet = rail.customCSS;
+  check(/\.pfd-sticky\{position:sticky/.test(sheet), "the rail is position: sticky", (sheet.match(/\.pfd-sticky\{[^}]*/) ?? ["(none)"])[0]);
+  check(!/position:fixed/.test(sheet), "and nothing on the page is fixed");
+  check(
+    /align-self:flex-start/.test(sheet),
+    "with align-self, or a stretched flex child has nowhere to hold",
+  );
+  check(!/left:0/.test(sheet), "and no left/right, which would make a column a band");
+
+  /* The one case where `fixed` is the point: a buy bar across the bottom of a
+     phone genuinely belongs to the viewport rather than to the page. */
+  const buyBar = await open({
+    sections: [
+      section(
+        [
+          {
+            type: "sticky",
+            edge: "bottom",
+            mobileOnly: true,
+            children: [{ type: "button", text: "Add to bag — $148" }],
+          },
+        ],
+        "product-detail-gallery",
+      ),
+    ],
+  });
+  check(/\.pfd-sticky\{position:fixed/.test(buyBar.customCSS), "a phone buy bar is fixed");
+  check(
+    /min-width: 768px\)\{\.pfd-sticky\{position:static;left:auto/.test(buyBar.customCSS),
+    "and returns to the flow above the phone, offsets and all",
+  );
+
   /* ---- and the class the form bug belonged to --------------------------- */
 
   console.log("\nevery element, every page above");
@@ -795,6 +861,7 @@ async function main(): Promise<void> {
     ...carousel, ...stats.items, ...shaped.items, ...form.items,
     ...stacked.items, ...inRow.items, ...labelled.items,
     ...slider.items, ...exact.items, ...banded.items, ...plain.items, ...unresolved.items,
+    ...rail.items, ...buyBar.items,
   ];
   /* Body and Layout are excluded: the format doc says both are required and
      carry no styles, they are built outside the element path, and neither has

@@ -397,16 +397,57 @@ const OVERLAY_ALIGN: Record<string, string> = {
    whatever the class, so there is nothing to gain from numbering them. */
 const STICKY_CLASS = "pfd-sticky";
 
+/* ==========================================================================
+   `sticky`, NOT `fixed`, and the difference is the whole bug.
+
+   This shipped as `position: fixed; left: 0; right: 0; top: 0`, and the mockup
+   has always rendered the same node as `position: sticky`. Two readers, two
+   answers, which is the failure the one-tree design exists to prevent.
+
+   `fixed` takes the block out of the document entirely and pins it to the
+   VIEWPORT. So a spec rail inside a product page — a column meant to stay
+   beside the specs while they scroll — left its column, went to the top-left of
+   the screen, and sat on top of the store's own header: the heading, the price
+   and the Add to bag button overlapping the theme's navigation, at 489px wide
+   because it no longer had a parent to be a fraction of.
+
+   `sticky` stays in the flow. It occupies its space, scrolls with the page, and
+   holds at its edge within its own container — which is what every use of this
+   node has actually wanted.
+
+   THE RULE, and it generalises past this node: reach for `sticky` first. It
+   cannot escape its parent, so the worst it can do is not stick. `fixed` can
+   only be right for something that genuinely belongs to the viewport rather
+   than to the page — a buy bar pinned across the bottom of a phone — and even
+   then it needs checking afterwards, because "out of the flow" means every
+   guarantee the layout gave you is gone.
+
+   The buy bar is the one case, and it is narrow enough to name: a `sticky` node
+   with `mobileOnly` and `edge: "bottom"`. There, `fixed` is the point — the bar
+   is meant to leave the flow and float over the page on a phone. Anything else
+   gets `sticky`.
+   ========================================================================== */
 function stickyCss(edge: "bottom" | "top", mobileOnly: boolean): string {
-  const rules = [
-    `.${STICKY_CLASS}{position:fixed;left:0;right:0;${edge}:0;z-index:60;}`,
-    /* The page needs room for it or the bar covers the last section's content
-       for ever, which is the failure everyone ships once. */
-    `.${STICKY_CLASS}::after{content:"";display:block;}`,
-  ];
-  if (mobileOnly)
-    rules.push(`@media (min-width: 768px){.${STICKY_CLASS}{position:static;}}`);
-  return rules.join("\n");
+  /* A phone buy bar belongs to the viewport. Everything else belongs to its
+     container, and taking it out of the flow is how it ends up on the header. */
+  const pinned = mobileOnly && edge === "bottom";
+
+  if (pinned)
+    return [
+      `.${STICKY_CLASS}{position:fixed;left:0;right:0;bottom:0;z-index:60;}`,
+      /* The page needs room for it or the bar covers the last section's content
+         for ever, which is the failure everyone ships once. */
+      `.${STICKY_CLASS}::after{content:"";display:block;}`,
+      /* Above the phone it goes back into the flow entirely — not `static` on a
+         `fixed` element, which leaves the offsets behind. */
+      `@media (min-width: 768px){.${STICKY_CLASS}{position:static;left:auto;right:auto;bottom:auto;z-index:auto;}}`,
+    ].join("\n");
+
+  return [
+    /* No `left`/`right`: a sticky element keeps its own width from its parent,
+     and pinning both edges of one is how a column becomes a full-width band. */
+    `.${STICKY_CLASS}{position:sticky;${edge}:0;z-index:20;align-self:flex-start;}`,
+  ].join("\n");
 }
 
 function marqueeCss(cls: string, speed: number): string {
