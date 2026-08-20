@@ -358,6 +358,21 @@ const product = z.object({
   /** must read exactly as it does in the mockup — merchants check this one */
   atcText: words(40, "Add to cart"),
   swatches: whole(0, 8, 0),
+  /**
+   * The thumbnail strip under (or beside) the main photograph.
+   *
+   * A property of the node rather than something the exporter guesses, because
+   * in PageFly it is a property of the element: ProductMedia3 has `showList`
+   * and `listPosition`, and a gallery is that one flag on that one element —
+   * NOT a main image plus a separate row of thumbnails, which is how it was
+   * being drawn and which renders raw Liquid on import.
+   *
+   * Off by default. A card in a grid shows one photograph; only a product page
+   * that is the point of the page earns a gallery.
+   */
+  gallery: flag(false),
+  /** where the strip sits relative to the main image */
+  galleryEdge: choice(["bottom", "left", "right", "top"] as const, "bottom"),
   query: words(120, "product photography"),
   ...styled,
 });
@@ -375,6 +390,20 @@ const productList = z.object({
   columns: whole(1, 4, 3),
   /** how many cards the grid renders */
   limit: whole(1, 24, 6),
+  /**
+   * Where the products come from.
+   *
+   * `collection` binds to the products IN the collection the page is showing,
+   * which is the only correct answer on a collection page and the reason this
+   * field exists: exported with the store-wide source, a collection page shows
+   * the same products as every other page and the collection it is named after
+   * is nowhere on it.
+   *
+   * `store` is the store-wide list — bestsellers or featured on a home page.
+   */
+  source: choice(["store", "collection"] as const, "store"),
+  /** a grid, or a carousel when the row would otherwise run off the page */
+  listLayout: choice(["grid", "slideshow"] as const, "grid"),
   /** search phrase for the placeholder photo the mockup shows */
   query,
   ...styled,

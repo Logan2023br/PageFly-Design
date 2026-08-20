@@ -31,6 +31,17 @@ import type { Brief } from "../validation";
 
 export type SectionRole =
   | "hero"
+  /**
+   * The product itself — a buy box, or a grid of the store's products.
+   *
+   * The role the library did not have. Every other role here is editorial: it
+   * says something ABOUT a product. A Product page whose arc contains only
+   * editorial roles comes back as eight bands of story with nothing to buy, and
+   * a Collection page comes back with none of the collection on it. Both did,
+   * and no prompt could have fixed it — the model was never given a slot to put
+   * a product in.
+   */
+  | "commerce"
   | "proof"
   | "media"
   | "content"
@@ -120,6 +131,7 @@ function parseVertical(slug: string): VerticalRow {
  */
 const GROUP_ROLE: Record<string, SectionRole> = {
   "Hero patterns": "hero",
+  Commerce: "commerce",
   "Proof and specification": "proof",
   "Image and atmosphere": "media",
   "Content and story": "content",
@@ -142,7 +154,7 @@ function candidates(): Map<SectionRole, string[]> {
   if (candidateCache) return candidateCache;
 
   const byRole = new Map<SectionRole, string[]>();
-  for (const role of ["hero", "proof", "media", "content", "conversion", "utility"] as SectionRole[])
+  for (const role of ["hero", "commerce", "proof", "media", "content", "conversion", "utility"] as SectionRole[])
     byRole.set(role, []);
 
   /* `sliceIds` gives ids in file order; the group each belongs to is recovered
@@ -208,9 +220,17 @@ function groupOf(ids: string[]): Map<string, string> {
  * which pattern makes each move, and that is the seed's job.
  */
 const ARCS: Record<string, SectionRole[]> = {
-  home: ["hero", "utility", "media", "proof", "content", "media", "proof", "conversion"],
-  product: ["hero", "utility", "proof", "media", "content", "proof", "content", "conversion"],
-  collection: ["hero", "utility", "content", "media", "content", "conversion"],
+  home: ["hero", "utility", "media", "commerce", "proof", "content", "proof", "conversion"],
+  /* A product page OPENS with the product. No separate hero: a real PDP puts
+     the gallery and the price on the first screen, and a hero above them
+     pushes the price to 900px. The commerce slot is also this page's
+     signature — see `planPage`. */
+  product: ["commerce", "utility", "proof", "media", "content", "proof", "content", "conversion"],
+  /* Two commerce slots, and they are different sections: a wide grid of the
+     collection, then — after one editorial band to break the wall — a carousel
+     or a second grid. A collection page whose products appear once, six cards
+     wide, is a landing page wearing a collection's name. */
+  collection: ["hero", "commerce", "content", "commerce", "media", "conversion"],
   about: ["hero", "content", "media", "proof", "content", "conversion"],
   faq: ["hero", "content", "conversion"],
   contact: ["hero", "conversion", "utility"],
@@ -234,6 +254,29 @@ const LP_ARC: SectionRole[] = [
 
 /* Pages that are a form, a gate or a legal notice. An arc would be a fiction:
    they have one job and the page is that job. */
+/* ==========================================================================
+   The commerce slots are PINNED, not drawn.
+
+   Everywhere else in this resolver the seed picks, because two stores in one
+   trade must not get the same page. A buy box is the exception: there is one
+   right answer to "what goes at the top of a product page" and rolling for it
+   means some product pages come back without one. The merchant did not ask for
+   variety in whether their product is on their product page.
+
+   Listed per page type and per occurrence, so the collection page's two slots
+   get two DIFFERENT sections rather than the same grid twice.
+
+   A page type absent from this map still gets its commerce slot filled — the
+   seed draws from the group, as with any other role. That is the right default
+   for the long tail (`bundle`, `comparison`, a landing page): they can carry a
+   product row, and which one is a matter of taste rather than correctness.
+   ========================================================================== */
+const PINNED_COMMERCE: Record<string, string[]> = {
+  product: ["product-detail-gallery"],
+  collection: ["collection-grid-3up", "collection-carousel"],
+  home: ["collection-featured-row"],
+};
+
 const MINIMAL_ARC: SectionRole[] = ["hero", "conversion"];
 const MINIMAL_TYPES = new Set([
   "password",
@@ -426,7 +469,23 @@ export function planPage(
       ? arc.findIndex((role, i) => i > 0 && role === signatureRole)
       : -1;
 
+  /* Which commerce slot this is, so a page with two gets two different ones. */
+  let commerceSeen = 0;
+
   arc.forEach((role, i) => {
+    /* Pinned before anything else, including the vertical's signature: a
+       vertical's signature pattern is a matter of taste and a product page
+       without a buy box is a matter of correctness. */
+    if (role === "commerce") {
+      const pinned = PINNED_COMMERCE[pageType]?.[commerceSeen];
+      commerceSeen++;
+      if (pinned && !isBanned(pinned)) {
+        used.add(pinned);
+        chosen.push({ role, pattern: pinned });
+        return;
+      }
+    }
+
     if (i === signatureSlot && row.signature) {
       used.add(row.signature);
       chosen.push({ role, pattern: row.signature });
@@ -477,6 +536,16 @@ export function planPage(
      hero is never the signature — it is the opening, and a page whose only
      investment is its first screen has nothing below the fold. */
   let signatureIndex = signatureSlot;
+
+  /* On a product or collection page the PRODUCT is the signature, whatever the
+     vertical's own signature pattern is. Those pages exist to sell the thing;
+     spending the page's most room and its best photograph on a lookbook while
+     the buy box gets standard padding is the wrong emphasis, and it is the
+     emphasis the vertical file would have chosen. */
+  const commerceIndex = chosen.findIndex((s) => s.role === "commerce" && s.pattern);
+  if (commerceIndex !== -1 && (pageType === "product" || pageType === "collection"))
+    signatureIndex = commerceIndex;
+
   if (signatureIndex === -1) signatureIndex = chosen.findIndex((s, i) => i > 0 && s.role === "media");
   if (signatureIndex === -1) signatureIndex = chosen.findIndex((s, i) => i > 0 && s.role === "proof");
   if (signatureIndex === -1) signatureIndex = chosen.length > 1 ? 1 : 0;

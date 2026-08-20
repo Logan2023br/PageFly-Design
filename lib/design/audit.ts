@@ -160,6 +160,41 @@ export function audit(
         `Build one section per order line, in that order.`,
     );
 
+  /* ==========================================================================
+     A COMMERCE SECTION HAS TO CONTAIN THE THING IT SELLS.
+
+     The pattern field can say `product-detail-gallery` while the section is a
+     heading, a paragraph and an image — the id was copied back and the buy box
+     was never built. That is the one place where matching the order is not
+     enough to know the page is right, because these two nodes are not styling:
+     `product` expands to a ProductBox with its required slot order, and
+     `productList` to a ProductList2 bound to real products. Drawn by hand out
+     of image + heading + text they are dead pictures with invented names, and
+     they look almost right in the mockup and are worthless on the storefront.
+
+     Checked against the ORDER rather than the page type, like every other check
+     here: the order is what was asked for.
+     ========================================================================== */
+  order.sections.forEach((want, i) => {
+    if (want.role !== "commerce" || !want.pattern) return;
+    const got = sections[i];
+    if (!got) return;
+
+    const inside = walk(got).map((n) => n.type);
+    const wantsBuyBox = want.pattern.startsWith("product-detail");
+    const needed = wantsBuyBox ? "product" : "productList";
+
+    if (!inside.includes(needed))
+      problems.push(
+        `Section ${i + 1} was ordered as "${want.pattern}" and contains no "${needed}" node. ` +
+          (wantsBuyBox
+            ? `A product page's buy box is ONE product node — layout, gallery, swatches, ` +
+              `compareAt and atcText are its fields. Do not draw it out of an image and a heading.`
+            : `The products in a grid are ONE productList node with columns, limit and source. ` +
+              `A hand-built row of image + heading cards shows invented names and cannot be bought from.`),
+      );
+  });
+
   order.sections.forEach((want, i) => {
     const got = sections[i] as (DesignSection & { pattern?: string }) | undefined;
     if (!got) return;

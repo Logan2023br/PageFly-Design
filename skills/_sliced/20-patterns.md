@@ -343,6 +343,121 @@ looks designed and one that looks appended. Answers are 2–4 sentences and name
 number, a duration or a policy.
 <!--/-->
 
+## Commerce
+
+<!--
+  THE SECTIONS THAT SELL. Everything above this heading is editorial — it tells
+  a story about a product. These are the product.
+
+  They exist because the library did not have them, and the resolver's arcs did
+  not have a slot for them, so a Product page came back as eight editorial bands
+  with no buy box and a Collection page came back with nothing from the
+  collection on it. No prompt could fix that: the model was never given a slot
+  to put a product in.
+
+  Each of these is ONE node. That is deliberate. `product` and `productList`
+  expand to PageFly subtrees — ProductBox with its required slot order,
+  ProductList2 with exactly one card template — that the builder gets right and
+  a hand-built row of images cannot: cards drawn out of image + heading + text
+  are dead pictures with invented names, while ProductList2 binds every card to
+  a real product with its real title, price and photo.
+-->
+
+<!--#product-detail-gallery-->
+**product-detail-gallery** — the buy box. The top of a product page, always.
+```
+section  padding 64px 56px  container 1180
+  product  layout "sideBySide"  gallery true  galleryEdge "bottom"
+           swatches 3-6  compareAt set  atcText the merchant's own words
+```
+This is the whole section. Do not put an eyebrow, a display heading or a trust
+row inside it — the product's own title IS the page's h1, and anything above it
+pushes the price below the fold.
+
+`gallery true` is not decoration: it turns on the thumbnail strip inside the one
+media element, which is how PageFly models a gallery. Never draw a main image
+plus a separate row of small images.
+
+Put the trust strip in the NEXT section, never inside this one.
+*Fails when:* a heading is added above the product and the price lands at 900px.
+<!--/-->
+
+<!--#product-detail-wide-->
+**product-detail-wide** — gallery across the full width, buy column under it.
+```
+section  padding 56px 56px  container 1320
+  product  layout "stacked"  gallery true  galleryEdge "bottom"
+           swatches 3-6  compareAt set
+```
+For one product photographed well enough to be the page: furniture, a bike, a
+rug, anything where the shape matters more than the spec. The stacked layout
+gives the photograph the full container and puts price and cart beneath it.
+*Fails when:* the product has one square studio photo — use the split instead.
+<!--/-->
+
+<!--#collection-grid-3up-->
+**collection-grid-3up** — the collection, three across.
+```
+section  padding 72px 56px  container 1180
+  heading level 2  ≤6 words          the collection's own name, not "Our Products"
+  productList  columns 3  limit 9  source "collection"  listLayout "grid"
+```
+`source "collection"` binds the cards to the products in the collection this
+page is showing. With the store-wide source a collection page shows the same
+products as every other page, and the collection it is named after appears
+nowhere on it.
+
+Nine cards, not six: a collection page that shows six products reads as a
+curated edit, and a merchant who has forty wants to feel like they have forty.
+*Fails when:* the grid is hand-built out of image + heading — those are dead
+pictures with invented names.
+<!--/-->
+
+<!--#collection-grid-4up-->
+**collection-grid-4up** — a dense collection, four across.
+```
+section  padding 64px 48px  container 1320
+  heading level 2  ≤6 words
+  text  body-lead ≤22 words            what is in this collection and who for
+  productList  columns 4  limit 12  source "collection"  listLayout "grid"
+```
+For catalogues: apparel, hardware, parts, anything with variants where the
+shopper is scanning rather than reading. Four columns needs a wider container
+and tighter side padding or the cards go narrow enough to break their titles.
+*Fails when:* the store sells six things — four columns of six looks half-built.
+<!--/-->
+
+<!--#collection-featured-row-->
+**collection-featured-row** — a short, deliberate row. For a home page.
+```
+section  padding 96px 56px  container 1180
+  eyebrow 1-3 words uppercase
+  heading level 2  ≤7 words           says what the row IS, not "Featured"
+  productList  columns 3  limit 3  source "store"  listLayout "grid"
+```
+Three products, chosen-looking. This is the one commerce section that belongs on
+a home page: a home page's job is to send people somewhere, and three products
+with a reason above them do that where a wall of twelve does not.
+
+`source "store"` here, not "collection" — a home page is not showing one
+collection.
+*Fails when:* the limit is raised past six and the home page becomes a
+collection page.
+<!--/-->
+
+<!--#collection-carousel-->
+**collection-carousel** — more products than the row can hold.
+```
+section  padding 80px 56px  container 1320
+  heading level 2  ≤7 words
+  productList  columns 4  limit 12  source "collection"  listLayout "slideshow"
+```
+The ONE place a carousel is right: the shopper is browsing, the order does not
+matter, and a fourth row of cards below the fold gets seen by nobody. Anywhere
+else a slider hides two thirds of the content behind an arrow nobody presses.
+*Fails when:* used for three cards that already fit on the screen.
+<!--/-->
+
 ## Conversion
 
 <!--#price-math-band-->
