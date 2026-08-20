@@ -152,7 +152,14 @@ type Dir = "horizontal" | "vertical";
  * content box — which is why a node that happened to fill its line was recorded
  * as `fill` even when it was meant to hug. Here the declarations answer it.
  */
-function widthMode(node: DesignNode | DesignSection, css: Css): "hug" | "fill" | "fixed" {
+/** Leaves that carry words. They size to the words unless told otherwise. */
+const WORDS = new Set(["heading", "text", "counter"]);
+
+function widthMode(
+  node: DesignNode | DesignSection,
+  css: Css,
+  parentDir: Dir | null,
+): "hug" | "fill" | "fixed" {
   const w = css.width === undefined ? undefined : String(css.width);
 
   if (w === "fit-content" || w === "max-content" || w === "auto") return "hug";
@@ -163,6 +170,23 @@ function widthMode(node: DesignNode | DesignSection, css: Css): "hug" | "fill" |
   const flex = css.flex === undefined ? "" : String(css.flex);
   if (flex && !flex.startsWith("0")) return "fill";
   if (Number(css.flexGrow ?? 0) > 0) return "fill";
+
+  /* ==========================================================================
+     TEXT IN A ROW HUGS. This is CSS's own default and the mockup's behaviour.
+
+     `fill` is not a hint here — PageFly's engine expands it to
+     `flex-grow: 1; flex-basis: 0px`, so a `WOOL CONTENT` label declared `fill`
+     inside a label/value row took the whole row and pushed `80%` to the far
+     edge, with a full-width blue box around the label in the editor. In the
+     mockup the same node is a flex child at its default `flex: 0 1 auto` and
+     sits at the width of its words.
+
+     Only in a row. In a column `fill` is right and is what makes a paragraph
+     wrap at the container's measure rather than at its own longest line — the
+     column-direction default `align-items: stretch`, which is the same rule
+     read the other way.
+     ========================================================================== */
+  if (parentDir === "horizontal" && WORDS.has(node.type)) return "hug";
 
   /* Inline things hug by nature; everything else is a block that fills. Getting
      this backwards on a button stretches it across the whole row, which is the
@@ -245,7 +269,7 @@ function cssAt(
   }
 
   const tail = [
-    `--pf-flex-layout-width: ${widthMode(node, css)};`,
+    `--pf-flex-layout-width: ${widthMode(node, css, parentDir)};`,
     `--pf-flex-layout-height: ${heightMode(css)};`,
     HAS_KIDS.has(node.type)
       ? `--pf-flex-layout-direction: ${directionOf(node, css)};`

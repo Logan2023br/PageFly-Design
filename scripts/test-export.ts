@@ -529,6 +529,62 @@ async function main(): Promise<void> {
     "a capped column inside a row is left to hug",
   );
 
+  /* ---- text in a row hugs; text in a column fills ---------------------- */
+
+  console.log("\na label beside a value");
+
+  const labelled = await open({
+    sections: [
+      section(
+        [
+          {
+            type: "row",
+            css: { justifyContent: "space-between", alignItems: "baseline" },
+            children: [
+              { type: "text", text: "WOOL CONTENT", css: { fontSize: "13px" } },
+              { type: "heading", level: 3, text: "80%", css: { fontSize: "28px" } },
+            ],
+          },
+          {
+            type: "col",
+            css: { maxWidth: "620px", gap: "12px" },
+            children: [
+              { type: "heading", level: 2, text: "Woven for a cooler night" },
+              { type: "text", text: "Long-staple cotton, spun tight and woven into sateen." },
+            ],
+          },
+        ],
+        "spec-bars",
+      ),
+    ],
+  });
+
+  const inARow = labelled.items.filter((i) =>
+    ["WOOL CONTENT", "80%"].includes(String(i.data?.value ?? "")),
+  );
+  check(inARow.length === 2, "the label and the value are both there", `${inARow.length}`);
+  /* THE BUG. `fill` is not a hint: PageFly expands it to
+     `flex-grow: 1; flex-basis: 0px`, so the label took the whole row and pushed
+     the value to the far edge. In the mockup the same node is a flex child at
+     its default `flex: 0 1 auto`. */
+  check(
+    inARow.every((i) => /--pf-flex-layout-width:\s*hug/.test(labelled.cssOf(i.id))),
+    "and both hug, because a row's children size to their words",
+    inARow.map((i) => labelled.cssOf(i.id).match(/--pf-flex-layout-width:[^;]*/)?.[0]).join(" · "),
+  );
+
+  /* And the other half of the same rule: in a column, text fills, which is what
+     makes a paragraph wrap at the container's measure. */
+  const inACol = labelled.items.filter((i) =>
+    /Long-staple cotton|cooler night/.test(String(i.data?.value ?? "")),
+  );
+  check(
+    inACol.length === 2 &&
+      inACol.every((i) => /--pf-flex-layout-width:\s*fill/.test(labelled.cssOf(i.id))),
+    "text in a column still fills its measure",
+    inACol.map((i) => labelled.cssOf(i.id).match(/--pf-flex-layout-width:[^;]*/)?.[0]).join(" · "),
+  );
+
   /* ---- and the class the form bug belonged to --------------------------- */
 
   console.log("\nevery element, every page above");
@@ -536,7 +592,7 @@ async function main(): Promise<void> {
   const everything = [
     ...items, ...split, ...withProduct, ...pdp, ...grid, ...featured,
     ...carousel, ...stats.items, ...shaped.items, ...form.items,
-    ...stacked.items, ...inRow.items,
+    ...stacked.items, ...inRow.items, ...labelled.items,
   ];
   /* Body and Layout are excluded: the format doc says both are required and
      carry no styles, they are built outside the element path, and neither has
