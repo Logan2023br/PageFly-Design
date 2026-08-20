@@ -524,6 +524,15 @@ export type EmitOptions = {
       reach a merchant's storefront whatever the prompt said. */
   videos?: Record<string, string>;
   /**
+   * Does this page have product context — a `product` node anywhere in it?
+   *
+   * A standalone add-to-cart button uses `source:"auto"` when the page is bound
+   * to a product and `source:"custom"` when it is not, and getting that backwards
+   * ships a button that renders "Please select a product" on a live storefront.
+   * Computed once in `pageflyFromTree` rather than asked per node.
+   */
+  hasProduct?: boolean;
+  /**
    * The page's text colour.
    *
    * Composites need it stated. In the mockup a product title or an accordion
@@ -600,6 +609,30 @@ function emitNode(
       return P4(node.text, sd);
 
     case "button":
+      /* ==========================================================================
+         AN ADD-TO-CART BUTTON IS NOT A BUTTON.
+
+         `Button2` is a styled anchor. It cannot add anything to a cart, so a
+         beautifully styled `Add to bag` was a dead link — and the merchant's only
+         route to a working one was to delete it and rebuild the button they had
+         just been given. `ProductATC2` adds the item, changes its own label while
+         the request is in flight, says so when it lands, and disables itself when
+         the variant is sold out. None of that can be bolted on afterwards.
+
+         `source` decides whether it works. Inside a `product` node the buy box
+         emits its own ATC with `auto`, which knows what it is adding. This is the
+         standalone case — a hero on a single-product home page — where there is no
+         product context, so it is `custom` and the merchant selects the product
+         once. That is the honest cost, and it is one setting rather than a rebuild.
+         ========================================================================== */
+      if (node.action === "atc")
+        return PRODUCT_ATC(sd, node.text, {
+          source: opts.hasProduct ? "auto" : "custom",
+          adding: node.atc?.adding,
+          added: node.atc?.added,
+          soldout: node.atc?.soldout,
+        });
+
       /* No href: the enum has no "none" member and a mockup button has no real
          destination. The merchant sets it in the editor. */
       return BTN(node.text, "", sd);
@@ -1390,6 +1423,10 @@ export function pageflyFromTree(
   const customBlocks: CleanBlock[] = [];
   opts = {
     ...opts,
+    /* Whether the page is bound to a product decides whether a standalone
+       add-to-cart button uses `auto` or `custom`. Computed once here from the
+       whole tree rather than asked per node. */
+    hasProduct: walk(tree).some((n) => n.type === "product"),
     ink: opts.ink ?? page.ink,
     customBlocks,
     customCount: { value: 0 },

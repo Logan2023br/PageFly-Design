@@ -37,7 +37,7 @@ This is the entire alphabet. There is nothing else.
 {"type":"col","css":{},"mobile":{},"children":[]}          vertical flex
 {"type":"heading","level":1,"text":"","css":{}}            level 1-6
 {"type":"text","text":"","css":{}}
-{"type":"button","text":"","css":{},"anim":{"hover":"float"}}
+{"type":"button","text":"","action":"link","css":{},"anim":{"hover":"float"}}
 {"type":"image","query":"","ratio":1,"css":{}}             query = English stock-photo terms
 {"type":"icon","name":"truck","css":{}}
 {"type":"divider","css":{}}
@@ -141,6 +141,25 @@ number by hand.
 **A two-column split is a `row` with two children and a basis on each.** 42/58,
 not 50/50. Do not reach for the grid form for two things.
 
+**A button that adds to cart is `"action":"atc"`, never a link.** A plain button
+is a styled anchor: it cannot put anything in a cart, so a beautifully styled
+`Add to bag` is a dead link and the merchant's only way to a working one is to
+delete it and rebuild the button you just gave them. `atc` becomes PageFly's own
+control — it adds the item, changes its own label while the request is in flight,
+says so when it lands, and disables itself when the variant is sold out.
+
+  - Write the other three labels in the page's own language:
+    `"atc":{"adding":"Đang thêm…","added":"Đã thêm","soldout":"Hết hàng"}`. A
+    button that says `Thêm vào giỏ` and then `Adding...` changes language when
+    you click it.
+  - Inside a `product` node you do not write one at all — the buy box has its
+    own, and it knows which item it is adding.
+  - Outside a `product` node the button has no product to add, so the merchant
+    picks one in the editor. That is fine on a single-product home page, where
+    the page IS about one thing. It is wrong on a collection page or a lookbook:
+    there, the button is a LINK — `Shop the hoodie` — and the product page does
+    the selling.
+
 **An FAQ is `accordion`, always.** Never a column of heading + text pairs
 pretending to open. The node exports as the real element, which opens.
 
@@ -221,6 +240,8 @@ and you should not fight them:
   - a `heading` or `text` inside a `row` → hugs its words, as it does in CSS
   - a `sticky` node → `position: sticky` inside its container, and `fixed` only
     for a phone buy bar. You never write either; the node is the whole answer.
+  - `"action":"atc"` → the add-to-cart element, its post-add behaviour, and
+    whether it binds to the page's product or asks the merchant to pick one
 
 That last one is why you write `maxWidth` on a `col` INSIDE the section and never
 on the section itself: the section is full-bleed and the container inside it is

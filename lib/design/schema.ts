@@ -319,6 +319,38 @@ const text = z.object({
 const button = z.object({
   type: z.literal("button"),
   text: saying(80),
+  /**
+   * What this button DOES, which decides which element it becomes.
+   *
+   * `link` is a styled anchor. `atc` is PageFly's own add-to-cart control: it
+   * puts the item in the cart, changes its own label while the request is in
+   * flight, says so when it lands, and disables itself when the variant is sold
+   * out. None of that can be added to a link afterwards.
+   *
+   * STATED RATHER THAN GUESSED FROM THE WORDS. Reading intent off the label
+   * would work in English and fail on the pages that matter: a store whose brief
+   * is in Vietnamese writes `Thêm vào giỏ`, and a matcher tuned to "add to
+   * cart" turns their only real button into a dead link. The design says what
+   * the button is; nobody has to parse it.
+   */
+  action: choice(["link", "atc"] as const, "link"),
+  /**
+   * The three labels an add-to-cart button shows in its other states.
+   *
+   * In the page's own language, which is why they are here rather than left to
+   * PageFly's English defaults: a Vietnamese page whose button says `Thêm vào
+   * giỏ` and then `Adding...` is a page that changes language when you click it.
+   *
+   * Only read when `action` is `atc`, so a page of links pays nothing for them.
+   */
+  atc: z
+    .object({
+      adding: words(40, "Adding…"),
+      added: words(40, "Added"),
+      soldout: words(40, "Sold out"),
+    })
+    .nullish()
+    .catch(null),
   ...styled,
 });
 

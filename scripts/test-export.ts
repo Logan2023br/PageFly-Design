@@ -852,6 +852,85 @@ async function main(): Promise<void> {
     "and returns to the flow above the phone, offsets and all",
   );
 
+  /* ---- an add-to-cart button is not a button ---------------------------- */
+
+  console.log("\nan Add to bag button");
+
+  /* A single-product home page: a hero with a price and a real cart button, and
+     no `product` node anywhere. `Button2` here is a styled anchor that cannot
+     add anything, so the merchant's only route to a working button was to delete
+     it and rebuild the one they had just been given. */
+  const atc = await open({
+    sections: [
+      section(
+        [
+          { type: "heading", level: 1, text: "Spec'd to be worn daily" },
+          {
+            type: "button",
+            text: "Thêm vào giỏ",
+            action: "atc",
+            atc: { adding: "Đang thêm…", added: "Đã thêm", soldout: "Hết hàng" },
+            css: { background: "#0A0A0A", color: "#FFFFFF", padding: "16px 28px" },
+          },
+        ],
+        "hero-editorial-stack",
+      ),
+    ],
+  });
+
+  const cart = atc.items.find((i) => i.type === "ProductATC2");
+  check(Boolean(cart), "it became a ProductATC2, not a Button2");
+  check(atc.items.every((i) => i.type !== "Button2"), "and there is no Button2 left");
+  if (cart) {
+    check(cart.data?.text === "Thêm vào giỏ", "the label is the design's own words", String(cart.data?.text));
+    /* PageFly's defaults for these are English. A button that says `Thêm vào
+       giỏ` and then `Adding...` changes language when you click it. */
+    check(cart.data?.adding === "Đang thêm…", "and so are the other three states", String(cart.data?.adding));
+    check(cart.data?.soldout === "Hết hàng", "including sold out", String(cart.data?.soldout));
+    check(
+      cart.data?.source === "custom",
+      "no product on the page, so the merchant picks one",
+      String(cart.data?.source),
+    );
+    check(cart.data?.action === "same", "and it stays on the page after adding");
+    /* The style the design wrote has to survive the swap — the point was that
+       the button looked right and did nothing. */
+    check(
+      /background:\s*#0A0A0A/i.test(atc.cssOf(cart.id)),
+      "the design's styling came with it",
+      atc.cssOf(cart.id).slice(0, 48),
+    );
+  }
+
+  /* On a page that HAS a product, the same button binds to it instead. */
+  const bound = await open({
+    sections: [
+      section(
+        [
+          { type: "product", title: "The Forge Hoodie", price: "$148", gallery: true },
+          { type: "button", text: "Add to bag", action: "atc" },
+        ],
+        "product-detail-gallery",
+      ),
+    ],
+  });
+  check(
+    bound.items.filter((i) => i.type === "ProductATC2").some((i) => i.data?.source === "auto"),
+    "a page with a product binds the button to it",
+  );
+
+  /* And a plain button is still a plain button. */
+  const plainBtn = await open({
+    sections: [
+      section([{ type: "button", text: "Shop the hoodie" }], "cta-band-full"),
+    ],
+  });
+  check(
+    plainBtn.items.some((i) => i.type === "Button2") &&
+      plainBtn.items.every((i) => i.type !== "ProductATC2"),
+    "a link is still a link",
+  );
+
   /* ---- and the class the form bug belonged to --------------------------- */
 
   console.log("\nevery element, every page above");
@@ -861,7 +940,7 @@ async function main(): Promise<void> {
     ...carousel, ...stats.items, ...shaped.items, ...form.items,
     ...stacked.items, ...inRow.items, ...labelled.items,
     ...slider.items, ...exact.items, ...banded.items, ...plain.items, ...unresolved.items,
-    ...rail.items, ...buyBar.items,
+    ...rail.items, ...buyBar.items, ...atc.items, ...bound.items, ...plainBtn.items,
   ];
   /* Body and Layout are excluded: the format doc says both are required and
      carry no styles, they are built outside the element path, and neither has

@@ -416,17 +416,49 @@ export function PRODUCT_SWATCHES(
 
 /** `text` is the button's label. Left unset it renders PageFly's default
     "Add to Cart", which is not necessarily what the mockup showed. */
-export function PRODUCT_ATC(styleData: StyleData, text?: string) {
+/**
+ * The add-to-cart control.
+ *
+ * `source` is the field that decides whether this button works at all:
+ *
+ *   `auto`   — inside a ProductBox, or on a page bound to a product. The button
+ *              knows which item it is adding.
+ *   `custom` — anywhere else, and it needs a `productId`. Emitted without one,
+ *              the merchant picks the product in the editor once, which is the
+ *              honest cost of an add-to-cart button on a page that is not about
+ *              a single product.
+ *
+ * The three secondary labels are passed rather than defaulted because PageFly's
+ * defaults are English: a page whose button says `Thêm vào giỏ` and then
+ * `Adding...` changes language when you click it.
+ */
+export function PRODUCT_ATC(
+  styleData: StyleData,
+  text?: string,
+  opts: {
+    source?: "auto" | "custom";
+    adding?: string;
+    added?: string;
+    soldout?: string;
+  } = {},
+) {
   /* Always written, never conditionally. Left unset when the model returned an
      empty string, the button imported with no label at all — the field showed
      its placeholder and the button rendered blank. "Add to Cart" is PageFly's
      own default and the right thing to fall back to. */
-  return node(
-    "ProductATC2",
-    { text: text?.trim() || "Add to Cart", buttonType: "text" },
-    styleData,
-    [],
-  );
+  const d: Record<string, unknown> = {
+    text: text?.trim() || "Add to Cart",
+    buttonType: "text",
+    source: opts.source ?? "auto",
+    /* Stay put. A button that navigates to the cart on every add turns a page
+       designed to sell three things into a page that sells one. */
+    action: "same",
+  };
+  if (opts.adding?.trim()) d.adding = opts.adding.trim();
+  if (opts.added?.trim()) d.added = opts.added.trim();
+  if (opts.soldout?.trim()) d.soldout = opts.soldout.trim();
+
+  return node("ProductATC2", d, styleData, []);
 }
 
 /** Four tiers, and the real content has to sit in the innermost one — content
