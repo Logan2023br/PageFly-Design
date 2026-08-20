@@ -635,11 +635,33 @@ function emitNode(
          all genuinely `row`, which is why the default has been getting away with
          it; each of them states it too, so the next person does not have to know
          that a leaf's direction comes from somewhere else. */
+      /* AND THE TYPE STAYS ON THE NUMBER.
+
+         The node's own `fontSize` is the size of the NUMBER — the mockup puts it
+         on the number's element and gives the label a fixed 13px. Left on the
+         wrapper here it was inherited by the label, which had no style of its
+         own, so `Ideal brewing temperature` came in at 48px and wrapped across
+         three lines under a 48px `94°C`. Two elements, one of them styled: the
+         unstyled one inherits, and inheritance is the whole bug.
+
+         So the wrapper keeps layout and spacing only, the number keeps the type,
+         and the label is given its own size rather than left to chance. */
       return FB(
-        filling(sd, "display: flex !important; flex-direction: column !important;"),
+        without(
+          filling(sd, "display: flex !important; flex-direction: column !important;"),
+          TYPE_PROPS,
+        ),
         [
           withTag(H2(shown, styleDataFor({ ...node, type: "heading" } as never, parentDir)), "div"),
-          ...(node.label ? [P4(node.label, null)] : []),
+          ...(node.label
+            ? [
+                P4(node.label, {
+                  all: {
+                    "&": `font-size: 13px; line-height: 1.35; opacity: .7; margin-top: 8px; ${inkRule(opts)}`,
+                  },
+                }),
+              ]
+            : []),
         ],
         cls,
       );
@@ -701,7 +723,13 @@ function productBox(
       { all: { "&": "gap: 8px; margin-top: 8px;" } },
       { all: { "&": "aspect-ratio: 1 / 1;" } },
     ),
-    { all: { "&": "width: 100%;" } },
+    {
+      all: {
+        "&": "width: 100%;",
+        "& .pf-media-wrapper img":
+          "width: 100% !important; height: 100% !important; object-fit: cover !important;",
+      },
+    },
     { show: node.gallery, edge: EDGE[node.galleryEdge] },
   );
 
@@ -812,7 +840,21 @@ function productGrid(
          rendered list with `display:none` left it in the editor's tree as an
          element a merchant could turn back on and get a broken card. */
       MEDIA_LIST(1, null, null),
-      { all: { "&": "width: 100%;" } },
+      /* SHAPE THE PHOTO, or the grid arrives ragged.
+         `aspect-ratio` on the root gives every card the same box; `object-fit`
+         on the `img` is what makes the photograph fill it. `fields.md` names
+         that selector for exactly this and says a square is the safe product
+         default. Without the img rule the box was square and the picture inside
+         it was whatever shape the merchant uploaded, so one card came in tall
+         and two came in short — which is what a real store's mixed photography
+         looks like the moment it is not placeholder art. */
+      {
+        all: {
+          "&": "width: 100%; aspect-ratio: 1 / 1;",
+          "& .pf-media-wrapper img":
+            "width: 100% !important; height: 100% !important; object-fit: cover !important;",
+        },
+      },
     ),
     FB(
       {
@@ -960,6 +1002,43 @@ function cardList(
   );
 
   return CONTENT_LIST(kids, kept, { columns, gap });
+}
+
+/**
+ * Type declarations, which belong on the element that carries the words.
+ *
+ * A wrapper that carries a font size hands it to every unstyled descendant, and
+ * an unstyled descendant is easy to create by accident: `P4(label, null)` is one
+ * argument short of a bug. Stripping them from wrappers makes inheritance stop
+ * being load-bearing.
+ */
+const TYPE_PROPS = new Set([
+  "font-size",
+  "font-weight",
+  "line-height",
+  "letter-spacing",
+  "text-transform",
+  "font-family",
+]);
+
+/** The same style set, minus a list of declarations. */
+function without(sd: StyleData, drop: Set<string>): StyleData {
+  if (!sd) return sd;
+  return Object.fromEntries(
+    Object.entries(sd).map(([device, rules]) => [
+      device,
+      {
+        ...rules,
+        "&": String(rules["&"] ?? "")
+          .split(";")
+          .filter((d) => {
+            const prop = d.split(":")[0]?.trim().toLowerCase();
+            return prop !== "" && !drop.has(prop);
+          })
+          .join(";"),
+      },
+    ]),
+  );
 }
 
 /** Declarations the element's own settings own. Written as CSS they fight it. */

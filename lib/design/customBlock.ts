@@ -144,14 +144,70 @@ function scopeSelector(selector: string, className: string): string {
  * try/catch because this runs on the merchant's live storefront. A decoration
  * that throws must not take the rest of the page's scripts down with it.
  */
+/**
+ * A try/catch around the setup guards the SETUP. It does not guard the
+ * callbacks.
+ *
+ * That gap was live in both readers of a custom block, and the comment above
+ * described a protection the code did not provide. A decoration whose JS
+ * registered an IntersectionObserver and read `.style` off a null query threw
+ * from inside the observer — asynchronously, long after the try/catch had
+ * returned — and kept throwing on every scroll. In the preview that was a
+ * permanent error badge; on a merchant's storefront it is an uncaught exception
+ * on their live page, every time a shopper scrolls past a wave divider.
+ *
+ * So the callback-registering globals are shadowed for the length of the block
+ * with versions that wrap what they are handed. `var` inside the wrapper
+ * function shadows the global for that function only — nothing outside the block
+ * is touched, which is the property that makes this safe to ship.
+ *
+ * Element listeners are NOT covered: shimming `addEventListener` means patching
+ * `EventTarget.prototype`, which is a global mutation on someone else's
+ * storefront and not a trade worth making. Observers and timers are where the
+ * failures have actually been.
+ */
+function guardPrelude(report: string): string {
+  return [
+    `var __g=function(f){return typeof f!=="function"?f:function(){try{return f.apply(this,arguments)}catch(e){${report}}}};`,
+    `var __w=function(N){return N?function(a,b){return new N(__g(a),b)}:N};`,
+    `var IntersectionObserver=__w(window.IntersectionObserver);`,
+    `var ResizeObserver=__w(window.ResizeObserver);`,
+    `var MutationObserver=__w(window.MutationObserver);`,
+    `var setTimeout=function(f,t){return window.setTimeout(__g(f),t)};`,
+    `var setInterval=function(f,t){return window.setInterval(__g(f),t)};`,
+    `var requestAnimationFrame=function(f){return window.requestAnimationFrame(__g(f))};`,
+  ].join("");
+}
+
+/**
+ * The block's JS as it ships to the storefront.
+ *
+ * Silent on failure. This runs on a page the merchant is selling from, and a
+ * console full of warnings from a wave divider is noise they cannot act on.
+ */
 export function wrapJs(raw: string, className: string): string {
   if (!raw.trim()) return "";
   return [
     `(function(){try{`,
+    guardPrelude(""),
     `var root=document.querySelector(".${className}");`,
     `if(!root)return;`,
     raw.trim(),
     `}catch(e){}})();`,
+  ].join("\n");
+}
+
+/**
+ * The same JS, for the preview, where a failure IS worth saying out loud.
+ *
+ * `root` is passed in rather than queried: four device frames render the same
+ * page at once, and a document-wide lookup finds the desktop one from inside the
+ * phone.
+ */
+export function previewJs(raw: string): string {
+  return [
+    guardPrelude(`console.warn("[custom block] callback failed:",e)`),
+    raw.trim(),
   ].join("\n");
 }
 

@@ -46,7 +46,7 @@ type Item = {
 };
 
 /** The page JSON, out of the zip the app hands the merchant. */
-async function build(tree: unknown, name = "probe"): Promise<Item[]> {
+async function open(tree: unknown, name = "probe") {
   const { pageflyFromTree } = await import("../lib/design/toPagefly");
   const { blob } = pageflyFromTree(
     tree as never,
@@ -57,7 +57,25 @@ async function build(tree: unknown, name = "probe"): Promise<Item[]> {
   const bytes = new Uint8Array(await blob.arrayBuffer());
   const files = unzipSync(bytes);
   const entry = Object.keys(files)[0];
-  return (JSON.parse(strFromU8(files[entry])) as { items: Item[] }).items;
+  const page = JSON.parse(strFromU8(files[entry])) as {
+    items: Item[];
+    styles: { id: string; styles: string }[];
+  };
+
+  /** The `&` rule for one item, at one breakpoint. Where the fidelity bugs are:
+      an element can be the right element and still carry the wrong type. */
+  const cssOf = (id: string, device = "all"): string => {
+    const entryFor = page.styles.find((s) => s.id === id);
+    if (!entryFor) return "";
+    const parsed = JSON.parse(entryFor.styles) as Record<string, Record<string, string>>;
+    return parsed[device]?.["&"] ?? "";
+  };
+
+  return { items: page.items, cssOf };
+}
+
+async function build(tree: unknown, name = "probe"): Promise<Item[]> {
+  return (await open(tree, name)).items;
 }
 
 const section = (children: unknown[], pattern: string) => ({
@@ -118,10 +136,10 @@ async function main(): Promise<void> {
        native wrappers "overrides the native grid and collapses every card to
        one per row" — so the mockup shows four across and the import shows four
        down. The layout declarations have to be GONE, not merely duplicated. */
-    const style = items.find((i) => i.id === list.id);
-    void style;
-    const css = JSON.stringify(list);
-    check(!/grid-template-columns/.test(css), "no CSS grid left on the list");
+    check(
+      !/grid-template-columns|display:\s*grid/.test(JSON.stringify(list)),
+      "no CSS grid left on the list",
+    );
   }
 
   /* A two-column split must NOT become a card list — it is a composition with
@@ -285,6 +303,68 @@ async function main(): Promise<void> {
     (car?.data?.listLayout as Record<string, string>)?.all === "slideshow",
     "the carousel is a carousel",
   );
+
+  /* ---- the type belongs to the words, not to the wrapper ---------------- */
+
+  console.log("\na stat card");
+
+  const stats = await open({
+    sections: [
+      section(
+        [
+          {
+            type: "counter",
+            value: "94",
+            suffix: "°C",
+            label: "Ideal brewing temperature",
+            css: { fontSize: "48px", fontWeight: 700 },
+          },
+        ],
+        "stat-strip-3up",
+      ),
+    ],
+  });
+
+  const num = stats.items.find((i) => i.type === "Heading2");
+  const lab = stats.items.filter((i) => i.type === "Paragraph4").pop();
+  const wrap = stats.items.find(
+    (i) => i.type === "FlexBlock" && i.children.length === 2 && i.children.includes(lab?.id ?? ""),
+  );
+
+  check(/font-size:\s*48px/.test(stats.cssOf(num?.id ?? "")), "the NUMBER keeps the 48px");
+  check(
+    /font-size:\s*13px/.test(stats.cssOf(lab?.id ?? "")),
+    "the label has its own size",
+    stats.cssOf(lab?.id ?? "").match(/font-size:[^;]*/)?.[0] ?? "(none)",
+  );
+  /* THE BUG. The wrapper carried the node's font-size, the label had no style of
+     its own, and inheritance did the rest: "Ideal brewing temperature" came in
+     at 48px and wrapped across three lines under a 48px "94°C". */
+  check(
+    !/font-size/.test(stats.cssOf(wrap?.id ?? "")),
+    "and the wrapper carries no type at all",
+    stats.cssOf(wrap?.id ?? "").match(/font-size:[^;]*/)?.[0] ?? "(clean)",
+  );
+  check(
+    /flex-direction:\s*column/.test(stats.cssOf(wrap?.id ?? "")),
+    "the wrapper still states its direction",
+  );
+
+  /* ---- a real store's photographs are not all the same shape ------------ */
+
+  console.log("\nproduct photography");
+
+  const shaped = await open({
+    sections: [
+      section(
+        [{ type: "productList", columns: 3, limit: 9, source: "collection", query: "coffee" }],
+        "collection-grid-3up",
+      ),
+    ],
+  });
+  const cardMedia = shaped.items.find((i) => i.type === "ProductMedia3");
+  const raw = shaped.cssOf(cardMedia?.id ?? "");
+  check(/aspect-ratio:\s*1\s*\/\s*1/.test(raw), "the card's media box is square", raw.match(/aspect-ratio:[^;]*/)?.[0] ?? "(none)");
 
   console.log();
   console.log(failures === 0 ? "PASS" : `FAIL — ${failures} problem${failures === 1 ? "" : "s"}`);

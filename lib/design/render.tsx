@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { cleanBlock } from "./customBlock";
+import { cleanBlock, previewJs } from "./customBlock";
 import { MOTION_CSS, motionClasses } from "./motion";
 import {
   Award,
@@ -430,9 +430,16 @@ function CustomBlock({ node, cls }: { node: Extract<DesignNode, { type: "custom"
        render the same page at once, and a document-wide lookup would find the
        desktop one from inside the phone. */
     try {
-      new Function("root", node.js)(ref.current);
-    } catch {
-      /* A decoration that throws must not take the preview with it. */
+      /* Through `previewJs`, so the observers and timers the block registers are
+         guarded too. The bare form guarded only the setup: a block that armed an
+         IntersectionObserver and read `.style` off a null query threw from inside
+         the callback, on every scroll, and the preview carried a permanent error
+         badge for a wave divider. */
+      new Function("root", previewJs(node.js))(ref.current);
+    } catch (err) {
+      /* A decoration that throws must not take the preview with it — but it
+         should say so, or the next person debugs the page instead of the block. */
+      console.warn("[custom block] setup failed:", err);
     }
   }, [node.js]);
 
