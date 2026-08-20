@@ -41,8 +41,8 @@ This is the entire alphabet. There is nothing else.
 {"type":"image","query":"","ratio":1,"css":{}}             query = English stock-photo terms
 {"type":"icon","name":"truck","css":{}}
 {"type":"divider","css":{}}
-{"type":"product","title":"","price":"","compareAt":"","atcText":"","swatches":4,"query":"","layout":"sideBySide"}
-{"type":"productList","columns":3,"limit":6,"query":""}
+{"type":"product","title":"","price":"","compareAt":"","atcText":"","swatches":4,"query":"","layout":"sideBySide","gallery":true,"galleryEdge":"bottom"}
+{"type":"productList","columns":3,"limit":6,"source":"collection","listLayout":"grid","query":""}
 {"type":"accordion","items":[{"q":"","a":""}]}
 {"type":"form","intent":"contact","fields":[{"label":"","kind":"text","required":true}],"submitText":""}
 {"type":"slideshow","perView":3,"autoplay":false,"slides":[]}
@@ -64,9 +64,23 @@ users wrench zap`
 add-to-cart form AND its own image gallery — main shot plus thumbnails. Never
 put `image` nodes beside it for the product's own photos.
 
+`gallery: true` turns the thumbnail strip on; `galleryEdge` is `bottom | left |
+right | top`. That flag IS the gallery — one element with a setting. Do not model
+a gallery as a main image plus a row of small images: that second form has no
+product binding and lands on the storefront as raw template code.
+
 **`productList`** is EVERY grid of real products. Never build a product grid by
 hand out of image + heading + text: those are dead pictures with invented names
 that stay wrong for ever.
+
+`source` is `collection` on a collection page and `store` anywhere else. This is
+the one field a merchant cannot fix by editing: with `store` on a collection
+page the grid looks right and lists the wrong products, and the collection the
+page is named after appears nowhere on it.
+
+`listLayout` is `grid`, except for the one case where the shopper is browsing a
+long list and a fourth row below the fold would be seen by nobody. Anywhere else
+a `slideshow` hides two thirds of the section behind an arrow nobody presses.
 
 **`overlay`** is text ON a photograph. This is the node that makes a page look
 designed rather than assembled. `scrim` is `left | bottom | full | none` and it
@@ -80,6 +94,43 @@ itself. `js` runs once with `root` bound to the block. No `<script>`, no
 
 Do NOT reach for `custom` when a node exists. A hover written by hand where
 `anim.hover` would do is a hover the merchant cannot edit.
+
+# One node, or several?
+
+Every node here becomes a specific PageFly element on import, and the choice you
+make is the element the merchant meets in the editor. Getting it wrong does not
+look wrong in the mockup — it looks wrong on their storefront, three days later,
+with no way to fix it but CSS.
+
+**A repeating grid of cards is ONE row holding N identical children.** Three
+feature cards, six spec tiles, four review cards: one `row`, `display:grid`,
+`gridTemplateColumns:"repeat(3, minmax(0, 1fr))"`, and three `col` children of
+the SAME shape. Built that way it becomes a native card list with a column count
+and a spacing control. Built as three separate rows, or as cards of differing
+shape, it stays a nest of boxes and the merchant has no way to say "four across".
+
+  - Every card the same shape. An image beside a column is a layout, not a list.
+  - No `width` or `flexBasis` on a card. A measured composition is a split; a
+    list distributes its columns evenly.
+  - Never a `product` or `productList` inside one of those cards. A product card
+    grid is ONE `productList` — product elements inside a static card list have
+    no product context and every card reads "Please select a product".
+
+**A two-column split is a `row` with two children and a basis on each.** 42/58,
+not 50/50. Do not reach for the grid form for two things.
+
+**An FAQ is `accordion`, always.** Never a column of heading + text pairs
+pretending to open. The node exports as the real element, which opens.
+
+**A carousel is `slideshow`, and almost nothing is a carousel.** A row of three
+cards that fits on the screen is a row of three cards.
+
+**A form is `form`.** Inputs drawn out of styled boxes look identical in the
+mockup and collect nothing.
+
+Rule of thumb: if the platform has an element for the thing, use the node that
+becomes it. `custom` is for what has no element — a wave divider, a progress
+ring, a marquee of logos — and nothing else.
 
 # css
 

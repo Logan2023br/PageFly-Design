@@ -1,6 +1,7 @@
 import {
   BEFORE_AFTER,
   BTN,
+  CONTENT_LIST,
   CUSTOM_HTML,
   FB,
   FORM,
@@ -665,6 +666,12 @@ function emitNode(
       /* A container that lost every child is decoration — a rail, a spacer, a
          coloured band. Same reasoning as `divider`. */
       if (kids.length === 0) return CUSTOM_HTML("<div></div>", sd);
+
+      /* A row of cards is a card list, not a box holding boxes. See
+         `asCardList` for what qualifies and why it matters on import. */
+      const asList = cardList(node, kids, sd);
+      if (asList) return asList;
+
       return FB(sd, kids);
     }
   }
@@ -684,14 +691,18 @@ function productBox(
 ): PFNode {
   const stacked = node.layout === "stacked";
 
+  /* The strip is turned on by the SETTING, not by CSS — see PRODUCT_MEDIA. The
+     style below is spacing only; whether the list renders at all is data. */
+  const EDGE = { bottom: "BOTTOM", left: "LEFT", right: "RIGHT", top: "TOP" } as const;
   const media = PRODUCT_MEDIA(
     MEDIA_MAIN({ all: { "&": "width: 100%; aspect-ratio: 1 / 1;" } }),
     MEDIA_LIST(
       4,
-      { all: { "&": "display: flex !important; gap: 8px; margin-top: 8px;" } },
-      { all: { "&": "width: 64px; aspect-ratio: 1 / 1;" } },
+      { all: { "&": "gap: 8px; margin-top: 8px;" } },
+      { all: { "&": "aspect-ratio: 1 / 1;" } },
     ),
     { all: { "&": "width: 100%;" } },
+    { show: node.gallery, edge: EDGE[node.galleryEdge] },
   );
 
   const info = FB(
@@ -796,7 +807,11 @@ function productGrid(
       MEDIA_MAIN({ all: { "&": "width: 100%; aspect-ratio: 1 / 1;" } }),
       /* No thumbnail strip on a grid card — the gallery belongs on the product
          page, and on a card it is noise under every tile. */
-      MEDIA_LIST(1, { all: { "&": "display: none !important;" } }, null),
+      /* No CSS hiding it: a card's `showList` is false, which is the default
+         PRODUCT_MEDIA applies, so the list is not rendered at all. Hiding a
+         rendered list with `display:none` left it in the editor's tree as an
+         element a merchant could turn back on and get a broken card. */
+      MEDIA_LIST(1, null, null),
       { all: { "&": "width: 100%;" } },
     ),
     FB(
@@ -826,17 +841,146 @@ function productGrid(
      on the root is valid CSS that changes nothing, and the cards came in
      squeezed into a fraction of the row. */
   const shell = filling(sd);
-  const withGrid: StyleData = shell && {
-    ...shell,
-    all: {
-      ...shell.all,
-      "& .pf-r-dg":
-        `display: grid !important; grid-template-columns: repeat(${node.columns}, minmax(0, 1fr)) !important;` +
-        " gap: 24px !important; width: 100% !important; align-items: start !important;",
-    },
-  };
+  /* Only in grid mode. In slideshow mode the track is a Splide slider and a CSS
+     grid laid over it puts every card on one row inside a viewport built to
+     scroll one — the cards arrive overlapping. The columns are `slidesToShow`
+     either way; this is the wrapper the platform's own note says owns gap and
+     alignment for the grid. */
+  const withGrid: StyleData =
+    node.listLayout === "slideshow"
+      ? shell
+      : shell && {
+          ...shell,
+          all: {
+            ...shell.all,
+            "& .pf-r-dg":
+              `display: grid !important; grid-template-columns: repeat(${node.columns}, minmax(0, 1fr)) !important;` +
+              " gap: 24px !important; width: 100% !important; align-items: start !important;",
+          },
+        };
 
-  return PRODUCT_LIST(card, withGrid, { columns: node.columns, limit: node.limit });
+  return PRODUCT_LIST(card, withGrid, {
+    columns: node.columns,
+    limit: node.limit,
+    /* The one field a merchant cannot fix by editing: bound to the wrong
+       source, the grid looks right and lists the wrong products. */
+    source: node.source === "collection" ? "auto" : "all",
+    layout: node.listLayout,
+  });
+}
+
+/* ==========================================================================
+   Is this row of children a card LIST?
+
+   The exporter's default is a FlexBlock holding FlexBlocks, and for two columns
+   of a split that is exactly right. For three, four or six sibling cards of the
+   same shape it is the wrong element: the platform has a repeating card grid
+   with a column count and a spacing control, and a nest of boxes has neither —
+   the merchant opens the section in the editor and finds no way to say "four
+   across" except by editing CSS, which is the thing this app exists to avoid.
+
+   WHAT DISQUALIFIES A ROW, and each of these is a real failure rather than a
+   preference:
+
+   - Fewer than three children. Two is a split, and a split in a ContentList2
+     gains nothing and loses the independent widths a split needs.
+   - Children of mixed types. An image beside a column is a layout, not a list.
+   - Any Product* element in the subtree. `fields.md`: Product elements inside a
+     ContentList2 have no product context and render "Please select a product"
+     on every card. A row of product cards is a ProductList2 with ONE template.
+   - Any node that owns its own layout engine — a form, an accordion, a
+     slideshow, a comparison, a sticky bar. Nesting one inside a repeating item
+     puts two layout engines on the same box.
+   - A child with its own width. `basis 42%` on a card means the row is a
+     measured composition; a card list distributes its columns evenly.
+   ========================================================================== */
+
+/** Types that cannot appear anywhere inside a ContentList2 card. */
+const NOT_IN_A_CARD = new Set([
+  "product",
+  "productList",
+  "form",
+  "accordion",
+  "slideshow",
+  "beforeAfter",
+  "sticky",
+]);
+
+/** `repeat(3, minmax(0, 1fr))` → 3. The model's own column count, when it said one. */
+function declaredColumns(css: Css): number | null {
+  const raw = css.gridTemplateColumns;
+  if (raw === undefined) return null;
+  const m = /repeat\(\s*(\d+)/.exec(String(raw));
+  if (m) return Number(m[1]);
+  /* A hand-written track list: count the tracks. */
+  const tracks = String(raw).trim().split(/\s+/).filter(Boolean).length;
+  return tracks > 1 ? tracks : null;
+}
+
+function cardList(
+  node: Extract<DesignNode, { type: "row" | "col" }>,
+  kids: PFNode[],
+  sd: StyleData,
+): PFNode | null {
+  const children = node.children;
+  if (children.length < 3 || children.length !== kids.length) return null;
+
+  /* One shape, repeated. */
+  const shape = children[0].type;
+  if (shape !== "col" && shape !== "row" && shape !== "image") return null;
+  if (!children.every((c) => c.type === shape)) return null;
+
+  for (const c of children) {
+    if (c.css?.width !== undefined || c.css?.flexBasis !== undefined) return null;
+    if (walkNode(c).some((n) => NOT_IN_A_CARD.has(n.type))) return null;
+  }
+
+  const css = styleAt(node, "all");
+  const columns = declaredColumns(css) ?? children.length;
+  const gap = Number(String(css.gap ?? css.columnGap ?? 24).replace(/[^\d.]/g, "")) || 24;
+
+  /* The layout properties move into the element's own data, so they are not ALSO
+     written as CSS — `display:grid` on the root or on the native wrappers is
+     what collapses the grid to one card per row. Everything that is not layout
+     (a background, a border, padding) stays. */
+  const kept: StyleData = sd && Object.fromEntries(
+    Object.entries(sd).map(([device, rules]) => [
+      device,
+      {
+        ...rules,
+        "&": String(rules["&"] ?? "")
+          .split(";")
+          .filter((d) => {
+            const prop = d.split(":")[0]?.trim().toLowerCase();
+            return prop !== "" && !CARD_LIST_OWNS.has(prop);
+          })
+          .join(";"),
+      },
+    ]),
+  );
+
+  return CONTENT_LIST(kids, kept, { columns, gap });
+}
+
+/** Declarations the element's own settings own. Written as CSS they fight it. */
+const CARD_LIST_OWNS = new Set([
+  "display",
+  "grid-template-columns",
+  "grid-auto-flow",
+  "flex-direction",
+  "flex-wrap",
+  "gap",
+  "row-gap",
+  "column-gap",
+  "align-items",
+  "justify-content",
+]);
+
+/** Every node in a subtree, parent first. */
+function walkNode(n: DesignNode): DesignNode[] {
+  const out: DesignNode[] = [n];
+  for (const kid of childrenOf(n)) out.push(...walkNode(kid));
+  return out;
 }
 
 function accordionOf(

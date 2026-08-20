@@ -109,6 +109,58 @@ export function FB(
   return node("FlexBlock", d, styleData, kids);
 }
 
+/**
+ * A repeating card grid — the element a row of cards is supposed to be.
+ *
+ * Three or more sibling cards used to export as a FlexBlock holding FlexBlocks,
+ * with the columns written as a CSS grid. That renders, and it is the wrong
+ * element twice over. `fields.md` is explicit about the second part: columns are
+ * DATA (`slidesToShow`), rendered natively, and a CSS `display:grid` on the root
+ * or the wrappers "overrides the native grid and collapses every card to one per
+ * row" — so the mockup showed three across and the imported page showed three
+ * down. It is also what the merchant meets in the editor: a ContentList2 has a
+ * column count and a spacing control, and a nest of FlexBlocks has neither.
+ *
+ * `spacing` is the ONLY channel for the gap. The item wrapper has no `gap`
+ * property in any layout mode, so a CSS gap here is a guaranteed no-op.
+ *
+ * STATIC CARDS ONLY. The moment a card carries a product's title or price it is
+ * a product card and belongs in a ProductList2 with one template — Product*
+ * elements inside a ContentList2 have no product context and render "Please
+ * select a product" on every card. The caller checks that; this function is
+ * given cards and trusts them.
+ */
+export function CONTENT_LIST(
+  cards: PFNode[],
+  styleData: StyleData,
+  opts: { columns?: number; gap?: number; layout?: "grid" | "slideshow" } = {},
+) {
+  const columns = Math.min(6, Math.max(1, opts.columns ?? cards.length));
+  const layout = opts.layout ?? "grid";
+  const gap = `${opts.gap ?? 24}px`;
+  return node(
+    "ContentList2",
+    {
+      listLayout: { all: layout, laptop: layout, tablet: layout, mobile: layout },
+      slidesToShow: {
+        all: columns,
+        laptop: columns,
+        tablet: Math.min(2, columns),
+        mobile: 1,
+      },
+      slidesToScroll: { all: 1, laptop: 1, tablet: 1, mobile: 1 },
+      spacing: { all: gap, laptop: gap, tablet: gap, mobile: "16px" },
+      maxHeight: true,
+      stretch: true,
+      navStyle: "none",
+      paginationStyle: "none",
+      align: "ct",
+    },
+    styleData,
+    cards.map((card) => node("ContentListItem", {}, null, [card])),
+  );
+}
+
 export function FSECTION(kids: PFNode[] = [], styleData: StyleData = null) {
   return node(
     "FlexSection",
@@ -212,8 +264,48 @@ export function PRODUCT_BOX(media: PFNode, info: PFNode, css: string) {
   );
 }
 
-export function PRODUCT_MEDIA(main: PFNode, list: PFNode, styleData: StyleData) {
-  return node("ProductMedia3", {}, styleData, [main, list]);
+/**
+ * The product's image, and — when asked — its thumbnail strip.
+ *
+ * `showList` IS the gallery. It used to be omitted, which left it at its
+ * default of `false`, and the strip was made visible instead by styling the
+ * MediaList2 with `display: flex`. That is the shape of a mockup/live mismatch:
+ * `fields.md` says the list "is shown per breakpoint by the parent `showList`
+ * object", so the mockup drew a row of thumbnails and the imported page had
+ * none, whatever CSS the list carried.
+ *
+ * `listPosition` and `mediaListSize` are settings for the same reason — a
+ * merchant who opens the element in the editor finds a gallery configured, not
+ * a gallery hand-drawn in CSS they would have to find and unpick.
+ */
+export function PRODUCT_MEDIA(
+  main: PFNode,
+  list: PFNode,
+  styleData: StyleData,
+  gallery: { show: boolean; edge?: "TOP" | "RIGHT" | "BOTTOM" | "LEFT"; size?: string } = {
+    show: false,
+  },
+) {
+  return node(
+    "ProductMedia3",
+    {
+      showList: {
+        all: gallery.show,
+        laptop: gallery.show,
+        tablet: gallery.show,
+        /* Off on a phone whichever way the desktop went: a thumbnail strip on a
+           375px screen is six 50px squares competing with the price. */
+        mobile: false,
+      },
+      listPosition: gallery.edge ?? "BOTTOM",
+      mediaListSize: gallery.size ?? "64px",
+      /* Click-to-zoom on a product page is what a shopper reaches for, and it
+         is a setting rather than something to build. */
+      clickAction: gallery.show ? "SHOW_FULLSCREEN" : "NONE",
+    },
+    styleData,
+    [main, list],
+  );
 }
 
 export function MEDIA_MAIN(styleData: StyleData) {
@@ -342,16 +434,35 @@ export function ACCORDION_HEADER(
 export function PRODUCT_LIST(
   card: PFNode,
   styleData: StyleData,
-  opts: { columns?: number; limit?: number; gap?: number } = {},
+  opts: {
+    columns?: number;
+    limit?: number;
+    gap?: number;
+    /**
+     * `auto` is the products IN the collection this page is showing; `all` is
+     * the store-wide list.
+     *
+     * It used to be hardcoded to `all`, which is the wrong answer on the one
+     * page type where the question matters: a collection page exported that way
+     * shows the same products as every other page, and the collection it is
+     * named after appears nowhere on it. The merchant sees a plausible grid and
+     * has no reason to suspect the binding.
+     */
+    source?: "all" | "auto";
+    layout?: "grid" | "slideshow";
+  } = {},
 ) {
   const columns = Math.min(4, Math.max(1, opts.columns ?? 3));
+  const layout = opts.layout ?? "grid";
   return node(
     "ProductList2",
     {
-      source: "all",
+      source: opts.source ?? "all",
       tag: "h3",
       limit: opts.limit ?? columns * 2,
-      listLayout: { all: "grid", laptop: "grid", tablet: "grid", mobile: "grid" },
+      /* Per breakpoint, and the platform default is `slideshow` — so a list
+         emitted without this field is a carousel nobody asked for. */
+      listLayout: { all: layout, laptop: layout, tablet: layout, mobile: layout },
       slidesToShow: {
         all: columns,
         laptop: columns,
