@@ -616,11 +616,50 @@ export function FORM_FIELD(
   kind: string,
   required: boolean,
   styleData: StyleData = null,
+  /** typography for the label; also guarantees it a style entry — see below */
+  labelStyle: StyleData = null,
 ) {
-  return node("Form2.Field", { label, required }, styleData, [
-    node("FormLabel", {}, null, []),
-    node("FormInput", { required, inputType: INPUT_TYPE[kind] ?? 0 }, null, []),
-  ]);
+  return node(
+    "Form2.Field",
+    {
+      /**
+       * `label` IS AN OBJECT, not the copy.
+       *
+       * The field table calls it a string and the Contains note gives it away:
+       * FormLabel is "shown by the parent `label.on` sub-field". Written as a
+       * bare string, `label.on` is undefined, so every label was hidden — the
+       * imported form showed three inputs carrying PageFly's own placeholder
+       * text and no Name, Email or Message anywhere, while the mockup labels
+       * them. Clicking one opened a settings panel reading a sub-field off a
+       * string and the editor answered "Something went wrong".
+       *
+       * `{ on, text }` is the convention the same file uses for every other
+       * label that carries copy — CountDown's `timeData` is documented as
+       * "Object w/d/h/m/s each { on, text }", and its `label` as
+       * "Object { on, reverse }". `value` rides along because `text` is the
+       * inferred key of the two and an unread extra key costs nothing; when an
+       * import confirms which one PageFly reads, delete the other.
+       */
+      label: { on: true, text: label, value: label },
+      required,
+    },
+    styleData,
+    [
+      /**
+       * Given a style, and it matters for a reason that is not cosmetic.
+       *
+       * `build()` writes a style entry only for a node whose styleData is not
+       * null, and omits `data` entirely for a node whose data is empty. So a
+       * FormLabel built with `{}` and `null` reached the editor as an item with
+       * NO data key and NO style entry, on an element whose own documentation
+       * lists typography, colour, background, spacing and border as styleable.
+       * An editor panel reading either one finds `undefined` where it expects an
+       * object — which is the other half of the crash.
+       */
+      node("FormLabel", { label }, labelStyle, []),
+      node("FormInput", { required, inputType: INPUT_TYPE[kind] ?? 0 }, null, []),
+    ],
+  );
 }
 
 export function FORM(
@@ -840,7 +879,20 @@ export class Page {
         createdAt: ts,
         updatedAt: ts,
       };
-      if (Object.keys(n.data).length) item.data = n.data;
+      /* ALWAYS a `data` key, even an empty one.
+
+         This used to be written only when there was something in it, which
+         reads as a tidy saving and is the shape of a crash: an item with no
+         `data` at all hands the editor `undefined` where it expects an object,
+         and a panel doing `item.data.label` throws. That is half of why
+         clicking a Form Field answered "Something went wrong" — its FormLabel
+         was built with `{}`.
+
+         MediaMain3, MediaList2, MediaItem2 and ContentListItem are all emitted
+         the same way and had the same exposure. `data: {}` is what an element
+         with no settings is supposed to look like, and the bytes are nothing
+         next to a class of bug that only shows up as a white screen. */
+      item.data = n.data;
       if (n.options && Object.keys(n.options).length) item.options = n.options;
       if (n.roomId !== undefined) item.roomId = n.roomId;
       items.push(item);

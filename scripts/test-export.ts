@@ -366,6 +366,92 @@ async function main(): Promise<void> {
   const raw = shaped.cssOf(cardMedia?.id ?? "");
   check(/aspect-ratio:\s*1\s*\/\s*1/.test(raw), "the card's media box is square", raw.match(/aspect-ratio:[^;]*/)?.[0] ?? "(none)");
 
+  /* ---- the form, which crashed the editor on click ---------------------- */
+
+  console.log("\na contact form");
+
+  const form = await open({
+    sections: [
+      section(
+        [
+          {
+            type: "form",
+            intent: "contact",
+            submitText: "Send enquiry",
+            fields: [
+              { label: "Name", kind: "text", required: true },
+              { label: "Email", kind: "email", required: true },
+              { label: "Message", kind: "message", required: true },
+            ],
+          },
+        ],
+        "lead-form-split",
+      ),
+    ],
+  });
+
+  const fields = form.items.filter((i) => i.type === "Form2.Field");
+  check(fields.length === 3, "three Form2.Fields", `${fields.length}`);
+
+  /* THE CRASH. `label` reads as an OBJECT — FormLabel is "shown by the parent
+     `label.on` sub-field". Written as a bare string every label was hidden, and
+     opening the field's settings panel gave "Something went wrong". */
+  const lab0 = fields[0]?.data?.label as Record<string, unknown> | string | undefined;
+  check(typeof lab0 === "object" && lab0 !== null, "label is an object, not a string", typeof lab0);
+  check((lab0 as Record<string, unknown>)?.on === true, "with on:true, or the label never renders");
+  check(
+    Object.values((lab0 ?? {}) as Record<string, unknown>).includes("Name"),
+    "and it carries the copy",
+    JSON.stringify(lab0),
+  );
+
+  /* The other half: an item with no data key and no style entry, on an element
+     whose own documentation lists five styleable properties. */
+  const labels = form.items.filter((i) => i.type === "FormLabel");
+  check(labels.length === 3, "one FormLabel per field", `${labels.length}`);
+  check(labels.every((l) => Boolean(l.data)), "every FormLabel has a data key");
+  check(
+    labels.every((l) => form.cssOf(l.id).length > 0),
+    "and a style entry of its own",
+  );
+
+  /* A multi-line field has to BE multi-line: 1, not 0. */
+  const inputs = form.items.filter((i) => i.type === "FormInput");
+  check(
+    inputs.map((i) => i.data?.inputType).join(",") === "0,2,1",
+    "text, email, multi-line map to 0, 2, 1",
+    inputs.map((i) => i.data?.inputType).join(","),
+  );
+  check(
+    inputs.every((i) => i.data?.required === true),
+    "required carries onto the input, not only the field",
+  );
+
+  const submit = form.items.find((i) => i.type === "Form2.Button2");
+  check(submit?.data?.value === "Send enquiry", "the button says what was written", String(submit?.data?.value));
+
+  /* ---- and the class the form bug belonged to --------------------------- */
+
+  console.log("\nevery element, every page above");
+
+  const everything = [
+    ...items, ...split, ...withProduct, ...pdp, ...grid, ...featured,
+    ...carousel, ...stats.items, ...shaped.items, ...form.items,
+  ];
+  /* Body and Layout are excluded: the format doc says both are required and
+     carry no styles, they are built outside the element path, and neither has
+     ever been something a merchant can click. Everything BELOW them is an
+     element with a settings panel, and a panel reading `item.data.x` off an
+     absent `data` is what "Something went wrong" looks like. */
+  const dataless = everything.filter(
+    (i) => i.data === undefined && i.type !== "Body" && i.type !== "Layout",
+  );
+  check(
+    dataless.length === 0,
+    "no element reaches the editor without a data key",
+    dataless.length ? [...new Set(dataless.map((i) => i.type))].join(", ") : "",
+  );
+
   console.log();
   console.log(failures === 0 ? "PASS" : `FAIL — ${failures} problem${failures === 1 ? "" : "s"}`);
   if (failures) process.exitCode = 1;

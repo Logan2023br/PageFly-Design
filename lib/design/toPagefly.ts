@@ -509,8 +509,19 @@ function emitNode(
           `border: 1px solid rgba(0,0,0,.16); border-radius: 6px; padding: 12px 14px; width: 100%;${inkRule(opts)}`,
         "& button": `background-color: ${opts.accent ?? "#111111"}; color: #FFFFFF; border: 0; border-radius: 6px; padding: 13px 26px; cursor: pointer;`,
       });
+      /* The label carries the field's name, so it is type the merchant reads —
+         and giving it a style is also what guarantees it a style entry at all.
+         See FORM_FIELD. */
+      const labelStyle: StyleData = {
+        all: {
+          "&": `font-size: 13px; letter-spacing: .02em; margin-bottom: 6px;${inkRule(opts)}`,
+        },
+      };
+
       return FORM(
-        node.fields.map((f) => FORM_FIELD(f.label, f.kind, f.required)),
+        node.fields.map((f) =>
+          FORM_FIELD(f.label, f.kind, f.required, null, labelStyle),
+        ),
         node.submitText,
         node.intent,
         styled,
