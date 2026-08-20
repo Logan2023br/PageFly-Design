@@ -208,6 +208,42 @@ function cssAt(
       );
   }
 
+  /* ==========================================================================
+     `max-width` WITHOUT `width` MEANS SOMETHING DIFFERENT IN THE TWO READERS.
+
+     This is the widest-reaching difference between the mockup and the import,
+     and it is not a bug in either of them.
+
+     In the mockup a `col` with `maxWidth: 1180px` sits inside a section that is
+     `display: flex; flex-direction: column`, so it inherits `align-items:
+     stretch` — the CSS default — and fills the section's width up to its
+     maximum. That is the ordinary centred-container idiom and it reads exactly
+     as intended.
+
+     In PageFly the same node is a flex child of a FlexSection whose base rules
+     do not stretch it, so `max-width` is a ceiling on a box that is already
+     hugging its content. The imported page showed a 1180px container collapsed
+     to the width of its longest line — a two-column split squeezed into 400px
+     with `Two years of development with a` wrapping every three words.
+
+     `width: 100%` reconciles them. It changes nothing in the mockup, where the
+     box already filled, and it is what the merchant would otherwise have to
+     type by hand into every container on the page.
+
+     ONLY WHEN THE PARENT STACKS. In a row, `width: 100%` on a child with a
+     `maxWidth` is wrong — that child is one side of a measured composition, and
+     making it ask for the whole row turns a 42/58 split into something the flex
+     shrink factor decides. A `maxWidth` there is a reading-width cap on a
+     column that is meant to hug.
+     ========================================================================== */
+  if (
+    css.maxWidth !== undefined &&
+    css.width === undefined &&
+    parentDir !== "horizontal"
+  ) {
+    own.push("width: 100% !important;");
+  }
+
   const tail = [
     `--pf-flex-layout-width: ${widthMode(node, css)};`,
     `--pf-flex-layout-height: ${heightMode(css)};`,
@@ -989,8 +1025,22 @@ function cardList(
   }
 
   const css = styleAt(node, "all");
-  const columns = declaredColumns(css) ?? children.length;
-  const gap = Number(String(css.gap ?? css.columnGap ?? 24).replace(/[^\d.]/g, "")) || 24;
+
+  /* THE DIRECTION DECIDES THE COLUMN COUNT.
+
+     A `col` stacks: four spec rows in a col are four rows, so `slidesToShow` is
+     ONE. Taking the child count regardless is what shipped four full-width spec
+     bars — label, value and a rule each — squeezed side by side into four narrow
+     columns, with `11,000 st` broken across two lines. The mockup stacked them
+     because a col stacks, and the element was told 4.
+
+     For a `row` the model's own `gridTemplateColumns` wins, because six cards at
+     three across is three columns and not six. Only when it says nothing does
+     the child count answer, which for a single row of cards is the same thing. */
+  const columns =
+    node.type === "col" ? 1 : (declaredColumns(css) ?? children.length);
+
+  const gap = Number(String(css.gap ?? css.rowGap ?? css.columnGap ?? 24).replace(/[^\d.]/g, "")) || 24;
 
   /* The layout properties move into the element's own data, so they are not ALSO
      written as CSS — `display:grid` on the root or on the native wrappers is

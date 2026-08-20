@@ -430,6 +430,105 @@ async function main(): Promise<void> {
   const submit = form.items.find((i) => i.type === "Form2.Button2");
   check(submit?.data?.value === "Send enquiry", "the button says what was written", String(submit?.data?.value));
 
+  /* ---- a stack is one per row, not N across ----------------------------- */
+
+  console.log("\nfour spec bars stacked in a col");
+
+  /* The exact shape that shipped wrong: a col holding four cols, each a
+     label/value row over a rule. The mockup stacks them because a col stacks;
+     the element was told four items per row and the import squeezed four
+     full-width bars into four narrow columns, breaking "11,000 st" over two
+     lines. */
+  const stacked = await open({
+    sections: [
+      section(
+        [
+          {
+            type: "col",
+            css: { maxWidth: "900px", gap: "40px" },
+            children: [
+              { type: "heading", level: 2, text: "Measured, not marketed" },
+              {
+                type: "col",
+                css: { gap: "24px" },
+                children: Array.from({ length: 4 }, (_, i) => ({
+                  type: "col",
+                  css: { gap: "8px" },
+                  children: [
+                    {
+                      type: "row",
+                      css: { justifyContent: "space-between" },
+                      children: [
+                        { type: "text", text: `WOOL CONTENT ${i + 1}` },
+                        { type: "text", text: "80%" },
+                      ],
+                    },
+                    { type: "custom", label: "bar", html: "<div class='b'></div>" },
+                  ],
+                })),
+              },
+            ],
+          },
+        ],
+        "spec-bars",
+      ),
+    ],
+  });
+
+  const bars = stacked.items.find((i) => i.type === "ContentList2");
+  check(Boolean(bars), "the stack became a ContentList2");
+  const per = (bars?.data?.slidesToShow as Record<string, number> | undefined)?.all;
+  check(per === 1, "ONE item per row, because a col stacks", String(per));
+  check(
+    stacked.items.filter((i) => i.type === "ContentListItem").length === 4,
+    "four items",
+  );
+
+  /* And the container: max-width with no width hugs in PageFly and fills in the
+     mockup. The imported 1180px container collapsed to the width of its longest
+     line until this was added. */
+  const container = stacked.items.find(
+    (i) => i.type === "FlexBlock" && /max-width:\s*900px/.test(stacked.cssOf(i.id)),
+  );
+  check(Boolean(container), "the 900px container is there");
+  check(
+    /width:\s*100%/.test(stacked.cssOf(container?.id ?? "")),
+    "and it is told to fill up to that maximum",
+    stacked.cssOf(container?.id ?? "").match(/(^|[; ])width:[^;]*/)?.[0]?.trim() ?? "(none)",
+  );
+
+  /* But NOT inside a row: there a maxWidth is a reading-width cap on a column
+     meant to hug, and width:100% turns a 42/58 split into a shrink-factor
+     argument. */
+  const inRow = await open({
+    sections: [
+      section(
+        [
+          {
+            type: "row",
+            css: { gap: "64px" },
+            children: [
+              {
+                type: "col",
+                css: { maxWidth: "520px" },
+                children: [{ type: "heading", level: 2, text: "Woven in Biella" }],
+              },
+              { type: "image", query: "wool cloth", ratio: 0.86 },
+            ],
+          },
+        ],
+        "deep-dive-split",
+      ),
+    ],
+  });
+  const capped = inRow.items.find(
+    (i) => i.type === "FlexBlock" && /max-width:\s*520px/.test(inRow.cssOf(i.id)),
+  );
+  check(
+    !/(^|[; ])width:\s*100%/.test(inRow.cssOf(capped?.id ?? "")),
+    "a capped column inside a row is left to hug",
+  );
+
   /* ---- and the class the form bug belonged to --------------------------- */
 
   console.log("\nevery element, every page above");
@@ -437,6 +536,7 @@ async function main(): Promise<void> {
   const everything = [
     ...items, ...split, ...withProduct, ...pdp, ...grid, ...featured,
     ...carousel, ...stats.items, ...shaped.items, ...form.items,
+    ...stacked.items, ...inRow.items,
   ];
   /* Body and Layout are excluded: the format doc says both are required and
      carry no styles, they are built outside the element path, and neither has

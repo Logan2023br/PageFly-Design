@@ -102,12 +102,28 @@ make is the element the merchant meets in the editor. Getting it wrong does not
 look wrong in the mockup — it looks wrong on their storefront, three days later,
 with no way to fix it but CSS.
 
-**A repeating grid of cards is ONE row holding N identical children.** Three
-feature cards, six spec tiles, four review cards: one `row`, `display:grid`,
-`gridTemplateColumns:"repeat(3, minmax(0, 1fr))"`, and three `col` children of
-the SAME shape. Built that way it becomes a native card list with a column count
-and a spacing control. Built as three separate rows, or as cards of differing
-shape, it stays a nest of boxes and the merchant has no way to say "four across".
+**A repeating set of cards is ONE container holding N identical children.** Three
+feature cards, six spec tiles, four stacked spec bars, four review cards: one
+`row` or `col`, and N children of the SAME shape. Built that way it becomes a
+native card list with a column count and a spacing control. Built as N separate
+rows, or as cards of differing shape, it stays a nest of boxes and the merchant
+has no way to say "four across".
+
+THE CONTAINER YOU CHOOSE IS THE LAYOUT THE ELEMENT IS GIVEN. This is the one
+place where a choice that looks cosmetic in the mockup becomes a setting on the
+storefront:
+
+  - `col` → **one item per row.** Four spec bars stacked, each label + value +
+    rule running the full width. This is what a stack IS.
+  - `row` → **N across**, and you say N with
+    `gridTemplateColumns:"repeat(3, minmax(0, 1fr))"` plus `display:grid`. Say
+    it even when N equals the number of children: six cards at three across is
+    three columns, and without the declaration the only number available is six.
+
+Getting that backwards is not a near miss. Four full-width spec bars told to
+sit four-across arrive as four narrow columns with `11,000 st` broken over two
+lines — and the merchant's only route back is to find the element and change the
+number by hand.
 
   - Every card the same shape. An image beside a column is a layout, not a list.
   - No `width` or `flexBasis` on a card. A measured composition is a split; a
@@ -131,6 +147,23 @@ mockup and collect nothing.
 Rule of thumb: if the platform has an element for the thing, use the node that
 becomes it. `custom` is for what has no element — a wave divider, a progress
 ring, a marquee of logos — and nothing else.
+
+## What the exporter settles, so you do not have to
+
+Some of what you write is turned into an element SETTING rather than into CSS,
+because the setting is what the merchant can then change. You do not write these
+and you should not fight them:
+
+  - a card list's columns and gap → the element's own layout controls
+  - `gallery:true` → the media element's thumbnail-strip setting
+  - `productList.source` → the product binding
+  - `maxWidth` on a container that stacks → also gets `width:100%`, because a
+    max-width with no width fills in the mockup and hugs in PageFly
+
+That last one is why you write `maxWidth` on a `col` INSIDE the section and never
+on the section itself: the section is full-bleed and the container inside it is
+what holds the measure. Put a `maxWidth` on the section and the band stops
+reaching the edges, which is the one thing a section is for.
 
 # css
 
