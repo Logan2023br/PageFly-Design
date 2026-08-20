@@ -30,16 +30,13 @@ const resolve_ = (Module as unknown as { _resolveFilename: (r: string, ...a: unk
   return resolve_.call(this, request, ...args);
 };
 
-const PAGE_TYPES = [
-  "home",
-  "product",
-  "collection",
-  "about",
-  "faq",
-  "contact",
-  "lp-launch",
-  "password",
-];
+/* EVERY page type in the catalogue, read from the catalogue.
+
+   It used to be eight, hand-picked, and that is how eighteen page types came to
+   share the About arc without anyone noticing: the list tested the types someone
+   had thought about. Read from `PAGE_CATEGORIES`, a type added to the product
+   is a type this test covers the same day. */
+const PAGE_TYPES: string[] = [];
 
 let failures = 0;
 function check(ok: boolean, label: string, detail = ""): void {
@@ -49,9 +46,40 @@ function check(ok: boolean, label: string, detail = ""): void {
 }
 
 async function main(): Promise<void> {
-  const { planPage, seedFor, _plan } = await import("../lib/design/plan");
+  const { planPage, seedFor, _plan, _fallbackArcTypes } = await import("../lib/design/plan");
   const { sliceIds } = await import("../lib/ai/skills");
   const { VERTICAL_CHIPS } = await import("../lib/verticals");
+  const { PAGE_CATEGORIES } = await import("../lib/pageCatalog");
+
+  PAGE_TYPES.push(...PAGE_CATEGORIES.flatMap((c) => c.pages.map((p) => p.id)));
+
+  /* ---- does every page type have an arc of its own? --------------------- */
+
+  const generic = _fallbackArcTypes(PAGE_TYPES);
+  console.log(`page types in the catalogue  ${PAGE_TYPES.length}`);
+  if (generic.length > 0) {
+    console.log(`  \x1b[33mstill on a generic arc\x1b[0m  ${generic.join(", ")}`);
+    failures++;
+  } else {
+    console.log("  every type has its own arc or is deliberately minimal");
+  }
+
+  /* ---- and does a page that should sell something, sell something? ------ */
+
+  const SHOULD_SELL: Record<string, number> = {
+    product: 1,
+    collection: 2,
+    home: 1,
+    sale: 2,
+    bundle: 1,
+    "gift-card": 1,
+    upsell: 1,
+    lookbook: 1,
+    "lp-launch": 1,
+    "lp-bfcm": 2,
+    "lp-discount": 1,
+    "lp-influencer": 1,
+  };
 
   const patternIds = new Set(sliceIds("patterns"));
   const motionIds = new Set(sliceIds("motion"));
@@ -84,6 +112,15 @@ async function main(): Promise<void> {
 
       const where = `${chip.slug}/${pageType}`;
       check(order.sections.length > 0, `${where}: no sections`);
+
+      /* The page types that exist to sell something must contain something to
+         buy, in every vertical. This is the check that would have caught a Sale
+         page with no products on it. */
+      const wanted = SHOULD_SELL[pageType];
+      if (wanted) {
+        const got = order.sections.filter((s) => s.role === "commerce" && s.pattern).length;
+        check(got >= wanted, `${where}: ${got} commerce section(s), wanted ${wanted}`);
+      }
       check(order.vertical === chip.slug, `${where}: wrong vertical`, order.vertical);
       check(
         order.sections.filter((s) => s.signature).length === 1,

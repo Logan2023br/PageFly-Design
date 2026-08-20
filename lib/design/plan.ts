@@ -219,23 +219,103 @@ function groupOf(ids: string[]): Map<string, string> {
  * for every store selling the same kind of thing. What differs by store is
  * which pattern makes each move, and that is the seed's job.
  */
+/* ==========================================================================
+   ONE ARC PER PAGE TYPE, because a page type IS an arc.
+
+   Eight types had their own and eighteen fell through to `about`, so a Sale page
+   had no products on it, a Bundle had nothing to bundle, a Gift card could not
+   be bought and a Lookbook was a page of prose. Exactly the failure the Product
+   and Collection pages had, spread across half the catalogue and invisible
+   because `about` is a perfectly reasonable arc — for an About page.
+
+   Written as a table because that is what it is. Reading down a row should tell
+   you what the page is FOR:
+
+     a Sale page shows products twice and states the offer between them
+     a Careers page tells a story and ends in a form
+     a Wholesale page argues, proves, and ends in a form
+     a Lookbook is photographs with one place to buy from
+
+   `commerce` appears wherever a shopper on that page could reasonably buy
+   something. It is absent from `careers`, `press`, `shipping` and `legal`
+   because a products row there is a shop interrupting a conversation.
+   ========================================================================== */
 const ARCS: Record<string, SectionRole[]> = {
+  /* ---- core --------------------------------------------------------------- */
   home: ["hero", "utility", "media", "commerce", "proof", "content", "proof", "conversion"],
   /* A product page OPENS with the product. No separate hero: a real PDP puts
      the gallery and the price on the first screen, and a hero above them
-     pushes the price to 900px. The commerce slot is also this page's
-     signature — see `planPage`. */
+     pushes the price to 900px. */
   product: ["commerce", "utility", "proof", "media", "content", "proof", "content", "conversion"],
   /* Two commerce slots, and they are different sections: a wide grid of the
-     collection, then — after one editorial band to break the wall — a carousel
-     or a second grid. A collection page whose products appear once, six cards
-     wide, is a landing page wearing a collection's name. */
+     collection, then — after one editorial band to break the wall — a carousel.
+     A collection page whose products appear once, six cards wide, is a landing
+     page wearing a collection's name. */
   collection: ["hero", "commerce", "content", "commerce", "media", "conversion"],
+
+  /* ---- trust & info ------------------------------------------------------- */
   about: ["hero", "content", "media", "proof", "content", "conversion"],
-  faq: ["hero", "content", "conversion"],
   contact: ["hero", "conversion", "utility"],
-  reviews: ["hero", "proof", "proof", "conversion"],
-  comparison: ["hero", "proof", "content", "conversion"],
+  faq: ["hero", "content", "utility", "conversion"],
+  reviews: ["hero", "proof", "proof", "media", "conversion"],
+  /* A size guide is a reference document. The table is the page; everything
+     around it is how to read the table. */
+  "size-guide": ["hero", "content", "proof", "content", "conversion"],
+  /* Policy. Short, scannable, and it ends in the question the reader actually
+     came with — which is why the FAQ-shaped content slot is last, not first. */
+  shipping: ["hero", "utility", "content", "content", "conversion"],
+  "store-locator": ["hero", "content", "utility", "conversion"],
+  /* A careers page is a story about working somewhere, and it ends in a form.
+     No commerce: a products row in the middle of a job advert is a shop
+     interrupting a conversation. */
+  careers: ["hero", "content", "media", "content", "conversion"],
+  press: ["hero", "utility", "proof", "content", "conversion"],
+  sustainability: ["hero", "content", "proof", "media", "content", "conversion"],
+
+  /* ---- content ------------------------------------------------------------ */
+  /* Neither of these can be right yet — see the note under ARCS on the two
+     missing nodes. A blog listing with no article list is the same bug as a
+     collection with no products, and it is a vocabulary gap rather than an arc
+     one. The arcs here are the best a page can do without them. */
+  "blog-list": ["hero", "content", "content", "media", "conversion"],
+  "blog-article": ["hero", "content", "media", "content", "proof", "conversion"],
+  /* Photographs, and one place to buy from. The commerce slot is what separates
+     a lookbook from a gallery. */
+  lookbook: ["hero", "media", "media", "commerce", "media", "conversion"],
+  ugc: ["hero", "media", "proof", "media", "conversion"],
+
+  /* ---- conversion --------------------------------------------------------- */
+  /* A sale page is a shop with a reason. Products twice, the offer stated
+     between them. */
+  sale: ["hero", "utility", "commerce", "proof", "commerce", "conversion"],
+  bundle: ["hero", "commerce", "content", "proof", "conversion"],
+  /* A gift card IS a product; the page is a buy box with an explanation. */
+  "gift-card": ["hero", "commerce", "content", "proof", "conversion"],
+  comparison: ["hero", "proof", "content", "proof", "conversion"],
+  /* A quiz is a form with a promise above it. Nothing else earns the room. */
+  quiz: ["hero", "content", "conversion", "utility"],
+  upsell: ["hero", "commerce", "proof", "conversion"],
+  membership: ["hero", "content", "proof", "conversion", "conversion"],
+  /* B2B: argue, prove, then ask. The last slot is a real form, not a CTA band —
+     a wholesale enquiry that ends in "email us" loses the enquiry. */
+  wholesale: ["hero", "proof", "content", "content", "conversion"],
+  affiliate: ["hero", "proof", "content", "conversion"],
+
+  /* ---- landing pages -----------------------------------------------------
+     Nine types shared one arc, which was defensible — they are all one offer
+     and one CTA — and wrong for the four where the offer IS a product. Those
+     four get commerce; the rest keep the shape LP_ARC had. */
+  "lp-launch": ["hero", "commerce", "utility", "proof", "media", "content", "proof", "conversion"],
+  "lp-bfcm": ["hero", "utility", "commerce", "proof", "commerce", "conversion"],
+  "lp-discount": ["hero", "utility", "commerce", "proof", "conversion"],
+  "lp-influencer": ["hero", "media", "commerce", "proof", "conversion"],
+  /* Long-form prose that argues its way to a product. Three content slots is
+     the point of the format, not padding. */
+  "lp-advertorial": ["hero", "content", "content", "media", "proof", "content", "conversion"],
+  "lp-waitlist": ["hero", "content", "proof", "conversion"],
+  "lp-lead-gen": ["hero", "content", "proof", "conversion", "utility"],
+  "lp-event": ["hero", "content", "proof", "content", "conversion"],
+  "lp-app": ["hero", "media", "proof", "content", "conversion"],
 };
 
 /* Every `lp-*` shares one arc — a landing page is a landing page whatever it is
@@ -255,26 +335,71 @@ const LP_ARC: SectionRole[] = [
 /* Pages that are a form, a gate or a legal notice. An arc would be a fiction:
    they have one job and the page is that job. */
 /* ==========================================================================
-   The commerce slots are PINNED, not drawn.
+   SLOTS THAT ARE NOT A MATTER OF TASTE.
 
    Everywhere else in this resolver the seed picks, because two stores in one
-   trade must not get the same page. A buy box is the exception: there is one
-   right answer to "what goes at the top of a product page" and rolling for it
-   means some product pages come back without one. The merchant did not ask for
-   variety in whether their product is on their product page.
+   trade must not get the same page. Some slots have one right answer and rolling
+   for them means some pages come back wrong:
 
-   Listed per page type and per occurrence, so the collection page's two slots
-   get two DIFFERENT sections rather than the same grid twice.
+   - A product page's first section is a buy box. Nobody asked for variety in
+     whether their product is on their product page.
+   - A wholesale, careers or quiz page ENDS IN A FORM. Left to the seed, a
+     wholesale page ended in a price band — an enquiry page that does not take
+     the enquiry.
+   - A blog listing does not end in a price band either. It ends in a newsletter.
 
-   A page type absent from this map still gets its commerce slot filled — the
-   seed draws from the group, as with any other role. That is the right default
-   for the long tail (`bundle`, `comparison`, a landing page): they can carry a
-   product row, and which one is a matter of taste rather than correctness.
+   Keyed by page type, then by role, then by occurrence — so a page with two
+   commerce slots gets two DIFFERENT sections rather than the same grid twice.
+   A role absent here is drawn by the seed as normal, which is the right default
+   for everything that IS a matter of taste.
    ========================================================================== */
-const PINNED_COMMERCE: Record<string, string[]> = {
-  product: ["product-detail-gallery"],
-  collection: ["collection-grid-3up", "collection-carousel"],
-  home: ["collection-featured-row"],
+type Pins = Partial<Record<SectionRole, string[]>>;
+
+/** The ending a page type earns, when its ending is not a choice. */
+const FORM_END: Pins = { conversion: ["lead-form-split"] };
+const LETTER_END: Pins = { conversion: ["newsletter-inline"] };
+
+const PINNED: Record<string, Pins> = {
+  /* ---- one product, and the page is about it ---------------------------- */
+  product: { commerce: ["product-detail-gallery"] },
+  "gift-card": { commerce: ["product-detail-wide"], conversion: ["cta-band-full"] },
+  "lp-launch": { commerce: ["product-detail-gallery"] },
+
+  /* ---- a shop: many products, twice where the arc has room -------------- */
+  collection: { commerce: ["collection-grid-3up", "collection-carousel"] },
+  sale: { commerce: ["collection-grid-4up", "collection-carousel"] },
+  "lp-bfcm": { commerce: ["collection-grid-4up", "collection-carousel"] },
+  "lp-discount": { commerce: ["collection-grid-3up"] },
+
+  /* ---- a deliberate few, not a wall ------------------------------------- */
+  home: { commerce: ["collection-featured-row"] },
+  lookbook: { commerce: ["collection-featured-row"], conversion: ["cta-band-full"] },
+  upsell: { commerce: ["collection-featured-row"] },
+  bundle: { commerce: ["collection-featured-row"], conversion: ["bundle-picker"] },
+  "lp-influencer": { commerce: ["collection-featured-row"] },
+
+  /* ---- pages whose whole purpose is the form at the end ---------------- */
+  contact: FORM_END,
+  wholesale: FORM_END,
+  careers: FORM_END,
+  quiz: FORM_END,
+  affiliate: FORM_END,
+  "lp-lead-gen": FORM_END,
+  "lp-waitlist": FORM_END,
+  "lp-event": FORM_END,
+
+  /* ---- pages that end by asking to stay in touch ----------------------- */
+  "blog-list": LETTER_END,
+  "blog-article": LETTER_END,
+  ugc: LETTER_END,
+  press: LETTER_END,
+  sustainability: LETTER_END,
+  shipping: LETTER_END,
+  "size-guide": LETTER_END,
+  "store-locator": LETTER_END,
+
+  /* ---- and one that is a price comparison, twice ------------------------ */
+  membership: { conversion: ["plan-comparison", "cta-band-full"] },
 };
 
 const MINIMAL_ARC: SectionRole[] = ["hero", "conversion"];
@@ -291,10 +416,29 @@ const MINIMAL_TYPES = new Set([
   "coming-soon",
 ]);
 
+/**
+ * The arc for a page type, most specific first.
+ *
+ * ORDER MATTERS AND IT WAS WRONG. The `lp-` prefix was tested before the table,
+ * so the nine landing arcs written into `ARCS` were unreachable and every
+ * landing page kept the one generic shape — a change that typechecks, passes,
+ * and does nothing. The table is now consulted before either fallback.
+ *
+ * Both fallbacks stay, for a page type added to the catalogue before it is added
+ * here: a new `lp-` gets the landing shape, anything else gets `about`. Neither
+ * is silent — `scripts/test-plan.ts` walks the catalogue and names any type
+ * still relying on one.
+ */
 function arcFor(pageType: string): SectionRole[] {
   if (MINIMAL_TYPES.has(pageType)) return MINIMAL_ARC;
+  if (ARCS[pageType]) return ARCS[pageType];
   if (pageType.startsWith("lp-")) return LP_ARC;
-  return ARCS[pageType] ?? ARCS.about;
+  return ARCS.about;
+}
+
+/** Which page types are getting a generic arc rather than their own. */
+export function _fallbackArcTypes(types: string[]): string[] {
+  return types.filter((t) => !MINIMAL_TYPES.has(t) && !ARCS[t]);
 }
 
 /* ---- the seed ------------------------------------------------------------ */
@@ -469,21 +613,21 @@ export function planPage(
       ? arc.findIndex((role, i) => i > 0 && role === signatureRole)
       : -1;
 
-  /* Which commerce slot this is, so a page with two gets two different ones. */
-  let commerceSeen = 0;
+  /* How many slots of each role have been filled, so the second commerce slot
+     and the second conversion slot get the second pin rather than the first. */
+  const seen = new Map<SectionRole, number>();
 
   arc.forEach((role, i) => {
     /* Pinned before anything else, including the vertical's signature: a
        vertical's signature pattern is a matter of taste and a product page
        without a buy box is a matter of correctness. */
-    if (role === "commerce") {
-      const pinned = PINNED_COMMERCE[pageType]?.[commerceSeen];
-      commerceSeen++;
-      if (pinned && !isBanned(pinned)) {
-        used.add(pinned);
-        chosen.push({ role, pattern: pinned });
-        return;
-      }
+    const nth = seen.get(role) ?? 0;
+    seen.set(role, nth + 1);
+    const pinned = PINNED[pageType]?.[role]?.[nth];
+    if (pinned && !isBanned(pinned)) {
+      used.add(pinned);
+      chosen.push({ role, pattern: pinned });
+      return;
     }
 
     if (i === signatureSlot && row.signature) {
@@ -537,14 +681,22 @@ export function planPage(
      investment is its first screen has nothing below the fold. */
   let signatureIndex = signatureSlot;
 
-  /* On a product or collection page the PRODUCT is the signature, whatever the
-     vertical's own signature pattern is. Those pages exist to sell the thing;
-     spending the page's most room and its best photograph on a lookbook while
-     the buy box gets standard padding is the wrong emphasis, and it is the
-     emphasis the vertical file would have chosen. */
+  /* WHERE THE ARC PUTS COMMERCE IS WHETHER COMMERCE IS THE POINT.
+
+     Read off the arc rather than listed per page type, because the arc already
+     encodes the answer and a second list would drift from it. A commerce slot in
+     the first two positions means the page opens with the thing it sells — a
+     product page, a collection, a gift card, a launch — and then the product is
+     the signature whatever the vertical's own signature pattern is. Spending the
+     page's most room and best photograph on a lookbook while the buy box gets
+     standard padding is the wrong emphasis, and it is the emphasis the vertical
+     file would otherwise have chosen.
+
+     Commerce further down is a products row inside a page about something else —
+     a home page, a sale, a lookbook — and there the signature belongs to
+     whatever that page is actually about. */
   const commerceIndex = chosen.findIndex((s) => s.role === "commerce" && s.pattern);
-  if (commerceIndex !== -1 && (pageType === "product" || pageType === "collection"))
-    signatureIndex = commerceIndex;
+  if (commerceIndex !== -1 && commerceIndex <= 1) signatureIndex = commerceIndex;
 
   if (signatureIndex === -1) signatureIndex = chosen.findIndex((s, i) => i > 0 && s.role === "media");
   if (signatureIndex === -1) signatureIndex = chosen.findIndex((s, i) => i > 0 && s.role === "proof");
