@@ -688,12 +688,35 @@ export function FORM(
 
 /* ---- slideshow ---------------------------------------------------------- */
 
+/**
+ * A carousel, set up the way the mockup draws one.
+ *
+ * EVERY DEFAULT HERE IS WRONG FOR US, which is why they are all written out.
+ * `navStyle` defaults to `nav-style-1` and `paginationStyle` to
+ * `pagination-style-1`, so a Slideshow emitted without them arrives with grey
+ * arrows sitting over the first and last slide and a row of dots underneath —
+ * neither of which the mockup has ever drawn. `gutter` defaults to 0, so the
+ * slides arrived edge to edge where the mockup gaps them by 24.
+ *
+ * The mockup is the specification for all three:
+ *
+ *   arrows      never drawn. `Slides` renders no controls at all.
+ *   dots        ONLY when the slides overflow — `slides.length > perView`. A
+ *               carousel showing everything it has needs no pager, and drawing
+ *               one says there is more when there is not.
+ *   gap         24 between slides, taken from the node's own `gap` when the
+ *               design states one.
+ */
 export function SLIDESHOW(
   slides: PFNode[],
-  opts: { perView: number; autoplay: boolean },
+  opts: { perView: number; autoplay: boolean; gutter?: number },
   styleData: StyleData,
 ) {
   const per = Math.max(1, Math.min(4, opts.perView));
+  const gap = Math.max(0, Math.round(opts.gutter ?? 24));
+  /* Nothing to page through, nothing to page with. */
+  const overflows = slides.length > per;
+
   return node(
     "Slideshow",
     {
@@ -706,14 +729,38 @@ export function SLIDESHOW(
          columns. */
       slidesToShow: { all: per, laptop: per, tablet: Math.min(2, per), mobile: 1 },
       slidesToScroll: { all: 1, laptop: 1, tablet: 1, mobile: 1 },
+      /* A phone gets a tighter gap for the same reason it gets one slide. */
+      gutter: { all: gap, laptop: gap, tablet: gap, mobile: Math.min(gap, 16) },
+      displayPartialItems: { all: false, laptop: false, tablet: false, mobile: false },
       maxHeight: true,
-      navStyle: "nav-style-1",
-      paginationStyle: "pagination-style-1",
+      navStyle: "none",
+      paginationStyle: overflows ? "pagination-style-1" : "none",
     },
     styleData,
     slides.map((s) => node("SlideshowSlide", {}, null, [s])),
   );
 }
+
+/**
+ * The dots, styled to the mockup, on the selectors `fields.md` names for them.
+ *
+ * The setting chooses WHETHER there is a pager and which of three shapes it
+ * takes; it cannot say 7px, or centred, or `currentColor`. So the shape comes
+ * from the setting and the look comes from here — which is the rule the whole
+ * export follows: use the setting where one exists, and write CSS for the part
+ * no setting reaches.
+ *
+ * `currentColor` rather than a literal: the pager sits inside a section whose
+ * ink is already correct, and a hard-coded grey is invisible on a dark band and
+ * heavy on a light one.
+ */
+export const SLIDESHOW_PARTS: Record<string, string> = {
+  "& .pf-slider-nav": "display: flex; justify-content: center; gap: 7px; padding-top: 22px;",
+  "& .pf-slider-nav button":
+    "width: 7px; height: 7px; padding: 0; border: 0; border-radius: 999px;" +
+    " background: currentColor; opacity: .22;",
+  "& .pf-slider-nav button.active": "opacity: .75;",
+};
 
 const SLOT_RULES: Record<string, string[]> = {
   ProductBox: ["ProductMedia3", "FlexBlock"],

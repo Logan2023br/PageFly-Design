@@ -22,6 +22,7 @@ import {
   PRODUCT_SWATCHES,
   PRODUCT_TITLE,
   SLIDESHOW,
+  SLIDESHOW_PARTS,
   ACCORDION,
   ACCORDION_HEADER,
   Page,
@@ -75,6 +76,39 @@ import {
    - Decoration emitted as Custom.HTML. A styled node with no text and no
      children is a rule or a dot; as a childless FlexBlock the editor paints
      "Drop element here" across it.
+
+   ==========================================================================
+   THE GOVERNING RULE, and every fidelity bug so far has been a breach of it:
+
+     THE MOCKUP IS THE SPECIFICATION. For each element, use the SETTING where
+     the platform has one, and write CSS only for the part no setting reaches.
+     Where a default disagrees with the mockup, override it explicitly — a
+     default you did not write is still a decision you shipped.
+
+   Settings first because a setting is what the merchant can change afterwards.
+   A column count written as CSS is a column count they have to find in a code
+   box; written as `slidesToShow` it is a number with a slider next to it. And
+   a CSS grid over a native one does not merely duplicate it — `fields.md` says
+   it collapses every card to one per row.
+
+   Defaults are the trap. They are invisible in the diff and they are almost
+   never what a designed page wants:
+
+     Slideshow.navStyle          nav-style-1        arrows nobody asked for
+     Slideshow.paginationStyle   pagination-style-1 dots on a 3-of-3 carousel
+     Slideshow.gutter            0                  slides edge to edge
+     ProductList2.listLayout     slideshow          a grid becomes a carousel
+     ProductList2.source         all                a collection page shows the
+                                                    whole store
+     ProductMedia3.showList      false              a PDP with no gallery
+
+   Each of those shipped. Each looked right in the mockup, because the mockup
+   never had the default.
+
+   The reverse trap is writing CSS for something a setting owns: a `gap` on a
+   Slideshow root does not reach the slider track, and `display:flex` on a
+   MediaList2 does not show a thumbnail strip whose `showList` is false. Both
+   render as nothing and neither reports anything.
    ========================================================================== */
 
 /** Numbers are px in CSS except for these. Matches React's own list. */
@@ -746,7 +780,22 @@ function emitNode(
       /* Every slide dropped means an empty carousel with working arrows, which
          is worse than the row it replaced. */
       if (slides.length === 0) return CUSTOM_HTML("<div></div>", sd);
-      return SLIDESHOW(slides, { perView: node.perView, autoplay: node.autoplay }, sd);
+
+      /* The gap between slides is a SETTING, so it is read off the node's own
+         `gap` and handed over as data rather than written as CSS — a CSS gap on
+         the root does not reach the slider track. The mockup's own 24 is the
+         fallback, because that is the number it draws when the design says
+         nothing. */
+      const css = styleAt(node, "all");
+      const gutter = Number(String(css.gap ?? 24).replace(/[^\d.]/g, "")) || 24;
+
+      /* And the dots' LOOK, which no setting can express — see
+         SLIDESHOW_PARTS. Setting for the shape, CSS for the rest. */
+      return SLIDESHOW(
+        slides,
+        { perView: node.perView, autoplay: node.autoplay, gutter },
+        withParts(without(sd, new Set(["gap"])), SLIDESHOW_PARTS),
+      );
     }
 
     case "row":

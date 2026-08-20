@@ -155,10 +155,14 @@ because the setting is what the merchant can then change. You do not write these
 and you should not fight them:
 
   - a card list's columns and gap → the element's own layout controls
+  - a `slideshow`'s gap, arrows and dots → its own settings. Arrows are never
+    drawn and the dots appear only when the slides outnumber `perView`, which is
+    what the mockup does. Do not write a `gap` expecting it to reach the track.
   - `gallery:true` → the media element's thumbnail-strip setting
-  - `productList.source` → the product binding
+  - `productList.source` and `listLayout` → the product binding and the layout
   - `maxWidth` on a container that stacks → also gets `width:100%`, because a
     max-width with no width fills in the mockup and hugs in PageFly
+  - a `heading` or `text` inside a `row` → hugs its words, as it does in CSS
 
 That last one is why you write `maxWidth` on a `col` INSIDE the section and never
 on the section itself: the section is full-bleed and the container inside it is

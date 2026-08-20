@@ -64,11 +64,11 @@ async function open(tree: unknown, name = "probe") {
 
   /** The `&` rule for one item, at one breakpoint. Where the fidelity bugs are:
       an element can be the right element and still carry the wrong type. */
-  const cssOf = (id: string, device = "all"): string => {
+  const cssOf = (id: string, device = "all", selector = "&"): string => {
     const entryFor = page.styles.find((s) => s.id === id);
     if (!entryFor) return "";
     const parsed = JSON.parse(entryFor.styles) as Record<string, Record<string, string>>;
-    return parsed[device]?.["&"] ?? "";
+    return parsed[device]?.[selector] ?? "";
   };
 
   return { items: page.items, cssOf };
@@ -585,6 +585,93 @@ async function main(): Promise<void> {
     inACol.map((i) => labelled.cssOf(i.id).match(/--pf-flex-layout-width:[^;]*/)?.[0]).join(" · "),
   );
 
+  /* ---- a carousel, set up the way the mockup draws one ------------------ */
+
+  console.log("\nsix slides, three visible");
+
+  const slider = await open({
+    sections: [
+      section(
+        [
+          {
+            type: "slideshow",
+            perView: 3,
+            autoplay: false,
+            css: { gap: "24px" },
+            slides: Array.from({ length: 6 }, (_, i) => ({
+              type: "col",
+              children: [
+                { type: "image", query: `look ${i + 1}`, ratio: 1.25 },
+                { type: "text", text: `Fog Walk ${i + 1}` },
+              ],
+            })),
+          },
+        ],
+        "lookbook-strip",
+      ),
+    ],
+  });
+
+  const show = slider.items.find((i) => i.type === "Slideshow");
+  check(Boolean(show), "a Slideshow was emitted");
+  if (show) {
+    /* EVERY ONE OF THESE IS A PLATFORM DEFAULT WE HAVE TO OVERRIDE. navStyle
+       defaults to nav-style-1 and paginationStyle to pagination-style-1, so a
+       Slideshow emitted without them arrives with grey arrows over the first and
+       last slide and a row of dots — neither of which the mockup draws. */
+    check(show.data?.navStyle === "none", "no arrows, because the mockup draws none", String(show.data?.navStyle));
+    check(
+      show.data?.paginationStyle === "pagination-style-1",
+      "dots, because six slides overflow three",
+      String(show.data?.paginationStyle),
+    );
+    const g = show.data?.gutter as Record<string, number> | undefined;
+    check(g?.all === 24, "the gap is the element's gutter, not CSS", String(g?.all));
+    check(g?.mobile === 16, "and tighter on a phone", String(g?.mobile));
+    check(
+      (show.data?.slidesToShow as Record<string, number>)?.mobile === 1,
+      "one slide on a phone whatever the desktop shows",
+    );
+    /* The dots' LOOK is CSS on the selectors fields.md names, because the
+       setting chooses the shape and cannot say 7px or currentColor. */
+    const dotRule = slider.cssOf(show.id, "all", "& .pf-slider-nav button");
+    check(/width:\s*7px/.test(dotRule), "the dots are 7px, as the mockup draws them", dotRule.slice(0, 40));
+    check(
+      /background:\s*currentColor/.test(dotRule),
+      "in currentColor, so they read on a dark band and a light one",
+    );
+    check(
+      /gap:\s*24px/.test(slider.cssOf(show.id)) === false,
+      "and the gap is NOT left on the root as dead CSS",
+    );
+  }
+
+  /* Three slides in a three-wide carousel is not a carousel. A pager that says
+     there is more when there is not is worse than no pager. */
+  const exact = await open({
+    sections: [
+      section(
+        [
+          {
+            type: "slideshow",
+            perView: 3,
+            autoplay: false,
+            slides: Array.from({ length: 3 }, (_, i) => ({
+              type: "col",
+              children: [{ type: "text", text: `Look ${i + 1}` }],
+            })),
+          },
+        ],
+        "lookbook-strip",
+      ),
+    ],
+  });
+  check(
+    exact.items.find((i) => i.type === "Slideshow")?.data?.paginationStyle === "none",
+    "no dots when nothing overflows",
+    String(exact.items.find((i) => i.type === "Slideshow")?.data?.paginationStyle),
+  );
+
   /* ---- and the class the form bug belonged to --------------------------- */
 
   console.log("\nevery element, every page above");
@@ -593,6 +680,7 @@ async function main(): Promise<void> {
     ...items, ...split, ...withProduct, ...pdp, ...grid, ...featured,
     ...carousel, ...stats.items, ...shaped.items, ...form.items,
     ...stacked.items, ...inRow.items, ...labelled.items,
+    ...slider.items, ...exact.items,
   ];
   /* Body and Layout are excluded: the format doc says both are required and
      carry no styles, they are built outside the element path, and neither has
