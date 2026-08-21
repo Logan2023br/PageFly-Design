@@ -5,8 +5,10 @@ import { loadSkills, sliceSkill } from "./skills";
 import { DESIGN_SYSTEM } from "./designPrompt";
 import { designTreeSchema, walk, type DesignTree } from "../design/schema";
 import { animationLines } from "../design/animationPicker";
-import { planPage, seedFor, type Order } from "../design/plan";
+import { planPage, seedFor, type Order, type OrderSection } from "../design/plan";
 import { audit } from "../design/audit";
+import { elementForPattern } from "../design/elementFor";
+import { getRepo } from "../db";
 import { sectionPlanLine } from "../design/sectionPlan";
 import { detectVertical } from "../generate/content";
 import { findVideo, resolvePhotos, stockProvider, urlsOf } from "../images/stock";
@@ -221,6 +223,77 @@ function orderLines(order: Order, bg: string, ink: string): string[] {
   ];
 }
 
+
+/* ==========================================================================
+   TRAINING SECTIONS, read from the database as text.
+
+   THE PRECEDENCE, and it is the merchant's before it is ours:
+
+     the merchant uploaded references  →  build from THOSE, and nothing else.
+                                          They pointed at a page. A stored
+                                          reference filed by an operator is a
+                                          second opinion on a question the
+                                          merchant already answered.
+     they uploaded nothing             →  the training set, where there is one.
+
+   Never both. Two descriptions of how a product box should look, from two
+   sources, is the model reconciling instead of building — the same reason
+   `referenceLines` REPLACES the measured hints rather than joining them.
+
+   CAPPED AT TWO. Every analysis is about 380 tokens and it lands in the part of
+   the prompt that is not cached, but the real cost is not the input: Phase 3
+   measured that a more precise spec buys MORE reasoning, not less. Two is the
+   signature slot and the commerce slot — the band the page spends its room on,
+   and the band that sells something. The other six already have a pattern.
+
+   THE SWITCH IS HONOURED HERE. An entry turned off is not read, which is what
+   the switch promises: "the model must work it out itself".
+   ========================================================================== */
+const MAX_TRAINING = 2;
+
+async function trainingLines(order: Order | null): Promise<string[]> {
+  if (!order) return [];
+
+  /* Signature first, then commerce, then whatever else has a filing. The order
+     of preference is the order of the page's own emphasis. */
+  const ranked = [...order.sections]
+    .map((s, i) => ({ s, i }))
+    .sort((a, b) => {
+      const score = (x: { s: OrderSection }) =>
+        (x.s.signature ? 2 : 0) + (x.s.role === "commerce" ? 1 : 0);
+      return score(b) - score(a) || a.i - b.i;
+    });
+
+  const wanted: { element: string; slot: number }[] = [];
+  const seen = new Set<string>();
+  for (const { s, i } of ranked) {
+    const element = s.pattern ? elementForPattern(s.pattern) : null;
+    if (!element || seen.has(element)) continue;
+    seen.add(element);
+    wanted.push({ element, slot: i + 1 });
+    if (wanted.length >= MAX_TRAINING) break;
+  }
+  if (wanted.length === 0) return [];
+
+  const repo = getRepo();
+  const found: string[] = [];
+  for (const { element, slot } of wanted) {
+    /* A database that is unreachable costs the page its training, not the page.
+       This runs on every build; it cannot be a reason one fails. */
+    const row = await repo.getTrainingSectionByElement(element).catch(() => null);
+    if (!row || row.enabled === false || !row.analysis?.trim()) continue;
+    found.push(`Section ${slot} — ${element}, filed as a reference:`, row.analysis.trim(), ``);
+  }
+
+  if (found.length === 0) return [];
+  return [
+    `HOW THESE ELEMENTS ARE BUILT WELL. Written from screenshots an operator`,
+    `filed. Follow the structure and the numbers; the words are this store's.`,
+    ``,
+    ...found,
+  ];
+}
+
 export async function designPageTree(
   input: DesignInput,
   signal?: AbortSignal,
@@ -308,6 +381,8 @@ export async function designPageTree(
     ...(order ? [] : [animationLines(input.pageType, detectVertical(input.sell), input.deckSize ?? 1)]),
     ...referenceLines(input.reference, input.refSections),
     ...styleLines(input.refStyle),
+    /* Only when the merchant pointed at nothing. See `trainingLines`. */
+    ...(input.refSections?.length ? [] : await trainingLines(order)),
     `Return the JSON object now.`,
   ]
     .filter(Boolean)

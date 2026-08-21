@@ -202,6 +202,82 @@ export type TrainingItem = {
   /** the screenshots. One reference is usually several pages of the same store,
       or the same page at several widths. */
   images: TrainingImage[];
+  /**
+   * May a build read this reference?
+   *
+   * A switch rather than a delete, because the two are different acts. A
+   * reference an operator is unsure about should stop reaching merchants
+   * immediately and stay filed so it can be looked at again; deleting it throws
+   * away the screenshots and the reading with them.
+   *
+   * Optional in the type because rows written before the switch existed have no
+   * value for it, and the migration reads a missing value as ON — those rows
+   * were filed to be used.
+   */
+  enabled?: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/* ==========================================================================
+   TRAINING SECTIONS — the same idea, one element at a time.
+
+   A template reference is a whole page filed by industry. A section reference is
+   a single element filed by ELEMENT NAME: what a good `ProductBox` looks like,
+   what a good `Accordion3` looks like. The build looks one up when it is about
+   to write that element and the merchant gave it nothing to go on.
+
+   THE ANALYSIS IS STORED, NOT PERFORMED AT BUILD TIME, and that is the whole
+   design. DeepSeek cannot see an image — both v4 models reject an `image_url`
+   outright — so a screenshot has to become TEXT before it is any use, and the
+   only thing that can do that here is Haiku. Read at build time, that is a
+   vision call and three to six seconds on every page. Read once when the
+   operator saves it, it is free for ever: the screenshot does not change, so
+   neither does the reading.
+
+   It also makes the collection judgeable, which the template tab has wanted
+   since it was written. The operator can see what Haiku understood, and fix the
+   note or throw the reference away, BEFORE it changes what a merchant sees.
+   ========================================================================== */
+
+export type TrainingSection = {
+  id: string;
+  /**
+   * The PageFly element this is a reference for — `ProductBox`, `Accordion3`.
+   *
+   * UNIQUE. One entry per element, holding as many screenshots as an operator
+   * wants to file: a second `ProductBox` entry would leave the build choosing
+   * between two collections for one element, and the answer to "I have another
+   * good product box" is another screenshot, not another entry.
+   */
+  element: string;
+  /** what an operator wants remembered about it, in their own words */
+  note: string | null;
+  /**
+   * Haiku's reading of the screenshots, as text a page designer can act on.
+   *
+   * Null until the analysis runs, and null again if it failed — in which case
+   * the entry still holds its screenshots and can be re-analysed. A build reads
+   * this field and never the images.
+   */
+  analysis: string | null;
+  analysedAt: string | null;
+  /** see `TrainingItem.enabled` — same switch, same reason */
+  enabled?: boolean;
+  images: TrainingImage[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** A section reference without its pictures, save one. Same reason as above. */
+export type TrainingSectionSummary = {
+  id: string;
+  element: string;
+  note: string | null;
+  analysis: string | null;
+  enabled?: boolean;
+  cover: string;
+  imageCount: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -218,6 +294,7 @@ export type TrainingSummary = {
   id: string;
   vertical: string;
   note: string | null;
+  enabled?: boolean;
   /** the first screenshot, which is what a card shows */
   cover: string;
   imageCount: number;
@@ -271,6 +348,14 @@ export type Repo = {
   getTrainingItem(id: string): Promise<TrainingItem | null>;
   saveTrainingItem(item: TrainingItem): Promise<void>;
   deleteTrainingItem(id: string): Promise<boolean>;
+
+  /* ---- training sections ---- */
+  listTrainingSections(): Promise<TrainingSectionSummary[]>;
+  getTrainingSection(id: string): Promise<TrainingSection | null>;
+  /** by element name, which is how a BUILD finds one */
+  getTrainingSectionByElement(element: string): Promise<TrainingSection | null>;
+  saveTrainingSection(item: TrainingSection): Promise<void>;
+  deleteTrainingSection(id: string): Promise<boolean>;
 
   /* ---- stock photos ---- */
   getPhotos(queries: string[]): Promise<PhotoRecord[]>;

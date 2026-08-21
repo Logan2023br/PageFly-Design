@@ -1,6 +1,6 @@
 import { AdminLogin } from "@/components/admin/AdminLogin";
 import { AdminShell } from "@/components/admin/AdminShell";
-import { TrainingDesign } from "@/components/admin/TrainingDesign";
+import { TrainingTabs } from "@/components/admin/TrainingTabs";
 import { getRepo } from "@/lib/db";
 import { readAdminSession } from "@/lib/session";
 
@@ -21,15 +21,19 @@ export default async function AdminTrainingPage() {
   /* An unreachable database should not be a crashed screen: the operator can
      still see where they are and what this is for. */
   /* Covers and counts, never the whole set — see lib/db/types.ts. */
-  const items = await getRepo().listTrainingItems().catch(() => []);
+  const repo = getRepo();
+  const [items, sections] = await Promise.all([
+    repo.listTrainingItems().catch(() => []),
+    repo.listTrainingSections().catch(() => []),
+  ]);
 
   return (
     <AdminShell
       current="training"
       title="Training Design"
-      subtitle="Reference pages the model can be pointed at, filed by industry"
+      subtitle="Reference pages filed by industry, and reference sections filed by PageFly element"
     >
-      <TrainingDesign initial={items} />
+      <TrainingTabs templates={items} sections={sections} />
     </AdminShell>
   );
 }

@@ -33,6 +33,8 @@ const saveSchema = z.object({
      accepted here without anyone remembering to update a second copy. */
   vertical: z.enum(VERTICAL_IDS),
   note: z.string().max(400).nullable().default(null),
+  /** may a build read this reference — see TrainingItem.enabled */
+  enabled: z.boolean().default(true),
   /** the pictures travel in the row, each with its own note */
   images: z
     .array(
@@ -148,6 +150,7 @@ export async function POST(request: Request) {
     id: body.id ?? newId(),
     vertical: body.vertical,
     note: body.note?.trim() ? body.note.trim() : null,
+    enabled: body.enabled,
     images: body.images.map((i) => ({
       src: i.src,
       note: i.note?.trim() ? i.note.trim() : null,

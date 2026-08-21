@@ -3,6 +3,8 @@ import { buildStats } from "./postgresRepo";
 import type {
   JobRecord,
   TrainingItem,
+  TrainingSection,
+  TrainingSectionSummary,
   TrainingSummary,
   PhotoRecord,
   Repo,
@@ -38,9 +40,10 @@ type Shape = {
   photos: PhotoRecord[];
   jobs: JobRecord[];
   training: TrainingItem[];
+  trainingSections: TrainingSection[];
 };
 
-const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], photos: [], jobs: [], training: [] };
+const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], photos: [], jobs: [], training: [], trainingSections: [] };
 
 export function createMemoryRepo(file: string): Repo {
   /* Writes are best-effort: a read-only filesystem downgrades this to a plain
@@ -60,6 +63,8 @@ export function createMemoryRepo(file: string): Repo {
         photos: parsed.photos ?? [],
         jobs: parsed.jobs ?? [],
         training: parsed.training ?? [],
+        /* Absent in a file written before section references existed. */
+        trainingSections: parsed.trainingSections ?? [],
       };
     } catch {
       return structuredClone(EMPTY);
@@ -262,6 +267,7 @@ export function createMemoryRepo(file: string): Repo {
             id: t.id,
             vertical: t.vertical,
             note: t.note,
+            enabled: t.enabled ?? true,
             /* One image, same reason as the postgres driver: a card needs a
                cover, not the set. */
             cover: t.images[0]?.src ?? "",
@@ -291,6 +297,60 @@ export function createMemoryRepo(file: string): Repo {
       const before = data.training.length;
       data.training = data.training.filter((t) => t.id !== id);
       if (data.training.length === before) return false;
+      flush();
+      return true;
+    },
+
+    /* ---- training sections ---- */
+
+    async listTrainingSections() {
+      sync();
+      return [...data.trainingSections]
+        .sort((a, b) => a.element.localeCompare(b.element))
+        .map(
+          (t): TrainingSectionSummary => ({
+            id: t.id,
+            element: t.element,
+            note: t.note,
+            analysis: t.analysis,
+            /* Absent means ON: an entry filed before the switch existed was
+               filed to be used. */
+            enabled: t.enabled ?? true,
+            cover: t.images[0]?.src ?? "",
+            imageCount: t.images.length,
+            createdAt: t.createdAt,
+            updatedAt: t.updatedAt,
+          }),
+        );
+    },
+
+    async getTrainingSection(id) {
+      sync();
+      const found = data.trainingSections.find((t) => t.id === id);
+      return found ? { ...found, images: [...found.images] } : null;
+    },
+
+    async getTrainingSectionByElement(element) {
+      sync();
+      const found = data.trainingSections.find(
+        (t) => t.element.toLowerCase() === element.toLowerCase(),
+      );
+      return found ? { ...found, images: [...found.images] } : null;
+    },
+
+    async saveTrainingSection(item) {
+      sync();
+      const i = data.trainingSections.findIndex((t) => t.id === item.id);
+      if (i >= 0) data.trainingSections[i] = { ...item };
+      else data.trainingSections.push({ ...item });
+      flush();
+    },
+
+    async deleteTrainingSection(id) {
+      sync();
+      const before = data.trainingSections.length;
+      data.trainingSections = data.trainingSections.filter((t) => t.id !== id);
+      if (data.trainingSections.length === before) return false;
       flush();
       return true;
     },

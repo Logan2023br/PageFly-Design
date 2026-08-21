@@ -105,6 +105,38 @@ export function TrainingDesign({ initial }: { initial: TrainingSummary[] }) {
     else setEditing(item);
   }, []);
 
+  /* Saves on its own, without opening the editor. This is the control an
+     operator reaches for repeatedly — turning a reference off because a build
+     went wrong — and making that a trip through a form is how it stops being
+     used. The full row has to be fetched first because the endpoint takes a
+     whole reference, and the listing deliberately does not carry the images. */
+  const toggle = useCallback(async (summary: TrainingSummary) => {
+    setError(null);
+    const full = await fetchItem(summary.id);
+    if (!full) {
+      setError("Couldn't load that reference.");
+      return;
+    }
+    try {
+      const res = await fetch("/api/admin/training", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: full.id,
+          vertical: full.vertical,
+          note: full.note,
+          enabled: full.enabled === false,
+          images: full.images,
+        }),
+      });
+      const body = (await res.json()) as TrainingResponse;
+      if (body.ok) setItems(body.items);
+      else setError(body.error);
+    } catch {
+      setError("Couldn't reach the server.");
+    }
+  }, []);
+
   const remove = useCallback(async (id: string) => {
     setError(null);
     try {
@@ -133,7 +165,7 @@ export function TrainingDesign({ initial }: { initial: TrainingSummary[] }) {
         </span>
 
         <span className="ml-auto text-[11.5px] text-pf-faint">
-          Not used by page builds yet
+          Read by builds when the merchant uploads nothing
         </span>
       </div>
 
@@ -188,6 +220,7 @@ export function TrainingDesign({ initial }: { initial: TrainingSummary[] }) {
                   onOpen={() => void open(item.id, "view")}
                   onEdit={() => void open(item.id, "edit")}
                   onDelete={() => void remove(item.id)}
+                  onToggle={() => void toggle(item)}
                 />
               </motion.div>
             ))}
@@ -223,12 +256,14 @@ function Card({
   onOpen,
   onEdit,
   onDelete,
+  onToggle,
 }: {
   item: TrainingSummary;
   busy: boolean;
   onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onToggle: () => void;
 }) {
   /* Two presses to delete, in place. A modal for one reference is more ceremony
      than the act deserves; doing it silently on one press is less. */
@@ -276,7 +311,14 @@ function Card({
 
       <div className="grid gap-2 p-3">
         <div className="flex items-center gap-2">
+          {/* The switch, and it is first because it is the state of the card:
+              an operator scanning the grid needs to see which references are
+              live before they read what any of them are. */}
+          <Switch on={item.enabled !== false} onClick={onToggle} />
           <Tag>{verticalLabel(item.vertical)}</Tag>
+          <span className="ml-auto text-[10.5px] text-pf-faint">
+            {item.enabled === false ? "ignored" : "in use"}
+          </span>
         </div>
 
         {item.note && (
@@ -306,6 +348,36 @@ function Card({
         </div>
       </div>
     </Panel>
+  );
+}
+
+/**
+ * On means a build may read this reference. Off means it must not.
+ *
+ * A switch rather than a delete, because they are different acts. A reference
+ * an operator has doubts about should stop reaching merchants at once and stay
+ * filed so it can be looked at again; deleting throws away the screenshots.
+ */
+function Switch({ on, onClick }: { on: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      role="switch"
+      aria-checked={on}
+      aria-label={on ? "Turn off" : "Turn on"}
+      className={[
+        "relative h-5 w-9 shrink-0 rounded-full border transition-colors duration-150",
+        on ? "border-pf-accent bg-pf-accent" : "border-pf-border bg-pf-surface",
+      ].join(" ")}
+    >
+      <span
+        className={[
+          "absolute top-1/2 size-3.5 -translate-y-1/2 rounded-full bg-white transition-all duration-150",
+          on ? "left-[18px]" : "left-[2px] opacity-60",
+        ].join(" ")}
+      />
+    </button>
   );
 }
 
@@ -437,7 +509,15 @@ function EditDialog({
       const res = await fetch("/api/admin/training", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: item?.id, vertical, note: note.trim() || null, images }),
+        body: JSON.stringify({
+          id: item?.id,
+          vertical,
+          note: note.trim() || null,
+          /* Carried through, or saving an edit would silently turn a reference
+             the operator had switched off back on. */
+          enabled: item?.enabled !== false,
+          images,
+        }),
       });
       const body = (await res.json()) as TrainingResponse;
       if (body.ok) onSaved(body.items);

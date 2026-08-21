@@ -2,6 +2,8 @@ import { Pool } from "pg";
 import type {
   JobRecord,
   TrainingImage,
+  TrainingSection,
+  TrainingSectionSummary,
   TrainingSummary,
   PhotoRecord,
   AdminStats,
@@ -133,6 +135,37 @@ create table if not exists training_items (
 );
 create index if not exists training_vertical on training_items (vertical, created_at desc);
 
+/* A switch rather than a delete. An operator unsure about a reference should be
+   able to stop it reaching merchants at once and still have it filed. Defaults
+   true: every row that existed before the column was filed to be used. */
+alter table training_items add column if not exists enabled boolean not null default true;
+
+/* Reference screenshots for ONE ELEMENT, plus Haiku's reading of them.
+
+   the analysis column is why this table exists rather than being a flag on the one
+   above. DeepSeek cannot see an image, so a screenshot is worth nothing to a
+   build until something has turned it into text — and doing that at build time
+   is a vision call and several seconds on every page. Read once here, it costs
+   nothing for ever, and an operator can see what was understood before it
+   changes a merchant's page.
+
+   the element column is unique: one entry per PageFly element, holding as many
+   screenshots as an operator wants. Two entries for ProductBox would leave a
+   build choosing between two collections for one element. */
+create table if not exists training_sections (
+  id          text primary key,
+  element     text not null,
+  note        text,
+  analysis    text,
+  analysed_at timestamptz,
+  enabled     boolean not null default true,
+  images      jsonb not null default '[]'::jsonb,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+create unique index if not exists training_sections_element
+  on training_sections (lower(element));
+
 /* A reference started as one screenshot and became several. The column is added
    rather than replaced, and the rows written before it are folded into the new
    shape, so nothing filed under the old one is lost. */
@@ -206,6 +239,23 @@ export function createPostgresRepo(url: string): Repo {
 /** Tolerates the older array-of-strings shape as well as the current one. The
     DDL converts stored rows, but a row written by an instance still running the
     previous build during a deploy would arrive here in the old shape. */
+/** One `training_sections` row, or null when there was none. */
+function rowToSection(r: Record<string, unknown> | undefined): TrainingSection | null {
+  if (!r) return null;
+  const text = (v: unknown) => (v === null || v === undefined ? null : String(v));
+  return {
+    id: String(r.id),
+    element: String(r.element),
+    note: text(r.note),
+    analysis: text(r.analysis),
+    analysedAt: iso(r.analysed_at) ?? null,
+    enabled: r.enabled !== false,
+    images: normalizeImages(r.images),
+    createdAt: iso(r.created_at) ?? "",
+    updatedAt: iso(r.updated_at) ?? "",
+  };
+}
+
 function normalizeImages(value: unknown): TrainingImage[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -501,7 +551,7 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       /* The first image only. Selecting the whole array here is what would make
          an admin page weigh tens of megabytes. */
       const { rows } = await db.query(
-        `select id, vertical, note, created_at, updated_at,
+        `select id, vertical, note, enabled, created_at, updated_at,
                 coalesce(images -> 0 ->> 'src', '') as cover,
                 jsonb_array_length(images)         as image_count
            from training_items
@@ -512,6 +562,7 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
           id: String(r.id),
           vertical: String(r.vertical),
           note: r.note === null || r.note === undefined ? null : String(r.note),
+          enabled: r.enabled !== false,
           cover: String(r.cover ?? ""),
           imageCount: Number(r.image_count ?? 0),
           createdAt: iso(r.created_at) ?? "",
@@ -523,7 +574,7 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
     async getTrainingItem(id) {
       await ready();
       const { rows } = await db.query(
-        `select id, vertical, note, images, created_at, updated_at
+        `select id, vertical, note, enabled, images, created_at, updated_at
            from training_items where id = $1`,
         [id],
       );
@@ -533,6 +584,7 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
         id: String(r.id),
         vertical: String(r.vertical),
         note: r.note === null || r.note === undefined ? null : String(r.note),
+        enabled: r.enabled !== false,
         images: normalizeImages(r.images),
         createdAt: iso(r.created_at) ?? "",
         updatedAt: iso(r.updated_at) ?? "",
@@ -545,18 +597,20 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
          the column is only still here so rows written before this change could
          be folded forward. */
       await db.query(
-        `insert into training_items (id,vertical,note,image,images,created_at,updated_at)
-         values ($1,$2,$3,null,$4,$5,$6)
+        `insert into training_items (id,vertical,note,image,images,enabled,created_at,updated_at)
+         values ($1,$2,$3,null,$4,$5,$6,$7)
          on conflict (id) do update set
            vertical = excluded.vertical,
            note     = excluded.note,
            images   = excluded.images,
+           enabled  = excluded.enabled,
            updated_at = excluded.updated_at`,
         [
           item.id,
           item.vertical,
           item.note,
           JSON.stringify(item.images),
+          item.enabled !== false,
           item.createdAt,
           item.updatedAt,
         ],
@@ -566,6 +620,98 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
     async deleteTrainingItem(id) {
       await ready();
       const { rowCount } = await db.query(`delete from training_items where id = $1`, [id]);
+      return (rowCount ?? 0) > 0;
+    },
+
+    /* ---- training sections ---- */
+
+    async listTrainingSections() {
+      await ready();
+      /* The cover only, same reason as the template listing: selecting every
+         screenshot is what makes an admin page weigh tens of megabytes.
+         `analysis` IS selected — it is text, it is the thing an operator opened
+         the page to read, and it is a few hundred bytes. */
+      const { rows } = await db.query(
+        `select id, element, note, analysis, enabled, created_at, updated_at,
+                coalesce(images -> 0 ->> 'src', '') as cover,
+                jsonb_array_length(images)         as image_count
+           from training_sections
+          order by element`,
+      );
+      return rows.map(
+        (r): TrainingSectionSummary => ({
+          id: String(r.id),
+          element: String(r.element),
+          note: r.note === null || r.note === undefined ? null : String(r.note),
+          analysis:
+            r.analysis === null || r.analysis === undefined ? null : String(r.analysis),
+          enabled: r.enabled !== false,
+          cover: String(r.cover ?? ""),
+          imageCount: Number(r.image_count ?? 0),
+          createdAt: iso(r.created_at) ?? "",
+          updatedAt: iso(r.updated_at) ?? "",
+        }),
+      );
+    },
+
+    async getTrainingSection(id) {
+      await ready();
+      const { rows } = await db.query(
+        `select id, element, note, analysis, analysed_at, enabled, images,
+                created_at, updated_at
+           from training_sections where id = $1`,
+        [id],
+      );
+      return rowToSection(rows[0]);
+    },
+
+    async getTrainingSectionByElement(element) {
+      await ready();
+      /* Matched case-insensitively against the unique index, which is also
+         lower(element) — so this lookup and that constraint agree. */
+      const { rows } = await db.query(
+        `select id, element, note, analysis, analysed_at, enabled, images,
+                created_at, updated_at
+           from training_sections where lower(element) = lower($1)`,
+        [element],
+      );
+      return rowToSection(rows[0]);
+    },
+
+    async saveTrainingSection(item) {
+      await ready();
+      await db.query(
+        `insert into training_sections
+           (id,element,note,analysis,analysed_at,enabled,images,created_at,updated_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         on conflict (id) do update set
+           element     = excluded.element,
+           note        = excluded.note,
+           analysis    = excluded.analysis,
+           analysed_at = excluded.analysed_at,
+           enabled     = excluded.enabled,
+           images      = excluded.images,
+           updated_at  = excluded.updated_at`,
+        [
+          item.id,
+          item.element,
+          item.note,
+          item.analysis,
+          item.analysedAt,
+          item.enabled !== false,
+          JSON.stringify(item.images),
+          item.createdAt,
+          item.updatedAt,
+        ],
+      );
+    },
+
+    async deleteTrainingSection(id) {
+      await ready();
+      const { rowCount } = await db.query(
+        `delete from training_sections where id = $1`,
+        [id],
+      );
       return (rowCount ?? 0) > 0;
     },
 
