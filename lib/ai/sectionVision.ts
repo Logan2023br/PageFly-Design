@@ -20,9 +20,18 @@ import { PAGEFLY_ELEMENTS } from "../pagefly/elements";
 
    THE OUTPUT IS SHAPED LIKE A PATTERN BLOCK, deliberately. `20-patterns.md`
    already describes sections in a form the designer acts on — indentation for
-   nesting, real numbers, a "fails when" line — and the design call already
-   receives blocks in that shape. A reading written any other way would be a
-   second dialect for the same job.
+   nesting, real numbers — and the design call already receives blocks in that
+   shape. A reading written any other way would be a second dialect for the same
+   job.
+
+   AND IT CLASSIFIES EVERY PART, which is the thing a plain description cannot
+   do. `toPagefly.ts` follows three tiers — use the SETTING where the platform
+   has one, write CSS for the look no setting reaches, and BUILD from primitives
+   where there is no element at all — and a reading that does not say which tier
+   a part belongs to leaves the page designer guessing at the one question that
+   decides whether it can be built. A star rating has no PageFly element; a
+   reading that only says "4.8 stars, 42 reviews" gets dropped, and the built
+   page comes out simpler than the reference for no reason anyone can see.
    ========================================================================== */
 
 const MODEL = "claude-haiku-4-5";
@@ -34,15 +43,22 @@ const MAX_IMAGES = 8;
 /**
  * The ceiling on what gets stored, in characters.
  *
- * A build pastes this text into a prompt, so its length is a cost paid on every
- * page for ever. 1,400 characters is about 380 tokens: enough for the structure,
- * the numbers and the type treatment, and short enough that three of them
- * together are still smaller than one pattern file.
+ * 3,000 — about 830 tokens. It was 1,400, and 1,400 was wrong.
  *
- * Enforced on the way IN rather than trusted to the prompt's word limit. A model
- * that runs long is not a reason for a merchant's build to get slower.
+ * The reasoning behind the smaller number was that a build pastes this into a
+ * prompt, so its length is a cost paid on every page for ever. True, and it
+ * priced the wrong risk: a reading too short to rebuild from is not cheaper, it
+ * is WASTED. The model spends the tokens, reads "a clean two-column buy box
+ * with generous spacing", and builds something else — so the page costs more and
+ * looks different, which is the outcome the whole feature exists to prevent.
+ *
+ * At 830 tokens, two readings on a page are 1,660 input tokens against a first
+ * call of about 8,000. Input is the cheap side and it is the side that buys
+ * fidelity. What it does not buy is certainty about the OUTPUT: Phase 3 measured
+ * that a more precise spec draws more reasoning, and that is the number to watch
+ * after the first real builds rather than to guess at now.
  */
-const MAX_ANALYSIS = 1400;
+const MAX_ANALYSIS = 3000;
 
 type ImagePart = {
   type: "image";
@@ -73,32 +89,63 @@ export function canAnalyseSections(): boolean {
 function prompt(element: string): string {
   return [
     `These are reference screenshots of one PageFly element: ${element}.`,
-    `Several shots of the same kind of section, filed by an operator as examples`,
-    `of how it should be built.`,
+    `Several examples an operator filed of how it should be built.`,
     ``,
-    `Write ONE description another model will build from. It cannot see these`,
-    `images and will only ever have your words.`,
+    `Write ONE specification another model will build from. It cannot see these`,
+    `images and will only ever have your words, so anything you leave out is a`,
+    `decision it makes instead of you — and it will make a different one.`,
     ``,
-    `Format — indentation is nesting, exactly this shape:`,
+    `MEASURE, DO NOT ADMIRE. "48% / 52%, gap 56" is usable; "balanced columns"`,
+    `is not. Every line below wants numbers or names, not adjectives.`,
     ``,
-    `  <element> — <what makes this one work, one line>`,
-    `  <structure, indented, with the real numbers>`,
-    `  <type treatment: sizes, weight, letter-spacing, case>`,
-    `  <what carries the colour, and where>`,
-    `  *Fails when:* <the one mistake that breaks it>`,
+    `Cover all of these. Say "not visible" for any you genuinely cannot read —`,
+    `that is more useful than a guess:`,
     ``,
-    `RULES.`,
-    `Numbers, not adjectives. "48% / 52%, gap 56" — not "balanced columns".`,
-    `Name the SETTINGS a PageFly element would carry: a thumbnail strip, a`,
-    `column count, a badge corner, a scrim. Not the CSS to fake them.`,
-    `Say what is REPEATED and how many: "5 thumbs", "3 trust lines".`,
-    `Describe the shape and the treatment. NEVER carry over the reference's`,
-    `words, its product, its industry or its claims — a different store will be`,
-    `built from this.`,
-    `Where the shots disagree, describe what they have in common and say which`,
-    `part varies.`,
+    `  STRUCTURE   the parts in order, top to bottom, indented for nesting.`,
+    `              Column ratios, the gap between them, how many of anything`,
+    `              repeated. Which parts sit in a row and which stack.`,
+    `  SPACING     section padding, and the gap between each pair of rows.`,
+    `              Give px. If it steps — 8 / 16 / 32 — say so.`,
+    `  TYPE        per text role: size in px, weight, letter-spacing, case,`,
+    `              line-height, and whether the face is grotesk, serif, mono or`,
+    `              condensed. Name the roles: eyebrow, display, body, caption,`,
+    `              label, price.`,
+    `  COLOUR      the ground, the ink, and what carries the accent — and WHERE`,
+    `              the accent is used, because one word in a headline and a solid`,
+    `              button are different designs. Give opacity where text is`,
+    `              muted (.5, .7).`,
+    `  BORDER      width, colour, and radius, per part. A 0px radius and a 14px`,
+    `              radius are two different products.`,
+    `  BACKGROUND  flat colour, gradient (say the direction and both stops),`,
+    `              photograph, or video. If text sits on an image, say how dark`,
+    `              the scrim is.`,
+    `  STATES      anything visibly interactive: hover, active thumbnail,`,
+    `              selected swatch, disabled.`,
     ``,
-    `No preamble. No markdown headings. Under 200 words.`,
+    `THEN, AND THIS IS THE PART THAT DECIDES WHETHER IT CAN BE BUILT.`,
+    `For each part, say which of three it is:`,
+    ``,
+    `  SETTING — PageFly has an element or a field for it. Name the field:`,
+    `            "thumbnail strip: ProductMedia3 showList, position LEFT",`,
+    `            "4 across: ContentList2 slidesToShow 4",`,
+    `            "quantity stepper: ProductQuantity".`,
+    `  STYLE   — the element exists and only its look differs. Say the CSS:`,
+    `            "the dots are 7px, currentColor at .22, .75 when active".`,
+    `  BUILD   — PageFly has NO element for it. Say so, and say what to build it`,
+    `            from: a row of an icon and two text nodes, a flex column, a`,
+    `            custom block. A star rating, a "12 people viewing" line and a`,
+    `            SAVE 33% pill are all this case, and leaving them out because`,
+    `            there is no element is how the built page ends up simpler than`,
+    `            the reference.`,
+    ``,
+    `NEVER carry over the reference's words, its product, its industry or its`,
+    `claims. A different store will be built from this: you are describing the`,
+    `shape, the numbers and the treatment, never the content.`,
+    ``,
+    `Where the shots disagree, describe what they share and name the part that`,
+    `varies.`,
+    ``,
+    `No preamble, no markdown headings, no summary. Under 450 words.`,
   ].join("\n");
 }
 
@@ -143,7 +190,7 @@ export async function readSection(
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 700,
+        max_tokens: 1600,
         messages: [
           { role: "user", content: [...parts, { type: "text", text: prompt(element) }] },
         ],

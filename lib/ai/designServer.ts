@@ -287,8 +287,24 @@ async function trainingLines(order: Order | null): Promise<string[]> {
 
   if (found.length === 0) return [];
   return [
-    `HOW THESE ELEMENTS ARE BUILT WELL. Written from screenshots an operator`,
-    `filed. Follow the structure and the numbers; the words are this store's.`,
+    `HOW THESE ELEMENTS ARE BUILT WELL. Read off screenshots an operator filed.`,
+    `Follow the structure, the numbers and the treatment exactly. The WORDS are`,
+    `this store's — never the reference's product, industry or claims.`,
+    ``,
+    /* Each part of a reading is tagged, because the tag answers the only
+       question that decides whether it can be built at all. Spelled out here
+       rather than left to be inferred: a part tagged BUILD and skipped is how a
+       page comes out simpler than the reference it was built from, and nobody
+       looking at the result can tell that is what happened. */
+    `Each part is tagged. Act on the tag:`,
+    `  SETTING — set that field on that node. Do not draw it.`,
+    `  STYLE   — write that CSS.`,
+    `  BUILD   — there is NO element for it. Build it from rows, text and icons`,
+    `            anyway. A star rating, a "12 people viewing" line, a SAVE 33%`,
+    `            pill: these are the parts with no element, and leaving one out`,
+    `            because it has no element is how the page ends up plainer than`,
+    `            the reference for no reason a merchant can see. Inside a`,
+    `            \`product\` node they go in \`extras\`.`,
     ``,
     ...found,
   ];
