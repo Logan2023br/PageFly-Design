@@ -203,6 +203,69 @@ async function main(): Promise<void> {
   check(freeform.sections.length > 0, "free text produced no order");
   check(freeform.vertical === "general", "free text should fall to general", freeform.vertical);
 
+  /* ---- the buy box has to be dense ------------------------------------- */
+
+  console.log("\na bare buy box");
+
+  const { audit } = await import("../lib/design/audit");
+  const pdpOrder = planPage(
+    { whatYouSell: "Audio & headphones", verticalSlug: "audio-headphones", visualStyle: "dark" } as never,
+    "product",
+    seedFor("audun.myshopify.com", "product", "dark"),
+  );
+
+  const buyBox = (extras: unknown[]) => ({
+    sections: pdpOrder.sections.map((s, i) => ({
+      type: "section",
+      pattern: s.pattern,
+      role: s.role,
+      css: { padding: "96px 56px" },
+      children:
+        i === 0
+          ? [{ type: "product", title: "Theta Pro", price: "$134", atcText: "Add to cart", extras }]
+          : [{ type: "heading", level: 2, text: "92% of 2,000 buyers" }],
+    })),
+  });
+
+  const bare = audit(buyBox([]) as never, pdpOrder);
+  const dense = audit(
+    buyBox([
+      { type: "text", text: "Ships in 24 hours" },
+      { type: "text", text: "30-day returns" },
+    ]) as never,
+    pdpOrder,
+  );
+
+  /* Printed rather than silent. `check` above says nothing on success, which is
+     right for a 2,970-order sweep and wrong for three targeted assertions — a
+     block that prints nothing cannot be read. */
+  const thin = (p: string[]) => p.filter((x) => /extra row/.test(x));
+  console.log(`  bare column   → ${thin(bare).length} complaint(s)`);
+  console.log(`  two rows      → ${thin(dense).length} complaint(s)`);
+  check(thin(bare).length === 1, "a bare title-price-cart column is flagged", thin(bare)[0]?.slice(0, 52));
+  check(thin(dense).length === 0, "two rows is enough to satisfy it");
+
+  /* And it must not fire on a page with no buy box at all. */
+  const homeOrder = planPage(
+    { whatYouSell: "Audio & headphones", verticalSlug: "audio-headphones", visualStyle: "dark" } as never,
+    "home",
+    seedFor("audun.myshopify.com", "home", "dark"),
+  );
+  const home = audit(
+    {
+      sections: homeOrder.sections.map((s) => ({
+        type: "section",
+        pattern: s.pattern,
+        role: s.role,
+        css: { padding: "96px 56px" },
+        children: [{ type: "heading", level: 2, text: "One harvest, one farm" }],
+      })),
+    } as never,
+    homeOrder,
+  );
+  console.log(`  no buy box    → ${thin(home).length} complaint(s)`);
+  check(thin(home).length === 0, "and silent on a page with no buy box");
+
   console.log();
   if (failures === 0) {
     console.log("PASS");

@@ -370,16 +370,24 @@ section  padding 64px 56px  container 1180
   product  layout "sideBySide"  gallery true  galleryEdge "bottom"
            swatches 3-6  compareAt set  atcText the merchant's own words
 ```
-This is the whole section. Do not put an eyebrow, a display heading or a trust
-row inside it — the product's own title IS the page's h1, and anything above it
-pushes the price below the fold.
-
 `gallery true` is not decoration: it turns on the thumbnail strip inside the one
 media element, which is how PageFly models a gallery. Never draw a main image
 plus a separate row of small images.
 
-Put the trust strip in the NEXT section, never inside this one.
-*Fails when:* a heading is added above the product and the price lands at 900px.
+The buy column is the densest thing on the page. A bare title-price-cart column
+is the clearest tell of a generated product page. Use `extras` — 2 to 4 rows,
+and vary them by trade.
+
+Only one thing is forbidden above the title: a DISPLAY heading (56px+). That
+costs 90px of vertical and pushes the price under the fold. An eyebrow at 11px
+costs 20px and buys the column its category, so it is welcome. Everything BELOW
+the cart button — trust rows, measured values, a delivery line — costs the price
+nothing and belongs here, not in the next section.
+
+Do not fix a shape. What goes in `extras` comes from the vertical and from the
+filed reference for this element, never from this file.
+*Fails when:* a display heading is added above the product and the price lands
+at 900px.
 <!--/-->
 
 <!--#product-detail-wide-->

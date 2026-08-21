@@ -195,6 +195,35 @@ export function audit(
       );
   });
 
+  /* ==========================================================================
+     A BUY BOX WITH NOTHING BUT TITLE, PRICE AND CART IS A THIN BUY BOX.
+
+     `20-patterns.md` asks for 2 to 4 `extras` rows, and a sentence in a pattern
+     with nothing checking it is a sentence the model can skip — which is how the
+     buy box stayed bare while the pattern said otherwise.
+
+     A COUNT, and only a count. This file does not say what the rows should BE:
+     a trust line, a measured value, a delivery promise and a rating are all
+     right, and which of them belongs comes from the vertical and the filed
+     reference for the element. Naming them here would give every trade the same
+     buy box, which is the disease the whole resolver exists to treat.
+     ========================================================================== */
+  order.sections.forEach((want, i) => {
+    if (!want.pattern?.startsWith("product-detail")) return;
+    const box = walk(sections[i] ?? ({} as DesignSection)).find(
+      (n): n is Extract<DesignNode, { type: "product" }> => n.type === "product",
+    );
+    if (!box) return;
+    const rows = (box.extras ?? []).length;
+    if (rows < 2)
+      problems.push(
+        `The buy box has ${rows} extra row${rows === 1 ? "" : "s"}. A bare ` +
+          `title-price-cart column is the clearest tell of a generated product page — ` +
+          `add 2 to 4 rows in "extras" under the cart button, drawn from what this ` +
+          `trade actually proves.`,
+      );
+  });
+
   order.sections.forEach((want, i) => {
     const got = sections[i] as (DesignSection & { pattern?: string }) | undefined;
     if (!got) return;
