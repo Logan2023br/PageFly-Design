@@ -79,6 +79,15 @@ export type OrderSection = {
   mayHaveBg: boolean;
 };
 
+/**
+ * One decided slot: a role, and the pattern that fills it.
+ *
+ * The unit both deciders speak in — `planPage` resolving from the arc, and
+ * `structure.ts` reading a model's answer. Everything downstream of a list of
+ * these is shared, which is the point of naming it.
+ */
+export type Slot = { role: SectionRole; pattern: string };
+
 export type Order = {
   vertical: string;
   archetype: "A" | "B" | "C" | "D" | "E" | "F" | "G";
@@ -647,7 +656,7 @@ export function planPage(
 
   /* Pattern per slot. The candidate list for the role, minus the vertical's
      bans, minus what this page already used — then the seed picks. */
-  const chosen: { role: SectionRole; pattern: string }[] = [];
+  const chosen: Slot[] = [];
 
   /* The signature slot is decided BEFORE the others and gets the vertical's own
      signature pattern. The first version put that pattern at the head of the
@@ -725,11 +734,34 @@ export function planPage(
     chosen.push({ role, pattern: pick });
   });
 
+  return finish(chosen, { vertical, row, seed, preferredSignature: signatureSlot });
+}
+
+/* ==========================================================================
+   THE RHYTHM, applied to a decided list of slots.
+
+   Split out of `planPage` so that a list of slots decided some OTHER way — by a
+   model, in `structure.ts` — arrives at the same page. Everything below this
+   line is composition rather than choice: which band is the signature, which
+   are dark, which get room, which may carry a photograph, which move. None of
+   it is a matter of taste per trade, all of it is measured by `test-plan.ts`,
+   and duplicating it for a second caller is how the two would drift.
+
+   `preferredSignature` is the index the caller already knows wants it — the arc
+   slot holding the vertical's own signature pattern — or -1 to let the rules
+   below decide from scratch.
+   ========================================================================== */
+function finish(
+  chosen: Slot[],
+  ctx: { vertical: string; row: VerticalRow; seed: string; preferredSignature: number },
+): Order {
+  const { vertical, row, seed } = ctx;
+
   /* The signature slot: the vertical's signature pattern where the arc has it,
      otherwise the first `media` slot, otherwise the longest non-hero slot. The
      hero is never the signature — it is the opening, and a page whose only
      investment is its first screen has nothing below the fold. */
-  let signatureIndex = signatureSlot;
+  let signatureIndex = ctx.preferredSignature;
 
   /* WHERE THE ARC PUTS COMMERCE IS WHETHER COMMERCE IS THE POINT.
 
