@@ -14,15 +14,19 @@ import {
   OVERLAY,
   SCRIM_CSS,
   P4,
+  DYNAMIC_CHECKOUT,
   PRODUCT_ATC,
+  PRODUCT_BADGE,
   PRODUCT_BOX,
   PRODUCT_LIST,
   PRODUCT_MEDIA,
   PRODUCT_PRICE,
+  PRODUCT_QUANTITY,
   PRODUCT_SWATCHES,
   PRODUCT_TITLE,
   SLIDESHOW,
   SLIDESHOW_PARTS,
+  STOCK_INDICATOR,
   ACCORDION,
   ACCORDION_HEADER,
   Page,
@@ -547,6 +551,15 @@ export type EmitOptions = {
    * element on an imported page that looks like it belongs to a different site.
    */
   accent?: string;
+  /**
+   * The page's border colour.
+   *
+   * The quantity stepper and the express checkout button are outlined controls,
+   * and the platform leaves both unstyled — a native input and a native button.
+   * Given no colour they arrive in the browser's own grey, which on a designed
+   * page is the one detail that says the section came from somewhere else.
+   */
+  border?: string;
   /** icon name → raw <svg> markup; icons are dropped when this is absent */
   iconSvg?: (name: string) => string | null;
   /* Custom blocks write their own CSS and JS, and both belong on the PAGE
@@ -929,6 +942,22 @@ function productBox(
       },
     },
     { show: node.gallery, edge: EDGE[node.galleryEdge] },
+    /* A CHILD of the media element, shown by its own flag. A badge drawn on top
+       needs `position:absolute`, which is banned, and `fields.md` says a
+       separate badge node is dropped on import. */
+    (node.badge ?? "").trim()
+      ? {
+          node: PRODUCT_BADGE(node.badge.trim(), {
+            all: {
+              "&":
+                "padding: 5px 10px; border-radius: 4px; font-size: 11px;" +
+                " font-weight: 700; letter-spacing: .08em; text-transform: uppercase;" +
+                ` background-color: ${opts.accent ?? "#111114"}; color: #ffffff;`,
+            },
+          }),
+          corner: node.badgeCorner ?? "TOP_LEFT",
+        }
+      : undefined,
   );
 
   const info = FB(
@@ -990,6 +1019,42 @@ function productBox(
       /* The label must read exactly as the mockup showed it — left unset,
          PageFly renders its own "Add to Cart", which may not be the words the
          merchant just approved. */
+      /* ==========================================================================
+         SLOT ORDER, and it is the platform's rather than ours.
+
+         `fields.md`: the express checkout goes on its own row BELOW the cart
+         button, and PAIRS with it rather than replacing it. Quantity and stock
+         go above — a shopper picks how many and checks it is available before
+         they commit, and a stepper under the button is a stepper nobody sees.
+         ========================================================================== */
+      ...(node.qty
+        ? [
+            PRODUCT_QUANTITY({
+              all: {
+                "&": "display: flex !important; align-items: stretch; width: fit-content;",
+                "& input":
+                  `width: 56px; text-align: center; border: 1px solid ${opts.border ?? "rgba(0,0,0,.16)"}; ${inkRule(opts)}`,
+                "& button":
+                  `width: 40px; border: 1px solid ${opts.border ?? "rgba(0,0,0,.16)"}; background: transparent; ${inkRule(opts)}`,
+              },
+            }),
+          ]
+        : []),
+      ...(node.stock
+        ? [
+            /* The colours are passed because the component's defaults were
+               chosen against a white theme: on a near-black page the green is
+               the only one of the three that reads. */
+            STOCK_INDICATOR({
+              all: {
+                "&": "font-size: 12.5px; letter-spacing: .06em; text-transform: uppercase;",
+              },
+            }),
+          ]
+        : []),
+      /* The label must read exactly as the mockup showed it — left unset,
+         PageFly renders its own "Add to Cart", which may not be the words the
+         merchant just approved. */
       PRODUCT_ATC(
         {
           all: {
@@ -1000,6 +1065,23 @@ function productBox(
         },
         node.atcText,
       ),
+      ...(node.express
+        ? [
+            DYNAMIC_CHECKOUT({
+              all: {
+                "&": "width: 100%;",
+                "& .shopify-payment-button__button--unbranded":
+                  `width: 100%; padding: 13px 22px; background: transparent;` +
+                  ` border: 1px solid ${opts.border ?? "rgba(0,0,0,.24)"}; ${inkRule(opts)}`,
+              },
+            }),
+          ]
+        : []),
+      /* The design's own rows — a rating line, trust lines, a caption. Static
+         presentation only; the schema refuses anything that needs a binding. */
+      ...(node.extras ?? [])
+        .map((child) => emit(child, "vertical", opts))
+        .filter((n): n is PFNode => n !== null),
     ],
   );
 

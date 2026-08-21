@@ -381,6 +381,27 @@ const icon = z.object({
 
 /* ---- composites: the model places them, the builder expands them --------- */
 
+/**
+ * `product.extras`, deferred.
+ *
+ * `product` is declared out here rather than inside the lazy union below, so it
+ * cannot name `node` directly. `z.lazy` closes over it and is called at PARSE
+ * time, long after the module has finished initialising — the same trick the
+ * union itself uses, for the same reason.
+ *
+ * The four refused types are refused because each needs a product binding or a
+ * behaviour of its own: inside a ProductBox they would fight the box's own
+ * binding, and a nested `product` is a buy box inside a buy box.
+ */
+const NOT_AN_EXTRA = new Set(["product", "productList", "form", "sticky"]);
+
+const productExtras: z.ZodType<DesignNode[]> = z.lazy(() =>
+  list(
+    node.refine((n) => !NOT_AN_EXTRA.has((n as { type: string }).type)),
+    6,
+  ),
+);
+
 const product = z.object({
   type: z.literal("product"),
   layout: choice(["sideBySide", "stacked"] as const, "sideBySide"),
@@ -405,6 +426,53 @@ const product = z.object({
   gallery: flag(false),
   /** where the strip sits relative to the main image */
   galleryEdge: choice(["bottom", "left", "right", "top"] as const, "bottom"),
+
+  /* ==========================================================================
+     FOUR THINGS PAGEFLY ALREADY HAS, and the buy box was shipping without.
+
+     A reference showing a quantity stepper, a stock line, an express checkout
+     button or a corner badge could not be built at all: the vocabulary had no
+     way to ask for them, so the model either left them out or drew them, and a
+     drawn stepper is three boxes nobody can press.
+
+     Flags rather than something the design composes, because each is bound to
+     the product. A stock line written as copy says IN STOCK on a sold-out
+     variant; a hand-placed badge needs `position:absolute`, which is banned for
+     the reason the whole ban exists.
+     ========================================================================== */
+
+  /** the − 1 + stepper. `ProductQuantity`, on the same product. */
+  qty: flag(false),
+  /** "IN STOCK" / "Only 3 left" / "Sold out", from real inventory. */
+  stock: flag(false),
+  /** "Buy it now" — Shopify express checkout, on its own row BELOW the cart. */
+  express: flag(false),
+  /** a corner badge over the photograph: "NEW", "-33%". Empty means none. */
+  badge: words(20),
+  badgeCorner: choice(
+    ["TOP_LEFT", "TOP_RIGHT", "BOTTOM_LEFT", "BOTTOM_RIGHT"] as const,
+    "TOP_LEFT",
+  ),
+
+  /**
+   * Rows of your own, in the buy column, under the cart button.
+   *
+   * THE OPEN SLOT, and the closed composite was the real limit. `product` has
+   * no `children`: the design places it and the builder expands it, which is
+   * what keeps ProductBox's required slot order correct. The cost was that a
+   * reference showing `4.8 ★ 42 reviews`, or three trust lines under the cart
+   * button, could not be built — the fields did not cover it and there was
+   * nowhere to put it.
+   *
+   * STATIC PRESENTATION ONLY, and that distinction is the one this file keeps
+   * making. A rating row is an icon and two numbers: nothing binds, nothing
+   * behaves, and the merchant swaps in their review app later. A product grid
+   * or a cart button is the opposite — it needs binding or behaviour, and
+   * hand-built it is a dead picture. Those are refused here; everything else is
+   * allowed.
+   */
+  extras: productExtras,
+
   query: words(120, "product photography"),
   ...styled,
 });
@@ -642,7 +710,31 @@ export type DesignNode =
   | z.infer<typeof image>
   | z.infer<typeof divider>
   | z.infer<typeof icon>
-  | z.infer<typeof product>
+  | {
+      /* Written out rather than inferred: `extras` holds DesignNode[], and
+         `z.infer` on a schema whose own type refers back to this union is a
+         circular reference TypeScript resolves to `any`. Every other container
+         in this file is written out for the same reason. */
+      type: "product";
+      layout: "sideBySide" | "stacked";
+      title: string;
+      price: string;
+      compareAt?: string;
+      atcText: string;
+      swatches: number;
+      gallery: boolean;
+      galleryEdge: "bottom" | "left" | "right" | "top";
+      qty: boolean;
+      stock: boolean;
+      express: boolean;
+      badge: string;
+      badgeCorner: "TOP_LEFT" | "TOP_RIGHT" | "BOTTOM_LEFT" | "BOTTOM_RIGHT";
+      extras: DesignNode[];
+      query: string;
+      css?: Css;
+      mobile?: Css;
+      anim?: Anim;
+    }
   | z.infer<typeof productList>
   | z.infer<typeof form>
   | z.infer<typeof custom>

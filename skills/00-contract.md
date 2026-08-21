@@ -41,7 +41,8 @@ This is the entire alphabet. There is nothing else.
 {"type":"image","query":"","ratio":1,"css":{}}             query = English stock-photo terms
 {"type":"icon","name":"truck","css":{}}
 {"type":"divider","css":{}}
-{"type":"product","title":"","price":"","compareAt":"","atcText":"","swatches":4,"query":"","layout":"sideBySide","gallery":true,"galleryEdge":"bottom"}
+{"type":"product","title":"","price":"","compareAt":"","atcText":"","swatches":4,"query":"","layout":"sideBySide",
+ "gallery":true,"galleryEdge":"bottom","qty":true,"stock":true,"express":true,"badge":"NEW","extras":[]}
 {"type":"productList","columns":3,"limit":6,"source":"collection","listLayout":"grid","query":""}
 {"type":"accordion","items":[{"q":"","a":""}]}
 {"type":"form","intent":"contact","fields":[{"label":"","kind":"text","required":true}],"submitText":""}
@@ -74,6 +75,29 @@ put `image` nodes beside it for the product's own photos.
 right | top`. That flag IS the gallery — one element with a setting. Do not model
 a gallery as a main image plus a row of small images: that second form has no
 product binding and lands on the storefront as raw template code.
+
+Four more flags, each a real element bound to the product. Turn one on when the
+reference has it and leave it off when it does not — none of them is decoration
+and all four are free:
+
+  - `qty` — the − 1 + stepper. On a considered purchase; off where nobody buys
+    two.
+  - `stock` — "In stock" / "Only 3 left" / "Sold out", from real inventory.
+    Never write that line as copy: written as copy it says IN STOCK on a
+    sold-out variant for ever.
+  - `express` — "Buy it now", Shopify's own express checkout, on its own row
+    under the cart button. It PAIRS with the cart button; it does not replace
+    it.
+  - `badge` — a corner word over the photograph: `"NEW"`, `"-33%"`.
+    `badgeCorner` places it. Never draw one: a box on top of an image needs
+    `position`, which is forbidden.
+
+`extras` is for rows the fields do not cover — a rating line, three trust lines,
+a caption under the cart button. STATIC PRESENTATION ONLY: an `icon` and two
+numbers for `4.8 ★ 42 reviews` is right, because nothing binds and nothing
+behaves and the merchant plugs their review app in later. A `productList` or a
+`form` in there is refused, for the reason everything else on this page is: it
+would need a binding it cannot have.
 
 **`productList`** is EVERY grid of real products. Never build a product grid by
 hand out of image + heading + text: those are dead pictures with invented names
@@ -242,6 +266,9 @@ and you should not fight them:
     for a phone buy bar. You never write either; the node is the whole answer.
   - `"action":"atc"` → the add-to-cart element, its post-add behaviour, and
     whether it binds to the page's product or asks the merchant to pick one
+  - `qty`, `stock`, `express`, `badge` → four bound elements and their slot
+    order. Quantity and stock go above the cart button, express below it — you
+    write the flags, not the order
 
 That last one is why you write `maxWidth` on a `col` INSIDE the section and never
 on the section itself: the section is full-bleed and the container inside it is

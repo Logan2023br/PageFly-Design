@@ -931,6 +931,89 @@ async function main(): Promise<void> {
     "a link is still a link",
   );
 
+  /* ---- the buy box, with everything the reference had ------------------- */
+
+  console.log("\na buy box with all four flags");
+
+  const full = await open({
+    sections: [
+      section(
+        [
+          {
+            type: "product",
+            layout: "sideBySide",
+            gallery: true,
+            galleryEdge: "left",
+            swatches: 1,
+            qty: true,
+            stock: true,
+            express: true,
+            badge: "NEW",
+            badgeCorner: "TOP_LEFT",
+            title: "EDC Tactical Pen",
+            price: "$134.20",
+            compareAt: "$201.30",
+            atcText: "Add to cart",
+            extras: [
+              {
+                type: "row",
+                css: { gap: "8px", alignItems: "center" },
+                children: [
+                  { type: "icon", name: "star" },
+                  { type: "text", text: "4.8" },
+                  { type: "text", text: "42 reviews" },
+                ],
+              },
+            ],
+          },
+        ],
+        "product-detail-gallery",
+      ),
+    ],
+  });
+
+  const has = (t: string) => full.items.some((i) => i.type === t);
+  check(has("ProductQuantity"), "qty became a ProductQuantity");
+  check(
+    full.items.filter((i) => i.type === "QuantityButton").length === 2 && has("QuantityField"),
+    "with both buttons and the field, in that order",
+  );
+  check(has("StockIndicator"), "stock became a StockIndicator");
+  check(has("ProductDynamicCheckout"), "express became a ProductDynamicCheckout");
+  check(has("ProductBadge"), "badge became a ProductBadge");
+
+  /* The badge is shown by the FLAG. Emitted as a child with showBadge left
+     false it imports and never renders — present, correct, invisible. */
+  const fullMedia = full.items.find((i) => i.type === "ProductMedia3");
+  check(fullMedia?.data?.showBadge === true, "shown by the media element's own flag");
+  check(fullMedia?.data?.badgePosition === "TOP_LEFT", "in the corner asked for");
+
+  /* Slot order is the platform's: quantity and stock above the cart button,
+     express below it. A stepper under the button is a stepper nobody sees. */
+  const infoBlock = full.items.find(
+    (i) =>
+      i.type === "FlexBlock" &&
+      i.children.some((c) => full.items.find((x) => x.id === c)?.type === "ProductATC2"),
+  );
+  const order = (infoBlock?.children ?? []).map(
+    (c) => full.items.find((x) => x.id === c)?.type ?? "?",
+  );
+  const at = (t: string) => order.indexOf(t);
+  check(at("ProductQuantity") < at("ProductATC2"), "quantity above the cart button", order.join(" · "));
+  check(at("StockIndicator") < at("ProductATC2"), "stock above it too");
+  check(at("ProductDynamicCheckout") > at("ProductATC2"), "express below it");
+
+  /* And `extras` — the open slot, because the composite is closed. */
+  check(
+    at("ProductATC2") < order.length - 1,
+    "the rating row landed after the buy controls",
+    order.join(" · "),
+  );
+  check(
+    full.items.some((i) => String(i.data?.value ?? "") === "42 reviews"),
+    "with the words the design wrote",
+  );
+
   /* ---- and the class the form bug belonged to --------------------------- */
 
   console.log("\nevery element, every page above");
@@ -940,7 +1023,7 @@ async function main(): Promise<void> {
     ...carousel, ...stats.items, ...shaped.items, ...form.items,
     ...stacked.items, ...inRow.items, ...labelled.items,
     ...slider.items, ...exact.items, ...banded.items, ...plain.items, ...unresolved.items,
-    ...rail.items, ...buyBar.items, ...atc.items, ...bound.items, ...plainBtn.items,
+    ...rail.items, ...buyBar.items, ...atc.items, ...bound.items, ...plainBtn.items, ...full.items,
   ];
   /* Body and Layout are excluded: the format doc says both are required and
      carry no styles, they are built outside the element path, and neither has

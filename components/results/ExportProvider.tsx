@@ -129,6 +129,7 @@ export function ExportProvider({ children }: { children: ReactNode }) {
           /* Form2's submit button is unstyled by default — a grey native
              control on an otherwise designed page. */
           accent: page.tokens.accent,
+          border: page.tokens.border,
           iconSvg: (name) => iconMarkup(stageRef.current, name),
         },
       );

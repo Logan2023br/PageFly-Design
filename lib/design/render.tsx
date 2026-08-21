@@ -224,16 +224,77 @@ function Product({ node, cls }: { node: Extract<DesignNode, { type: "product" }>
         ...sx(node, device),
       }}
     >
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
         <div
           data-pf="product-media"
-          style={{ width: "100%", aspectRatio: "1 / 1", background: "#E8E8EC", overflow: "hidden" }}
+          style={{
+            position: "relative",
+            width: "100%",
+            aspectRatio: "1 / 1",
+            background: "#E8E8EC",
+            overflow: "hidden",
+          }}
         >
           {src && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
           )}
+          {/* The corner badge. On the export it is ProductBadge shown by the
+              media element's own flag and placed by `badgePosition`; here it is
+              the same four corners, so the two agree on where it sits. */}
+          {node.badge?.trim() && (
+            <span
+              data-pf="product-badge"
+              style={{
+                position: "absolute",
+                top: node.badgeCorner?.startsWith("TOP") ? 10 : undefined,
+                bottom: node.badgeCorner?.startsWith("BOTTOM") ? 10 : undefined,
+                left: node.badgeCorner?.endsWith("LEFT") ? 10 : undefined,
+                right: node.badgeCorner?.endsWith("RIGHT") ? 10 : undefined,
+                padding: "5px 10px",
+                borderRadius: 4,
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: ".08em",
+                textTransform: "uppercase",
+                background: "#111114",
+                color: "#fff",
+              }}
+            >
+              {node.badge.trim()}
+            </span>
+          )}
         </div>
+
+        {/* The thumbnail strip, when the gallery flag is on. On the export it is
+            ProductMedia3's own `showList`; drawn here so the mockup shows the
+            same page. Off on a phone in both readers. */}
+        {node.gallery && device !== "mobile" && (
+          <div
+            data-pf="product-thumbs"
+            style={{
+              display: "flex",
+              gap: 8,
+              flexDirection:
+                node.galleryEdge === "left" || node.galleryEdge === "right"
+                  ? "column"
+                  : "row",
+            }}
+          >
+            {Array.from({ length: 4 }, (_, i) => (
+              <span
+                key={i}
+                style={{
+                  width: 64,
+                  aspectRatio: "1 / 1",
+                  background: "#E8E8EC",
+                  border: i === 0 ? "1px solid currentColor" : "1px solid rgba(0,0,0,.12)",
+                  overflow: "hidden",
+                }}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 14 }}>
@@ -264,6 +325,43 @@ function Product({ node, cls }: { node: Extract<DesignNode, { type: "product" }>
             ))}
           </div>
         )}
+        {/* Quantity and stock ABOVE the button, express checkout BELOW it —
+            the order `fields.md` gives for the exported slots, so the two
+            readers put them in the same place. */}
+        {node.qty && (
+          <div data-pf="product-qty" style={{ display: "flex", width: "fit-content" }}>
+            {["−", "1", "+"].map((glyph, i) => (
+              <span
+                key={i}
+                style={{
+                  display: "grid",
+                  placeItems: "center",
+                  width: i === 1 ? 56 : 40,
+                  height: 40,
+                  border: "1px solid rgba(0,0,0,.16)",
+                  marginLeft: i === 0 ? 0 : -1,
+                }}
+              >
+                {glyph}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {node.stock && (
+          <span
+            data-pf="product-stock"
+            style={{
+              fontSize: 12.5,
+              letterSpacing: ".06em",
+              textTransform: "uppercase",
+              color: "#22c55e",
+            }}
+          >
+            In stock
+          </span>
+        )}
+
         <span
           data-pf="product-atc"
           style={{
@@ -277,6 +375,27 @@ function Product({ node, cls }: { node: Extract<DesignNode, { type: "product" }>
         >
           {node.atcText}
         </span>
+
+        {node.express && (
+          <span
+            data-pf="product-express"
+            style={{
+              display: "inline-block",
+              textAlign: "center",
+              padding: "13px 22px",
+              border: "1px solid rgba(0,0,0,.24)",
+              fontWeight: 600,
+            }}
+          >
+            Buy it now
+          </span>
+        )}
+
+        {/* The design's own rows, under the buy controls. Same position as the
+            export puts them. */}
+        {(node.extras ?? []).map((child, i) => (
+          <Node key={i} node={child} />
+        ))}
       </div>
     </div>
   );

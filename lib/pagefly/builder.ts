@@ -329,6 +329,8 @@ export function PRODUCT_MEDIA(
   gallery: { show: boolean; edge?: "TOP" | "RIGHT" | "BOTTOM" | "LEFT"; size?: string } = {
     show: false,
   },
+  /** the corner badge, when the design asked for one */
+  badge?: { node: PFNode; corner: "TOP_LEFT" | "TOP_RIGHT" | "BOTTOM_LEFT" | "BOTTOM_RIGHT" },
 ) {
   return node(
     "ProductMedia3",
@@ -346,9 +348,13 @@ export function PRODUCT_MEDIA(
       /* Click-to-zoom on a product page is what a shopper reaches for, and it
          is a setting rather than something to build. */
       clickAction: gallery.show ? "SHOW_FULLSCREEN" : "NONE",
+      /* The badge is shown by the FLAG, not by being present. Emitted as a child
+         with `showBadge` left false, it imports and never renders. */
+      showBadge: Boolean(badge),
+      badgePosition: badge?.corner ?? "TOP_LEFT",
     },
     styleData,
-    [main, list],
+    badge ? [main, list, badge.node] : [main, list],
   );
 }
 
@@ -432,6 +438,88 @@ export function PRODUCT_SWATCHES(
  * defaults are English: a page whose button says `Thêm vào giỏ` and then
  * `Adding...` changes language when you click it.
  */
+/**
+ * The − 1 + stepper.
+ *
+ * SLOT_RULES requires exactly `QuantityButton, QuantityField, QuantityButton` —
+ * decrease, the number, increase. Both buttons appear or neither does, which is
+ * what `showButton` governs, so the two are emitted together and the flag is
+ * left at its default of true: a stepper with no buttons is a number.
+ */
+export function PRODUCT_QUANTITY(styleData: StyleData) {
+  return node(
+    "ProductQuantity",
+    { source: "auto", showButton: true, defaultQuantity: 1 },
+    styleData,
+    [
+      node("QuantityButton", { kind: "minus" }, null, []),
+      node("QuantityField", {}, null, []),
+      node("QuantityButton", { kind: "plus" }, null, []),
+    ],
+  );
+}
+
+/**
+ * "IN STOCK" / "Only 3 left" / "Sold out", from real inventory.
+ *
+ * The three texts are passed so the line is in the page's own language, and the
+ * three colours are passed because the component's defaults are a green, an
+ * orange and a red chosen against a white theme — on a near-black page the green
+ * is the only one that reads.
+ *
+ * `displayOption: "always"` rather than `showIfUnder`: a design that placed a
+ * stock line placed it because the row is part of the composition, and a row
+ * that appears only under five units is a row that shifts the page when
+ * inventory moves.
+ */
+export function STOCK_INDICATOR(
+  styleData: StyleData,
+  texts: { inStock?: string; lowStock?: string; outOfStock?: string } = {},
+) {
+  return node(
+    "StockIndicator",
+    {
+      source: "auto",
+      displayOption: "always",
+      threshold: 5,
+      inStockText: texts.inStock?.trim() || "In stock",
+      lowStockText: texts.lowStock?.trim() || "Only {quantity} left",
+      outOfStockText: texts.outOfStock?.trim() || "Sold out",
+    },
+    styleData,
+    [],
+  );
+}
+
+/**
+ * Shopify's express checkout — "Buy it now", Shop Pay, the wallet buttons.
+ *
+ * `fields.md`: its own row, BELOW ProductATC2, full width. It PAIRS with the
+ * cart button rather than replacing it — a buy box with only express checkout
+ * cannot add to a cart, and one with only a cart button loses the shopper who
+ * wanted to be gone in two taps.
+ */
+export function DYNAMIC_CHECKOUT(styleData: StyleData, label?: string) {
+  return node(
+    "ProductDynamicCheckout",
+    { source: "auto", value: label?.trim() || "Buy it now" },
+    styleData,
+    [],
+  );
+}
+
+/**
+ * The corner badge over the photograph — "NEW", "-33%".
+ *
+ * A CHILD OF THE MEDIA ELEMENT, shown by its `showBadge` flag and positioned by
+ * `badgePosition`. Not a box on top: a hand-placed badge needs
+ * `position:absolute`, which is banned for the reason the whole ban exists, and
+ * the platform's own note says a separate badge node is dropped on import.
+ */
+export function PRODUCT_BADGE(text: string, styleData: StyleData) {
+  return node("ProductBadge", { text }, styleData, []);
+}
+
 export function PRODUCT_ATC(
   styleData: StyleData,
   text?: string,
@@ -840,7 +928,11 @@ export const SLIDESHOW_PARTS: Record<string, string> = {
 
 const SLOT_RULES: Record<string, string[]> = {
   ProductBox: ["ProductMedia3", "FlexBlock"],
+  /* Two slots, or three when a badge was asked for. An exact match on one form
+     would reject the other, and `fields.md` lists ProductBadge as a config child
+     of this element rather than a sibling of it. */
   ProductMedia3: ["MediaMain3", "MediaList2"],
+  "ProductMedia3+badge": ["MediaMain3", "MediaList2", "ProductBadge"],
   ProductPrice2: ["ProductPrice2Item", "ProductPrice2Item"],
   ProductQuantity: ["QuantityButton", "QuantityField", "QuantityButton"],
   ProductVariantSwatches: ["OptionLabel", "Swatch"],
@@ -1094,8 +1186,14 @@ export class Page {
       const rule = SLOT_RULES[i.type];
       if (rule) {
         const kt = i.children.map((c) => byId.get(c)!.type);
-        if (kt.join("|") !== rule.join("|"))
-          throw new Error(`${i.type} slots must be ${rule}, got ${kt}`);
+        /* Some elements have a second legal shape — ProductMedia3 with a badge.
+           Checked as alternatives rather than as one exact list, because an
+           exact match on either form rejects the other. */
+        const alt = SLOT_RULES[`${i.type}+badge`];
+        const ok =
+          kt.join("|") === rule.join("|") ||
+          (alt !== undefined && kt.join("|") === alt.join("|"));
+        if (!ok) throw new Error(`${i.type} slots must be ${rule}, got ${kt}`);
       }
       const uniform = UNIFORM_CHILDREN[i.type];
       if (uniform) {
