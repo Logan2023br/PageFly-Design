@@ -227,24 +227,36 @@ function orderLines(order: Order, bg: string, ink: string): string[] {
 /* ==========================================================================
    TRAINING SECTIONS, read from the database as text.
 
-   THE PRECEDENCE, and it is the merchant's before it is ours:
+   BOTH, ALWAYS, AND THAT IS A CORRECTION.
 
-     the merchant uploaded references  →  build from THOSE, and nothing else.
-                                          They pointed at a page. A stored
-                                          reference filed by an operator is a
-                                          second opinion on a question the
-                                          merchant already answered.
-     they uploaded nothing             →  the training set, where there is one.
+   This used to skip the filings entirely whenever the merchant had uploaded a
+   reference, on the reasoning that two descriptions of one thing is a model
+   reconciling instead of building. That reasoning is right about two answers to
+   ONE question and this was never that:
 
-   Never both. Two descriptions of how a product box should look, from two
-   sources, is the model reconciling instead of building — the same reason
-   `referenceLines` REPLACES the measured hints rather than joining them.
+     the merchant's reference   WHICH sections, in WHAT ORDER — a whole page
+     a filed reading            HOW one element is built — inside one band
 
-   CAPPED AT TWO. Every analysis is about 380 tokens and it lands in the part of
-   the prompt that is not cached, but the real cost is not the input: Phase 3
-   measured that a more precise spec buys MORE reasoning, not less. Two is the
-   signature slot and the commerce slot — the band the page spends its room on,
-   and the band that sells something. The other six already have a pattern.
+   A page screenshot does not carry the inside of a buy box, so dropping the
+   filing lost detail and gained nothing. Worse, it lost it for the merchant who
+   had invested the most: the one who took the trouble to upload.
+
+   They can still disagree, and when they do the line below says who wins —
+   sequence to the merchant, detail to the filing. Stated rather than left to be
+   worked out, because a model given two sources and no rule will average them.
+
+   CAPPED AT THREE, raised from two now that a filing also reaches the merchant
+   who uploaded. Each one enters at ~400 tokens (see `MAX_PROMPT_CHARS`) in the
+   part of the prompt that is NOT cached, and the input is not even the real
+   cost: Phase 3 measured that a more precise spec buys MORE reasoning, not less.
+
+   Two covered the signature slot and the commerce slot — the band the page
+   spends its room on, and the band that sells something. Three adds the one
+   after those, which on most page types is the proof band, and it is the third
+   band an operator actually bothers to file. Beyond three the filings stop being
+   the reason a page looks good and start being most of the prompt: the ordering
+   below is by how much a slot needs help, so the fourth is by definition the
+   least useful one, bought at the same price as the first.
 
    THE SWITCH IS HONOURED HERE. An entry turned off is not read, which is what
    the switch promises: "the model must work it out itself".
@@ -274,7 +286,10 @@ function trim(analysis: string): string {
   return (lastLine > MAX_PROMPT_CHARS * 0.6 ? cut.slice(0, lastLine) : cut).trimEnd();
 }
 
-async function trainingLines(order: Order | null): Promise<string[]> {
+async function trainingLines(
+  order: Order | null,
+  hasReference: boolean,
+): Promise<string[]> {
   if (!order) return [];
 
   /* Signature first, then commerce, then whatever else has a filing. The order
@@ -324,6 +339,16 @@ async function trainingLines(order: Order | null): Promise<string[]> {
     `Follow the structure, the numbers and the treatment exactly. The WORDS are`,
     `this store's — never the reference's product, industry or claims.`,
     ``,
+    /* Only when there is a second source to rank against. On a page with no
+       uploads the sentence would be answering a question nobody asked. */
+    ...(hasReference
+      ? [
+          `The merchant's reference decides WHICH sections and in what ORDER. These filings`,
+          `decide how the individual elements are BUILT. When they disagree, the reference`,
+          `wins on sequence, the filing wins on detail.`,
+          ``,
+        ]
+      : []),
     /* Each part of a reading is tagged, because the tag answers the only
        question that decides whether it can be built at all. Spelled out here
        rather than left to be inferred: a part tagged BUILD and skipped is how a
@@ -430,8 +455,9 @@ export async function designPageTree(
     ...(order ? [] : [animationLines(input.pageType, detectVertical(input.sell), input.deckSize ?? 1)]),
     ...referenceLines(input.reference, input.refSections),
     ...styleLines(input.refStyle),
-    /* Only when the merchant pointed at nothing. See `trainingLines`. */
-    ...(input.refSections?.length ? [] : await trainingLines(order)),
+    /* Always. The two sources answer questions at different scales — see
+       `trainingLines`. */
+    ...(await trainingLines(order, Boolean(input.refSections?.length))),
     `Return the JSON object now.`,
   ]
     .filter(Boolean)
