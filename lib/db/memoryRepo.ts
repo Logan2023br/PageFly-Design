@@ -63,8 +63,13 @@ export function createMemoryRepo(file: string): Repo {
         photos: parsed.photos ?? [],
         jobs: parsed.jobs ?? [],
         training: parsed.training ?? [],
-        /* Absent in a file written before section references existed. */
-        trainingSections: parsed.trainingSections ?? [],
+        /* Absent in a file written before section references existed. Rows
+           written before `vertical` existed read as the shared filing, which is
+           what they were: one entry serving every trade. */
+        trainingSections: (parsed.trainingSections ?? []).map((t) => ({
+          ...t,
+          vertical: t.vertical ?? null,
+        })),
       };
     } catch {
       return structuredClone(EMPTY);
@@ -306,11 +311,18 @@ export function createMemoryRepo(file: string): Repo {
     async listTrainingSections() {
       sync();
       return [...data.trainingSections]
-        .sort((a, b) => a.element.localeCompare(b.element))
+        /* Element first, then trade, with the shared filing last inside each
+           element — which is the order an operator reads them in. */
+        .sort(
+          (a, b) =>
+            a.element.localeCompare(b.element) ||
+            (a.vertical ?? "\uffff").localeCompare(b.vertical ?? "\uffff"),
+        )
         .map(
           (t): TrainingSectionSummary => ({
             id: t.id,
             element: t.element,
+            vertical: t.vertical ?? null,
             note: t.note,
             analysis: t.analysis,
             /* Absent means ON: an entry filed before the switch existed was
@@ -330,11 +342,17 @@ export function createMemoryRepo(file: string): Repo {
       return found ? { ...found, images: [...found.images] } : null;
     },
 
-    async getTrainingSectionByElement(element) {
+    async getTrainingSectionByElementAndVertical(element, vertical) {
       sync();
-      const found = data.trainingSections.find(
-        (t) => t.element.toLowerCase() === element.toLowerCase(),
-      );
+      const of = (t: TrainingSection) => t.element.toLowerCase() === element.toLowerCase();
+      /* The trade's own filing first. Falling back to the shared one is the
+         point of allowing null at all — a reading about how a thumbnail strip
+         sits is worth having once, for everybody. */
+      const exact = vertical
+        ? data.trainingSections.find((t) => of(t) && t.vertical === vertical)
+        : undefined;
+      const shared = data.trainingSections.find((t) => of(t) && !t.vertical);
+      const found = exact ?? shared;
       return found ? { ...found, images: [...found.images] } : null;
     },
 

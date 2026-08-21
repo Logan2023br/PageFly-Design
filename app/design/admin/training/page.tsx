@@ -1,6 +1,7 @@
 import { AdminLogin } from "@/components/admin/AdminLogin";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { TrainingTabs } from "@/components/admin/TrainingTabs";
+import { sliceIds } from "@/lib/ai/skills";
 import { getRepo } from "@/lib/db";
 import { readAdminSession } from "@/lib/session";
 
@@ -33,7 +34,15 @@ export default async function AdminTrainingPage() {
       title="Training Design"
       subtitle="Reference pages filed by industry, and reference sections filed by PageFly element"
     >
-      <TrainingTabs templates={items} sections={sections} />
+      {/* The industry list comes from the skill file rather than a copy of it.
+          Read here because this is a server component and `sliceIds` is
+          server-only — and because a second hand-kept list of 67 slugs would go
+          stale the first time one is renamed, silently, in a dropdown. */}
+      <TrainingTabs
+        templates={items}
+        sections={sections}
+        verticals={sliceIds("verticals")}
+      />
     </AdminShell>
   );
 }

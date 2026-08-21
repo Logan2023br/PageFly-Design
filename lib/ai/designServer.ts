@@ -249,7 +249,30 @@ function orderLines(order: Order, bg: string, ink: string): string[] {
    THE SWITCH IS HONOURED HERE. An entry turned off is not read, which is what
    the switch promises: "the model must work it out itself".
    ========================================================================== */
-const MAX_TRAINING = 2;
+const MAX_TRAINING = 3;
+
+/**
+ * The ceiling on ONE filing as it enters the prompt.
+ *
+ * ~400 tokens. The stored reading is capped at 3,000 characters, which is right
+ * for the operator reading it on a card and too much to paste three of into a
+ * prompt: it lands in the part that is NOT cached, so three at full length is
+ * 2,500 uncached input tokens on every page for ever.
+ *
+ * Cut on a line boundary rather than mid-word. These readings are written as
+ * labelled blocks — STRUCTURE, SPACING, TYPE — so losing whole trailing lines
+ * costs the last axes and leaves the earlier ones intact, which is a far better
+ * failure than a sentence stopping halfway through a number.
+ */
+const MAX_PROMPT_CHARS = 1440;
+
+function trim(analysis: string): string {
+  const text = analysis.trim();
+  if (text.length <= MAX_PROMPT_CHARS) return text;
+  const cut = text.slice(0, MAX_PROMPT_CHARS);
+  const lastLine = cut.lastIndexOf("\n");
+  return (lastLine > MAX_PROMPT_CHARS * 0.6 ? cut.slice(0, lastLine) : cut).trimEnd();
+}
 
 async function trainingLines(order: Order | null): Promise<string[]> {
   if (!order) return [];
@@ -280,9 +303,19 @@ async function trainingLines(order: Order | null): Promise<string[]> {
   for (const { element, slot } of wanted) {
     /* A database that is unreachable costs the page its training, not the page.
        This runs on every build; it cannot be a reason one fails. */
-    const row = await repo.getTrainingSectionByElement(element).catch(() => null);
+    /* The trade's own filing first, the shared one behind it — see the repo.
+       Handing every trade the same reading is what made every store's buy box
+       identical, which is the disease the resolver exists to treat. */
+    const row = await repo
+      .getTrainingSectionByElementAndVertical(element, order.vertical)
+      .catch(() => null);
     if (!row || row.enabled === false || !row.analysis?.trim()) continue;
-    found.push(`Section ${slot} — ${element}, filed as a reference:`, row.analysis.trim(), ``);
+    const scope = row.vertical ? row.vertical : "any trade";
+    found.push(
+      `Section ${slot} — ${element}, filed for ${scope}:`,
+      trim(row.analysis),
+      ``,
+    );
   }
 
   if (found.length === 0) return [];

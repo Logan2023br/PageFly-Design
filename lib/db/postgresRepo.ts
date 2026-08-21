@@ -163,8 +163,23 @@ create table if not exists training_sections (
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
-create unique index if not exists training_sections_element
-  on training_sections (lower(element));
+/* The trade a filing is for, or null for every trade. Added rather than baked
+   into the create above, so a database that already has the table gets it too —
+   and every row that predates the column reads as the shared filing, which is
+   what it was: one entry serving the whole platform. */
+alter table training_sections add column if not exists vertical text;
+
+/* Uniqueness is per element AND trade. The old index was on lower(element)
+   alone, which is what made one ProductBox filing serve a headphone shop, a
+   moisturiser and a sofa alike.
+
+   coalesce, not the bare column: Postgres treats NULLs as distinct in a unique
+   index, so (lower(element), vertical) would happily accept two shared
+   filings for the same element — and then a build would be choosing between
+   two with no way to choose. */
+drop index if exists training_sections_element;
+create unique index if not exists training_sections_element_vertical
+  on training_sections (lower(element), coalesce(vertical, ''));
 
 /* A reference started as one screenshot and became several. The column is added
    rather than replaced, and the rows written before it are folded into the new
@@ -246,6 +261,7 @@ function rowToSection(r: Record<string, unknown> | undefined): TrainingSection |
   return {
     id: String(r.id),
     element: String(r.element),
+    vertical: text(r.vertical),
     note: text(r.note),
     analysis: text(r.analysis),
     analysedAt: iso(r.analysed_at) ?? null,
@@ -632,16 +648,18 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
          `analysis` IS selected — it is text, it is the thing an operator opened
          the page to read, and it is a few hundred bytes. */
       const { rows } = await db.query(
-        `select id, element, note, analysis, enabled, created_at, updated_at,
+        `select id, element, vertical, note, analysis, enabled,
+                created_at, updated_at,
                 coalesce(images -> 0 ->> 'src', '') as cover,
                 jsonb_array_length(images)         as image_count
            from training_sections
-          order by element`,
+          order by element, vertical nulls last`,
       );
       return rows.map(
         (r): TrainingSectionSummary => ({
           id: String(r.id),
           element: String(r.element),
+          vertical: r.vertical === null || r.vertical === undefined ? null : String(r.vertical),
           note: r.note === null || r.note === undefined ? null : String(r.note),
           analysis:
             r.analysis === null || r.analysis === undefined ? null : String(r.analysis),
@@ -657,23 +675,29 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
     async getTrainingSection(id) {
       await ready();
       const { rows } = await db.query(
-        `select id, element, note, analysis, analysed_at, enabled, images,
-                created_at, updated_at
+        `select id, element, vertical, note, analysis, analysed_at, enabled,
+                images, created_at, updated_at
            from training_sections where id = $1`,
         [id],
       );
       return rowToSection(rows[0]);
     },
 
-    async getTrainingSectionByElement(element) {
+    async getTrainingSectionByElementAndVertical(element, vertical) {
       await ready();
-      /* Matched case-insensitively against the unique index, which is also
-         lower(element) — so this lookup and that constraint agree. */
+      /* Both candidates in one query, the trade's own filing first. Ordered
+         rather than fetched twice: two round trips to answer one question is two
+         round trips on every build. `nulls last` puts the shared filing behind
+         the specific one, so `rows[0]` is already the preference. */
       const { rows } = await db.query(
-        `select id, element, note, analysis, analysed_at, enabled, images,
-                created_at, updated_at
-           from training_sections where lower(element) = lower($1)`,
-        [element],
+        `select id, element, vertical, note, analysis, analysed_at, enabled,
+                images, created_at, updated_at
+           from training_sections
+          where lower(element) = lower($1)
+            and (vertical = $2 or vertical is null)
+          order by vertical nulls last
+          limit 1`,
+        [element, vertical],
       );
       return rowToSection(rows[0]);
     },
@@ -682,10 +706,12 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       await ready();
       await db.query(
         `insert into training_sections
-           (id,element,note,analysis,analysed_at,enabled,images,created_at,updated_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           (id,element,vertical,note,analysis,analysed_at,enabled,images,
+            created_at,updated_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
          on conflict (id) do update set
            element     = excluded.element,
+           vertical    = excluded.vertical,
            note        = excluded.note,
            analysis    = excluded.analysis,
            analysed_at = excluded.analysed_at,
@@ -695,6 +721,7 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
         [
           item.id,
           item.element,
+          item.vertical,
           item.note,
           item.analysis,
           item.analysedAt,

@@ -251,6 +251,24 @@ export type TrainingSection = {
    * good product box" is another screenshot, not another entry.
    */
   element: string;
+  /**
+   * The trade this filing is for, or null for "every trade".
+   *
+   * ONE FILING PER ELEMENT WAS THE WRONG SHAPE. A `ProductBox` reference served
+   * every store on the platform, so a headphone shop, a moisturiser and a sofa
+   * were all handed the same reading — which is the "every store looks the same"
+   * disease the whole resolver exists to treat, arriving through the one door
+   * left open.
+   *
+   * Null is a genuine answer, not a missing one: some readings are about the
+   * ELEMENT rather than the trade — how a thumbnail strip sits, how a spec table
+   * is spaced — and those are worth having once. A build prefers the filing that
+   * names its trade and falls back to the shared one.
+   *
+   * The id is a slug from `skills/_sliced/30-verticals.md`, the same list Step 1
+   * offers, because that is what a build has in hand when it looks one up.
+   */
+  vertical: string | null;
   /** what an operator wants remembered about it, in their own words */
   note: string | null;
   /**
@@ -273,6 +291,7 @@ export type TrainingSection = {
 export type TrainingSectionSummary = {
   id: string;
   element: string;
+  vertical: string | null;
   note: string | null;
   analysis: string | null;
   enabled?: boolean;
@@ -352,8 +371,12 @@ export type Repo = {
   /* ---- training sections ---- */
   listTrainingSections(): Promise<TrainingSectionSummary[]>;
   getTrainingSection(id: string): Promise<TrainingSection | null>;
-  /** by element name, which is how a BUILD finds one */
-  getTrainingSectionByElement(element: string): Promise<TrainingSection | null>;
+  /** by element name and trade, which is how a BUILD finds one. Prefers the
+      filing that names the trade, falls back to the shared one, then null. */
+  getTrainingSectionByElementAndVertical(
+    element: string,
+    vertical: string | null,
+  ): Promise<TrainingSection | null>;
   saveTrainingSection(item: TrainingSection): Promise<void>;
   deleteTrainingSection(id: string): Promise<boolean>;
 

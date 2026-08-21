@@ -68,7 +68,25 @@ async function fetchSection(id: string): Promise<TrainingSection | null> {
 
 /* ---- the screen --------------------------------------------------------- */
 
-export function TrainingSections({ initial }: { initial: TrainingSectionSummary[] }) {
+/** `bedding-textiles` → `Bedding textiles`. The chip labels live in a different
+    list and do not cover every slug in the skill file, so the slug is prettified
+    rather than looked up — a dropdown that silently omits an industry is worse
+    than one with a plain label. */
+function industryLabel(slug: string): string {
+  const s = slug.replace(/-/g, " ");
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+const ALL_INDUSTRIES = "__all__";
+
+export function TrainingSections({
+  initial,
+  verticals,
+}: {
+  initial: TrainingSectionSummary[];
+  /** industry slugs from `30-verticals.md`, in file order */
+  verticals: string[];
+}) {
   const [items, setItems] = useState(initial);
   const [editing, setEditing] = useState<TrainingSection | "new" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -125,6 +143,7 @@ export function TrainingSections({ initial }: { initial: TrainingSectionSummary[
           body: JSON.stringify({
             id: full.id,
             element: full.element,
+            vertical: full.vertical,
             note: full.note,
             enabled: full.enabled === false,
             images: full.images,
@@ -196,7 +215,8 @@ export function TrainingSections({ initial }: { initial: TrainingSectionSummary[
         {editing && (
           <SectionDialog
             item={editing === "new" ? null : editing}
-            taken={items.map((i) => i.element)}
+            verticals={verticals}
+            taken={items.map((i) => `${i.element}\u0000${i.vertical ?? ""}`)}
             onClose={() => setEditing(null)}
             onSaved={(next, analysed) => {
               setItems(next);
@@ -243,6 +263,11 @@ function SectionCardView({
           <code className="truncate text-[12.5px] font-semibold text-pf-text">
             {item.element}
           </code>
+          {/* Which trade, on the card. Without it an operator with a ProductBox
+              filed three times cannot tell which is which. */}
+          <span className="shrink-0">
+            <Tag>{item.vertical ? industryLabel(item.vertical) : "All"}</Tag>
+          </span>
           <span className="ml-auto shrink-0">
             <Tag>{item.imageCount}</Tag>
           </span>
@@ -345,15 +370,20 @@ function IconButton({
 function SectionDialog({
   item,
   taken,
+  verticals,
   onClose,
   onSaved,
 }: {
   item: TrainingSection | null;
+  /** `element\u0000vertical` for every filing that exists — the pair is what is
+      unique, so the pair is what a clash is checked against */
   taken: string[];
+  verticals: string[];
   onClose: () => void;
   onSaved: (items: TrainingSectionSummary[], analysed: boolean) => void;
 }) {
   const [element, setElement] = useState(item?.element ?? "ProductBox");
+  const [vertical, setVertical] = useState(item?.vertical ?? ALL_INDUSTRIES);
   const [note, setNote] = useState(item?.note ?? "");
   const [enabled, setEnabled] = useState(item?.enabled !== false);
   const [images, setImages] = useState<TrainingImage[]>(item?.images ?? []);
@@ -363,8 +393,11 @@ function SectionDialog({
   /* Named before the request is sent, because a clash is the one failure an
      operator can fix without leaving the dialog — and being told after a
      ten-second upload is being told too late. */
-  const clash =
-    !item && taken.some((t) => t.toLowerCase() === element.toLowerCase());
+  /* The PAIR, because the pair is what is unique. `ProductBox` for audio and
+     `ProductBox` for skincare are two filings; a second `ProductBox` for audio
+     is a build choosing between two with no way to choose. */
+  const slot = `${element}\u0000${vertical === ALL_INDUSTRIES ? "" : vertical}`;
+  const clash = !item && taken.some((t) => t.toLowerCase() === slot.toLowerCase());
 
   const add = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -472,7 +505,13 @@ function SectionDialog({
                   {COMMON_SECTION_ELEMENTS.map((e) => (
                     <option key={e} value={e}>
                       {e}
-                      {taken.some((t) => t.toLowerCase() === e.toLowerCase()) ? " · filed" : ""}
+                      {taken.some(
+                        (t) =>
+                          t.toLowerCase() ===
+                          `${e}\u0000${vertical === ALL_INDUSTRIES ? "" : vertical}`.toLowerCase(),
+                      )
+                        ? " · filed"
+                        : ""}
                     </option>
                   ))}
                 </optgroup>
@@ -480,20 +519,55 @@ function SectionDialog({
                   {rest.map((e) => (
                     <option key={e} value={e}>
                       {e}
-                      {taken.some((t) => t.toLowerCase() === e.toLowerCase()) ? " · filed" : ""}
+                      {taken.some(
+                        (t) =>
+                          t.toLowerCase() ===
+                          `${e}\u0000${vertical === ALL_INDUSTRIES ? "" : vertical}`.toLowerCase(),
+                      )
+                        ? " · filed"
+                        : ""}
                     </option>
                   ))}
                 </optgroup>
               </select>
-              {clash && (
-                <span className="text-[11.5px] leading-relaxed text-pf-danger">
-                  {element} is already filed. Close this, open that entry, and add
-                  the screenshots to it — one entry per element, as many
-                  screenshots as you like.
-                </span>
-              )}
             </label>
           )}
+
+          {/* The trade this filing is for. "Every industry" is a real answer,
+              not a default to get past: a reading about how a thumbnail strip
+              sits is worth having once, for everybody. A reading about what a
+              headphone buyer needs proved is not. */}
+          <label className="grid gap-1.5">
+            <span className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-pf-faint">
+              Industry
+            </span>
+            <select
+              value={vertical}
+              onChange={(e) => setVertical(e.target.value)}
+              className="rounded-pf-md border border-pf-border bg-pf-bg-deep px-3 py-2 text-[13px] text-pf-text outline-none transition-colors focus:border-pf-primary-hi"
+            >
+              <option value={ALL_INDUSTRIES}>Every industry — shared fallback</option>
+              {verticals.map((v) => (
+                <option key={v} value={v}>
+                  {industryLabel(v)}
+                </option>
+              ))}
+            </select>
+            <span className="text-[11.5px] leading-relaxed text-pf-faint">
+              A build prefers the filing that names its industry, and falls back
+              to the shared one.
+            </span>
+            {clash && (
+              <span className="text-[11.5px] leading-relaxed text-pf-danger">
+                {element}{" "}
+                {vertical === ALL_INDUSTRIES
+                  ? "shared across every industry"
+                  : `for ${industryLabel(vertical)}`}{" "}
+                is already filed. Open that entry and add the screenshots to it,
+                or file this one under a different industry.
+              </span>
+            )}
+          </label>
 
           <label className="grid gap-1.5">
             <span className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-pf-faint">

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { readSection } from "@/lib/ai/sectionVision";
 import { getRepo } from "@/lib/db";
 import type { TrainingSection, TrainingSectionSummary } from "@/lib/db/types";
+import { sliceIds } from "@/lib/ai/skills";
 import { PAGEFLY_ELEMENTS } from "@/lib/pagefly/elements";
 import { readAdminSession } from "@/lib/session";
 
@@ -36,6 +37,11 @@ const saveSchema = z.object({
   /* The list itself is the enum, generated from `fields.md`, so an element
      PageFly adds is accepted here the moment the generator is run. */
   element: z.enum(PAGEFLY_ELEMENTS),
+  /* A slug from `30-verticals.md`, or null for every trade. Not an enum here:
+     the list lives in a skill file, and duplicating 67 slugs into a schema is
+     a copy that goes stale the first time one is renamed. The route checks it
+     against the file instead. */
+  vertical: z.string().max(64).nullable().default(null),
   note: z.string().max(400).nullable().default(null),
   enabled: z.boolean().default(true),
   images: z
@@ -142,14 +148,42 @@ export async function POST(request: Request) {
      exists — which is what the message says, because a refusal that does not
      say what to do instead is a dead end.
      ========================================================================== */
-  const clash = await repo.getTrainingSectionByElement(body.element);
-  if (clash && clash.id !== (body.id ?? "")) {
+  /* Checked against the skill file rather than a copy of it. An unknown slug
+     would file a reading no build can ever look up. */
+  if (body.vertical !== null && !sliceIds("verticals").includes(body.vertical))
+    return Response.json(
+      { ok: false, error: `"${body.vertical}" is not an industry this app knows.` } satisfies SectionsResponse,
+      { status: 400 },
+    );
+
+  /* ==========================================================================
+     ONE ENTRY PER ELEMENT AND TRADE.
+
+     It used to be one per element, full stop, and that was the bug: a single
+     ProductBox filing served a headphone shop, a moisturiser and a sofa alike —
+     the "every store looks the same" disease arriving through the one door left
+     open.
+
+     Now `ProductBox` for `audio` and `ProductBox` for `skincare` are two
+     filings, and `ProductBox` with no trade is the shared one a build falls back
+     to. What is still refused is a SECOND filing for the same pair, because
+     there a build would be choosing between two with no way to choose.
+     ========================================================================== */
+  const clash = await repo.getTrainingSectionByElementAndVertical(
+    body.element,
+    body.vertical,
+  );
+  /* The lookup falls back to the shared filing, so a match whose trade differs
+     from the one being saved is not a clash — it is the fallback doing its job. */
+  const sameSlot = clash && (clash.vertical ?? null) === body.vertical;
+  if (clash && sameSlot && clash.id !== (body.id ?? "")) {
+    const where = body.vertical ? `for ${body.vertical}` : "shared across every industry";
     return Response.json(
       {
         ok: false,
         error:
-          `${body.element} already has an entry with ${clash.images.length} screenshot${clash.images.length === 1 ? "" : "s"}. ` +
-          `Open it and add these to it — one entry per element, as many screenshots as you like.`,
+          `${body.element} ${where} already has an entry with ${clash.images.length} screenshot${clash.images.length === 1 ? "" : "s"}. ` +
+          `Open it and add these to it — or file this one under a different industry.`,
       } satisfies SectionsResponse,
       { status: 409 },
     );
@@ -197,6 +231,7 @@ export async function POST(request: Request) {
   const item: TrainingSection = {
     id: body.id ?? newId(),
     element: body.element,
+    vertical: body.vertical,
     note: body.note?.trim() ? body.note.trim() : null,
     analysis,
     analysedAt,

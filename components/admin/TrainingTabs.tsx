@@ -26,9 +26,12 @@ type Tab = "template" | "section";
 export function TrainingTabs({
   templates,
   sections,
+  verticals,
 }: {
   templates: TrainingSummary[];
   sections: TrainingSectionSummary[];
+  /** industry slugs, read from `30-verticals.md` by the server component */
+  verticals: string[];
 }) {
   const [tab, setTab] = useState<Tab>("template");
 
@@ -62,7 +65,7 @@ export function TrainingTabs({
         <TrainingDesign initial={templates} />
       </div>
       <div hidden={tab !== "section"}>
-        <TrainingSections initial={sections} />
+        <TrainingSections initial={sections} verticals={verticals} />
       </div>
     </div>
   );
