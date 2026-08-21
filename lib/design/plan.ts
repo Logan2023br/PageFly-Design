@@ -522,6 +522,18 @@ export function arcLength(pageType: string): number {
 }
 
 /**
+ * Where this page type's arc puts a role — the position a missing pin belongs at.
+ *
+ * -1 when the arc has no slot for it. Asked for rather than guessed because
+ * guessing produced a home page opening with a products row: a commerce pin put
+ * at index 0 is right for a product page and wrong for every page whose commerce
+ * slot is a row in the middle of something else.
+ */
+export function arcIndexOf(pageType: string, role: SectionRole): number {
+  return arcFor(pageType).indexOf(role);
+}
+
+/**
  * An Order from a list of slots somebody else decided.
  *
  * The seam. Everything after this point is identical whether the arc chose the

@@ -143,10 +143,25 @@ export async function startBuild(
   live.set(jobId, controller);
 
   /* Deliberately not awaited. The request that asked for the build returns as
-     soon as the row exists; the work outlives it. */
-  void run(job, brief, variants, plan, controller.signal).finally(() =>
-    live.delete(jobId),
-  );
+     soon as the row exists; the work outlives it.
+
+     THE CATCH IS LOAD-BEARING. Without it a throw anywhere in `run` became an
+     unhandled rejection and the row stayed `running` for ever — the browser
+     polls a job that will never move, and the merchant sees a Create button
+     that did nothing. `run` wraps its worker loop but its deck-level setup sits
+     above that try, so "nothing here can throw" was never a property of the
+     code, only a hope about it. A build that dies now says so. */
+  void run(job, brief, variants, plan, controller.signal)
+    .catch(async (err) => {
+      console.error("[build] died before it could report", err);
+      await getRepo()
+        .updateJob(jobId, {
+          status: "failed",
+          error: (err as Error)?.message ?? "The build stopped unexpectedly.",
+        })
+        .catch(() => {});
+    })
+    .finally(() => live.delete(jobId));
 
   return { ok: true, jobId };
 }

@@ -4,6 +4,7 @@ import { getProvider, isAiEnabled, type Usage } from "../ai/provider";
 import { sliceSkill } from "../ai/skills";
 import { elementForPattern } from "./elementFor";
 import {
+  arcIndexOf,
   arcLength,
   pageHasOneProduct,
   patternsByRole,
@@ -275,18 +276,32 @@ function vet(
     if (slots.length >= MAX_SECTIONS) break;
   }
 
-  /* THE PINS. Correctness, not taste — see `pinnedFor`. A missing commerce pin
-     goes to the front, because a page that sells one product opens with it; a
-     missing conversion pin goes to the end, because that is what "ends in the
-     form" means. */
+  /* THE PINS. Correctness, not taste — see `pinnedFor`.
+
+     WHERE a missing pin goes is its own question, and the first answer was
+     wrong. Everything that was not a conversion pin went to index 0, on the
+     reasoning that a page selling one product opens with its buy box. True for
+     `product`, and false for `home`, whose commerce pin is a products ROW in the
+     middle of a page about something else — so the first real answer from the
+     model came back with a home page opening on `collection-featured-row`
+     instead of a hero. The exact complaint this whole change set started from,
+     reintroduced by the repair meant to protect it.
+
+     The arc already knows where each role belongs on each page type. Ask it. */
   for (const pin of pinnedFor(pageType)) {
     if (seen.has(pin) || banned(pin)) continue;
     const role = roleFor(pin);
     if (!role) continue;
     seen.add(pin);
-    if (role === "conversion") slots.push({ role, pattern: pin });
-    else slots.unshift({ role, pattern: pin });
-    notes.push(`${pageType}: inserted "${pin}" — this page type requires it`);
+
+    const at = arcIndexOf(pageType, role);
+    const where =
+      role === "conversion" || at === -1
+        ? slots.length /* the close, or a role this arc has no opinion about */
+        : Math.min(at, slots.length);
+
+    slots.splice(where, 0, { role, pattern: pin });
+    notes.push(`${pageType}: inserted "${pin}" at ${where + 1} — this page type requires it`);
   }
 
   if (slots.length < MIN_SECTIONS) return null;
@@ -311,12 +326,15 @@ export async function decideStructure(
   const provider = getProvider();
   if (!provider) return empty("no model configured");
 
-  const timer = AbortSignal.timeout(TIMEOUT_MS);
-  const combined = signal ? AbortSignal.any([signal, timer]) : timer;
-
+  /* INSIDE the try, all of it. `AbortSignal.any` needs Node 20 and the package
+     only asks for >=20.9, but that is not the point: this function is awaited
+     before the first page is designed, and anything it throws takes the whole
+     build with it. There is no failure here worth more than an arc. */
   let text: string;
   let usage: Usage = NOTHING;
   try {
+    const timer = AbortSignal.timeout(TIMEOUT_MS);
+    const combined = signal ? AbortSignal.any([signal, timer]) : timer;
     const completion = await provider.complete({
       system: systemPrompt(ask),
       user: userPrompt(ask),

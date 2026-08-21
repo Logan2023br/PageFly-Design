@@ -181,6 +181,35 @@ async function main(): Promise<void> {
     "and it says the page type required it",
   );
 
+  /* THE REPAIR THAT BECAME THE BUG. Every non-conversion pin used to be
+     unshifted to index 0, and the first real answer from the model came back
+     with a home page opening on a products row — the complaint this whole change
+     set began with, reintroduced by the guard meant to prevent it. A pin goes
+     where the arc puts that role, and on home that is the middle. */
+  console.log("\na home page missing its products row");
+  reply({
+    home: [
+      "hero-type-only",
+      "split-media-alternating",
+      "spec-bars",
+      "story-band",
+      "full-bleed-quote-band",
+      "cta-band-full",
+    ],
+  });
+  out = await decideStructure(ask(["home"]));
+  const home = out.plans.get("home");
+  check(home?.[0]?.role === "hero", "home still opens on a hero", home?.[0]?.pattern);
+  check(
+    Boolean(home?.some((s) => s.pattern === "collection-featured-row")),
+    "the products row was put in",
+  );
+  check(
+    (home?.findIndex((s) => s.pattern === "collection-featured-row") ?? 0) > 0,
+    "and NOT at the top",
+    `position ${(home?.findIndex((s) => s.pattern === "collection-featured-row") ?? -1) + 1}`,
+  );
+
   console.log("\na page too thin to build");
   reply({ home: ["hero-full-bleed-scrim", "cta-band-full"] });
   out = await decideStructure(ask(["home"]));
