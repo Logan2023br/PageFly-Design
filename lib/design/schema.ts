@@ -183,6 +183,45 @@ function words(max: number, fallback = "") {
 }
 
 /**
+ * A container's children, where LOSING them all is a failure.
+ *
+ * `list` drops what it cannot parse, which is right — one invented node should
+ * cost itself and not its thirty siblings. The cost showed up on a real page as
+ * a small orange rectangle with nothing in it, closing a product page:
+ *
+ *   the model wrote a button with no text
+ *   `saying()` refused it, because a button with no words is not a button
+ *   `list` dropped it, correctly
+ *   and its parent `col` kept `background:#FF6A1F` and `padding:16px 32px`
+ *
+ * So the page ended in a painted box around nothing. The mockup and the import
+ * agreed about it, which is why it was not caught as a fidelity bug — both were
+ * faithfully drawing a container that should no longer have existed.
+ *
+ * A container the model wrote EMPTY is different: a rail, a spacer, a coloured
+ * band are all real, and the exporter has a path for them. The difference is
+ * whether children were asked for, and only the schema knows that — by the time
+ * anything else sees the tree, the evidence has been dropped.
+ *
+ * So: empty in, empty out, kept. Non-empty in and empty out, refused — and the
+ * parent's own `list` then drops the container too.
+ */
+function kids(max: number): z.ZodType<DesignNode[], unknown> {
+  return z.unknown().transform((value, ctx) => {
+    const asked = Array.isArray(value) ? value.length : 0;
+    const got = list(node, max).parse(value);
+    if (asked > 0 && got.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        message: "every child was dropped; the container is paint around nothing",
+      });
+      return z.NEVER;
+    }
+    return got;
+  });
+}
+
+/**
  * Text a node exists to show, which therefore cannot be empty.
  *
  * This is the one place a leaf is still allowed to fail, and it fails on
@@ -837,12 +876,12 @@ const node: z.ZodType<DesignNode> = z.lazy(() =>
     z.object({
       type: z.literal("row"),
       ...styled,
-      children: list(node, 24),
+      children: kids(24),
     }),
     z.object({
       type: z.literal("col"),
       ...styled,
-      children: list(node, 24),
+      children: kids(24),
     }),
   ]),
 );

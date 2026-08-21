@@ -171,6 +171,60 @@ async function main(): Promise<void> {
   check(f?.fields[1]?.required === true, '"yes" read as required', String(f?.fields[1]?.required));
   check(f?.submitText === "Send", "empty submit label took the fallback", f?.submitText);
 
+  /* ---- a container that lost every child ------------------------------- */
+
+  console.log("\na painted box whose only child was refused");
+
+  /* The exact page that prompted this: a CTA band ending in a small orange
+     rectangle with no words. The button had no label, `saying()` refused it,
+     `list` dropped it — correctly — and its parent kept its background. */
+  const hollow = designTreeSchema.safeParse({
+    sections: [
+      {
+        type: "section",
+        pattern: "cta-band-full",
+        css: { padding: "140px 56px" },
+        children: [
+          { type: "heading", level: 2, text: "Ready when you are" },
+          {
+            type: "col",
+            css: { background: "#FF6A1F", padding: "16px 32px" },
+            children: [{ type: "button", text: "" }],
+          },
+        ],
+      },
+    ],
+  });
+  check(hollow.success, "the page still parses");
+  if (hollow.success) {
+    const kinds = hollow.data.sections[0].children.map((c) => c.type);
+    check(
+      !kinds.includes("col"),
+      "the emptied container is gone, not left as paint around nothing",
+      kinds.join(", "),
+    );
+    check(kinds.includes("heading"), "and the heading beside it survived");
+  }
+
+  /* A container the model wrote EMPTY is different — a rail, a spacer, a
+     coloured band are all real, and the exporter has a path for them. The
+     difference is whether children were asked for. */
+  const rail = designTreeSchema.safeParse({
+    sections: [
+      {
+        type: "section",
+        children: [
+          { type: "heading", level: 2, text: "The math" },
+          { type: "col", css: { background: "#FF6A1F", height: "2px" }, children: [] },
+        ],
+      },
+    ],
+  });
+  check(
+    rail.success && rail.data.sections[0].children.some((c) => c.type === "col"),
+    "a container written empty on purpose is kept",
+  );
+
   /* ---- and the one thing that must still fail --------------------------- */
 
   console.log("\nwhat should still be refused");

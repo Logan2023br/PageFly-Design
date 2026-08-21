@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { DesignNode, DesignSection, DesignTree } from "./schema";
+import { childrenOf, type DesignNode, type DesignSection, type DesignTree } from "./schema";
 import type { Order } from "./plan";
 
 /* ==========================================================================
@@ -281,6 +281,51 @@ export function audit(
     problems.push(
       `${videos} background videos. One per page at most — two autoplaying videos on a ` +
         `phone is the page's whole data budget spent on decoration.`,
+    );
+
+  /* ==========================================================================
+     A BUTTON HAS TO SAY SOMETHING, AND A PAINTED BOX HAS TO HOLD SOMETHING.
+
+     Both are counts, not values. This file does not get to say what a button
+     should be called — that comes from the vertical, the filed reference and the
+     model. It gets to say that a button with no words is not a button.
+
+     The schema already refuses a button with no text at all, and refuses a
+     container that lost every child to it. These two catch what survives that:
+     a button whose label is one glyph or a whole sentence, and a container the
+     model deliberately wrote empty and then painted.
+     ========================================================================== */
+  const labels = all
+    .filter((n): n is Extract<DesignNode, { type: "button" }> => n.type === "button")
+    .map((n) => n.text.trim());
+
+  const tooShort = labels.filter((t) => t.length < 2).length;
+  const tooLong = labels.filter((t) => t.length > 40).length;
+  if (tooShort > 0)
+    problems.push(
+      `${tooShort} button${tooShort === 1 ? " has" : "s have"} a label of one character or ` +
+        `less. A button is words a shopper can read, not a glyph.`,
+    );
+  if (tooLong > 0)
+    problems.push(
+      `${tooLong} button label${tooLong === 1 ? " is" : "s are"} over 40 characters. ` +
+        `A button is a few words; a sentence belongs in the line above it.`,
+    );
+
+  /* A box with paint on it and nothing in it. The page that prompted this check
+     ended in a small orange rectangle with no words — the button inside had no
+     label, so it was dropped, and its parent kept its background. */
+  const hollow = all.filter((n) => {
+    if (n.type !== "row" && n.type !== "col") return false;
+    if (childrenOf(n).length > 0) return false;
+    const c = (n.css ?? {}) as Record<string, unknown>;
+    return Boolean(c.background ?? c.backgroundColor ?? c.border ?? c.padding);
+  }).length;
+  if (hollow > 0)
+    problems.push(
+      `${hollow} painted container${hollow === 1 ? "" : "s"} with nothing inside. ` +
+        `A background and padding around no content reads as a broken button. ` +
+        `Put the content in it or remove it.`,
     );
 
   const ratios = new Set(
