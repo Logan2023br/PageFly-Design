@@ -467,6 +467,80 @@ export function _fallbackArcTypes(types: string[]): string[] {
   return types.filter((t) => !MINIMAL_TYPES.has(t) && !ARCS[t]);
 }
 
+/* ==========================================================================
+   WHAT THE OTHER DECIDER NEEDS.
+
+   `structure.ts` asks a model for the section list instead of drawing it from
+   the arc. These are the facts it has to hand the model, and the facts it has to
+   check the answer against — exported rather than duplicated, because a copy of
+   the pattern vocabulary or of the correctness pins would go stale the day
+   somebody edits the file it came from.
+   ========================================================================== */
+
+/** Every pattern id, grouped by the role it can fill. */
+export function patternsByRole(): Map<SectionRole, string[]> {
+  return candidates();
+}
+
+/** The role a pattern belongs to — a fact about the pattern file, not a choice. */
+export function roleFor(pattern: string): SectionRole | null {
+  return roleOfPattern(candidates(), pattern);
+}
+
+/** The vertical's row, parsed. */
+export function verticalRow(slug: string): VerticalRow {
+  return parseVertical(slug);
+}
+
+/** Which vertical a brief resolves to. */
+export function verticalFor(
+  brief: Pick<Brief, "whatYouSell" | "verticalSlug">,
+): string {
+  return verticalOf(brief as never);
+}
+
+/**
+ * The patterns this page type must contain whatever else it contains.
+ *
+ * Not taste. A product page without a buy box, a wholesale page that does not
+ * take the enquiry — the comment above `PINNED` calls these matters of
+ * correctness, and they stay true no matter who decided the rest of the page.
+ */
+export function pinnedFor(pageType: string): string[] {
+  const pins = PINNED[pageType] ?? {};
+  return Object.values(pins).flat().filter(Boolean) as string[];
+}
+
+/** True when this page type has ONE product in context — see `isBanned`. */
+export function pageHasOneProduct(pageType: string): boolean {
+  return (PINNED[pageType]?.commerce ?? []).some((id) => id.startsWith("product-detail"));
+}
+
+/** How many sections this page type's arc asks for, as a length to aim at. */
+export function arcLength(pageType: string): number {
+  return arcFor(pageType).length;
+}
+
+/**
+ * An Order from a list of slots somebody else decided.
+ *
+ * The seam. Everything after this point is identical whether the arc chose the
+ * slots or a model did, which is the only way the two paths can be held to the
+ * same standard by the same test.
+ */
+export function orderFromSlots(
+  brief: Pick<Brief, "whatYouSell" | "verticalSlug" | "visualStyle">,
+  seed: string,
+  slots: Slot[],
+): Order {
+  const vertical = verticalOf(brief);
+  const row = parseVertical(vertical);
+  const preferredSignature = row.signature
+    ? slots.findIndex((s, i) => i > 0 && s.pattern === row.signature)
+    : -1;
+  return finish(slots, { vertical, row, seed, preferredSignature });
+}
+
 /* ---- the seed ------------------------------------------------------------ */
 
 /**

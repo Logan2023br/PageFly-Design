@@ -54,7 +54,7 @@ function check(ok: boolean, label: string, detail: string | null = null): void {
   if (!ok) failures++;
 }
 
-const RANKING = "the reference wins on sequence, the filing wins on detail";
+const RANKING = "the reference wins on the section, the filing wins inside the element";
 const FILING = "gallery left, buy box right";
 
 /* The prompt is written as fixed-width lines, so a sentence in it is not a

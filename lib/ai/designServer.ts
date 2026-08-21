@@ -5,7 +5,14 @@ import { loadSkills, sliceSkill } from "./skills";
 import { DESIGN_SYSTEM } from "./designPrompt";
 import { designTreeSchema, walk, type DesignTree } from "../design/schema";
 import { animationLines } from "../design/animationPicker";
-import { planPage, seedFor, type Order, type OrderSection } from "../design/plan";
+import {
+  orderFromSlots,
+  planPage,
+  seedFor,
+  type Order,
+  type OrderSection,
+  type Slot,
+} from "../design/plan";
 import { audit } from "../design/audit";
 import { elementForPattern } from "../design/elementFor";
 import { getRepo } from "../db";
@@ -81,6 +88,15 @@ export type DesignInput = {
    * ten pages that each invented their own motion do not look like one site.
    */
   deckSize?: number;
+  /**
+   * The section list a model chose for this page type, when it was asked.
+   *
+   * Decided ONCE for the whole deck in `lib/design/structure.ts`, so every page
+   * in a build was ordered by something that could see the others. Absent when
+   * the call was off, failed, or its answer for this page type did not survive
+   * checking — and then the arc decides, exactly as before.
+   */
+  structure?: Slot[] | null;
   pageLabel: string;
   pageType: string;
   tokens: {
@@ -241,9 +257,14 @@ function orderLines(order: Order, bg: string, ink: string): string[] {
    filing lost detail and gained nothing. Worse, it lost it for the merchant who
    had invested the most: the one who took the trouble to upload.
 
-   They can still disagree, and when they do the line below says who wins —
-   sequence to the merchant, detail to the filing. Stated rather than left to be
-   worked out, because a model given two sources and no rule will average them.
+   They can still disagree, and when they do the line below says who wins — the
+   section to the merchant, the inside of an element to the filing. Stated rather
+   than left to be worked out, because a model given two sources and no rule will
+   average them.
+
+   It used to rank them on SEQUENCE, which was wrong twice over: sequence is not
+   what a filing is about, and it is no longer what the reference decides either
+   — `structure.ts` owns it now, and it is given the reference itself.
 
    CAPPED AT THREE, raised from two now that a filing also reaches the merchant
    who uploaded. Each one enters at ~400 tokens (see `MAX_PROMPT_CHARS`) in the
@@ -343,9 +364,9 @@ async function trainingLines(
        uploads the sentence would be answering a question nobody asked. */
     ...(hasReference
       ? [
-          `The merchant's reference decides WHICH sections and in what ORDER. These filings`,
-          `decide how the individual elements are BUILT. When they disagree, the reference`,
-          `wins on sequence, the filing wins on detail.`,
+          `The merchant's reference decides how the SECTIONS look. These filings decide how`,
+          `the individual ELEMENTS are built. When they disagree, the reference wins on the`,
+          `section, the filing wins inside the element.`,
           ``,
         ]
       : []),
@@ -391,18 +412,23 @@ export async function designPageTree(
      ========================================================================== */
   const usePlan = process.env.USE_PLAN !== "false";
 
-  const order = usePlan
-    ? planPage(
-        {
-          whatYouSell: input.sell,
-          verticalSlug: input.verticalSlug ?? null,
-          visualStyle: input.style as never,
-        },
-        input.pageType,
-        seedFor(input.storeDomain ?? input.sell, input.pageType, input.style),
-        input.refStyle?.heroKind ?? null,
-      )
-    : null;
+  const brief = {
+    whatYouSell: input.sell,
+    verticalSlug: input.verticalSlug ?? null,
+    visualStyle: input.style as never,
+  };
+  const seed = seedFor(input.storeDomain ?? input.sell, input.pageType, input.style);
+
+  /* Two deciders, one seam. `orderFromSlots` and `planPage` return the same
+     shape and both go through `finish()`, so everything downstream — the skill
+     slices, the prompt, the audit, the exporter — cannot tell which one ran.
+     That is deliberate: the model was given the section list to decide, not a
+     second code path to be special in. */
+  const order = !usePlan
+    ? null
+    : input.structure?.length
+      ? orderFromSlots(brief, seed, input.structure)
+      : planPage(brief, input.pageType, seed, input.refStyle?.heroKind ?? null);
 
   /* §7 — CONCATENATION ORDER IS NOT COSMETIC. DeepSeek caches by prefix, and
      the cached prefix ends at the first byte that differs. `00-contract` and
@@ -695,7 +721,23 @@ function referenceLines(
   /* The read beats the measurement wherever both exist, and replaces it rather
      than joining it: "grids run 3 columns" adds nothing next to a list that
      already says which sections are 3-up, and two descriptions of one image
-     invite the model to reconcile them instead of building. */
+     invite the model to reconcile them instead of building.
+
+     IT NO LONGER DECIDES SEQUENCE, and that is a bug fix.
+
+     This block used to say "Follow that ORDER" — while the order above it, from
+     the resolver, said something else for this page type. Two imperatives about
+     sequence in one prompt, the reference's one last and immediately before
+     "Return the JSON object now". A merchant who uploaded a product-page
+     screenshot therefore got a HOME page told to open with a buy box, because
+     one read of one page was applied as a sequence to every page type in the
+     deck.
+
+     Sequence is now decided in exactly one place — `structure.ts` when a model
+     is asked, `planPage` otherwise — and `structure.ts` is given this same list,
+     where something that knows the page type can judge which of these sections
+     belongs on which page. What is left here is what a screenshot is genuinely
+     evidence of: how the sections LOOK. */
   if (seen && seen.length > 0) {
     return [
       `The merchant uploaded pages they want theirs to resemble. Read top to bottom, those pages are:`,
@@ -705,12 +747,13 @@ function referenceLines(
          another shop selling something else — the merchant is pointing at its
          shape, and a page that borrowed its subject would be worse than one
          that ignored it entirely. */
-      `Follow that ORDER and that STRUCTURE: which sections appear, in what`,
-      `sequence, how many columns each runs, which ones are dark. Write your own`,
-      `words for this merchant's product — never carry over the reference's`,
-      `wording, its industry or its claims.`,
-      `Where a section in that list has no element in your vocabulary, build the`,
-      `nearest honest thing and move on.`,
+      `Take the TREATMENT from those pages: how many columns each kind of section`,
+      `runs, which ones are dark, how much room they take, how the type is scaled.`,
+      `The section list above is this page's order — it already accounts for the`,
+      `reference. Do not re-order this page to match theirs, and do not add a`,
+      `section because they had one.`,
+      `Write your own words for this merchant's product — never carry over the`,
+      `reference's wording, its industry or its claims.`,
       ``,
     ];
   }

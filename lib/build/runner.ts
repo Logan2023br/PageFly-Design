@@ -2,6 +2,8 @@ import "server-only";
 
 import { designPageTree } from "../ai/designServer";
 import { readReferences } from "../ai/refVision";
+import { decideStructure } from "../design/structure";
+import { verticalFor } from "../design/plan";
 import { getRepo } from "../db";
 import type { JobRecord, RunPageRecord, RunRecord } from "../db/types";
 import { buildPage, expandSelection } from "../generate/mock";
@@ -179,6 +181,47 @@ async function run(
   const reading = await readReferences(brief, signal);
   if (reading) tokens += reading.usage.input + reading.usage.output;
 
+  /* WHICH SECTIONS EACH PAGE TYPE HAS, decided once for the whole deck.
+
+     Once rather than per page, and that is most of why it is safe to ask at all.
+     The model sees every page in the build together, so "home and product must
+     not be the same page" is a thing it can act on rather than a hope; and a
+     ten-page deck pays for one completion, not ten.
+
+     After the reference read, because the reference is an input to it: a merchant
+     who uploaded a page is pointing at a shape, and the only place that can
+     judge which page type that shape belongs on is the place deciding page
+     types. Before any page is designed, because every page needs its answer.
+
+     Failure is not fatal anywhere. No key, a timeout, unusable JSON, an answer
+     that does not survive checking — each falls back to the deterministic arc,
+     per page type, and says so in the log. */
+  const wantedTypes = [...new Set(plan.map((e) => e.pageType))];
+  const structure = await decideStructure(
+    {
+      sell: brief.whatYouSell,
+      storeType: brief.storeType,
+      vertical: verticalFor(brief),
+      pageTypes: wantedTypes,
+      refSections: reading?.sections ?? null,
+    },
+    signal,
+  );
+  tokens += structure.usage.input + structure.usage.output;
+
+  if (structure.reason)
+    console.log(
+      `[build] structure not used — ${structure.reason} · every page falls back to its arc`,
+    );
+  else
+    console.log(
+      `[build] structure · ${structure.plans.size}/${wantedTypes.length} page types ordered ` +
+        `by the model · in ${structure.usage.input} out ${structure.usage.output}`,
+    );
+  for (const f of structure.fallbacks)
+    console.log(`[build] structure · ${f.pageType} → arc — ${f.reason}`);
+  for (const r of structure.repairs) console.log(`[build] structure · ${r}`);
+
   /* A simple index cursor rather than a queue library: every worker takes the
      next unclaimed entry, so a page that takes ninety seconds does not hold up
      three others behind it. */
@@ -218,6 +261,9 @@ async function run(
             reference: base.refHints,
             /* What a model that can see actually found in those screenshots. */
             refSections: reading?.sections ?? null,
+            /* Absent for this page type when the model was not asked, or when
+               its answer for it did not survive checking. Then the arc runs. */
+            structure: structure.plans.get(entry.pageType) ?? null,
             refStyle: reading?.style ?? null,
             /* The whole deck, so a page can pace itself against its siblings
                rather than each one deciding in isolation. */

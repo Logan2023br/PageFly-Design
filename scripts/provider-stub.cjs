@@ -18,12 +18,19 @@ const TREE = JSON.stringify({
   ],
 });
 
+/* Tests that care about the ANSWER set `globalThis.__PFD_REPLY` — a string, or a
+   function of the request. Everything else gets the minimal tree above, which is
+   what a test about the QUESTION wants. */
 exports.getProvider = () => ({
   name: "stub",
   model: "stub",
   async complete(args) {
     asked.push(args);
-    return { text: TREE, usage: { input: 0, output: 0 }, truncated: false, reasoning: null };
+    const reply = globalThis.__PFD_REPLY;
+    const answer = typeof reply === "function" ? reply(args) : (reply ?? TREE);
+    if (answer && typeof answer === "object")
+      return { usage: { input: 0, output: 0 }, truncated: false, reasoning: null, ...answer };
+    return { text: answer, usage: { input: 0, output: 0 }, truncated: false, reasoning: null };
   },
 });
 
