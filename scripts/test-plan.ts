@@ -50,6 +50,7 @@ async function main(): Promise<void> {
   const { sliceIds } = await import("../lib/ai/skills");
   const { VERTICAL_CHIPS } = await import("../lib/verticals");
   const { PAGE_CATEGORIES } = await import("../lib/pageCatalog");
+  const { elementForPattern } = await import("../lib/design/elementFor");
 
   PAGE_TYPES.push(...PAGE_CATEGORIES.flatMap((c) => c.pages.map((p) => p.id)));
 
@@ -127,6 +128,25 @@ async function main(): Promise<void> {
         `${where}: signature count`,
         String(order.sections.filter((s) => s.signature).length),
       );
+
+      /* A BUY BOX ONLY WHERE THERE IS A PRODUCT TO PUT IN IT.
+         `hero-product-lead` is a ProductBox filed under `## Hero`, so the hero
+         slot offered it to every page type — and a home page came back opening
+         with the product page's own first screen. A ProductBox takes its product
+         from the page's context and only a product page has one, so the empty
+         box was the mockup's version of a page that would arrive unbound.
+         Mirrors the resolver's rule rather than restating it: a page with a
+         product detail may have a buy box, a page without one may not. */
+      const boxes = order.sections.filter(
+        (s) => s.pattern && elementForPattern(s.pattern) === "ProductBox",
+      );
+      const hasDetail = order.sections.some((s) => s.pattern?.startsWith("product-detail"));
+      check(
+        boxes.length === 0 || hasDetail,
+        `${where}: a buy box on a page with no product`,
+        boxes.map((s) => `${s.role}/${s.pattern}`).join(", "),
+      );
+      check(boxes.length <= 1, `${where}: ${boxes.length} buy boxes on one page`);
 
       for (const s of order.sections) {
         if (s.pattern === "") {

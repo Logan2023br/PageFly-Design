@@ -224,6 +224,39 @@ export function audit(
       );
   });
 
+  /* ==========================================================================
+     A BUY BOX ON A PAGE THAT HAS NO PRODUCT.
+
+     A `product` node is a ProductBox, and the exporter binds it to nothing — it
+     takes the product from the page's own context, which only a product page
+     has. On a home page the buy box arrives empty, and in the mockup it arrives
+     looking exactly like the product page's opening screen. That is what a
+     merchant saw: two pages in one deck with the same photograph, the same
+     price and the same Add to cart.
+
+     The resolver no longer hands a ProductBox pattern to a page with no product
+     (see `isBanned` in plan.ts), so this catches the other half — the model
+     building one anyway, in a slot that never asked for it.
+
+     COUNTS, on both sides. Zero product-detail sections ordered, one or more
+     product nodes built. It says nothing about what a buy box should contain,
+     or which pages should have one; the order already decided that.
+     ========================================================================== */
+  const detailsOrdered = order.sections.filter((s) =>
+    s.pattern?.startsWith("product-detail"),
+  ).length;
+  if (detailsOrdered === 0) {
+    const boxes = all.filter((n) => n.type === "product").length;
+    if (boxes > 0)
+      problems.push(
+        `This page has ${boxes} "product" node${boxes === 1 ? "" : "s"} and no ` +
+          `product-detail section was ordered. A "product" node is a live buy box ` +
+          `bound to the page's own product, and this page type has none — it would ` +
+          `arrive empty in the store. Use "productList" to show products here, or ` +
+          `build the section without one.`,
+      );
+  }
+
   order.sections.forEach((want, i) => {
     const got = sections[i] as (DesignSection & { pattern?: string }) | undefined;
     if (!got) return;

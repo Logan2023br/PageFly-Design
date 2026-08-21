@@ -3,6 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { sliceSkill, sliceIds } from "../ai/skills";
 import { GENERAL_VERTICAL, isKnownVertical, slugForLabel } from "../verticals";
+import { elementForPattern } from "./elementFor";
 import type { Brief } from "../validation";
 
 /* ==========================================================================
@@ -607,8 +608,41 @@ export function planPage(
      nothing: no vertical's ban line names a full pattern id, so every ban in
      the file was inert and a fashion store could be handed a spec grid whenever
      the seed reached for one. */
-  const isBanned = (id: string) =>
+  const bannedByVertical = (id: string) =>
     row.ban.some((b) => id === b || id.startsWith(`${b}-`));
+
+  /* A HOME PAGE THAT OPENS WITH A BUY BOX.
+
+     `hero-product-lead` is a `ProductBox` — its own block calls it "the product
+     page opener" — and it sits under `## Hero` in the pattern file, so the hero
+     slot offered it to every page type there is. A home page and a product page
+     for the same store came back with the same first screen: the same photograph,
+     the same price, the same Add to cart.
+
+     Three separate routes delivered it, which is why the fix is here rather than
+     at any one of them. The pool offered it on a plain seed draw; `row.hero`
+     weighted it DOUBLE for the three trades that name it in `30-verticals.md`;
+     and `HERO_FOR_KIND["product-lead"]` PINNED it — beating both the seed and the
+     vertical — for any merchant who uploaded a product-page screenshot, since one
+     style read is applied to every page in the deck. All three read this list.
+
+     It is not only a repeated screen. A `ProductBox` is bound to nothing by the
+     exporter; it takes the product from the page's own context, and only a
+     product page has one. On a home page the buy box arrives with no product in
+     it, so this is correctness before it is taste.
+
+     WHICH PAGES HAVE ONE PRODUCT is not a new list — it is already written down
+     in `PINNED`, as the page types whose commerce slot is a `product-detail`.
+     Derived rather than restated, because a second list goes stale silently: the
+     nine landing arcs were unreachable for a week because `arcFor` tested a
+     prefix before consulting its table. */
+  const pageHasOneProduct = (PINNED[pageType]?.commerce ?? []).some((id) =>
+    id.startsWith("product-detail"),
+  );
+  const needsAProduct = (id: string) => elementForPattern(id) === "ProductBox";
+
+  const isBanned = (id: string) =>
+    bannedByVertical(id) || (needsAProduct(id) && !pageHasOneProduct);
   const used = new Set<string>();
 
   /* Pattern per slot. The candidate list for the role, minus the vertical's
