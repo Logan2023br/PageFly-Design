@@ -51,6 +51,16 @@ export function StickyBar() {
         return;
       }
       await start();
+    } catch (err) {
+      /* `finally` alone reset the button and let the rejection go unhandled, so
+         a failing account refresh or a throw inside `start` looked exactly like
+         a click that did nothing. Anything thrown here is the merchant's
+         problem to see, not ours to swallow. */
+      console.error("[create] failed", err);
+      setBlocked(
+        (err as Error)?.message ??
+          "Something went wrong starting the build. Try again.",
+      );
     } finally {
       setChecking(false);
     }

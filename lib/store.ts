@@ -291,7 +291,26 @@ export const useStore = create<State & Actions>((set, get) => ({
   start: async () => {
     const { draft } = get();
     const parsed = validateBrief(draft);
-    if (!parsed.success) return;
+    if (!parsed.success) {
+      /* IT USED TO RETURN IN SILENCE, and that is the whole bug report: the
+         button said "Checking…", went back to "Create pages", and nothing
+         happened — no screen, no message, nothing in the console.
+
+         The reason it can happen at all is that readiness is decided twice by
+         two different rules. `firstMissing()` enables the button on four fields;
+         `briefSchema` validates the whole brief. Anything the schema refuses that
+         `firstMissing` does not check is a button that looks ready and a start
+         that refuses, for ever, with no way for the merchant to find out which
+         field it was. Naming the field is the least this can do. */
+      const issue = parsed.error.issues[0];
+      const where = issue?.path?.join(".");
+      set({
+        buildError: where
+          ? `That brief could not be used — ${where}: ${issue.message}`
+          : (issue?.message ?? "That brief could not be used."),
+      });
+      return;
+    }
 
     const brief = parsed.data;
     const plan: PlanEntry[] = expandSelection(brief.pages).map((p) => ({
