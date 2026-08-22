@@ -5,6 +5,7 @@ import {
   MAX_IMAGES,
   MAX_PROMPT_CHARS,
   MAX_SELL_CHARS,
+  MAX_SLICES,
   STORE_TYPE_IDS,
 } from "./briefOptions";
 import { ALL_PAGE_IDS, MAX_PER_PAGE, MAX_TOTAL_PAGES } from "./pageCatalog";
@@ -33,7 +34,22 @@ export const referenceImageSchema = z.object({
    * upload back and useless for reading a tall page: a 1500x8000 capture ends
    * up 192 wide. These keep the horizontal resolution and split the height.
    */
-  slices: z.array(z.string()).max(4).optional(),
+  /**
+   * Bounded by the same constant the slicer uses, and unable to refuse a brief.
+   *
+   * This said `.max(4)` while `sliceForReading` produced up to six, so a tall
+   * screenshot made the whole brief invalid — and `start()` returned in silence,
+   * so the merchant got a Create button that did nothing. Two numbers in two
+   * files, one of which was changed.
+   *
+   * `.catch(undefined)` is the second half of the fix and matters more than the
+   * first. These slices are OUR derived artefact, not something the merchant
+   * typed: refusing their entire brief because our own slicer produced one piece
+   * more than a number in another file is never the right failure. Without them
+   * the vision read falls back to the thumbnail, which is worse and still a
+   * page. Same reasoning, and same shape, as `surface` below.
+   */
+  slices: z.array(z.string()).max(MAX_SLICES).optional().catch(undefined),
   /** dominant colours pulled off the image, most prominent first */
   palette: z.array(z.string()).default([]),
   /**

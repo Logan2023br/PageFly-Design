@@ -149,5 +149,19 @@ export const UPLOAD_REJECT_MESSAGE =
 
 /* One slot per role — see BRAND_COLOR_ROLES. */
 export const MAX_BRAND_COLORS = BRAND_COLOR_ROLES.length;
+/**
+ * The most pieces one reference image is cut into for the vision read.
+ *
+ * HERE, and not in `imageAnalysis.ts`, because two files need it and they were
+ * allowed to disagree: the slicer said 6, `briefSchema` said 4, and a screenshot
+ * tall enough to need five pieces made the whole brief invalid. The brief was
+ * then refused in silence, so the symptom was a Create button that did nothing
+ * whenever a reference image was attached — and nothing at all when it was not.
+ *
+ * `imageAnalysis.ts` cannot own it: it reaches for a canvas, and importing it
+ * into the schema would pull DOM code into the server bundle.
+ */
+export const MAX_SLICES = 6;
+
 export const MAX_SELL_CHARS = 120;
 export const MAX_PROMPT_CHARS = 1500;

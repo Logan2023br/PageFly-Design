@@ -5,6 +5,9 @@ import type {
   RefBand,
   RefBandKind,
 } from "./refLayout";
+/* Shared with `briefSchema`, which validates what this produces. See the note
+   on `MAX_SLICES` for why it lives there and not here. */
+import { MAX_SLICES } from "./briefOptions";
 
 /* ==========================================================================
    Reference image preparation.
@@ -75,8 +78,6 @@ const SLICE_RATIO = 1.4;
    Each extra slice is about 600 Haiku tokens, once per build, so the ceiling on
    this is judgement rather than money: past six, slices get short enough that a
    section is regularly split across two of them. */
-const MAX_SLICES = 6;
-
 /**
  * The ceiling that actually bites, and it is not the file size.
  *
