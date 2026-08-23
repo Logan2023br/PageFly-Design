@@ -1014,6 +1014,102 @@ async function main(): Promise<void> {
     "with the words the design wrote",
   );
 
+  /* ---- text on a photograph, three across ------------------------------- */
+
+  /* `usecase-tiles-overlay` — "the highest-value non-hero pattern", and the one
+     that shipped three full-screen empty boxes. Three separate defects met in
+     it and each is asserted below, because each of them alone is enough to make
+     the section look broken:
+
+       the tile had no photograph   nothing collected an overlay's query, so the
+                                    scrim gradient painted over nothing
+       the tile was a screen tall   `ratio` is a SHAPE, written as a fraction of
+                                    the viewport width, then clamped to 100vh
+       the row was not a card list  `cardList` allowed col/row/image children,
+                                    and `elementFor` says this pattern IS a
+                                    ContentList2 */
+
+  console.log("\nthree overlay tiles across");
+
+  const TILE_QUERIES = [
+    "woman wearing a fine gold chain at a kitchen window",
+    "gold hoop earrings on a dressing table at night",
+    "stacked gold bracelets on a wrist, daylight",
+  ];
+
+  const tilesTree = {
+    sections: [
+      section(
+        [
+          {
+            type: "row",
+            css: { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "16px" },
+            children: TILE_QUERIES.map((query, i) => ({
+              type: "overlay",
+              query,
+              ratio: 1.15,
+              scrim: "bottom",
+              align: "bottom-left",
+              children: [
+                { type: "text", text: ["THE MORNING", "THE EVENING", "THE EVERYDAY"][i] },
+                { type: "heading", level: 3, text: "A single chain" },
+                { type: "text", text: "One quiet piece that does the work before you speak." },
+              ],
+            })),
+          },
+        ],
+        "usecase-tiles-overlay",
+      ),
+    ],
+  };
+
+  /* Every overlay query the tree asks for must be asked FOR. This is the only
+     assertion here that is not about `toPagefly` — it is about the step before
+     it, and it lives beside the others because the three of them are one
+     section's worth of damage and are meant to be read together. */
+  const { imageWants } = await import("../lib/design/imageWants");
+  const asked = new Set(imageWants(tilesTree as never).map((w) => w.query));
+  check(
+    TILE_QUERIES.every((q) => asked.has(q)),
+    "an overlay's photograph is asked for",
+    TILE_QUERIES.filter((q) => !asked.has(q)).join(" · ") || "",
+  );
+
+  const tiles = await open(tilesTree, "tiles", {
+    images: Object.fromEntries(TILE_QUERIES.map((q, i) => [q, `https://example.test/tile-${i}.jpg`])),
+  });
+  const tileType = (t: string) => tiles.items.filter((i) => i.type === t);
+
+  const tileList = tileType("ContentList2")[0];
+  check(Boolean(tileList), "the tile row became a ContentList2", tileList ? "" : "still a FlexBlock");
+  if (tileList) {
+    check(
+      tileType("ContentListItem").length === 3,
+      "one ContentListItem per tile",
+      `${tileType("ContentListItem").length}`,
+    );
+    const shown = tileList.data?.slidesToShow as Record<string, number> | undefined;
+    check(shown?.all === 3, "three across, as DATA", String(shown?.all));
+  }
+
+  /* The tiles themselves: the FlexBlocks carrying a scrim gradient. */
+  const tileBoxes = tiles.items.filter((i) => /linear-gradient/.test(tiles.cssOf(i.id)));
+  check(tileBoxes.length === 3, "three tiles carry a scrim", `${tileBoxes.length}`);
+
+  for (const box of tileBoxes.slice(0, 1)) {
+    const css = tiles.cssOf(box.id);
+    check(/url\("https:\/\/example\.test\//.test(css), "the photograph is in the tile", css.slice(0, 90));
+    /* THE HEIGHT BUG. `ratio` is cao/rộng of THIS box. As `vw` it is a fraction
+       of the whole viewport, so a tile one third of the row wide asked for
+       115vw and got clamped to exactly one screen. */
+    check(
+      !/min-height:\s*\d+vw/.test(css),
+      "the tile's shape is not a fraction of the viewport",
+      (/min-height:\s*\d+vw/.exec(css) ?? [""])[0],
+    );
+    check(/aspect-ratio:/.test(css), "the tile states its aspect ratio", css.slice(0, 90));
+  }
+
   /* ---- and the class the form bug belonged to --------------------------- */
 
   console.log("\nevery element, every page above");
@@ -1024,6 +1120,7 @@ async function main(): Promise<void> {
     ...stacked.items, ...inRow.items, ...labelled.items,
     ...slider.items, ...exact.items, ...banded.items, ...plain.items, ...unresolved.items,
     ...rail.items, ...buyBar.items, ...atc.items, ...bound.items, ...plainBtn.items, ...full.items,
+    ...tiles.items,
   ];
   /* Body and Layout are excluded: the format doc says both are required and
      carry no styles, they are built outside the element path, and neither has

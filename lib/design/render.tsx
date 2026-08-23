@@ -683,7 +683,13 @@ function Overlay({ node, cls }: { node: Extract<DesignNode, { type: "overlay" }>
       style={{
         display: "flex",
         width: "100%",
-        minHeight: `${Math.round(node.ratio * 100)}vw`,
+        /* Height ÷ width, against THIS box — not `ratio * 100vw`, which is the
+           same number only when the overlay is full-bleed and made every tile in
+           a three-across grid a full screen tall. `minHeight: min-content` is
+           the floor that keeps text taller than the shape from being clipped.
+           Kept identical to the export's rule in `toPagefly.ts`. */
+        aspectRatio: `1 / ${node.ratio}`,
+        minHeight: "min-content",
         maxHeight: "100vh",
         backgroundImage: [scrim, src ? `url("${src}")` : ""].filter(Boolean).join(", "),
         backgroundSize: "cover",

@@ -729,10 +729,25 @@ function emitNode(
             layers && `background-image: ${layers};`,
             "background-size: cover;",
             "background-position: center;",
-            /* The ratio is the shape the model asked for; `min-height` rather
-               than `aspect-ratio` because the text inside must be able to make
-               it taller, and an aspect-ratio box clips instead. */
-            `min-height: ${Math.round(node.ratio * 100)}vw;`,
+            /* THE SHAPE, AGAINST THIS BOX'S OWN WIDTH.
+
+               `ratio` is height ÷ width — `stock.ts` reads the same number as
+               orientation, `<= 1.05` being landscape. Written as `min-height:
+               <ratio*100>vw` it was a fraction of the VIEWPORT instead, which is
+               only the same thing when the overlay is full-bleed. In a
+               three-across grid it is not: `usecase-tiles-overlay` asks for 1.15
+               on a tile one third of the row wide, so a tile that should be
+               ~400px tall asked for 115vw and hit the `100vh` bound below —
+               three empty full-screen boxes with the words at the bottom, which
+               is exactly what shipped.
+
+               `min-height: min-content` is what the old comment was protecting:
+               an aspect-ratio box does clip text taller than its shape, and this
+               is the floor that lets the text win instead. It also means that if
+               the Flex engine ever declines the aspect-ratio, the tile falls
+               back to hugging its words — short, not a screen tall. */
+            `aspect-ratio: 1 / ${node.ratio};`,
+            "min-height: min-content;",
             "max-height: 100vh;",
             `display: flex !important; ${align}`,
           ]
@@ -1247,9 +1262,16 @@ function cardList(
   const children = node.children;
   if (children.length < 3 || children.length !== kids.length) return null;
 
-  /* One shape, repeated. */
+  /* One shape, repeated.
+
+     `overlay` belongs here and its absence was a plain omission rather than a
+     decision: none of the disqualifiers above describe it — it is not a mixed
+     row, it carries no Product*, it brings no layout engine of its own, and it
+     states no width. `elementFor` already says `usecase-tiles-overlay` IS a
+     ContentList2, and two files disagreeing is what shipped three photo tiles
+     as a nest of FlexBlocks with no column control in the editor. */
   const shape = children[0].type;
-  if (shape !== "col" && shape !== "row" && shape !== "image") return null;
+  if (shape !== "col" && shape !== "row" && shape !== "image" && shape !== "overlay") return null;
   if (!children.every((c) => c.type === shape)) return null;
 
   for (const c of children) {

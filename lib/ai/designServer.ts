@@ -15,6 +15,7 @@ import {
 } from "../design/plan";
 import { audit } from "../design/audit";
 import { elementForPattern } from "../design/elementFor";
+import { imageWants } from "../design/imageWants";
 import { getRepo } from "../db";
 import { sectionPlanLine } from "../design/sectionPlan";
 import { detectVertical } from "../generate/content";
@@ -583,7 +584,7 @@ export async function designPageTree(
   }
 
   let tree = parsed.data;
-  let nodes = walk(tree);
+  const nodes = walk(tree);
   let usage = completion.usage;
   let auditFailures = 0;
 
@@ -644,7 +645,6 @@ export async function designPageTree(
         const repaired = designTreeSchema.safeParse(parseObject(repair.text));
         if (repaired.success && repaired.data.sections.length >= tree.sections.length) {
           tree = repaired.data;
-          nodes = walk(tree);
         }
       } catch {
         /* A failed repair costs the page nothing: the first tree still stands. */
@@ -652,24 +652,11 @@ export async function designPageTree(
     }
   }
 
-  const wants = nodes
-    .filter((n): n is Extract<typeof n, { type: "image" }> => n.type === "image")
-    .map((n) => ({ query: n.query, ratio: n.ratio }));
-
-  const shots = nodes
-    .filter((n): n is Extract<typeof n, { type: "product" }> => n.type === "product")
-    .map((n) => ({ query: n.query, ratio: 1 }));
-
-  /* A band's background photograph is resolved with the rest — it is the same
-     library and the same cache, and it is landscape by nature. */
-  const bands = tree.sections
-    .filter((s) => s.bg?.kind === "photo" && s.bg.query)
-    .map((s) => ({ query: s.bg!.query, ratio: 0.5 }));
-
+  /* Which nodes carry a photograph is a fact about the schema, so it is kept
+     next to the schema — see `imageWants`. Inline here, the list went stale the
+     moment a new node type grew a `query`. */
   const photos =
-    stockProvider() === "none"
-      ? {}
-      : await resolvePhotos([...wants, ...shots, ...bands], signal);
+    stockProvider() === "none" ? {} : await resolvePhotos(imageWants(tree), signal);
 
   /* ==========================================================================
      Background videos, one lookup each, and never more than one per page.
