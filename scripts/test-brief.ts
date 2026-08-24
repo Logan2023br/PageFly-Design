@@ -157,6 +157,52 @@ async function main(): Promise<void> {
     check(ready === valid, `${label}: button ${ready ? "on" : "off"}, schema ${valid ? "ok" : "no"}`, why(d));
   }
 
+  /* ---- which brief made this page --------------------------------------- */
+
+  /* `loadLibrary` merges every saved run into ONE deck and keeps only the last
+     run's brief in `brief`. A panel that reads that field shows run Z's brief on
+     a page built by run A — correct-looking and wrong. The second case below is
+     that exact bug. */
+
+  console.log("\nwhich brief made this page");
+
+  const { briefForPage } = await import("../lib/briefForPage");
+
+  /* `validateBrief` returns a zod safeParse union, so `.data` only exists on
+     the success arm — narrowing here rather than `!` keeps this compiling under
+     the repo's strict TS, and turns a broken fixture into a clear failure. */
+  const parseOk = (over: Record<string, unknown>) => {
+    const r = validateBrief(draft(over) as never);
+    if (!r.success) throw new Error("test fixture is not a valid brief");
+    return r.data;
+  };
+
+  const briefA = parseOk({ whatYouSell: "Run A cookware" });
+  const briefZ = parseOk({ whatYouSell: "Run Z candles" });
+  const byRun = { "run-a": briefA, "run-z": briefZ };
+
+  check(
+    briefForPage({}, briefZ, {}) === briefZ,
+    "a normal build: a page with no runId gets the brief in state",
+  );
+
+  check(
+    briefForPage({ runId: "run-a" }, briefZ, byRun) === briefA,
+    "a Library page gets ITS run's brief, not the last run's",
+    briefForPage({ runId: "run-a" }, briefZ, byRun)?.whatYouSell,
+  );
+
+  check(
+    briefForPage({ runId: "run-z" }, briefZ, byRun) === briefZ,
+    "and a page from the last run still gets its own",
+  );
+
+  check(
+    briefForPage({ runId: "run-missing" }, briefZ, byRun) === null,
+    "a runId with no brief resolves to null rather than the wrong brief",
+    String(briefForPage({ runId: "run-missing" }, briefZ, byRun)?.whatYouSell),
+  );
+
   console.log();
   console.log(failures === 0 ? "PASS" : `FAIL — ${failures} problem${failures === 1 ? "" : "s"}`);
   if (failures) process.exitCode = 1;
