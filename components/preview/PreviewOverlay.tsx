@@ -518,10 +518,7 @@ export function PreviewOverlay({
 
         <div
           ref={stageRef}
-          /* `relative` so the brief's opaque ground can fill exactly this box —
-             the stage — rather than the whole screen, leaving the toolbar and
-             the page arrows where they are. */
-          className="relative grid min-h-0 flex-1 place-items-center overflow-hidden"
+          className="grid min-h-0 flex-1 place-items-center overflow-hidden"
         >
           {/* OPAQUE, and across the whole stage.
 
@@ -531,9 +528,18 @@ export function PreviewOverlay({
               took its place the merchant was reading the brief through their own
               deck. A `max-w` column would leave the same leak either side of it,
               so the ground is full-bleed and the reading measure is set inside
-              the panel. */}
+              the panel.
+
+              AN IN-FLOW GRID ITEM, and it has to be. This was `absolute
+              inset-0`, which renders NOTHING here: the stage is a grid with
+              `place-items-center`, and an absolutely-positioned box inherits
+              that `align-self: center`, which makes it shrink to its content
+              instead of stretching to the inset rectangle — so the panel's own
+              `h-full w-full` resolved against `auto` and collapsed. As a grid
+              item the same `h-full w-full` resolves against the grid area, which
+              is the whole stage. */}
           {showBrief && (
-            <div className="absolute inset-0 z-10 bg-pf-bg-deep">
+            <div className="h-full w-full bg-pf-bg-deep">
               <BriefPanel brief={pageBrief} />
             </div>
           )}
