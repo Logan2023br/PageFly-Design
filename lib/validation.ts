@@ -27,6 +27,17 @@ export const referenceImageSchema = z.object({
    */
   dataUrl: z.string().optional(),
   /**
+   * A much smaller copy of the same picture, and the only one that survives
+   * being saved.
+   *
+   * `dataUrl` is dropped when a run is stored, because at 1024px it is 80-200KB
+   * and `/api/runs` takes 200,000 characters in total — keeping it would stop
+   * runs saving at all. This is 256px, so the brief can still be read back with
+   * its references months later. Optional: every run saved before it existed
+   * has none, and those show the file names instead.
+   */
+  thumbUrl: z.string().optional(),
+  /**
    * The same image cut into readable pieces for the vision pass, in order.
    *
    * Separate from `dataUrl` because they answer different questions. `dataUrl`

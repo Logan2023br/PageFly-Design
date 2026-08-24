@@ -2,6 +2,7 @@ import { z } from "zod";
 import { currentAccount, remainingPages } from "@/lib/account";
 import { getRepo } from "@/lib/db";
 import type { RunPageRecord, RunRecord } from "@/lib/db";
+import { MAX_RUN_PAYLOAD_CHARS } from "@/lib/runPayload";
 
 /* ==========================================================================
    GET  /api/runs   the signed-in store's saved runs (drives Library)
@@ -28,7 +29,10 @@ const pageSchema = z.object({
 });
 
 const bodySchema = z.object({
-  payload: z.string().min(2).max(200_000),
+  /* The same constant the encoder budgets against, imported rather than
+     repeated — the encoder drops reference thumbnails to stay under it, and it
+     can only do that if both files mean the same number. */
+  payload: z.string().min(2).max(MAX_RUN_PAYLOAD_CHARS),
   pages: z.array(pageSchema).min(1).max(60),
   sell: z.string().max(300).default(""),
   styleLabel: z.string().max(100).default(""),

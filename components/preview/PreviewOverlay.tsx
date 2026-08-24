@@ -518,10 +518,22 @@ export function PreviewOverlay({
 
         <div
           ref={stageRef}
-          className="grid min-h-0 flex-1 place-items-center overflow-hidden"
+          /* `relative` so the brief's opaque ground can fill exactly this box —
+             the stage — rather than the whole screen, leaving the toolbar and
+             the page arrows where they are. */
+          className="relative grid min-h-0 flex-1 place-items-center overflow-hidden"
         >
+          {/* OPAQUE, and across the whole stage.
+
+              The overlay's backdrop is `bg-pf-bg-deep/88`, so twelve per cent
+              of the results screen behind it has always come through — invisible
+              while a mockup covered the stage, and the moment a panel of text
+              took its place the merchant was reading the brief through their own
+              deck. A `max-w` column would leave the same leak either side of it,
+              so the ground is full-bleed and the reading measure is set inside
+              the panel. */}
           {showBrief && (
-            <div className="h-full w-full max-w-[860px]">
+            <div className="absolute inset-0 z-10 bg-pf-bg-deep">
               <BriefPanel brief={pageBrief} />
             </div>
           )}

@@ -101,6 +101,7 @@ export function ImageUpload() {
           accepted.push({
             ...base,
             dataUrl: prepared.dataUrl,
+            thumbUrl: prepared.thumbUrl,
             slices: prepared.slices,
             palette: prepared.palette,
             /* The page background and ink. When present these decide the

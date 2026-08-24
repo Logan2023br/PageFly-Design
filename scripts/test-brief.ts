@@ -203,6 +203,55 @@ async function main(): Promise<void> {
     String(briefForPage({ runId: "run-missing" }, briefZ, byRun)?.whatYouSell),
   );
 
+  /* ---- a saved run stays under the ceiling ------------------------------ */
+
+  /* `/api/runs` refuses a payload over MAX_RUN_PAYLOAD_CHARS. Reference
+     thumbnails are the only part of a brief that can be large, so they are the
+     only part that can push a run over it — and a refused POST loses the deck,
+     not the pictures. The encoder drops them instead; this is that promise. */
+
+  console.log("\nwhat a saved run may weigh");
+
+  const { encodeRunPayload, MAX_RUN_PAYLOAD_CHARS } = await import("../lib/runPayload");
+
+  const withImages = (thumbBytes: number) =>
+    parseOk({
+      referenceImages: Array.from({ length: 6 }, (_, i) => ({
+        id: `img-${i}`,
+        name: `Screenshot ${i}.png`,
+        url: `blob:http://localhost/${i}`,
+        dataUrl: `data:image/webp;base64,${"D".repeat(200_000)}`,
+        thumbUrl: `data:image/webp;base64,${"T".repeat(thumbBytes)}`,
+        type: "image/png",
+        size: 1_200_000,
+      })),
+    });
+
+  /* Realistic: a 256px webp is 8-20KB, so six is well inside the ceiling. */
+  const normal = encodeRunPayload(withImages(20_000), {});
+  check(
+    normal.length <= MAX_RUN_PAYLOAD_CHARS,
+    "six normal thumbnails fit",
+    `${normal.length} / ${MAX_RUN_PAYLOAD_CHARS}`,
+  );
+  check(normal.includes("TTTT"), "and the thumbnails are actually kept");
+  check(
+    !normal.includes("DDDD"),
+    "while the 1024px copies are not — they are what would break it",
+  );
+
+  /* Absurd, to prove the guard fires rather than the POST failing. */
+  const huge = encodeRunPayload(withImages(60_000), {});
+  check(
+    huge.length <= MAX_RUN_PAYLOAD_CHARS,
+    "thumbnails too heavy to fit are dropped, not the run",
+    `${huge.length} / ${MAX_RUN_PAYLOAD_CHARS}`,
+  );
+  check(
+    huge.includes("Screenshot 0.png"),
+    "the reference is still listed by name after its picture is dropped",
+  );
+
   console.log();
   console.log(failures === 0 ? "PASS" : `FAIL — ${failures} problem${failures === 1 ? "" : "s"}`);
   if (failures) process.exitCode = 1;

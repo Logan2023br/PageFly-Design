@@ -35,6 +35,20 @@ import { MAX_SLICES } from "./briefOptions";
 
 export const REF_MAX_EDGE = 1024;
 
+/**
+ * A much smaller copy, kept so a SAVED run can show what was uploaded.
+ *
+ * `dataUrl` cannot do this job. It is capped at 1024 on the long edge, which is
+ * 80-200KB once base64'd, and `/api/runs` accepts a payload of at most 200,000
+ * characters — six references would be a megabyte and the run would stop saving
+ * altogether. That is the same shape as the `slices` bug: a bound in one file
+ * and the thing producing the value in another.
+ *
+ * 256 is sized for the job it has. The brief panel draws these at 64px, so even
+ * a retina screen is asking for 128, and a 256px webp lands around 8-20KB.
+ */
+export const REF_THUMB_EDGE = 256;
+
 /* ==========================================================================
    Slices for the vision pass.
 
@@ -116,6 +130,8 @@ export type PreparedImage = {
   /** bounded, serialisable copy. NOT rendered into mockups — kept so the real
       vision-capable generator has the image to send. */
   dataUrl: string;
+  /** the small copy that survives being saved with a run — see REF_THUMB_EDGE */
+  thumbUrl: string;
   /**
    * The same picture cut into readable pieces, in order, for the model that
    * reads it. One entry when the image is not tall; up to four when it is.
@@ -588,6 +604,18 @@ export async function prepareReferenceImage(
       canvas.toDataURL("image/webp", 0.82) ||
       canvas.toDataURL("image/jpeg", 0.82);
 
+    /* The small copy, drawn from the same canvas rather than the source, so it
+       costs one more scale and no second decode of a 20MB PNG. */
+    const tScale = Math.min(1, REF_THUMB_EDGE / Math.max(w, h));
+    const tc = document.createElement("canvas");
+    tc.width = Math.max(1, Math.round(w * tScale));
+    tc.height = Math.max(1, Math.round(h * tScale));
+    const tctx = tc.getContext("2d");
+    if (!tctx) throw new Error("Canvas is unavailable");
+    tctx.drawImage(canvas, 0, 0, tc.width, tc.height);
+    const thumbUrl =
+      tc.toDataURL("image/webp", 0.7) || tc.toDataURL("image/jpeg", 0.7);
+
     // Palette from a tiny second pass, area-budgeted — see SAMPLE_PIXELS.
     const sc = document.createElement("canvas");
     const sScale = Math.min(1, Math.sqrt(SAMPLE_PIXELS / (w * h)));
@@ -605,7 +633,7 @@ export async function prepareReferenceImage(
        reason these exist is that the thumbnail is too small to read. */
     const slices = sliceForReading(img);
 
-    return { dataUrl, slices, palette, surface, layout, width: w, height: h, lightness, saturation };
+    return { dataUrl, thumbUrl, slices, palette, surface, layout, width: w, height: h, lightness, saturation };
   } finally {
     URL.revokeObjectURL(objectUrl);
   }

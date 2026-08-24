@@ -102,28 +102,37 @@ export function BriefPanel({ brief }: { brief: Brief | null }) {
 }
 
 /* ==========================================================================
-   A saved run keeps the NAMES of the reference images and not the pixels.
+   Three sources, in the order they survive.
 
-   `runPayload.ts` blanks `url` and clears `dataUrl` before a run is stored, so
-   a deck reopened from the Library has the list and no thumbnails. Rendering an
-   <img> with an empty src would give the merchant a row of broken-image icons
-   and imply the upload was lost; showing nothing would imply there never was
-   one. Neither is true, so the names are shown as names.
+   `dataUrl` is the 1024px copy and exists only in the session that uploaded it.
+   `thumbUrl` is 256px and IS saved with the run, which is what lets a brief be
+   read back from the Library months later with its references intact. `url` is
+   an object URL and does not outlive the tab that made it.
+
+   Runs saved before thumbnails existed have none of the three, and those show
+   the file names. Rendering an <img> with an empty src would give the merchant
+   a row of broken-image icons and imply the upload was lost; showing nothing
+   would imply there never was one. Neither is true.
    ========================================================================== */
 
 function ReferenceImages({ images }: { images: Brief["referenceImages"] }) {
   return (
     <ul className="flex flex-wrap gap-3">
       {images.map((img) => {
-        const src = img.dataUrl || img.url;
+        const src = img.dataUrl || img.thumbUrl || img.url;
         return (
           <li key={img.id}>
             {src ? (
+              /* `object-contain` on a tall box, NOT a 64px square crop. These
+                 are usually full-page screenshots — a square `object-cover`
+                 tile of one shows a slice of its header and nothing that
+                 identifies it, which is the same as showing nothing. */
               /* eslint-disable-next-line @next/next/no-img-element */
               <img
                 src={src}
                 alt={img.name}
-                className="size-16 rounded-pf-sm border border-pf-border object-cover"
+                title={img.name}
+                className="h-40 w-auto max-w-[240px] rounded-pf-sm border border-pf-border bg-pf-card object-contain"
               />
             ) : (
               <span className="flex items-center gap-1.5 rounded-pf-sm border border-pf-border px-2 py-1.5 text-[12.5px] text-pf-muted">
