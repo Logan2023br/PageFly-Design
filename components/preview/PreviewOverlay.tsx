@@ -3,10 +3,12 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { DEVICES, type DeviceId, type PageMockup } from "@/lib/generate/types";
+import { briefForPage } from "@/lib/briefForPage";
 import { useStore } from "@/lib/store";
 import { MockupPage } from "../mockup/MockupPage";
 import { Button, Icon, Tag } from "../ui";
 import { useExport } from "../results/ExportProvider";
+import { BriefPanel } from "./BriefPanel";
 import { DeviceFrame } from "./DeviceFrame";
 
 /* ==========================================================================
@@ -33,6 +35,7 @@ const SHORTCUTS = [
   ["1 – 4", "Device size"],
   ["+ −", "Zoom"],
   ["0", "Fit"],
+  ["B", "Brief"],
 ] as const;
 
 type Spec = (typeof DEVICES)[number];
@@ -146,6 +149,8 @@ export function PreviewOverlay({
   const setZoom = useStore((s) => s.setZoom);
   const nudgeZoom = useStore((s) => s.nudgeZoom);
   const close = useStore((s) => s.closePreview);
+  const brief = useStore((s) => s.brief);
+  const briefs = useStore((s) => s.briefs);
   const step = useStore((s) => s.stepPreview);
   const regenerateOne = useStore((s) => s.regenerateOne);
   const hasSeenShortcuts = useStore((s) => s.hasSeenShortcuts);
@@ -156,9 +161,15 @@ export function PreviewOverlay({
   const stageRef = useRef<HTMLDivElement>(null);
   const [stage, setStage] = useState({ w: 0, h: 0 });
   const [scrub, setScrub] = useState(false);
+  const [showBrief, setShowBrief] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(!hasSeenShortcuts);
 
   const spec = DEVICES.find((d) => d.id === device) ?? DEVICES[0];
+
+  /* Resolved per page, so stepping through a Library deck shows each page's own
+     brief rather than the last run's — see `briefForPage`. `page` is only
+     guarded further down, so the conditional is load-bearing. */
+  const pageBrief = page ? briefForPage(page, brief, briefs) : null;
 
   /* ---- body scroll lock ------------------------------------------------ */
   useEffect(() => {
@@ -207,7 +218,11 @@ export function PreviewOverlay({
       switch (e.key) {
         case "Escape":
           e.preventDefault();
-          close();
+          /* One key, the nearest thing first. Closing the whole overlay from
+             under an open brief loses the merchant's page as well as the panel
+             they meant to dismiss. */
+          if (showBrief) setShowBrief(false);
+          else close();
           break;
         case "ArrowLeft":
           e.preventDefault();
@@ -238,6 +253,11 @@ export function PreviewOverlay({
           e.preventDefault();
           setZoom(null);
           break;
+        case "b":
+        case "B":
+          e.preventDefault();
+          setShowBrief((v) => !v);
+          break;
         case "?":
           e.preventDefault();
           setShowShortcuts((v) => !v);
@@ -246,7 +266,10 @@ export function PreviewOverlay({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [close, step, setDevice, setZoom, nudgeZoom]);
+    /* `showBrief` is in here because Escape reads it. Without it the handler
+       keeps the first render's value and Escape closes the whole overlay from
+       under an open panel — the exact thing the branch above prevents. */
+  }, [close, step, setDevice, setZoom, nudgeZoom, showBrief]);
 
   /* The hint shows once per session, then gets out of the way. */
   useEffect(() => {
@@ -418,6 +441,17 @@ export function PreviewOverlay({
 
             <Button
               size="sm"
+              variant={showBrief ? "primary" : "ghost"}
+              icon="ClipboardList"
+              aria-pressed={showBrief}
+              onClick={() => setShowBrief((v) => !v)}
+              title="What this page was built from (B)"
+            >
+              <span className="hidden lg:inline">Brief</span>
+            </Button>
+
+            <Button
+              size="sm"
               variant={scrub ? "primary" : "ghost"}
               icon="Crosshair"
               aria-pressed={scrub}
@@ -486,36 +520,48 @@ export function PreviewOverlay({
           ref={stageRef}
           className="grid min-h-0 flex-1 place-items-center overflow-hidden"
         >
-          {/* Zoom is a plain CSS transform on the outside. Inside it, the frame
-              springs from the ratio of the device we came from to 1 — so a
-              1440 → 390 switch visibly shrinks instead of hard-cutting, while
-              the mockup itself is laid out at its true width the entire time.
+          {showBrief && (
+            <div className="h-full w-full max-w-[860px]">
+              <BriefPanel brief={pageBrief} />
+            </div>
+          )}
 
-              Deliberately NOT a Framer `layout` animation: layout projection
-              around the whole mockup subtree is what distorted the result
-              cards, and mixing it with a `scale` style on the same element
-              fights over the transform. */}
-          <div
-            style={{ transform: `scale(${scale})` }}
-            className="origin-center"
-          >
-            <motion.div
-              key={device}
-              initial={
-                reduced ? false : { scale: prevDeviceWidth / spec.width }
-              }
-              animate={{ scale: 1 }}
-              transition={spring}
+          {/* Hidden, not unmounted: remounting resets scroll position, and the
+              device spring would replay on every return. `hidden` also takes it
+              out of the accessibility tree, so a screen reader is not offered a
+              page that is not on screen. */}
+          <div className={showBrief ? "hidden" : "contents"}>
+            {/* Zoom is a plain CSS transform on the outside. Inside it, the frame
+                springs from the ratio of the device we came from to 1 — so a
+                1440 → 390 switch visibly shrinks instead of hard-cutting, while
+                the mockup itself is laid out at its true width the entire time.
+
+                Deliberately NOT a Framer `layout` animation: layout projection
+                around the whole mockup subtree is what distorted the result
+                cards, and mixing it with a `scale` style on the same element
+                fights over the transform. */}
+            <div
+              style={{ transform: `scale(${scale})` }}
               className="origin-center"
             >
-              <Viewport
-                key={`${page.id}-${page.variant}-${device}`}
-                page={page}
-                spec={spec}
-                device={device}
-                scrub={scrub}
-              />
-            </motion.div>
+              <motion.div
+                key={device}
+                initial={
+                  reduced ? false : { scale: prevDeviceWidth / spec.width }
+                }
+                animate={{ scale: 1 }}
+                transition={spring}
+                className="origin-center"
+              >
+                <Viewport
+                  key={`${page.id}-${page.variant}-${device}`}
+                  page={page}
+                  spec={spec}
+                  device={device}
+                  scrub={scrub}
+                />
+              </motion.div>
+            </div>
           </div>
         </div>
 
