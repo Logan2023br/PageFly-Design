@@ -91,7 +91,10 @@ export async function POST(request: Request) {
     return Response.json(
       {
         ok: false,
-        error: "Store chưa được phép sử dụng.",
+        /* English, like every other message this route returns, and worded to
+           pair with the line already under the form: "Not on the list? Contact
+           support to request beta access." */
+        error: "This store is not on the list.",
         hint: empty
           ? "No store list has been loaded yet — see README (SHEET_SERVICE_ACCOUNT_JSON or /api/admin/sync)."
           : undefined,
