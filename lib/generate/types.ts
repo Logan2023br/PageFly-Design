@@ -337,6 +337,16 @@ export type PageMockup = {
   /** bumped by Regenerate to produce a different reproducible variant */
   variant: number;
   seed: string;
+  /**
+   * The saved run this page was rebuilt from, when it came from the Library.
+   *
+   * Absent on a normal build, where the deck has one brief and `brief` in the
+   * store is it. Present, it names which of several briefs made this page —
+   * see `briefForPage`.
+   *
+   * Optional and last, so a deck snapshotted before this existed still reopens.
+   */
+  runId?: string;
 };
 
 /** Kept structural (not importing lib/design) so this module stays free of

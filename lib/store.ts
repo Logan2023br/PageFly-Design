@@ -57,6 +57,9 @@ type State = {
   draft: BriefDraft;
   /** validated snapshot the current results were generated from */
   brief: Brief | null;
+  /** run id → the brief that run was built from. Only the Library fills this;
+      a normal build has one brief and `brief` above is it. */
+  briefs: Record<string, Brief>;
 
   plan: PlanEntry[];
   pages: PageMockup[];
@@ -160,6 +163,7 @@ export const useStore = create<State & Actions>((set, get) => ({
   screen: "brief",
   draft: EMPTY_DRAFT,
   brief: null,
+  briefs: {},
 
   plan: [],
   pages: [],
@@ -327,6 +331,9 @@ export const useStore = create<State & Actions>((set, get) => ({
     set({
       screen: "generating",
       brief,
+      /* A build of its own. Left behind, a Library's map would answer for pages
+         that are not from any of those runs. */
+      briefs: {},
       plan,
       pages: [],
       failures: [],
@@ -582,6 +589,11 @@ export const useStore = create<State & Actions>((set, get) => ({
     set({
       screen: "generating",
       brief: runs.at(-1)?.brief ?? null,
+      /* THE POINT OF THIS MAP. The line above keeps ONE brief for a deck built
+         from many runs, so anything reading `brief` shows the last run's brief
+         on every page — including the ones run A built. Kept per run here, and
+         resolved per page by `briefForPage`. */
+      briefs: Object.fromEntries(runs.map((r) => [r.id, r.brief])),
       plan: [],
       pages: [],
       failures: [],
@@ -596,9 +608,14 @@ export const useStore = create<State & Actions>((set, get) => ({
         if (signal.aborted) return;
 
         if (run.snapshot && run.snapshot.length > 0) {
+          /* `runId` rather than splitting the id on `::` later. That convention
+             has two writers and no readers — it exists so ids do not collide
+             across runs, not as an encoding — and the first reader would break
+             the day a run id contains `::`. */
           const saved = run.snapshot.map((page) => ({
             ...page,
             id: `${run.id}::${page.id}`,
+            runId: run.id,
           }));
           set((s) => ({ pages: [...s.pages, ...saved] }));
           continue;
@@ -608,7 +625,7 @@ export const useStore = create<State & Actions>((set, get) => ({
           run.brief,
           (page) =>
             set((s) => ({
-              pages: [...s.pages, { ...page, id: `${run.id}::${page.id}` }],
+              pages: [...s.pages, { ...page, id: `${run.id}::${page.id}`, runId: run.id }],
             })),
           signal,
           { variants: run.variants, instant: true },
