@@ -3,6 +3,7 @@ import "server-only";
 import { designPageTree } from "../ai/designServer";
 import { readReferences } from "../ai/refVision";
 import { decideStructure } from "../design/structure";
+import { deckPlanEnabled, planDeck } from "../design/deckPlan";
 import { verticalFor } from "../design/plan";
 import { getRepo } from "../db";
 import type { JobRecord, RunPageRecord, RunRecord } from "../db/types";
@@ -212,25 +213,106 @@ async function run(
      that does not survive checking — each falls back to the deterministic arc,
      per page type, and says so in the log. */
   const wantedTypes = [...new Set(plan.map((e) => e.pageType))];
-  const structure = await decideStructure(
+
+  /* ==========================================================================
+     THE DECK PLAN — struct-v2, off unless USE_DECK_PLAN=true.
+
+     One call that decides the whole design rather than only the section list:
+     how many bands, which, in what order, which is the signature, which invert,
+     how much room each gets, which may carry a photograph, what moves, and what
+     goes inside each one. It runs on its own provider so it can be pointed at a
+     stronger model than the per-page call — see `provider.ts`, roles.
+
+     Tried FIRST and falls through completely: a page type it did not answer
+     for, or whose answer did not survive checking, drops to `decideStructure`
+     below exactly as before. Nothing here can cost a build.
+     ========================================================================== */
+  /* The palette, resolved once for the whole deck.
+
+     Taken from a throwaway `buildPage` rather than recomputed here, and that is
+     the point: the precedence — a reference's surface beats a merchant's own
+     hex, per role, by index — lives in `mock.ts` and is subtle enough that a
+     second copy of it would drift within a release. `buildPage` costs no tokens
+     and is a pure function of the brief, so the tokens it resolves for page one
+     are the tokens every page in this build gets. */
+  const palette = deckPlanEnabled() && plan[0]
+    ? buildPage({
+        brief,
+        pageType: plan[0].pageType,
+        pageId: plan[0].pageId,
+        index: 1,
+        copyIndex: plan[0].copyIndex,
+        copyTotal: plan[0].copyTotal,
+        variant: variants[plan[0].pageId] ?? 0,
+      }).tokens
+    : null;
+
+  const deck = await planDeck(
     {
       sell: brief.whatYouSell,
       storeType: brief.storeType,
       vertical: verticalFor(brief),
       pageTypes: wantedTypes,
+      prompt: brief.prompt,
+      styleLabel: styleDef(brief.visualStyle)?.label ?? brief.visualStyle,
+      styleBlurb: styleDef(brief.visualStyle)?.blurb ?? "",
+      density: palette?.density ?? "normal",
+      tokens: {
+        bg: palette?.bg ?? "#FFFFFF",
+        ink: palette?.ink ?? "#111114",
+        accent: palette?.accent ?? "#111114",
+        band: palette?.surfaceAlt ?? "#F7F7F8",
+      },
       refSections: reading?.sections ?? null,
+      refStyle: reading?.style ?? null,
     },
     signal,
   );
+  tokens += deck.usage.input + deck.usage.output;
+
+  if (deck.reason) {
+    if (deckPlanEnabled()) console.log(`[build] deck plan not used — ${deck.reason}`);
+  } else {
+    console.log(
+      `[build] deck plan · ${deck.plans.size}/${wantedTypes.length} page types designed by ` +
+        `${deck.model} · in ${deck.usage.input} out ${deck.usage.output}`,
+    );
+    /* The number the experiment turns on. A model that needs the rhythm
+       repaired on most pages was not ready to own the rhythm. */
+    console.log(`[build] deck plan · ${deck.repairs.length} repair(s)`);
+    for (const r of deck.repairs) console.log(`[build] deck plan · ${r}`);
+    for (const f of deck.fallbacks)
+      console.log(`[build] deck plan · ${f.pageType} → older decider — ${f.reason}`);
+  }
+
+  /* Only for the page types the deck plan did not take. Asking for a section
+     list that is about to be thrown away is a completion nobody reads. */
+  const stillWanted = wantedTypes.filter((t) => !deck.plans.has(t));
+  const structure = stillWanted.length
+    ? await decideStructure(
+        {
+          sell: brief.whatYouSell,
+          storeType: brief.storeType,
+          vertical: verticalFor(brief),
+          pageTypes: stillWanted,
+          refSections: reading?.sections ?? null,
+        },
+        signal,
+      )
+    : { plans: new Map(), usage: { input: 0, output: 0 }, fallbacks: [], repairs: [], reason: null };
   tokens += structure.usage.input + structure.usage.output;
 
-  if (structure.reason)
+  if (stillWanted.length === 0)
+    /* Not "0 of 3 ordered by the model" — that reads as a call that ran and
+       came back empty, and it did not run at all. */
+    console.log(`[build] structure · not asked · the deck plan took every page type`);
+  else if (structure.reason)
     console.log(
       `[build] structure not used — ${structure.reason} · every page falls back to its arc`,
     );
   else
     console.log(
-      `[build] structure · ${structure.plans.size}/${wantedTypes.length} page types ordered ` +
+      `[build] structure · ${structure.plans.size}/${stillWanted.length} page types ordered ` +
         `by the model · in ${structure.usage.input} out ${structure.usage.output}`,
     );
   for (const f of structure.fallbacks)
@@ -279,6 +361,10 @@ async function run(
             /* Absent for this page type when the model was not asked, or when
                its answer for it did not survive checking. Then the arc runs. */
             structure: structure.plans.get(entry.pageType) ?? null,
+            /* struct-v2. Present only when the deck plan answered for this page
+               type and the answer survived checking — and when it is, it wins:
+               it arrives with the rhythm already decided. */
+            order: deck.plans.get(entry.pageType) ?? null,
             refStyle: reading?.style ?? null,
             /* The whole deck, so a page can pace itself against its siblings
                rather than each one deciding in isolation. */

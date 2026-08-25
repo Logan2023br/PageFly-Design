@@ -55,6 +55,15 @@ export type OrderSection = {
   role: SectionRole;
   /** block id in 20-patterns.md */
   pattern: string;
+  /**
+   * One sentence saying what this band contains on THIS store's page.
+   *
+   * Only `deckPlan.ts` sets it — the two older deciders name a pattern and stop
+   * there, and a pattern id is a shape rather than a subject. Null on both of
+   * those paths, and the prompt simply omits the line, so nothing downstream
+   * has to know which decider ran.
+   */
+  brief?: string | null;
   /** exactly one section in an order has this */
   signature: boolean;
   dark: boolean;

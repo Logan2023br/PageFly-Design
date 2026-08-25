@@ -15,6 +15,23 @@ import Anthropic from "@anthropic-ai/sdk";
    Unset or missing credentials is not an error. Generation falls back to the
    deterministic path, which is the whole product today — an unconfigured deploy
    must still build pages.
+
+   ==========================================================================
+   ROLES, because one build now makes two different kinds of call.
+
+   Deciding a whole deck's design once and writing one page's elements are not
+   the same job, and the model that is best at the first is not obviously the
+   one that is cheapest at the second. So a call names the ROLE it is making,
+   and a role can be pointed at its own vendor, model and key:
+
+     DESIGN_PROVIDER=anthropic  DESIGN_MODEL=claude-opus-5  DESIGN_API_KEY=…
+
+   Every field falls back: an unset role is the default provider, so a deploy
+   that sets none of these behaves exactly as it did before roles existed.
+
+   `DESIGN_API_KEY` is separate from `ANTHROPIC_API_KEY` on purpose — the point
+   is not only "a different vendor" but "a different key at the same vendor",
+   which is how a spend on an expensive model is kept legible on a bill.
    ========================================================================== */
 
 export type Usage = { input: number; output: number };
@@ -52,17 +69,59 @@ export type Provider = {
   }): Promise<Completion>;
 };
 
-export function providerName(): "anthropic" | "deepseek" | "none" {
-  const explicit = process.env.AI_PROVIDER?.toLowerCase();
-  if (explicit === "anthropic" && process.env.ANTHROPIC_API_KEY) return "anthropic";
-  if (explicit === "deepseek" && process.env.DEEPSEEK_API_KEY) return "deepseek";
-  if (!explicit && process.env.ANTHROPIC_API_KEY) return "anthropic";
-  if (!explicit && process.env.DEEPSEEK_API_KEY) return "deepseek";
+/**
+ * Which call is being made.
+ *
+ * `"default"` is everything that existed before roles did. `"design"` is the
+ * deck-planning call in `deckPlan.ts` — one per build, the one worth pointing
+ * at a stronger model.
+ */
+export type Role = "default" | "design";
+
+/** The env prefix a role reads, or null for the unprefixed default. */
+const PREFIX: Record<Role, string | null> = {
+  default: null,
+  design: "DESIGN",
+};
+
+/** `DESIGN_MODEL` for the design role, `AI_MODEL` for the default one. */
+function roleVar(role: Role, name: "PROVIDER" | "MODEL" | "API_KEY"): string | undefined {
+  const prefix = PREFIX[role];
+  if (!prefix) {
+    return name === "PROVIDER"
+      ? process.env.AI_PROVIDER
+      : name === "MODEL"
+        ? process.env.AI_MODEL
+        : undefined;
+  }
+  return process.env[`${prefix}_${name}`];
+}
+
+/** The key a vendor is reached with for this role — the role's own, or the shared one. */
+function keyFor(vendor: "anthropic" | "deepseek", role: Role): string | undefined {
+  return (
+    roleVar(role, "API_KEY") ??
+    (vendor === "anthropic" ? process.env.ANTHROPIC_API_KEY : process.env.DEEPSEEK_API_KEY)
+  );
+}
+
+export function providerName(role: Role = "default"): "anthropic" | "deepseek" | "none" {
+  const explicit = roleVar(role, "PROVIDER")?.toLowerCase();
+
+  if (explicit === "anthropic") return keyFor("anthropic", role) ? "anthropic" : "none";
+  if (explicit === "deepseek") return keyFor("deepseek", role) ? "deepseek" : "none";
+
+  /* A role that names no provider of its own inherits the default one entirely
+     — vendor AND model — so setting nothing is setting nothing. */
+  if (role !== "default") return providerName("default");
+
+  if (process.env.ANTHROPIC_API_KEY) return "anthropic";
+  if (process.env.DEEPSEEK_API_KEY) return "deepseek";
   return "none";
 }
 
-export function isAiEnabled(): boolean {
-  return providerName() !== "none";
+export function isAiEnabled(role: Role = "default"): boolean {
+  return providerName(role) !== "none";
 }
 
 /**
@@ -72,9 +131,17 @@ export function isAiEnabled(): boolean {
  * unset reads as `null`, which looks like nothing is configured on a server
  * that is happily spending money on the default.
  */
-export function modelName(): string | null {
-  if (process.env.AI_MODEL) return process.env.AI_MODEL;
-  switch (providerName()) {
+export function modelName(role: Role = "default"): string | null {
+  const named = roleVar(role, "MODEL");
+  if (named) return named;
+
+  /* A role with no model of its own but a provider of its own must NOT inherit
+     the default role's `AI_MODEL` — `AI_MODEL=deepseek-v4-flash` sent to
+     Anthropic is a 404. Only the vendor's own default is safe here. */
+  const inherits = !roleVar(role, "PROVIDER");
+  if (role !== "default" && inherits) return modelName("default");
+
+  switch (providerName(role)) {
     case "anthropic":
       return DEFAULT_ANTHROPIC_MODEL;
     case "deepseek":
@@ -91,9 +158,9 @@ const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
 
 /* ---- Anthropic ----------------------------------------------------------- */
 
-function anthropicProvider(): Provider {
-  const model = process.env.AI_MODEL ?? DEFAULT_ANTHROPIC_MODEL;
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+function anthropicProvider(role: Role): Provider {
+  const model = modelName(role) ?? DEFAULT_ANTHROPIC_MODEL;
+  const client = new Anthropic({ apiKey: keyFor("anthropic", role)! });
 
   return {
     name: "anthropic",
@@ -139,9 +206,9 @@ function anthropicProvider(): Provider {
 
 /* ---- DeepSeek ------------------------------------------------------------ */
 
-function deepseekProvider(): Provider {
-  const model = process.env.AI_MODEL ?? DEFAULT_DEEPSEEK_MODEL;
-  const key = process.env.DEEPSEEK_API_KEY!;
+function deepseekProvider(role: Role): Provider {
+  const model = modelName(role) ?? DEFAULT_DEEPSEEK_MODEL;
+  const key = keyFor("deepseek", role)!;
 
   return {
     name: "deepseek",
@@ -190,12 +257,12 @@ function deepseekProvider(): Provider {
   };
 }
 
-export function getProvider(): Provider | null {
-  switch (providerName()) {
+export function getProvider(role: Role = "default"): Provider | null {
+  switch (providerName(role)) {
     case "anthropic":
-      return anthropicProvider();
+      return anthropicProvider(role);
     case "deepseek":
-      return deepseekProvider();
+      return deepseekProvider(role);
     default:
       return null;
   }

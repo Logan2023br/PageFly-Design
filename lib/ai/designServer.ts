@@ -98,6 +98,16 @@ export type DesignInput = {
    * checking — and then the arc decides, exactly as before.
    */
   structure?: Slot[] | null;
+  /**
+   * A finished order for this page type, decided by `deckPlan.ts`.
+   *
+   * The difference from `structure` above is what was decided: that one names
+   * the sections and leaves the rhythm to `finish()`, this one arrives with the
+   * rhythm already in it — signature, dark, padding, motion, backgrounds — and
+   * a brief per band. When it is present nothing else runs; when it is absent
+   * the two older deciders are untouched.
+   */
+  order?: Order | null;
   pageLabel: string;
   pageType: string;
   tokens: {
@@ -227,6 +237,10 @@ function orderLines(order: Order, bg: string, ink: string): string[] {
         s.dark ? `background ${ink}, text ${bg}` : `background ${bg}`,
         PADDING_PX[s.padding] ?? "96px 56px",
         s.signature ? "SIGNATURE — the most room and the best photograph on the page" : "",
+        /* What goes in the band, when something upstream knew. A pattern id is
+           a shape; this is the subject. Only `deckPlan.ts` fills it — the two
+           older deciders leave it null and the line disappears. */
+        s.brief ? `→ ${s.brief}` : "",
         /* Two words, on at most two lines of the order. The whole background
            feature costs the prompt about eight tokens; the decision it replaces
            would have cost eight judgements. */
@@ -427,9 +441,13 @@ export async function designPageTree(
      second code path to be special in. */
   const order = !usePlan
     ? null
-    : input.structure?.length
-      ? orderFromSlots(brief, seed, input.structure)
-      : planPage(brief, input.pageType, seed, input.refStyle?.heroKind ?? null);
+    : /* THREE deciders now, still one seam. `deckPlan` arrives finished — it
+         decided the rhythm itself rather than leaving it to `finish()` — so it
+         is used as-is. The other two are unchanged. */
+      (input.order ??
+      (input.structure?.length
+        ? orderFromSlots(brief, seed, input.structure)
+        : planPage(brief, input.pageType, seed, input.refStyle?.heroKind ?? null)));
 
   /* §7 — CONCATENATION ORDER IS NOT COSMETIC. DeepSeek caches by prefix, and
      the cached prefix ends at the first byte that differs. `00-contract` and
