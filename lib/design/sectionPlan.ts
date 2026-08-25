@@ -159,4 +159,19 @@ function article(n: number): string {
 }
 
 /** Exposed for tests and for anything that wants the numbers without the prose. */
+/**
+ * How long this page type may be, as numbers rather than as a sentence.
+ *
+ * `sectionPlanLine` renders the same table as prose for the legacy path, where
+ * the model is choosing the sections itself. `deckPlan.ts` needs the bounds to
+ * ENFORCE them, and reading them off a rendered sentence would be parsing our
+ * own prose. Same table either way — struct-v2 shipped with its own 3-to-12
+ * bound and gave a home page ten sections, five of them grids, which spent the
+ * whole 48,000-token design budget thinking and returned nothing. A limit in
+ * one file and the thing producing the value in another, again.
+ */
+export function sectionBounds(pageType: string): { min: number; target: string; cap: number } {
+  return PAGES[pageType] ?? FALLBACK;
+}
+
 export const _plans = { PAGES, ARCHETYPES, BY_VERTICAL, FALLBACK };

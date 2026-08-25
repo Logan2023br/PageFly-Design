@@ -3,6 +3,7 @@ import "server-only";
 import { getProvider, isAiEnabled, modelName, type Usage } from "../ai/provider";
 import { sliceSkill } from "../ai/skills";
 import { elementForPattern } from "./elementFor";
+import { sectionBounds } from "./sectionPlan";
 import {
   arcIndexOf,
   pageHasOneProduct,
@@ -69,10 +70,20 @@ const MAX_TOKENS = 32_000;
 
 const TIMEOUT_MS = 180_000;
 
-/** Fewer than this is not a page. */
+/**
+ * Floor and ceiling per page type come from `sectionPlan.ts`, not from here.
+ *
+ * struct-v2 shipped with a flat 3-to-12 of its own and the first real build
+ * proved why that was wrong: the model gave `home` TEN sections — two product
+ * grids, a stat strip, spec bars, an ingredient list, a proof wall — and the
+ * page call spent all 48,000 of its output tokens thinking, returning no JSON
+ * at all. The table says `home` is 7-9, cap 9, and the table was right.
+ *
+ * `MIN_SECTIONS` stays local because it is a different question: the table's
+ * `min` is what a page SHOULD have, and this is the point below which an answer
+ * is not a page at all and is thrown away.
+ */
 const MIN_SECTIONS = 3;
-/** More is a page nobody scrolls. */
-const MAX_SECTIONS = 12;
 
 /** At most this many bands on one page may carry a photograph — see `vet`. */
 const MAX_BACKGROUNDS = 2;
@@ -193,9 +204,20 @@ function systemPrompt(ask: DeckAsk): string {
     `1. A page that sells one product opens with its buy box. A page that takes`,
     `   an enquiry ends with the form. These are not matters of taste and an`,
     `   answer that breaks them will be corrected.`,
-    `2. ${MIN_SECTIONS} to ${MAX_SECTIONS} sections per page. Give each page the length it needs.`,
+    /* The lengths, per page type, resolved from the same table `vet` enforces.
+       Told rather than trimmed to: a page cut from ten bands to nine loses its
+       last band, which is the close — and a page that was PLANNED as nine has
+       its close where it belongs. */
+    `2. HOW LONG EACH PAGE IS. These are not suggestions; anything past the cap`,
+    `   is cut, and the band that gets cut is your last one.`,
+    ...ask.pageTypes.map((t) => {
+      const b = sectionBounds(t);
+      return `     ${t} — aim for ${b.target}, never more than ${b.cap}`;
+    }),
     `   A six-section page of real content beats an eight-section page carrying`,
-    `   two filler bands.`,
+    `   two filler bands. Every band must earn its place: a band of grids or`,
+    `   cards is expensive to build, and a page of nothing but grids is a page`,
+    `   that cannot be built at all.`,
     `3. Open with a hero on any page that is not selling one product.`,
     `4. Do not use a buy-box pattern on a page that has no product of its own.`,
     `5. Two pages in this deck may share patterns where the page genuinely needs`,
@@ -324,6 +346,7 @@ function vet(
 ): OrderSection[] | null {
   if (!Array.isArray(raw)) return null;
 
+  const { cap } = sectionBounds(pageType);
   const seen = new Set<string>();
   const bands: OrderSection[] = [];
 
@@ -365,7 +388,10 @@ function vet(
       brief: str(b.brief) || null,
     });
 
-    if (bands.length >= MAX_SECTIONS) break;
+    if (bands.length >= cap) {
+      notes.push(`${pageType}: cut to ${cap} sections — the cap for this page type`);
+      break;
+    }
   }
 
   /* THE PINS. Correctness, not taste — a product page without a buy box, a
@@ -394,6 +420,19 @@ function vet(
       brief: null,
     });
     notes.push(`${pageType}: inserted "${pin}" at ${where + 1} — this page type requires it`);
+  }
+
+  /* The pins go in AFTER the cap, so inserting one can push a page past it —
+     a collection capped at seven came out at eight. The pin is correctness and
+     the cap is a budget, so the pin stays and something else goes: the last
+     band that was not pinned, which is the cheapest thing on the page to lose. */
+  if (bands.length > cap) {
+    const pins = new Set(pinnedFor(pageType));
+    for (let i = bands.length - 1; i >= 0 && bands.length > cap; i--) {
+      if (pins.has(bands[i].pattern)) continue;
+      notes.push(`${pageType}: over the cap of ${cap} after a pin — dropped "${bands[i].pattern}"`);
+      bands.splice(i, 1);
+    }
   }
 
   if (bands.length < MIN_SECTIONS) return null;

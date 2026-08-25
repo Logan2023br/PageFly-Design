@@ -300,6 +300,63 @@ async function main(): Promise<void> {
     check(notes.some((n) => n.includes("bans it")), "recorded");
   }
 
+  /* ---- how long a page may be -------------------------------------------- */
+
+  /* THE BUG THIS BRANCH SHIPPED WITH. struct-v2 carried its own flat 3-to-12
+     bound while `sectionPlan.ts` already held a per-page-type table, and the
+     first real build gave `home` ten sections — two product grids, a stat
+     strip, spec bars, an ingredient list, a proof wall. The page call spent all
+     48,000 of its output tokens thinking and returned no JSON at all. Two files
+     holding two different numbers, which is the failure this repo keeps
+     meeting. */
+
+  console.log("\nhow long a page may be");
+
+  {
+    const { sectionBounds } = await import("../lib/design/sectionPlan");
+    const home = sectionBounds("home");
+    check(home.cap === 9, "home's cap comes from the table", `${home.cap}`);
+
+    /* Twelve real, distinct ids — more than home may have. */
+    const many = [
+      "hero-full-bleed-scrim", "stat-strip-3up", "ingredient-list",
+      "collection-featured-row", "collection-grid-3up", "spec-bars",
+      "origin-band", "social-proof-wall", "guarantee-row", "faq-accordion",
+      "usecase-tiles-overlay", "cta-band-full",
+    ].map((pattern) => ({ pattern }));
+
+    const notes: string[] = [];
+    const out = __vetForTest("home", many, never, notes);
+
+    check(
+      (out?.length ?? 0) <= home.cap,
+      "a home page of twelve bands is cut to the cap",
+      `${out?.length}`,
+    );
+    check(notes.some((n) => n.includes("cut to")), "and the cut is recorded");
+  }
+
+  {
+    /* A collection page is shorter than a home page, and the vet must know it
+       rather than applying one number to every page type. */
+    const { sectionBounds } = await import("../lib/design/sectionPlan");
+    const collection = sectionBounds("collection");
+    check(collection.cap === 7, "collection's cap is its own", `${collection.cap}`);
+
+    const many = [
+      "hero-full-bleed-scrim", "stat-strip-3up", "ingredient-list",
+      "collection-featured-row", "collection-grid-3up", "spec-bars",
+      "origin-band", "social-proof-wall", "guarantee-row",
+    ].map((pattern) => ({ pattern }));
+
+    const out = __vetForTest("collection", many, never, []);
+    check(
+      (out?.length ?? 0) <= collection.cap,
+      "and a nine-band collection page is cut to it",
+      `${out?.length}`,
+    );
+  }
+
   /* ---- the brief --------------------------------------------------------- */
 
   console.log("\nthe band brief");
