@@ -159,7 +159,7 @@ export function PagePicker() {
   return (
     <SectionCard
       id="pfd-pages"
-      eyebrow="Step 6"
+      eyebrow="Step 7"
       title="Which pages?"
       help={`Repeatable pages have a stepper. ${MAX_TOTAL_PAGES} max.`}
       aside={

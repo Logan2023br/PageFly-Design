@@ -5,6 +5,7 @@ import { create } from "zustand";
 import {
   MAX_BRAND_COLORS,
   MAX_IMAGES,
+  type MarketId,
   type StoreTypeId,
 } from "./briefOptions";
 import {
@@ -110,6 +111,7 @@ type Actions = {
   setSell: (v: string, verticalSlug?: string) => void;
   setStyle: (v: VisualStyleId) => void;
   setStoreType: (v: StoreTypeId) => void;
+  setMarket: (v: MarketId) => void;
   setPrompt: (v: string) => void;
   appendPrompt: (snippet: string) => void;
 
@@ -195,6 +197,7 @@ export const useStore = create<State & Actions>((set, get) => ({
     })),
   setStyle: (v) => set((s) => ({ draft: { ...s.draft, visualStyle: v } })),
   setStoreType: (v) => set((s) => ({ draft: { ...s.draft, storeType: v } })),
+  setMarket: (v) => set((s) => ({ draft: { ...s.draft, market: v } })),
   setPrompt: (v) => set((s) => ({ draft: { ...s.draft, prompt: v } })),
 
   appendPrompt: (snippet) =>

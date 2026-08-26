@@ -162,7 +162,7 @@ export function ImageUpload() {
   return (
     <SectionCard
       id="pfd-images"
-      eyebrow="Step 5 · optional"
+      eyebrow="Step 6 · optional"
       title="Reference images"
       help={`Images only — up to ${MAX_IMAGES}, ${MAX_IMAGE_BYTES / 1024 / 1024} MB each.`}
       aside={

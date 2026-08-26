@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isKnownVertical } from "./verticals";
 import {
+  isKnownMarket,
   MAX_BRAND_COLORS,
   MAX_IMAGES,
   MAX_PROMPT_CHARS,
@@ -117,6 +118,21 @@ export const briefSchema = z.object({
 
   storeType: z.enum(STORE_TYPE_IDS),
 
+  /**
+   * Who the page is being sold TO.
+   *
+   * Optional and null by default, exactly as `verticalSlug` is, and for the
+   * same reason: a brief saved before this field existed must still validate,
+   * and a merchant who did not choose must get the page they would have got
+   * yesterday. Null is not "global" — it is "nobody said", and every prompt
+   * treats it as the absence it is.
+   */
+  market: z
+    .string()
+    .nullable()
+    .default(null)
+    .refine((v) => v === null || isKnownMarket(v), "Unknown market"),
+
   prompt: z
     .string()
     .max(MAX_PROMPT_CHARS, `Keep this under ${MAX_PROMPT_CHARS} characters`)
@@ -163,6 +179,7 @@ export type BriefDraft = {
   whatYouSell: string;
   visualStyle: string | null;
   storeType: string | null;
+  market: string | null;
   prompt: string;
   brandColors: string[];
   referenceImages: ReferenceImage[];
@@ -173,6 +190,7 @@ export const EMPTY_DRAFT: BriefDraft = {
   whatYouSell: "",
   visualStyle: null,
   storeType: null,
+  market: null,
   prompt: "",
   brandColors: [],
   referenceImages: [],

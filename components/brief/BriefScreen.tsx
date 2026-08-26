@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { GradientWord } from "../ui";
 import { ImageUpload } from "./ImageUpload";
+import { MarketPicker } from "./MarketPicker";
 import { PagePicker } from "./PagePicker";
 import { PromptField } from "./PromptField";
 import { SellInput } from "./SellInput";
@@ -32,6 +33,7 @@ export function BriefScreen() {
         <SellInput />
         <StylePicker />
         <StoreTypePicker />
+        <MarketPicker />
         <PromptField />
         <ImageUpload />
         <PagePicker />
