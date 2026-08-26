@@ -165,3 +165,66 @@ export const MAX_SLICES = 6;
 
 export const MAX_SELL_CHARS = 120;
 export const MAX_PROMPT_CHARS = 1500;
+
+/* ==========================================================================
+   MARKETS — who the page is being sold to.
+
+   Twelve rather than a long list, and the reason is the file behind them: every
+   id here has a hand-written block in `skills/_sliced/60-markets.md` naming
+   what a shopper in that market looks for before they buy. A picker offering a
+   hundred countries with knowledge behind ten invites the model to invent the
+   commercial customs of the other ninety, and an invented custom is worse than
+   an absent one — the merchant cannot tell which they got.
+
+   Adding one later is a block in that file and a row here. No code changes.
+   ========================================================================== */
+
+export type MarketId =
+  | "us"
+  | "uk"
+  | "in"
+  | "cn"
+  | "jp"
+  | "de"
+  | "fr"
+  | "vn"
+  | "id"
+  | "br"
+  | "gulf"
+  | "au";
+
+export const MARKET_IDS = [
+  "us",
+  "uk",
+  "in",
+  "cn",
+  "jp",
+  "de",
+  "fr",
+  "vn",
+  "id",
+  "br",
+  "gulf",
+  "au",
+] as const satisfies readonly MarketId[];
+
+export const MARKETS: { id: MarketId; label: string }[] = [
+  { id: "us", label: "United States" },
+  { id: "uk", label: "United Kingdom" },
+  { id: "in", label: "India" },
+  { id: "cn", label: "China" },
+  { id: "jp", label: "Japan" },
+  { id: "de", label: "Germany" },
+  { id: "fr", label: "France" },
+  { id: "vn", label: "Vietnam" },
+  { id: "id", label: "Indonesia" },
+  { id: "br", label: "Brazil" },
+  { id: "gulf", label: "Gulf (UAE, Saudi Arabia)" },
+  { id: "au", label: "Australia" },
+];
+
+const MARKET_SET = new Set<string>(MARKET_IDS);
+
+export function isKnownMarket(id: string): boolean {
+  return MARKET_SET.has(id);
+}
