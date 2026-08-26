@@ -51,6 +51,43 @@ export type SectionRole =
 
 export type Padding = "statement" | "standard" | "dense" | "utility";
 
+/**
+ * What a text-bearing element is FOR, in type terms — not a pixel size.
+ *
+ * The pass that fills this in writes blind: it has not seen a word of the copy.
+ * A `font-size` chosen there is a guess, and a headline of fourteen words under
+ * a size picked for four is a broken page. Layout has no such problem — 44/56
+ * is 44/56 whatever the words turn out to be — so layout is given as numbers
+ * and type as intent, and the model that knows the words turns the intent into
+ * pixels.
+ */
+export type Scale = "oversized" | "large" | "body" | "caption" | "eyebrow";
+
+/** One element the design pass wants inside a band, and what it does. */
+export type SpecNode = {
+  /** an element type from `schema.ts`, or "row" / "col" */
+  el: string;
+  /** text-bearing elements only */
+  scale?: Scale;
+  /** this child's share of its row, e.g. "44%" */
+  basis?: string;
+  /** space between this node's children, px */
+  gap?: number;
+  /** images: height ÷ width */
+  ratio?: number;
+  anim?: { hover?: string; reveal?: string; delay?: number };
+  /**
+   * Absent or false means the built section must contain it.
+   *
+   * Required is the default rather than optional because a spec whose every
+   * line is a suggestion is the situation this whole stage exists to end.
+   */
+  optional?: boolean;
+  children?: SpecNode[];
+};
+
+export type SectionSpec = { nodes: SpecNode[] };
+
 export type OrderSection = {
   role: SectionRole;
   /** block id in 20-patterns.md */
@@ -86,6 +123,14 @@ export type OrderSection = {
    * model, which is the whole shape of this rebuild.
    */
   mayHaveBg: boolean;
+  /**
+   * The elements inside this band, when stage 2b ran and its answer survived.
+   *
+   * Null on every other path, exactly as `brief` is — the older deciders name a
+   * band and stop. The prompt omits the block when it is null, so nothing
+   * downstream has to know which decider ran.
+   */
+  spec?: SectionSpec | null;
 };
 
 /**
