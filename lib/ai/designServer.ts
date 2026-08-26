@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getProvider, isAiEnabled, providerName, type Completion, type Usage } from "./provider";
+import { parseObject } from "./json";
 import { loadSkills, sliceSkill } from "./skills";
 import { DESIGN_SYSTEM } from "./designPrompt";
 import { designTreeSchema, walk, type DesignTree } from "../design/schema";
@@ -849,23 +850,3 @@ function referenceLines(
 }
 
 /** Models wrap JSON in prose or fences more often than they should. */
-function parseObject(text: string): unknown | null {
-  const attempts = [text];
-
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
-  if (fenced) attempts.push(fenced[1]);
-
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start >= 0 && end > start) attempts.push(text.slice(start, end + 1));
-
-  for (const attempt of attempts) {
-    try {
-      const value = JSON.parse(attempt.trim());
-      if (value && typeof value === "object") return value;
-    } catch {
-      // try the next shape
-    }
-  }
-  return null;
-}

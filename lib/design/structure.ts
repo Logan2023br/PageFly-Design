@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getProvider, isAiEnabled, type Usage } from "../ai/provider";
+import { parseObject } from "../ai/json";
 import { sliceSkill } from "../ai/skills";
 import { elementForPattern } from "./elementFor";
 import {
@@ -204,24 +205,6 @@ function userPrompt(ask: StructureAsk): string {
 
 /* ---- reading the answer -------------------------------------------------- */
 
-function parseObject(text: string): unknown | null {
-  const attempts = [text];
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
-  if (fenced) attempts.push(fenced[1]);
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start >= 0 && end > start) attempts.push(text.slice(start, end + 1));
-
-  for (const attempt of attempts) {
-    try {
-      const parsed = JSON.parse(attempt.trim());
-      if (parsed && typeof parsed === "object") return parsed;
-    } catch {
-      /* next */
-    }
-  }
-  return null;
-}
 
 /**
  * Check one page's list, and repair what can be repaired.

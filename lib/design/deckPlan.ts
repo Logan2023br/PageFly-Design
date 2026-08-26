@@ -2,6 +2,7 @@ import "server-only";
 
 import { getProvider, isAiEnabled, modelName, type Usage } from "../ai/provider";
 import { sliceIds, sliceSkill } from "../ai/skills";
+import { parseObject } from "../ai/json";
 import { elementForPattern } from "./elementFor";
 import { sectionBounds } from "./sectionPlan";
 import {
@@ -311,24 +312,6 @@ function userPrompt(ask: DeckAsk): string {
 
 /* ---- reading the answer -------------------------------------------------- */
 
-function parseObject(text: string): unknown | null {
-  const attempts = [text];
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
-  if (fenced) attempts.push(fenced[1]);
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start >= 0 && end > start) attempts.push(text.slice(start, end + 1));
-
-  for (const attempt of attempts) {
-    try {
-      const parsed = JSON.parse(attempt.trim());
-      if (parsed && typeof parsed === "object") return parsed;
-    } catch {
-      /* next */
-    }
-  }
-  return null;
-}
 
 type RawBand = {
   pattern?: unknown;
@@ -652,6 +635,19 @@ function enforceBackgrounds(pageType: string, bands: OrderSection[], notes: stri
  * worse than none — it reports a number nobody has checked.
  */
 export const __vetForTest = vet;
+
+/**
+ * The two prompts, without making the call.
+ *
+ * For inspection: what a model is actually asked is the least visible part of
+ * this pipeline and the part most often wrong — three of the defects on this
+ * branch (invented motion ids, no hero, ten sections) were prompt bugs, and
+ * each was found by reading the answer rather than the question. Being able to
+ * read the question costs nothing and would have found them sooner.
+ */
+export function __promptsForTest(ask: DeckAsk): { system: string; user: string } {
+  return { system: systemPrompt(ask), user: userPrompt(ask) };
+}
 
 /* ---- the call ------------------------------------------------------------ */
 
