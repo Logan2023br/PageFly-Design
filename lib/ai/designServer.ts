@@ -225,6 +225,7 @@ function specLines(node: SpecNode, depth: number): string[] {
   const bits = [
     node.el,
     node.scale ?? "",
+    node.note ? `→ ${node.note}` : "",
     node.basis ? `basis ${node.basis}` : "",
     node.gap !== undefined ? `gap ${node.gap}` : "",
     node.ratio !== undefined ? `ratio ${node.ratio}` : "",

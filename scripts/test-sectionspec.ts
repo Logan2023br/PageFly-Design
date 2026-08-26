@@ -80,6 +80,30 @@ async function main(): Promise<void> {
   const badBasis = vetSpec({ nodes: [{ el: "col", basis: "half" }] });
   check(badBasis?.nodes[0].basis === undefined, "drops a basis that is not a percentage");
 
+  /* The three losses the first real build found. Every one of them threw away
+     a complete design over a shape, and the run cost 9,161 output tokens. */
+  const wrapped = vetSpec({
+    nodes: [{ el: "section", padding: "64px 56px", children: [{ el: "heading" }, { el: "text" }] }],
+  });
+  check(wrapped?.nodes.length === 2, "a root `section` is unwrapped, not refused");
+  check(wrapped?.nodes[0].el === "heading", "…and its children come up a level");
+
+  const extras = vetSpec({
+    nodes: [{ el: "product", extras: [{ el: "row", children: [{ el: "icon" }, { el: "text" }] }] }],
+  });
+  check(extras?.nodes[0].children?.length === 1, "`extras` counts as children on a product");
+  check(
+    extras?.nodes[0].children?.[0].children?.length === 2,
+    "…and the rows inside them survive",
+  );
+
+  const noted = vetSpec({ nodes: [{ el: "text", note: "the review count as a real figure" }] });
+  check(noted?.nodes[0].note === "the review count as a real figure", "a note is kept");
+  check(
+    (vetSpec({ nodes: [{ el: "text", note: "x".repeat(400) }] })?.nodes[0].note ?? "").length === 200,
+    "a runaway note is cut to 200 characters",
+  );
+
   check(vetSpec({ nodes: [] }) === null, "an empty node list is null, not an empty spec");
   check(vetSpec({ nodes: [{ el: "nope" }] }) === null, "a spec of only bad nodes is null");
   check(vetSpec(null) === null, "null in, null out");
@@ -110,11 +134,11 @@ async function main(): Promise<void> {
     "counts, not just presence",
   );
 
-  const wrapped = vetSpec({
+  const boxed = vetSpec({
     nodes: [{ el: "row", children: [{ el: "col", children: [{ el: "heading" }] }] }],
   })!;
   check(
-    specDelta(built("heading"), wrapped).missing.length === 0,
+    specDelta(built("heading"), boxed).missing.length === 0,
     "row and col are not counted — a build may reach the same layout with fewer wrappers",
   );
 

@@ -101,6 +101,21 @@ function vetAnim(raw: unknown): SpecNode["anim"] {
   return { hover, reveal, delay };
 }
 
+/**
+ * A node's children, from either place a model puts them.
+ *
+ * `extras` is the tree schema's own name for the rows inside a `product` — the
+ * buy box has no `children`, because its slot order is fixed and only the rows
+ * under the cart button are free. A design model that has read the contract
+ * uses `extras` there, correctly, and reading only `children` threw away the
+ * entire buy box it had just designed.
+ */
+function kidsOf(o: Record<string, unknown>): unknown[] {
+  const a = Array.isArray(o.children) ? o.children : [];
+  const b = Array.isArray(o.extras) ? o.extras : [];
+  return [...a, ...b];
+}
+
 function vetNode(raw: unknown): SpecNode | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const o = raw as Record<string, unknown>;
@@ -113,14 +128,19 @@ function vetNode(raw: unknown): SpecNode | null {
   const gap = num(o.gap);
   const ratio = num(o.ratio);
   const anim = vetAnim(o.anim);
+  /* The sentence saying what this element is FOR, which is the difference
+     between "a text node here" and a design. Free text on purpose: it is read
+     by a model, not matched by code, and the first run produced 58 of them. */
+  const note = str(o.note).slice(0, 200) || undefined;
 
-  const kids = Array.isArray(o.children)
-    ? o.children.map(vetNode).filter((n): n is SpecNode => n !== null)
-    : [];
+  const kids = kidsOf(o)
+    .map(vetNode)
+    .filter((n): n is SpecNode => n !== null);
 
   return {
     el,
     ...(scale ? { scale } : {}),
+    ...(note ? { note } : {}),
     ...(basis ? { basis } : {}),
     ...(gap !== undefined ? { gap: Math.max(0, Math.round(gap)) } : {}),
     ...(ratio !== undefined ? { ratio } : {}),
@@ -143,7 +163,23 @@ export function vetSpec(raw: unknown): SectionSpec | null {
   const list = (raw as Record<string, unknown>).nodes;
   if (!Array.isArray(list)) return null;
 
-  const nodes = list.map(vetNode).filter((n): n is SpecNode => n !== null);
+  /* ONE LEVEL OF `section` IS UNWRAPPED, NOT REFUSED.
+
+     The band already IS a section — that is what a band is — so a spec that
+     opens with one is a correct instinct expressed a level too high. The first
+     real run refused it and lost ten bands out of ten: every one of them was
+     wrapped, every one held a complete design underneath, and 9,161 output
+     tokens went in the bin over the name of a box.
+
+     Unwrapping recovers all of it, and a model that keeps reaching for the word
+     keeps being understood. Refusing would be defensible only if `section`
+     meant something else here, and it does not. */
+  const unwrapped = list.flatMap((n) => {
+    const o = n && typeof n === "object" && !Array.isArray(n) ? (n as Record<string, unknown>) : null;
+    return o && str(o.el) === "section" ? kidsOf(o) : [n];
+  });
+
+  const nodes = unwrapped.map(vetNode).filter((n): n is SpecNode => n !== null);
   return nodes.length ? { nodes } : null;
 }
 
@@ -155,8 +191,19 @@ function flatten(node: SpecNode, out: SpecNode[] = []): SpecNode[] {
   return out;
 }
 
+/**
+ * Every node under this one — including a product's `extras`.
+ *
+ * `childrenOf` deliberately does not descend into `extras`, and the rest of the
+ * codebase is right to leave it that way: those rows are a property of the buy
+ * box rather than free children, and the exporter treats them as such. Here it
+ * matters, because the spec side now counts them. Walking one side and not the
+ * other would report every buy-box row as missing on a page that has them all.
+ */
 function walk(node: DesignNode | DesignSection, out: DesignNode[] = []): DesignNode[] {
-  for (const c of childrenOf(node)) {
+  const extras = (node as { extras?: DesignNode[] }).extras;
+  const kids = [...childrenOf(node), ...(Array.isArray(extras) ? extras : [])];
+  for (const c of kids) {
     out.push(c);
     walk(c, out);
   }

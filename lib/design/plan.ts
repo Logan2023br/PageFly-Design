@@ -69,6 +69,15 @@ export type SpecNode = {
   el: string;
   /** text-bearing elements only */
   scale?: Scale;
+  /**
+   * One phrase saying what this element is FOR on this store's page.
+   *
+   * The difference between "a text node here" and a design. Free text, because
+   * it is read by the model that writes the copy rather than matched by code —
+   * the band's `brief` says what the band is about, and this says what one
+   * element inside it carries.
+   */
+  note?: string;
   /** this child's share of its row, e.g. "44%" */
   basis?: string;
   /** space between this node's children, px */
