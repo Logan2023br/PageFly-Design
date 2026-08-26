@@ -79,6 +79,19 @@ right | top`. That flag IS the gallery — one element with a setting. Do not mo
 a gallery as a main image plus a row of small images: that second form has no
 product binding and lands on the storefront as raw template code.
 
+**THE PHOTOGRAPH IS THE LARGEST THING ON THE PAGE.** Two fields shape it:
+
+  - `mediaRatio` — height ÷ width of the main image. `1` is square and right for
+    a bottle, a jar, a small object photographed on white. A garment wants
+    `1.2`–`1.35`: cropped to square it loses the hem, which is the part being
+    looked at. A wide object — a rug, a desk, a bike — wants `0.7`–`0.85`.
+  - `mediaHover` — `magnifier` puts zoom under the cursor, which is what a
+    shopper reaches for on anything expensive or textured. `none` where the
+    photography is editorial and a magnifier would break the mood.
+
+`galleryEdge: "left"` puts the strip beside the photograph rather than under it,
+which suits a tall image and a short buy column.
+
 Four more flags, each a real element bound to the product. Turn one on when the
 reference has it and leave it off when it does not — none of them is decoration
 and all four are free:

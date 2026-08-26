@@ -275,9 +275,13 @@ function Product({ node, cls }: { node: Extract<DesignNode, { type: "product" }>
           style={{
             position: "relative",
             width: "100%",
-            aspectRatio: "1 / 1",
+            /* The design's own shape. Square was hardcoded, and square is right
+               for a bottle and wrong for a coat — a garment cropped to 1:1
+               loses the hem, which is the part being looked at. */
+            aspectRatio: `1 / ${node.mediaRatio || 1}`,
             background: "#E8E8EC",
             overflow: "hidden",
+            borderRadius: radius || undefined,
           }}
         >
           {src && (
@@ -326,14 +330,19 @@ function Product({ node, cls }: { node: Extract<DesignNode, { type: "product" }>
                   : "row",
             }}
           >
-            {Array.from({ length: 4 }, (_, i) => (
+            {Array.from({ length: 6 }, (_, i) => (
               <span
                 key={i}
                 style={{
-                  width: 64,
+                  width: 76,
                   aspectRatio: "1 / 1",
                   background: "#E8E8EC",
-                  border: i === 0 ? "1px solid currentColor" : "1px solid rgba(0,0,0,.12)",
+                  /* The chosen one has to be visible as chosen. Six identical
+                     squares leave a shopper unable to tell which they are
+                     looking at — and the export marks it the same way. */
+                  border: `1px solid ${i === 0 ? atcBg : "transparent"}`,
+                  opacity: i === 0 ? 1 : 0.62,
+                  borderRadius: radius || undefined,
                   overflow: "hidden",
                 }}
               />

@@ -133,6 +133,7 @@ export function ExportProvider({ children }: { children: ReactNode }) {
           accent: page.tokens.accent,
           border: page.tokens.border,
           radius: page.tokens.radius,
+          band: page.tokens.surfaceAlt,
           iconSvg: (name) => iconMarkup(stageRef.current, name),
         },
       );

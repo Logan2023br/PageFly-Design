@@ -559,6 +559,24 @@ const product = z.object({
   /** where the strip sits relative to the main image */
   galleryEdge: choice(["bottom", "left", "right", "top"] as const, "bottom"),
 
+  /**
+   * The shape of the main photograph.
+   *
+   * Square was hardcoded, and square is right for a bottle and wrong for a
+   * coat: a garment shot cropped to 1:1 loses the hem, which is the part a
+   * shopper is looking at. Height ÷ width, so 1.25 is a portrait.
+   */
+  mediaRatio: within(0.5, 2, 1),
+
+  /**
+   * What the main photograph does when a shopper's cursor is on it.
+   *
+   * `magnifier` is the one a shopper reaches for on a product page and it is a
+   * SETTING, not something to build — PageFly ships it. `none` is right for a
+   * page whose photography is editorial rather than forensic.
+   */
+  mediaHover: choice(["magnifier", "none"] as const, "magnifier"),
+
   /* ==========================================================================
      FOUR THINGS PAGEFLY ALREADY HAS, and the buy box was shipping without.
 
@@ -906,6 +924,8 @@ export type DesignNode =
       variants: { name: string; values: number; as: "dots" | "tiles" | "dropdown" }[];
       gallery: boolean;
       galleryEdge: "bottom" | "left" | "right" | "top";
+      mediaRatio: number;
+      mediaHover: "magnifier" | "none";
       qty: boolean;
       stock: boolean;
       express: boolean;

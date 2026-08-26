@@ -57,6 +57,7 @@ async function open(
     videos?: Record<string, string>;
     border?: string;
     accent?: string;
+    band?: string;
   } = {},
 ) {
   const { pageflyFromTree } = await import("../lib/design/toPagefly");
@@ -70,6 +71,7 @@ async function open(
       videos: media.videos ?? {},
       ...(media.border ? { border: media.border } : {}),
       ...(media.accent ? { accent: media.accent } : {}),
+      ...(media.band ? { band: media.band } : {}),
     },
   );
   const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -1228,6 +1230,66 @@ async function main(): Promise<void> {
     rowRule.includes("#3A3A38"),
     "and it takes the page's border colour, not a black hairline invisible on a dark page",
     rowRule,
+  );
+
+  /* ---- the photograph ------------------------------------------------------
+
+     ProductMedia3 has nine styleable parts and this file was using two, which
+     is how a product page's largest element came out as a square grey rectangle
+     with a strip of squares under it. */
+  console.log("\nthe photograph");
+
+  const shot = await open(
+    {
+      sections: [
+        section(
+          [
+            {
+              type: "product",
+              title: "Overshirt",
+              price: "$480",
+              atcText: "Add",
+              gallery: true,
+              mediaRatio: 1.25,
+              mediaHover: "magnifier",
+              children: [],
+            },
+          ],
+          "product-detail-gallery",
+        ),
+      ],
+    },
+    "probe",
+    { border: "#3A3A38", accent: "#C6A667", band: "#F4F1E8" },
+  );
+
+  const med = shot.items.find((i) => i.type === "ProductMedia3")!;
+  check(med.data?.hoverAction === "MAGNIFIER", "the magnifier is a setting, not something built");
+  check(
+    (med.data?.mediaListSize as Record<string, string>)?.mobile === "56px",
+    "thumbnails size per breakpoint",
+  );
+
+  const main = shot.items.find((i) => i.type === "MediaMain3")!;
+  check(
+    shot.cssOf(main.id, "all").includes("aspect-ratio: 1 / 1.25"),
+    "the main image takes the design's shape, not a hardcoded square",
+    shot.cssOf(main.id, "all").slice(0, 60),
+  );
+
+  const thumb = shot.items.find((i) => i.type === "MediaListItem2")!;
+  const active = shot.cssOf(thumb.id, "all", '&[data-active="true"]');
+  check(
+    active.includes("#C6A667"),
+    "and the chosen thumbnail is visibly the chosen one",
+    active.slice(0, 60),
+  );
+
+  const arrows = shot.cssOf(med.id, "all", "& .splide__arrow--prev, & .splide__arrow--next");
+  check(
+    arrows.includes("#F4F1E8"),
+    "the gallery arrows sit on a plate from this page, not a guessed white",
+    arrows.slice(0, 60),
   );
 
   /* ---- how a product is chosen ------------------------------------------- */

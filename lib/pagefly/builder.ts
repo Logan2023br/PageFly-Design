@@ -326,7 +326,13 @@ export function PRODUCT_MEDIA(
   main: PFNode,
   list: PFNode,
   styleData: StyleData,
-  gallery: { show: boolean; edge?: "TOP" | "RIGHT" | "BOTTOM" | "LEFT"; size?: string } = {
+  gallery: {
+    show: boolean;
+    edge?: "TOP" | "RIGHT" | "BOTTOM" | "LEFT";
+    size?: string;
+    /** what the main photograph does under a cursor */
+    hover?: "MAGNIFIER" | "NONE";
+  } = {
     show: false,
   },
   /** the corner badge, when the design asked for one */
@@ -344,10 +350,24 @@ export function PRODUCT_MEDIA(
         mobile: false,
       },
       listPosition: gallery.edge ?? "BOTTOM",
-      mediaListSize: gallery.size ?? "64px",
+
       /* Click-to-zoom on a product page is what a shopper reaches for, and it
          is a setting rather than something to build. */
       clickAction: gallery.show ? "SHOW_FULLSCREEN" : "NONE",
+      /* Zoom under the cursor. It ships off, and a product page without it is
+         the one detail a shopper notices missing on an expensive thing —
+         `fields.md` has it as a setting precisely so nobody builds one. */
+      hoverAction: gallery.hover ?? "NONE",
+      /* Per breakpoint, and bigger than the 50px default. Six 50px squares
+         under a full-width photograph read as an afterthought rather than a
+         gallery, and the flat `gallery.size` this replaces could not shrink
+         them on a phone. */
+      mediaListSize: gallery.size
+        ? { all: gallery.size, laptop: gallery.size, tablet: gallery.size, mobile: gallery.size }
+        : { all: "76px", laptop: "76px", tablet: "64px", mobile: "56px" },
+      /* The arrows are styled below; without this they are not there to style. */
+      imageNavigation: true,
+      buttonSize: "36px",
       /* The badge is shown by the FLAG, not by being present. Emitted as a child
          with `showBadge` left false, it imports and never renders. */
       showBadge: Boolean(badge),

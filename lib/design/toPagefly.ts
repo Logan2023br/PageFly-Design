@@ -610,6 +610,15 @@ export type EmitOptions = {
    */
   radius?: number;
   /**
+   * The page's band colour — the surface a section steps onto when it steps off
+   * the page background.
+   *
+   * Only the gallery arrows need it. PageFly draws them as bare browser buttons
+   * over a photograph, and the plate they sit on has to be a colour belonging to
+   * this page rather than a white one guessed at.
+   */
+  band?: string;
+  /**
    * Inside a buy box: the bound element for a named slot.
    *
    * Set only while `productBox` emits a product's own children, and the reason
@@ -1029,21 +1038,65 @@ function productBox(
   /* The strip is turned on by the SETTING, not by CSS — see PRODUCT_MEDIA. The
      style below is spacing only; whether the list renders at all is data. */
   const EDGE = { bottom: "BOTTOM", left: "LEFT", right: "RIGHT", top: "TOP" } as const;
+  /* ==========================================================================
+     THE GALLERY, DESIGNED RATHER THAN DEFAULTED.
+
+     `ProductMedia3` has nine styleable parts and this file was using two of
+     them, which is how a product page's largest element came out as a square
+     grey rectangle with a strip of squares under it. The rest are here now: the
+     photograph's own corners, the thumbnails' corners and their selected state,
+     the slider arrows, and the shape of the main image.
+
+     Square was hardcoded and square is right for a bottle and wrong for a coat.
+     The design says which. */
+  const ratio = node.mediaRatio || 1;
+  const mediaRule = opts.border ?? "rgba(0,0,0,.14)";
+  const mediaAccent = opts.accent ?? "currentColor";
+  const mediaRadius = opts.radius ? `border-radius: ${opts.radius}px;` : "";
+
   const media = PRODUCT_MEDIA(
-    MEDIA_MAIN({ all: { "&": "width: 100%; aspect-ratio: 1 / 1;" } }),
+    MEDIA_MAIN({
+      all: { "&": `width: 100%; aspect-ratio: 1 / ${ratio}; overflow: hidden; ${mediaRadius}` },
+    }),
     MEDIA_LIST(
-      4,
-      { all: { "&": "gap: 8px; margin-top: 8px;" } },
-      { all: { "&": "aspect-ratio: 1 / 1;" } },
+      6,
+      { all: { "&": "gap: 10px; margin-top: 10px;" } },
+      {
+        all: {
+          "&": `aspect-ratio: 1 / 1; overflow: hidden; cursor: pointer;` +
+            ` border: 1px solid transparent; ${mediaRadius}` +
+            " opacity: .62; transition: opacity .18s ease, border-color .18s ease;",
+          /* The chosen thumbnail has to be visible as chosen. Left alone the
+             strip is six identical squares and a shopper cannot tell which one
+             they are looking at. */
+          "&:hover": "opacity: 1;",
+          '&[data-active="true"]': `opacity: 1; border-color: ${mediaAccent};`,
+        },
+      },
     ),
     {
       all: {
         "&": "width: 100%;",
+        /* The photograph itself. `object-fit: cover` is what makes the ratio
+           above a crop rather than a squash. */
         "& .pf-media-wrapper img":
           "width: 100% !important; height: 100% !important; object-fit: cover !important;",
+        "& .pf-media-wrapper": `overflow: hidden; ${mediaRadius}`,
+        "& .pf-main-media": mediaRadius,
+        /* PageFly's arrows arrive as bare browser buttons on a designed page. */
+        "& .splide__arrow--prev, & .splide__arrow--next":
+          `background: ${opts.band ?? "rgba(255,255,255,.86)"}; border: 1px solid ${mediaRule};` +
+          " border-radius: 999px; width: 36px; height: 36px; opacity: .9;",
+        "& .pf-r-dg": "gap: 10px;",
       },
     },
-    { show: node.gallery, edge: EDGE[node.galleryEdge] },
+    {
+      show: node.gallery,
+      edge: EDGE[node.galleryEdge],
+      /* A setting, not something to build — and the one a shopper reaches for
+         on a product page. */
+      hover: node.mediaHover === "magnifier" ? "MAGNIFIER" : "NONE",
+    },
     /* A CHILD of the media element, shown by its own flag. A badge drawn on top
        needs `position:absolute`, which is banned, and `fields.md` says a
        separate badge node is dropped on import. */
