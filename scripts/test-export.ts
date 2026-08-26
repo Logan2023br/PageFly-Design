@@ -1230,6 +1230,82 @@ async function main(): Promise<void> {
     rowRule,
   );
 
+  /* ---- a size chart -------------------------------------------------------
+
+     A hand-built grid of rows stops aligning the moment two cells differ in
+     length, carries no header semantics, and on a phone either overflows or
+     collapses. PageFly has an element for this and the vocabulary did not. */
+  console.log("\na size chart");
+
+  const chart = await open(
+    {
+      sections: [
+        section(
+          [
+            {
+              type: "table",
+              headerColumn: true,
+              rows: [
+                ["Size", "Chest", "Length"],
+                ["S", "96 cm", "70 cm"],
+                ["M", "102 cm", "72 cm"],
+              ],
+            },
+          ],
+          "size-fit-guide",
+        ),
+      ],
+    },
+    "probe",
+    { border: "#3A3A38" },
+  );
+
+  const tbl = chart.items.find((i) => i.type === "Table2");
+  check(!!tbl, "the table became a Table2, not a nest of FlexBlocks");
+  check(
+    !chart.items.some((i) => i.type === "ContentList2"),
+    "and not a card list either",
+  );
+
+  const cells = tbl?.data?.rows as string[][] | undefined;
+  check(cells?.length === 3, "the cells are DATA, not children", String(cells?.length));
+  check(cells?.[0]?.[0] === "Size", "the header row is row zero");
+  check(cells?.[2]?.[1] === "102 cm", "and the values arrive verbatim");
+
+  const slots = (tbl?.children ?? []).map(
+    (c) => chart.items.find((x) => x.id === c)?.type ?? "?",
+  );
+  check(
+    slots.join(",") === "Table2.RowHeader,Table2.ColumnHeader,Table2.ColumnBody,Table2.Body",
+    "four slots, in the order the validator requires",
+    slots.join(" · "),
+  );
+  check(
+    tbl?.data?.columnHeadersPosition === "left",
+    "headerColumn true puts the row labels down the left",
+  );
+  check(
+    (tbl?.data?.columnsWidth as Record<string, string> | undefined)?.mobile === "hug",
+    "columns hug on a phone, whatever they do on a desktop",
+  );
+
+  /* Ragged input is a table with holes in it. The schema pads; assert the
+     exporter never sees a short row. */
+  const ragged = await open({
+    sections: [
+      section(
+        [{ type: "table", rows: [["A", "B", "C"], ["1"]] }],
+        "size-fit-guide",
+      ),
+    ],
+  });
+  const raggedCells = ragged.items.find((i) => i.type === "Table2")?.data?.rows as string[][];
+  check(
+    raggedCells?.[1]?.length === 3,
+    "a short row is padded to the widest, not left with holes",
+    JSON.stringify(raggedCells?.[1]),
+  );
+
   /* A design that forgets one of the three parts a buy box cannot do without
      gets it appended. Losing the page over a missing marker would cost far more
      than a button in the wrong place. */

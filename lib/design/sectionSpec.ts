@@ -106,7 +106,7 @@ function systemPrompt(ask: SpecAsk): string {
     `  text and marks   heading, text, button, icon, divider`,
     `  media            image, slideshow, marquee, overlay, beforeAfter`,
     `  commerce         product, productList, form`,
-    `  behaviour        accordion, counter, sticky, custom`,
+    `  behaviour        accordion, table, counter, sticky, custom`,
     `  layout           row, col`,
     ``,
     `Do NOT emit a "section" — the band already is one. Your top-level nodes go`,

@@ -622,6 +622,55 @@ export function ACCORDION(
   );
 }
 
+/**
+ * A data table.
+ *
+ * The cells go in DATA, not in children: `fields.md` is explicit that they are
+ * supplied as `rows: string[][]` and that "row/column counts derive from rows;
+ * do not set them". The four children are SLOTS — exactly one of each, holding
+ * nothing — and the renderer builds the grid from the data between them. Hand
+ * a Table2 a tree of cells instead and the editor shows an empty table.
+ *
+ * `columnsWidth` is per breakpoint. `fill` shares the width evenly, which is
+ * right for a size chart; `hug` sizes to content, which is right when the first
+ * column is a long label and the rest are single values. A table wider than a
+ * phone scrolls inside its own wrapper rather than pushing the page sideways —
+ * that rule is in the page stylesheet, not here.
+ */
+export function TABLE(
+  rows: string[][],
+  styleData: StyleData,
+  opts: { headerColumn?: boolean; width?: "fill" | "hug" } = {},
+) {
+  const width = opts.width ?? "fill";
+
+  /* Padded here as well as in the schema. A ragged row is a table with holes in
+     it, and a tree can reach this function without having been parsed — the
+     exporter is called directly by tests and by any caller holding a tree it
+     built itself. One place that cannot emit a broken table beats two places
+     that agree to check. */
+  const columns = rows.reduce((n, r) => Math.max(n, r.length), 0);
+  const square = rows.map((r) => [...r, ...Array(Math.max(0, columns - r.length)).fill("")]);
+
+  return node(
+    "Table2",
+    {
+      rows: square,
+      rowHeaders: 1,
+      columnHeadersPosition: opts.headerColumn ? "left" : "disable",
+      ...(opts.headerColumn ? { columnHeaders: 1 } : {}),
+      columnsWidth: { all: width, laptop: width, tablet: width, mobile: "hug" },
+    },
+    styleData,
+    [
+      node("Table2.RowHeader", {}, null, []),
+      node("Table2.ColumnHeader", {}, null, []),
+      node("Table2.ColumnBody", {}, null, []),
+      node("Table2.Body", {}, null, []),
+    ],
+  );
+}
+
 export function ACCORDION_HEADER(
   label: string,
   styleData: StyleData,
@@ -984,6 +1033,9 @@ const SLOT_RULES: Record<string, string[]> = {
   /* One card template, repeated. Two ProductBoxes here is two identical cards
      stamped over every product in the grid. */
   ProductList2: ["ProductBox"],
+  /* Four slots, exactly once each and in this order. The cells are DATA — a
+     Table2 handed a tree of cells renders an empty table. */
+  Table2: ["Table2.RowHeader", "Table2.ColumnHeader", "Table2.ColumnBody", "Table2.Body"],
 };
 
 /** Parents whose children must ALL be one type (count is free). */

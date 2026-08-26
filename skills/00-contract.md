@@ -46,6 +46,7 @@ This is the entire alphabet. There is nothing else.
 {"type":"bound","slot":"atc"}                              only inside a product's children
 {"type":"productList","columns":3,"limit":6,"source":"collection","listLayout":"grid","query":""}
 {"type":"accordion","items":[{"q":"","a":""}]}
+{"type":"table","rows":[["",""],["",""]],"headerColumn":false}   rows[0] is the header row
 {"type":"form","intent":"contact","fields":[{"label":"","kind":"text","required":true}],"submitText":""}
 {"type":"slideshow","perView":3,"autoplay":false,"slides":[]}
 {"type":"overlay","query":"","ratio":0.62,"scrim":"left","align":"bottom-left","children":[]}
@@ -199,6 +200,13 @@ The cart button's colour and corners and the stepper's outline are NOT yours —
 they are emitted from the store's palette so the buy box matches the page. Do
 not set `css` on the `product` node to restyle them. What is yours is what the
 box CONTAINS, and how it is arranged.
+
+**`table`** is EVERY size chart, spec sheet and comparison. Never build one out
+of rows and columns: hand-built, the columns stop aligning the moment two cells
+hold different lengths, there is no header row for a screen reader, and on a
+phone it either overflows the page or collapses into nonsense. `rows[0]` is the
+header. `headerColumn: true` when the left column names the row — a size chart —
+and false when it does not.
 
 **`productList`** is EVERY grid of real products. Never build a product grid by
 hand out of image + heading + text: those are dead pictures with invented names

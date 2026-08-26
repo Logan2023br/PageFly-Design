@@ -29,6 +29,7 @@ import {
   STOCK_INDICATOR,
   ACCORDION,
   ACCORDION_HEADER,
+  TABLE,
   Page,
   type DeviceKey,
   type PFNode,
@@ -736,6 +737,21 @@ function emitNode(
 
     case "productList":
       return productGrid(node, sd, opts);
+
+    /* Cells are data. A hand-built grid of rows is what this replaces: its
+       columns stop aligning the moment two cells hold different lengths, it
+       carries no header semantics, and on a phone it either overflows the page
+       or collapses into nonsense. */
+    case "table": {
+      if (node.rows.length === 0) return null;
+      return TABLE(node.rows, sd, {
+        headerColumn: node.headerColumn,
+        /* Hug when the first column is a long label and the rest are short
+           values — a spec sheet. Fill when every column carries about the same,
+           which is a size chart. Decided from the shape rather than asked. */
+        width: node.rows.every((r) => r.length > 0 && r[0].length > 18) ? "hug" : "fill",
+      });
+    }
 
     case "accordion":
       return accordionOf(node, sd, opts);

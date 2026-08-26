@@ -136,9 +136,10 @@ The bar fills once on scroll; it does not loop.
 ```
 section  padding 88px 56px  container 1100
   col gap 32 → eyebrow · section-head
-  grid  cols 4  gap 0  border 1px
-    header row · 6-9 body rows
+  table  rows[0] = header · 6-9 body rows · headerColumn true
 ```
+A `table`, not a grid of rows. The columns have to line up across every row and
+a hand-built grid stops doing that as soon as two cells differ in length.
 Never win every row. One row where the alternative is better is what makes the
 other eight believable.
 <!--/-->

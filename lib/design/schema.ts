@@ -800,6 +800,46 @@ const counter = z.object({
    here it would reference `node` before `node` exists, and TypeScript reports
    that as the whole union silently becoming `any`. */
 
+/**
+ * A data table — a size chart, a spec sheet, a comparison.
+ *
+ * PageFly has `Table2` for exactly this, and until now the vocabulary did not,
+ * so a size chart was built by hand out of rows and columns. Hand-built it is a
+ * grid pretending to be a table: the columns do not align across rows once the
+ * text lengths differ, there is no header semantics, and on a phone it either
+ * overflows or collapses into nonsense. The element handles all three.
+ *
+ * `rows[0]` is the header row. Everything is strings, because a table cell that
+ * carried a nested element would be a layout inside a layout and Table2 gives
+ * each cell its own wrapper anyway.
+ */
+const tableRows = loose().transform((v): string[][] => {
+  if (!Array.isArray(v)) return [];
+  const rows = v
+    .map((row) =>
+      Array.isArray(row)
+        ? row.slice(0, 8).map((cell) => (typeof cell === "string" ? cell.slice(0, 120) : String(cell ?? "")))
+        : [],
+    )
+    .filter((row) => row.length > 0)
+    .slice(0, 20);
+
+  /* Ragged rows are a table with holes in it. Padding to the widest row is what
+     a browser does with a short `<tr>` anyway, and doing it here means the two
+     readers agree about how many columns there are. */
+  const width = rows.reduce((n, r) => Math.max(n, r.length), 0);
+  return rows.map((r) => [...r, ...Array(width - r.length).fill("")]);
+});
+
+const table = z.object({
+  type: z.literal("table"),
+  /** `rows[0]` is the header row; every row is padded to the widest */
+  rows: tableRows,
+  /** a left-hand header column — right for a size chart, wrong for a spec list */
+  headerColumn: flag(false),
+  ...styled,
+});
+
 const accordion = z.object({
   type: z.literal("accordion"),
   /* No fallback row here, unlike `form`: an accordion whose questions all
@@ -881,6 +921,7 @@ export type DesignNode =
       children: DesignNode[];
     }
   | z.infer<typeof accordion>
+  | z.infer<typeof table>
   | {
       type: "slideshow";
       perView: number;
@@ -911,6 +952,7 @@ const node: z.ZodType<DesignNode> = z.lazy(() =>
     beforeAfter,
     counter,
     accordion,
+    table,
     /* Only when the brief or the reference asks for a carousel. A row of three
        cards that fits on the screen is a row of three cards; turning it into a
        slider hides two thirds of it behind an arrow nobody presses. PageFly's

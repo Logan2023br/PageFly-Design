@@ -566,6 +566,63 @@ function ProductGrid({ node, cls }: { node: Extract<DesignNode, { type: "product
  * Both of those defaults are read from the exporter rather than chosen here.
  * If they change there, this has to change with them.
  */
+/**
+ * A data table, drawn as one.
+ *
+ * A real `<table>` rather than a grid of divs, for the same reason the export
+ * emits a Table2: columns that align whatever the cells hold, header semantics,
+ * and a wrapper that scrolls instead of pushing the page sideways on a phone.
+ * The two readers have to agree, and they agree by both being a table.
+ */
+function TableNode({ node, cls }: { node: Extract<DesignNode, { type: "table" }>; cls?: string }) {
+  const { device, palette } = useDesign();
+  const rule = palette?.border ?? "rgba(0,0,0,.12)";
+  const [head, ...body] = node.rows;
+  if (!head) return null;
+
+  const cell = {
+    padding: "12px 16px",
+    borderBottom: `1px solid ${rule}`,
+    textAlign: "left" as const,
+    verticalAlign: "top" as const,
+  };
+
+  return (
+    <div data-pf="table" className={cls} style={{ overflowX: "auto", width: "100%", ...sx(node, device) }}>
+      <table style={{ borderCollapse: "collapse", width: "100%", minWidth: head.length * 110 }}>
+        <thead>
+          <tr>
+            {head.map((c, i) => (
+              <th key={i} style={{ ...cell, fontWeight: 600, fontSize: 13, letterSpacing: ".04em", textTransform: "uppercase", opacity: 0.72 }}>
+                {c}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {body.map((row, r) => (
+            <tr key={r}>
+              {row.map((c, i) => (
+                <td
+                  key={i}
+                  style={{
+                    ...cell,
+                    /* The left column is the row's label when the design said
+                       so — matches `columnHeadersPosition: "left"` on export. */
+                    fontWeight: node.headerColumn && i === 0 ? 600 : 400,
+                  }}
+                >
+                  {c}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function Accordion({ node, cls }: { node: Extract<DesignNode, { type: "accordion" }>; cls?: string }) {
   const { device, palette } = useDesign();
   /* `null` rather than a number: -1 would work, but the exporter's -1 means
@@ -1016,6 +1073,9 @@ function Node({ node }: { node: DesignNode }) {
       return <Product node={node} cls={cls} />;
     case "productList":
       return <ProductGrid node={node} cls={cls} />;
+    case "table":
+      return <TableNode node={node} cls={cls} />;
+
     case "accordion":
       return <Accordion node={node} cls={cls} />;
     case "form":
