@@ -55,6 +55,8 @@ export type SpecAsk = {
   order: Order;
   sell: string;
   storeType: string;
+  /** who the page is being sold to, or null when the merchant did not say */
+  market: string | null;
   styleLabel: string;
   styleBlurb: string;
   /** the merchant's own words, verbatim */
@@ -182,6 +184,16 @@ function systemPrompt(ask: SpecAsk): string {
     `icons with no words, and any row that would read the same on a phone case`,
     `as on a face serum.`,
     ``,
+    ...(ask.market
+      ? [
+          `THE MARKET. What a shopper here looks for before they buy. It belongs`,
+          `INSIDE the bands — a payment row, a delivery promise, a returns line`,
+          `— and it does not change how anything looks.`,
+          ``,
+          sliceSkill("markets", [ask.market]),
+          ``,
+        ]
+      : []),
     `RULES.`,
     `1. Every band gets a spec. A band you skip is a band built by guesswork.`,
     `2. Vary between bands. Two bands with the same element list is the failure`,

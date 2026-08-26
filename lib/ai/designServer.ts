@@ -42,6 +42,14 @@ export type DesignInput = {
   sell: string;
   prompt: string;
   storeType: string;
+  /**
+   * The market, when the merchant chose one.
+   *
+   * This is the stage that writes the words, so it is the stage the market
+   * matters most to — it decides the LANGUAGE. See the language rule in
+   * `skills/50-copy.md`, which this field is what makes true.
+   */
+  market?: string | null;
   /** the style's id, kept for logging */
   style: string;
   /** the name the merchant actually picked, e.g. "Neubrutalist" */
@@ -591,6 +599,17 @@ export async function designPageTree(
     /* Always. The two sources answer questions at different scales — see
        `trainingLines`. */
     ...(await trainingLines(order, Boolean(input.refSections?.length))),
+    ...(input.market
+      ? [
+          `THE MARKET THIS PAGE SELLS INTO. Write the page in this market's`,
+          `language, in its currency and its number format, naming the payment`,
+          `methods and the promises a shopper here expects. None of it changes`,
+          `the look — the visual style already decided that.`,
+          ``,
+          sliceSkill("markets", [input.market]),
+          ``,
+        ]
+      : []),
     `Return the JSON object now.`,
   ]
     .filter(Boolean)

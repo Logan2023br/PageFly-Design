@@ -252,6 +252,7 @@ async function run(
     {
       sell: brief.whatYouSell,
       storeType: brief.storeType,
+      market: brief.market ?? null,
       vertical: verticalFor(brief),
       pageTypes: wantedTypes,
       prompt: brief.prompt,
@@ -306,6 +307,7 @@ async function run(
             order,
             sell: brief.whatYouSell,
             storeType: brief.storeType,
+            market: brief.market ?? null,
             styleLabel: styleDef(brief.visualStyle)?.label ?? brief.visualStyle,
             styleBlurb: styleDef(brief.visualStyle)?.blurb ?? "",
             prompt: brief.prompt,
@@ -408,6 +410,7 @@ async function run(
             sell: brief.whatYouSell,
             prompt: brief.prompt,
             storeType: brief.storeType,
+            market: brief.market ?? null,
             style: brief.visualStyle,
             styleLabel: styleDef(brief.visualStyle)?.label ?? brief.visualStyle,
             styleBlurb: styleDef(brief.visualStyle)?.blurb ?? "",

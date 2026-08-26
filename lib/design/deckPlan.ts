@@ -103,6 +103,14 @@ const MOTION_IDS = new Set(sliceIds("motion"));
 export type DeckAsk = {
   sell: string;
   storeType: string;
+  /**
+   * Who the page is being sold TO, or null when the merchant did not say.
+   *
+   * It reaches this stage because a market changes WHICH bands a page needs —
+   * somewhere to say cash on delivery is available, somewhere to carry an
+   * instalment plan — and that is a decision made here, not downstream.
+   */
+  market: string | null;
   /** the resolved vertical slug */
   vertical: string;
   /** every page type in the deck, deduped, in the order the merchant chose */
@@ -251,6 +259,23 @@ function systemPrompt(ask: DeckAsk): string {
     `6. This trade's own signature and hero are strong preferences. Its ban list`,
     `   is not a preference.`,
     ``,
+    /* Spliced only when the merchant chose one. Absent, the spread contributes
+       NOTHING — not an empty string — so a build with no market produces the
+       prompt it produced before markets existed, to the byte. No `.filter` is
+       added here on purpose: the empty strings in this array are deliberate
+       blank lines, and filtering them would rewrite the very prompt this guard
+       exists to leave alone. */
+    ...(ask.market
+      ? [
+          ``,
+          `THE MARKET THIS SELLS INTO. Everything below is a commercial fact`,
+          `about the people buying, not a style. It changes which sections this`,
+          `store needs — a market that expects cash on delivery and instalments`,
+          `needs somewhere to say so — and it never changes how they look.`,
+          ``,
+          sliceSkill("markets", [ask.market]),
+        ]
+      : []),
     `Answer with JSON and nothing else:`,
     `{"pages":{"<page type>":[{"pattern":"…","role":"…","signature":false,`,
     `"dark":false,"padding":"standard","bg":false,"motion":null,"brief":"…"}]}}`,
