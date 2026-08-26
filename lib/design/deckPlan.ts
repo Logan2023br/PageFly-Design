@@ -2,6 +2,7 @@ import "server-only";
 
 import { getProvider, isAiEnabled, modelName, type Usage } from "../ai/provider";
 import { sliceIds, sliceSkill } from "../ai/skills";
+import { marketLines } from "./marketLines";
 import { parseObject } from "../ai/json";
 import { elementForPattern } from "./elementFor";
 import { sectionBounds } from "./sectionPlan";
@@ -265,17 +266,7 @@ function systemPrompt(ask: DeckAsk): string {
        added here on purpose: the empty strings in this array are deliberate
        blank lines, and filtering them would rewrite the very prompt this guard
        exists to leave alone. */
-    ...(ask.market
-      ? [
-          ``,
-          `THE MARKET THIS SELLS INTO. Everything below is a commercial fact`,
-          `about the people buying, not a style. It changes which sections this`,
-          `store needs — a market that expects cash on delivery and instalments`,
-          `needs somewhere to say so — and it never changes how they look.`,
-          ``,
-          sliceSkill("markets", [ask.market]),
-        ]
-      : []),
+    ...(marketLines(ask.market).length ? [``, ...marketLines(ask.market)] : []),
     `Answer with JSON and nothing else:`,
     `{"pages":{"<page type>":[{"pattern":"…","role":"…","signature":false,`,
     `"dark":false,"padding":"standard","bg":false,"motion":null,"brief":"…"}]}}`,

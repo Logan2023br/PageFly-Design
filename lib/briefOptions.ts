@@ -169,62 +169,115 @@ export const MAX_PROMPT_CHARS = 1500;
 /* ==========================================================================
    MARKETS — who the page is being sold to.
 
-   Twelve rather than a long list, and the reason is the file behind them: every
-   id here has a hand-written block in `skills/_sliced/60-markets.md` naming
-   what a shopper in that market looks for before they buy. A picker offering a
-   hundred countries with knowledge behind ten invites the model to invent the
-   commercial customs of the other ninety, and an invented custom is worse than
-   an absent one — the merchant cannot tell which they got.
+   TWO TIERS, and the difference is honest rather than cosmetic.
 
-   Adding one later is a block in that file and a row here. No code changes.
+   Twelve markets have a hand-written block in `skills/_sliced/60-markets.md`
+   naming what a shopper there looks for before they buy — the payment methods,
+   the delivery expectation, the returns norm, the line the law expects. Picking
+   one of those genuinely changes which sections a page has and what they
+   promise.
+
+   The rest carry what can be stated truthfully without inventing anything: the
+   language the page is written in, the currency, and how a price is written in
+   it. That is real — a Portuguese store gets a Portuguese page with prices as
+   `58,00 €` — and it stops short of the commercial customs nobody here knows.
+
+   The alternative was a picker of a hundred countries with knowledge behind
+   twelve, which invites the model to invent the trade practices of the other
+   eighty-eight. An invented custom is worse than an absent one: the merchant
+   cannot tell which they got.
    ========================================================================== */
 
-export type MarketId =
-  | "us"
-  | "uk"
-  | "in"
-  | "cn"
-  | "jp"
-  | "de"
-  | "fr"
-  | "vn"
-  | "id"
-  | "br"
-  | "gulf"
-  | "au";
+export type Market = {
+  id: string;
+  label: string;
+  /** the language the page is written in */
+  language: string;
+  /** currency name and how a price is written in it */
+  price: string;
+  /**
+   * True when `60-markets.md` has a block for this id.
+   *
+   * The picker groups on it and the prompt branches on it, so the two cannot
+   * drift: a market claiming detail it does not have would be the one failure
+   * this whole two-tier design exists to prevent.
+   */
+  detailed?: boolean;
+};
 
-export const MARKET_IDS = [
-  "us",
-  "uk",
-  "in",
-  "cn",
-  "jp",
-  "de",
-  "fr",
-  "vn",
-  "id",
-  "br",
-  "gulf",
-  "au",
-] as const satisfies readonly MarketId[];
+export const MARKETS: Market[] = [
+  /* ---- written up in full ------------------------------------------------ */
+  { id: "us", label: "United States", language: "English (US)", price: "$68.00", detailed: true },
+  { id: "uk", label: "United Kingdom", language: "English (UK)", price: "£58.00", detailed: true },
+  { id: "in", label: "India", language: "English (India)", price: "₹2,499", detailed: true },
+  { id: "cn", label: "China", language: "简体中文", price: "¥498", detailed: true },
+  { id: "jp", label: "Japan", language: "日本語", price: "¥5,480", detailed: true },
+  { id: "de", label: "Germany", language: "Deutsch", price: "58,00 €", detailed: true },
+  { id: "fr", label: "France", language: "Français", price: "58,00 €", detailed: true },
+  { id: "vn", label: "Vietnam", language: "Tiếng Việt", price: "1.290.000₫", detailed: true },
+  { id: "id", label: "Indonesia", language: "Bahasa Indonesia", price: "Rp249.000", detailed: true },
+  { id: "br", label: "Brazil", language: "Português (Brasil)", price: "R$ 349,00", detailed: true },
+  { id: "gulf", label: "Gulf (UAE, Saudi Arabia)", language: "English", price: "AED 249", detailed: true },
+  { id: "au", label: "Australia", language: "English (AU)", price: "$68.00 AUD", detailed: true },
 
-export const MARKETS: { id: MarketId; label: string }[] = [
-  { id: "us", label: "United States" },
-  { id: "uk", label: "United Kingdom" },
-  { id: "in", label: "India" },
-  { id: "cn", label: "China" },
-  { id: "jp", label: "Japan" },
-  { id: "de", label: "Germany" },
-  { id: "fr", label: "France" },
-  { id: "vn", label: "Vietnam" },
-  { id: "id", label: "Indonesia" },
-  { id: "br", label: "Brazil" },
-  { id: "gulf", label: "Gulf (UAE, Saudi Arabia)" },
-  { id: "au", label: "Australia" },
+  /* ---- language and currency only ---------------------------------------- */
+  { id: "ca", label: "Canada", language: "English (Canada)", price: "$68.00 CAD" },
+  { id: "mx", label: "Mexico", language: "Español (México)", price: "$1,249.00 MXN" },
+  { id: "ar", label: "Argentina", language: "Español", price: "$34.900" },
+  { id: "cl", label: "Chile", language: "Español", price: "$48.900" },
+  { id: "co", label: "Colombia", language: "Español", price: "$249.000" },
+  { id: "es", label: "Spain", language: "Español", price: "58,00 €" },
+  { id: "it", label: "Italy", language: "Italiano", price: "58,00 €" },
+  { id: "pt", label: "Portugal", language: "Português", price: "58,00 €" },
+  { id: "nl", label: "Netherlands", language: "Nederlands", price: "€ 58,00" },
+  { id: "be", label: "Belgium", language: "Nederlands", price: "€ 58,00" },
+  { id: "ie", label: "Ireland", language: "English (Ireland)", price: "€58.00" },
+  { id: "at", label: "Austria", language: "Deutsch", price: "58,00 €" },
+  { id: "ch", label: "Switzerland", language: "Deutsch", price: "CHF 58.00" },
+  { id: "se", label: "Sweden", language: "Svenska", price: "649 kr" },
+  { id: "no", label: "Norway", language: "Norsk", price: "699 kr" },
+  { id: "dk", label: "Denmark", language: "Dansk", price: "449 kr" },
+  { id: "fi", label: "Finland", language: "Suomi", price: "58,00 €" },
+  { id: "pl", label: "Poland", language: "Polski", price: "249,00 zł" },
+  { id: "cz", label: "Czechia", language: "Čeština", price: "1 490 Kč" },
+  { id: "ro", label: "Romania", language: "Română", price: "289,00 lei" },
+  { id: "gr", label: "Greece", language: "Ελληνικά", price: "58,00 €" },
+  { id: "tr", label: "Türkiye", language: "Türkçe", price: "1.899,00 ₺" },
+  { id: "ru", label: "Russia", language: "Русский", price: "4 990 ₽" },
+  { id: "ua", label: "Ukraine", language: "Українська", price: "2 499 ₴" },
+  { id: "il", label: "Israel", language: "עברית", price: "₪249" },
+  { id: "eg", label: "Egypt", language: "العربية", price: "٣٬٤٩٩ ج.م" },
+  { id: "za", label: "South Africa", language: "English (South Africa)", price: "R1,249" },
+  { id: "ng", label: "Nigeria", language: "English (Nigeria)", price: "₦89,000" },
+  { id: "ke", label: "Kenya", language: "English (Kenya)", price: "KSh 8,900" },
+  { id: "ma", label: "Morocco", language: "Français", price: "699,00 MAD" },
+  { id: "kr", label: "South Korea", language: "한국어", price: "89,000원" },
+  { id: "tw", label: "Taiwan", language: "繁體中文", price: "NT$1,980" },
+  { id: "hk", label: "Hong Kong", language: "繁體中文", price: "HK$498" },
+  { id: "sg", label: "Singapore", language: "English (Singapore)", price: "S$89.00" },
+  { id: "my", label: "Malaysia", language: "Bahasa Malaysia", price: "RM 289.00" },
+  { id: "th", label: "Thailand", language: "ไทย", price: "฿1,890" },
+  { id: "ph", label: "Philippines", language: "English (Philippines)", price: "₱3,499" },
+  { id: "pk", label: "Pakistan", language: "English (Pakistan)", price: "Rs 16,900" },
+  { id: "bd", label: "Bangladesh", language: "বাংলা", price: "৳6,900" },
+  { id: "nz", label: "New Zealand", language: "English (NZ)", price: "$98.00 NZD" },
 ];
 
-const MARKET_SET = new Set<string>(MARKET_IDS);
+export type MarketId = string;
+
+export const MARKET_IDS: readonly string[] = MARKETS.map((m) => m.id);
+
+/** The twelve with a block in `60-markets.md`. The picker groups on this. */
+export const DETAILED_MARKET_IDS: readonly string[] = MARKETS.filter((m) => m.detailed).map(
+  (m) => m.id,
+);
+
+const MARKET_BY_ID = new Map(MARKETS.map((m) => [m.id, m]));
 
 export function isKnownMarket(id: string): boolean {
-  return MARKET_SET.has(id);
+  return MARKET_BY_ID.has(id);
+}
+
+export function marketById(id: string): Market | null {
+  return MARKET_BY_ID.get(id) ?? null;
 }

@@ -15,6 +15,7 @@ import {
   type Slot,
   type SpecNode,
 } from "../design/plan";
+import { marketLines } from "../design/marketLines";
 import { audit } from "../design/audit";
 import { elementForPattern } from "../design/elementFor";
 import { imageWants } from "../design/imageWants";
@@ -599,16 +600,8 @@ export async function designPageTree(
     /* Always. The two sources answer questions at different scales — see
        `trainingLines`. */
     ...(await trainingLines(order, Boolean(input.refSections?.length))),
-    ...(input.market
-      ? [
-          `THE MARKET THIS PAGE SELLS INTO. Write the page in this market's`,
-          `language, in its currency and its number format, naming the payment`,
-          `methods and the promises a shopper here expects. None of it changes`,
-          `the look — the visual style already decided that.`,
-          ``,
-          sliceSkill("markets", [input.market]),
-          ``,
-        ]
+    ...(marketLines(input.market ?? null).length
+      ? [...marketLines(input.market ?? null), ``]
       : []),
     `Return the JSON object now.`,
   ]

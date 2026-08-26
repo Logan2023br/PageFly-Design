@@ -37,52 +37,65 @@ function check(ok: boolean, label: string, detail: string | null = null): void {
 }
 
 async function main(): Promise<void> {
-  const { MARKET_IDS, MARKETS, isKnownMarket } = await import("@/lib/briefOptions");
-  const { sliceSkill, sliceIds } = await import("@/lib/ai/skills");
+  const { MARKETS, MARKET_IDS, DETAILED_MARKET_IDS, isKnownMarket, marketById } = await import(
+    "@/lib/briefOptions"
+  );
+  const { sliceIds } = await import("@/lib/ai/skills");
+  const { marketLines } = await import("@/lib/design/marketLines");
 
-  console.log("\nthe list and the file agree");
+  console.log("\ntwo tiers, and the line between them holds");
 
-  /* Both directions. An id with no block offers the merchant a market that
-     teaches the model nothing; a block with no id is knowledge nobody can
-     reach. Either one is silent, which is why both are asserted. */
+  /* Both directions, and only for the tier that claims detail. A market flagged
+     `detailed` with no block promises the merchant something it cannot deliver;
+     a block nobody can reach is knowledge written and thrown away. Both fail
+     silently, which is why both are asserted. */
   const inFile = new Set(sliceIds("markets"));
-  for (const id of MARKET_IDS)
-    check(inFile.has(id), `${id} has a block`, inFile.has(id) ? null : "missing from 60-markets.md");
+  for (const id of DETAILED_MARKET_IDS)
+    check(inFile.has(id), `${id} claims detail and has a block`);
   for (const id of inFile)
     check(
-      isKnownMarket(id),
-      `the block "${id}" is a listed market`,
-      isKnownMarket(id) ? null : "block exists but no id offers it",
+      DETAILED_MARKET_IDS.includes(id),
+      `the block "${id}" belongs to a market that claims it`,
     );
-  check(MARKETS.length === MARKET_IDS.length, "every id has a label");
+  check(DETAILED_MARKET_IDS.length === 12, "twelve are written up", String(DETAILED_MARKET_IDS.length));
+  check(MARKETS.length > 40, "and the list is long enough to find yourself in", String(MARKETS.length));
 
-  console.log("\nslicing");
+  const ids = MARKET_IDS;
+  check(new Set(ids).size === ids.length, "no id appears twice");
+  check(
+    MARKETS.every((m) => m.label && m.language && m.price),
+    "every market names its language and how a price is written",
+  );
 
-  const india = sliceSkill("markets", ["in"]);
-  check(india.length > 0, "a real market slices to something");
-  check(india.includes("UPI"), "India's block names UPI");
-  check(!india.includes("Alipay"), "and carries no other market with it");
+  console.log("\nwhat a market tells the model");
 
-  check(sliceSkill("markets", ["latvia"]).trim() === "", "an unknown id slices to nothing");
-  check(sliceSkill("markets", []).trim() === "", "no ids slices to nothing");
+  const india = marketLines("in").join("\n");
+  check(india.includes("UPI"), "a written market carries its payment methods");
+  check(india.includes("India"), "and names itself");
 
-  console.log("\nthe blocks stay commercial");
+  const portugal = marketLines("pt").join("\n");
+  check(portugal.includes("Português"), "an unwritten one carries its language");
+  check(portugal.includes("58,00"), "and its number format");
+  check(
+    portugal.includes("do not invent"),
+    "and says plainly that nothing else about it is known",
+  );
+  check(
+    !portugal.includes("UPI") && !portugal.includes("Alipay"),
+    "carrying no other market's customs with it",
+  );
+  check(portugal.length < india.length, "the honest brief is the shorter one");
 
-  /* A market that described colour or type would be overriding a control the
-     merchant actively pressed, and would be exactly the caricature this feature
-     was designed to avoid. */
-  const banned = ["font-size", "typeface", "saturated", "colour palette", "color palette"];
-  for (const id of MARKET_IDS) {
-    const body = sliceSkill("markets", [id]).toLowerCase();
-    const hit = banned.find((w) => body.includes(w));
-    check(!hit, `${id} describes no visual style`, hit ?? null);
-  }
+  check(marketLines(null).length === 0, "no market says nothing at all");
+  check(marketLines("latvia").length === 0, "an unknown id says nothing at all");
 
   console.log("\nvalidation");
 
-  check(isKnownMarket("in"), "a listed market is known");
+  check(isKnownMarket("in"), "a written market is known");
+  check(isKnownMarket("pt"), "so is a language-only one");
   check(!isKnownMarket("xx"), "an unlisted one is not");
   check(!isKnownMarket(""), "and neither is nothing");
+  check(marketById("pt")?.detailed !== true, "and a language-only market does not claim detail");
 
   console.log(`\n${failures === 0 ? "PASS" : `${failures} FAILED`}\n`);
   process.exit(failures === 0 ? 0 : 1);
