@@ -290,8 +290,8 @@ export function CUSTOM_HTML(code: string, styleData?: StyleData, cls?: string) {
    `MD Json PageFly/fields.md` now documents their fields, and it contradicts
    nothing here — ProductPrice2Item genuinely has no configurable fields, so the
    regular and compare-at lines are distinguished by ORDER, which is what the slot
-   table below encodes. It does list fields worth setting that this builder still
-   ignores (ProductATC2.text, Heading2.tag); see the README.
+   table below encodes. Where it once listed fields this builder ignored, both
+   have since been written: ProductATC2's label and Heading2's tag.
 
    Slot order is load-bearing and enforced in `validate` below.
    ------------------------------------------------------------------------- */
@@ -533,9 +533,23 @@ export function PRODUCT_ATC(
   /* Always written, never conditionally. Left unset when the model returned an
      empty string, the button imported with no label at all — the field showed
      its placeholder and the button rendered blank. "Add to Cart" is PageFly's
-     own default and the right thing to fall back to. */
+     own default and the right thing to fall back to.
+
+     WRITTEN TWICE, AND THAT IS NOT BELT-AND-BRACES. `fields.md` describes this
+     element two ways: its field table lists `text` as the button label, and its
+     header says `copy: value on this element` — the same line Button2, Heading2
+     and Paragraph4 carry, and for all three of those the editor reads `value`.
+     Writing only `text` imported a button whose label field was empty and whose
+     face rendered blank, which is what the merchant saw. `value` is the one the
+     editor reads; `text` is kept because the table documents it and the two
+     saying different things would be a worse bug than either alone.
+
+     This was the only element of the nine whose copy lives in `value` that was
+     not writing it. */
+  const label = text?.trim() || "Add to Cart";
   const d: Record<string, unknown> = {
-    text: text?.trim() || "Add to Cart",
+    value: label,
+    text: label,
     buttonType: "text",
     source: opts.source ?? "auto",
     /* Stay put. A button that navigates to the cart on every add turns a page

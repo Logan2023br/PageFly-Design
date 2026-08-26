@@ -1151,6 +1151,28 @@ async function main(): Promise<void> {
     "extras written beside an arranged column are kept, not dropped",
   );
 
+  /* The label goes in `value`, which is where every other element whose copy is
+     editable puts it — Button2, Heading2, Paragraph4 all do. Writing only `text`
+     imported a cart button whose label field was empty in the editor and whose
+     face rendered blank, on a live storefront. */
+  const atcEl = both.items.find((i) => i.type === "ProductATC2");
+  check(atcEl?.data?.value === "Add to Bag", "the cart label is in `value`", String(atcEl?.data?.value));
+  check(atcEl?.data?.text === "Add to Bag", "and in `text`, saying the same thing");
+
+  const noLabel = await open({
+    sections: [
+      section(
+        [{ type: "product", title: "X", price: "$1", atcText: "", children: [] }],
+        "product-detail-gallery",
+      ),
+    ],
+  });
+  const bare = noLabel.items.find((i) => i.type === "ProductATC2");
+  /* PageFly's own documented default, per fields.md. The schema has a fallback
+     too, but a tree reaching the exporter unparsed — as here — must not be able
+     to ship a blank button either. */
+  check(bare?.data?.value === "Add to Cart", "an empty label falls back, never ships blank", String(bare?.data?.value));
+
   /* A design that forgets one of the three parts a buy box cannot do without
      gets it appended. Losing the page over a missing marker would cost far more
      than a button in the wrong place. */
