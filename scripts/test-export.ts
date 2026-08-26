@@ -1230,6 +1230,92 @@ async function main(): Promise<void> {
     rowRule,
   );
 
+  /* ---- a design that never mentioned phones ------------------------------
+
+     The common case, and until now the broken one: a two-column band with no
+     `mobile` block exported ONE breakpoint. On a 375px screen that is two
+     columns of about 160 pixels, a 72px gap and a 56px heading — the page was
+     not responsive, it was desktop shown small. */
+  console.log("\na design that never mentioned phones");
+
+  const noPhone = await open({
+    sections: [
+      section(
+        [
+          {
+            type: "row",
+            css: { gap: "72px", alignItems: "center" },
+            children: [
+              {
+                type: "col",
+                css: { flexBasis: "44%" },
+                children: [{ type: "heading", level: 2, text: "A headline", css: { fontSize: "56px" } }],
+              },
+              { type: "image", query: "cloth", ratio: 0.82, css: { flexBasis: "56%" } },
+            ],
+          },
+        ],
+        "deep-dive-split",
+      ),
+    ],
+  });
+
+  const splitRow = noPhone.items.find(
+    (i) => i.type === "FlexBlock" && noPhone.cssOf(i.id, "all").includes("gap: 72px"),
+  )!;
+  const splitMobile = noPhone.cssOf(splitRow.id, "mobile");
+  check(splitMobile.length > 0, "a phone breakpoint exists at all");
+  check(splitMobile.includes("flex-direction: column"), "the row stacks", splitMobile.slice(0, 60));
+  check(!splitMobile.includes("gap: 72px"), "and its desktop gap does not follow it there");
+
+  const headEl = noPhone.items.find((i) => i.type === "Heading2")!;
+  const headMobile = noPhone.cssOf(headEl.id, "mobile");
+  const headSize = /font-size:\s*(\d+)/.exec(headMobile)?.[1];
+  check(Number(headSize) < 56, "a 56px display size comes down on a phone", `${headSize}px`);
+
+  const imgEl = noPhone.items.find((i) => i.type === "Image5")!;
+  check(
+    noPhone.cssOf(imgEl.id, "mobile").includes("width: 100%"),
+    "a 56% share of a row becomes full width once the row is a column",
+  );
+
+  /* Laptop and tablet exist too, and they are not just copies of the phone. */
+  check(noPhone.cssOf(splitRow.id, "tablet").length > 0, "tablet is styled");
+  check(
+    noPhone.cssOf(splitRow.id, "laptop").includes("flex-direction: row"),
+    "a laptop keeps the two columns — stacking at 1280px is the other bug",
+    noPhone.cssOf(splitRow.id, "laptop").slice(0, 60),
+  );
+
+  /* And the floor never argues with a design that DID decide. */
+  const decided = await open({
+    sections: [
+      section(
+        [
+          {
+            type: "row",
+            css: { gap: "72px" },
+            mobile: { flexDirection: "row", gap: "8px" },
+            children: [
+              { type: "text", text: "a" },
+              { type: "text", text: "b" },
+            ],
+          },
+        ],
+        "deep-dive-split",
+      ),
+    ],
+  });
+  const kept = decided.items.find(
+    (i) => i.type === "FlexBlock" && decided.cssOf(i.id, "all").includes("gap: 72px"),
+  )!;
+  const keptMobile = decided.cssOf(kept.id, "mobile");
+  check(
+    keptMobile.includes("flex-direction: row") && keptMobile.includes("gap: 8px"),
+    "a design that asked for a row on phones gets one — this is a floor, not a policy",
+    keptMobile.slice(0, 60),
+  );
+
   /* ---- a size chart -------------------------------------------------------
 
      A hand-built grid of rows stops aligning the moment two cells differ in
