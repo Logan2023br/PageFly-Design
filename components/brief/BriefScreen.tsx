@@ -30,10 +30,13 @@ export function BriefScreen() {
       </header>
 
       <div className="mx-auto grid max-w-5xl gap-4">
+        {/* Above the numbered steps rather than inside them. Where a merchant
+            sells frames every answer below it — the language, what the page has
+            to promise — and it is the one question they can skip. */}
+        <MarketPicker />
         <SellInput />
         <StylePicker />
         <StoreTypePicker />
-        <MarketPicker />
         <PromptField />
         <ImageUpload />
         <PagePicker />

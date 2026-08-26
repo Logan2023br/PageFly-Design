@@ -28,7 +28,7 @@ export function PromptField() {
   return (
     <SectionCard
       id="pfd-prompt"
-      eyebrow="Step 5 · optional"
+      eyebrow="Step 4 · optional"
       title="Anything else?"
       help="The more specific, the less generic the mockups."
       aside={<Counter value={prompt.length} max={MAX_PROMPT_CHARS} />}

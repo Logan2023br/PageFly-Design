@@ -11,7 +11,7 @@ export function MarketPicker() {
   return (
     <SectionCard
       id="pfd-market"
-      eyebrow="Step 4"
+      eyebrow="Market · optional"
       title="Where are you selling?"
       help="Sets the language, the payment methods and what the page has to promise."
     >
