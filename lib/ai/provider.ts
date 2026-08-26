@@ -166,20 +166,36 @@ function anthropicProvider(role: Role): Provider {
     name: "anthropic",
     model,
     async complete({ system, user, maxTokens, signal }) {
-      const res = await client.messages.create(
-        {
-          model,
-          max_tokens: maxTokens,
-          /* The skills are identical on every request and dwarf the brief, so
-             they are marked cacheable. Without this the same instructions are
-             billed at full input rate on every page of every build. */
-          system: [
-            { type: "text", text: system, cache_control: { type: "ephemeral" } },
-          ],
-          messages: [{ role: "user", content: user }],
-        },
-        { signal },
-      );
+      const params = {
+        model,
+        max_tokens: maxTokens,
+        /* The skills are identical on every request and dwarf the brief, so
+           they are marked cacheable. Without this the same instructions are
+           billed at full input rate on every page of every build. */
+        system: [
+          { type: "text" as const, text: system, cache_control: { type: "ephemeral" as const } },
+        ],
+        messages: [{ role: "user" as const, content: user }],
+      };
+
+      /* ====================================================================
+         ABOVE ~16,000 OUTPUT TOKENS, STREAM.
+
+         Anthropic's own guidance, and it is not advisory: a non-streaming
+         request with a large `max_tokens` hits the SDK's HTTP timeout and
+         fails as a network error rather than as anything diagnosable. This
+         provider was written when the only Anthropic call in the codebase was
+         the reference read at 1,200 tokens, where it never came up. The deck
+         plan asks for 32,000, and on a model whose thinking is on by default
+         that budget can genuinely be used.
+
+         `getFinalMessage()` returns the same `Message` the non-streaming call
+         does, so everything below is unchanged.
+         ==================================================================== */
+      const res =
+        maxTokens > 16_000
+          ? await client.messages.stream(params, { signal }).finalMessage()
+          : await client.messages.create(params, { signal });
 
       const text = res.content
         .map((part) => (part.type === "text" ? part.text : ""))
@@ -187,8 +203,16 @@ function anthropicProvider(role: Role): Provider {
 
       return {
         truncated: res.stop_reason === "max_tokens",
-        /* Anthropic does not report a thinking count on a non-thinking model. */
-        reasoning: null,
+        /* Thinking blocks are billed as output like any other. Counting them
+           is what tells "the model could not do it" from "the model was not
+           given room to finish" — the same distinction `reasoning` carries for
+           DeepSeek, and on a model with thinking on by default it is not a
+           theoretical one. */
+        reasoning:
+          res.content.reduce(
+            (n, part) => n + (part.type === "thinking" ? part.thinking.length : 0),
+            0,
+          ) || null,
         text,
         usage: {
           /* Cache reads and writes are input tokens too. Reporting only

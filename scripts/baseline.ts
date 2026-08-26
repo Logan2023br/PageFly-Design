@@ -229,44 +229,84 @@ async function main(): Promise<void> {
     process.env.PG_URL ??
     "";
 
-  if (!url) {
-    console.log("NO DATABASE");
-    console.log();
-    console.log("No DATABASE_URL, POSTGRES_URL or PG_URL in the environment, so");
-    console.log("there is nothing to score. This script is read-only and safe to");
-    console.log("point at production:");
-    console.log();
-    console.log("  DATABASE_URL='postgres://…' npx tsx scripts/baseline.ts > baseline-v1.txt");
-    console.log();
-    console.log("Or run it on the host that already has the variable set.");
-    process.exitCode = 1;
-    return;
-  }
-
-  const { Pool } = (await import("pg")) as typeof import("pg");
-  const pool = new Pool({
-    connectionString: url,
-    /* One connection. This is a reporting script; it must not compete with the
-       app for the pool, which is set to three. */
-    max: 1,
-    ssl: url.includes("sslmode=disable") ? false : { rejectUnauthorized: false },
-  });
-
   let rows: { domain: string; snapshot: unknown }[];
-  try {
-    const res = await pool.query(
-      `select domain, snapshot from runs where snapshot is not null order by created_at desc`,
-    );
-    rows = res.rows as { domain: string; snapshot: unknown }[];
-  } catch (err) {
-    console.log("DATABASE UNREACHABLE");
-    console.log();
-    console.log((err as Error).message);
-    process.exitCode = 1;
+
+  if (url) {
+    const { Pool } = (await import("pg")) as typeof import("pg");
+    const pool = new Pool({
+      connectionString: url,
+      /* One connection. This is a reporting script; it must not compete with the
+         app for the pool, which is set to three. */
+      max: 1,
+      ssl: url.includes("sslmode=disable") ? false : { rejectUnauthorized: false },
+    });
+
+    try {
+      const res = await pool.query(
+        `select domain, snapshot from runs where snapshot is not null order by created_at desc`,
+      );
+      rows = res.rows as { domain: string; snapshot: unknown }[];
+    } catch (err) {
+      console.log("DATABASE UNREACHABLE");
+      console.log();
+      console.log((err as Error).message);
+      process.exitCode = 1;
+      await pool.end().catch(() => {});
+      return;
+    }
     await pool.end().catch(() => {});
-    return;
+  } else {
+    /* ======================================================================
+       THE DEV FILE STORE, when there is no Postgres.
+
+       This script existed for months and was never once run: `baseline-v1.txt`
+       in the repo contains nothing but its own "NO DATABASE" message. The
+       measurements it defines — three paddings, five type sizes, a dark band —
+       are quoted in `plan.ts` as things that WERE measured, and they were not.
+       A scoring tool that only runs against production is a scoring tool that
+       runs the day someone is least willing to experiment.
+
+       The dev store holds the same `runs` rows with the same `snapshot`, so the
+       scoring below does not change; only where the rows come from does.
+       ====================================================================== */
+    const { readFileSync } = await import("node:fs");
+    try {
+      const db = JSON.parse(readFileSync(".pfd-dev-db.json", "utf8")) as {
+        runs?: { domain?: string; snapshot?: unknown; createdAt?: string }[];
+      };
+      /* An optional count of the most recent runs to score:
+             npx tsx scripts/baseline.ts 1
+         Which is how a branch is judged. Scoring every run ever built averages
+         the change away — sixteen old runs and one new one move a median by
+         nothing — and the question is never "what is the average of everything
+         this app has ever produced", it is "is the page I just built better
+         than the ones before it". */
+      const limit = Number(process.argv[2]);
+      const all = (db.runs ?? [])
+        .filter((r) => r.snapshot != null)
+        .sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")))
+        .map((r) => ({ domain: String(r.domain ?? "dev"), snapshot: r.snapshot }));
+
+      rows = Number.isFinite(limit) && limit > 0 ? all.slice(0, limit) : all;
+      console.log(
+        `SOURCE  .pfd-dev-db.json — ${rows.length} run(s)` +
+          (rows.length < all.length ? ` (most recent of ${all.length})` : ""),
+      );
+      console.log();
+    } catch (err) {
+      console.log("NO DATABASE, AND NO DEV STORE");
+      console.log();
+      console.log("Neither DATABASE_URL/POSTGRES_URL/PG_URL nor a readable");
+      console.log(".pfd-dev-db.json in the working directory:");
+      console.log();
+      console.log(`  ${(err as Error).message}`);
+      console.log();
+      console.log("  DATABASE_URL='postgres://…' npx tsx scripts/baseline.ts");
+      console.log();
+      process.exitCode = 1;
+      return;
+    }
   }
-  await pool.end().catch(() => {});
 
   const scores: PageScore[] = [];
   let skippedNoDesign = 0;
