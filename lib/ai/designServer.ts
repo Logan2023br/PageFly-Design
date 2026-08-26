@@ -213,6 +213,36 @@ const PADDING_PX: Record<string, string> = {
 };
 
 /**
+ * How much output this page is allowed, and why it is not one number.
+ *
+ * The long note at the call site works out that a ceiling prices FAILURES
+ * rather than successes — a page needing 25,000 is billed 25,000 whichever
+ * ceiling is set — so it has to sit above what a page genuinely needs, and
+ * 48,000 was chosen as comfortably above the 26,726 measured on the heaviest
+ * page there was.
+ *
+ * A design pass that specifies every element changed what "heaviest" means.
+ * First real build of a twelve-band product page with a full spec:
+ *
+ *     ran out of output budget at 47999 tokens
+ *     — 42557 of them spent thinking, leaving 5442 for the JSON
+ *
+ * The thinking grew, not the answer. That is worth saying plainly because it is
+ * the opposite of the intuition the spec was built on: being handed the design
+ * did not save the build model from deciding, it gave it more to reconcile.
+ * Whether that is the prompt's fault or the model's is not yet known, and
+ * raising the ceiling does not answer it — it only stops the question costing a
+ * page every time it is asked.
+ *
+ * So the specified path gets 64,000 and the old path keeps 48,000. A build with
+ * no specs cannot be made to fail more expensively by a feature it never used.
+ */
+function ceilingFor(order: Order | null): number {
+  if (providerName() !== "deepseek") return 16_000;
+  return order?.sections.some((s) => s.spec) ? 64_000 : 48_000;
+}
+
+/**
  * One spec node as an indented line, its children beneath it.
  *
  * Indented text rather than the JSON it arrived as: everything around it in
@@ -614,8 +644,11 @@ export async function designPageTree(
 
          48,000: comfortably above the 26,726 measured on the heaviest page
          there is, and still 25% below the 64,000 that made one failure cost
-         more than two successes. */
-      maxTokens: providerName() === "deepseek" ? 48_000 : 16_000,
+         more than two successes.
+
+         See `ceilingFor` — "the heaviest page there is" stopped being that
+         page the moment a design pass started specifying its elements. */
+      maxTokens: ceilingFor(order),
       /* A DeepSeek page measured 100-172 seconds against Haiku's 45, so the
          old 240s ceiling left almost no headroom on a slow one. */
       signal: signal
@@ -659,7 +692,7 @@ export async function designPageTree(
       const again = await provider.complete({
         system,
         user,
-        maxTokens: providerName() === "deepseek" ? 48_000 : 16_000,
+        maxTokens: ceilingFor(order),
         signal: signal
           ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])
           : AbortSignal.timeout(TIMEOUT_MS),
@@ -768,7 +801,7 @@ export async function designPageTree(
             `Return the SAME page with those fixed and nothing else changed.`,
             `Same JSON shape. Do not rewrite copy that was not named above.`,
           ].join("\n"),
-          maxTokens: providerName() === "deepseek" ? 48_000 : 16_000,
+          maxTokens: ceilingFor(order),
           signal: signal
             ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])
             : AbortSignal.timeout(TIMEOUT_MS),

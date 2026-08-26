@@ -276,8 +276,17 @@ function userPrompt(ask: DeckAsk): string {
     `  accent      ${ask.tokens.accent}`,
     `  band        ${ask.tokens.band}`,
     ``,
-    `Pages in this build:`,
-    ...ask.pageTypes.map((t) => `  ${t}`),
+    `Pages in this build, and the sections each one is REQUIRED to contain:`,
+    /* Enforcement without instruction is how a product page came back with no
+       product box. `vet` has always inserted a missing pin, and the model was
+       never told the pin existed — so it designed eleven bands, had a twelfth
+       bolted on at position 1, and went over the cap. Saying it here costs a
+       line per page and buys a page designed AROUND its buy box rather than one
+       repaired into having one. */
+    ...ask.pageTypes.map((t) => {
+      const pins = pinnedFor(t);
+      return pins.length ? `  ${t} — must include ${pins.join(", ")}` : `  ${t}`;
+    }),
     ``,
     ...(r
       ? [
