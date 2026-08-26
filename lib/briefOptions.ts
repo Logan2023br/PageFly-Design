@@ -169,23 +169,21 @@ export const MAX_PROMPT_CHARS = 1500;
 /* ==========================================================================
    MARKETS — who the page is being sold to.
 
-   TWO TIERS, and the difference is honest rather than cosmetic.
+   Fifty-two, and every one of them changes what a page says: the model is asked
+   to build for shoppers there, in their language, carrying what they look for
+   before they trust a store.
 
-   Twelve markets have a hand-written block in `skills/_sliced/60-markets.md`
-   naming what a shopper there looks for before they buy — the payment methods,
-   the delivery expectation, the returns norm, the line the law expects. Picking
-   one of those genuinely changes which sections a page has and what they
-   promise.
+   Twelve additionally have a block in `skills/_sliced/60-markets.md`. Those
+   blocks are ANCHORS rather than a second tier — they pin the handful of things
+   where the exact words matter and a near-miss reads as foreign. `detailed` is
+   how `marketLines` finds them; it is not shown to the merchant, because a
+   merchant reading two groups would read the second as "the ones that do not
+   work", and all of them work.
 
-   The rest carry what can be stated truthfully without inventing anything: the
-   language the page is written in, the currency, and how a price is written in
-   it. That is real — a Portuguese store gets a Portuguese page with prices as
-   `58,00 €` — and it stops short of the commercial customs nobody here knows.
-
-   The alternative was a picker of a hundred countries with knowledge behind
-   twelve, which invites the model to invent the trade practices of the other
-   eighty-eight. An invented custom is worse than an absent one: the merchant
-   cannot tell which they got.
+   An earlier cut had this backwards: a dozen "known" markets and forty that got
+   their language and a warning not to invent anything. Withholding the question
+   did not prevent invention. It prevented knowledge — the model knows more
+   about trade in Poland than the person who wrote the blocks does.
    ========================================================================== */
 
 export type Market = {
@@ -198,15 +196,15 @@ export type Market = {
   /**
    * True when `60-markets.md` has a block for this id.
    *
-   * The picker groups on it and the prompt branches on it, so the two cannot
-   * drift: a market claiming detail it does not have would be the one failure
-   * this whole two-tier design exists to prevent.
+   * Read only by `marketLines`, which appends the block as an anchor. Not shown
+   * anywhere: it says something about how much has been written down, not about
+   * whether choosing this market does anything.
    */
   detailed?: boolean;
 };
 
 export const MARKETS: Market[] = [
-  /* ---- written up in full ------------------------------------------------ */
+  /* ---- with an anchor block in 60-markets.md ------------------------------ */
   { id: "us", label: "United States", language: "English (US)", price: "$68.00", detailed: true },
   { id: "uk", label: "United Kingdom", language: "English (UK)", price: "£58.00", detailed: true },
   { id: "in", label: "India", language: "English (India)", price: "₹2,499", detailed: true },
@@ -220,7 +218,7 @@ export const MARKETS: Market[] = [
   { id: "gulf", label: "Gulf (UAE, Saudi Arabia)", language: "English", price: "AED 249", detailed: true },
   { id: "au", label: "Australia", language: "English (AU)", price: "$68.00 AUD", detailed: true },
 
-  /* ---- language and currency only ---------------------------------------- */
+  /* ---- the model's own knowledge, same instruction ------------------------ */
   { id: "ca", label: "Canada", language: "English (Canada)", price: "$68.00 CAD" },
   { id: "mx", label: "Mexico", language: "Español (México)", price: "$1,249.00 MXN" },
   { id: "ar", label: "Argentina", language: "Español", price: "$34.900" },
@@ -267,7 +265,7 @@ export type MarketId = string;
 
 export const MARKET_IDS: readonly string[] = MARKETS.map((m) => m.id);
 
-/** The twelve with a block in `60-markets.md`. The picker groups on this. */
+/** The twelve with an anchor block. Used by the test, not by the picker. */
 export const DETAILED_MARKET_IDS: readonly string[] = MARKETS.filter((m) => m.detailed).map(
   (m) => m.id,
 );

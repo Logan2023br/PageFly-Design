@@ -69,22 +69,31 @@ async function main(): Promise<void> {
 
   console.log("\nwhat a market tells the model");
 
+  /* Every market gets the same instruction. The first cut of this file gave a
+     dozen of them the real brief and told the rest not to invent anything,
+     which did not prevent invention — it prevented knowledge, and left forty
+     pages addressed to nobody while looking addressed to someone. */
   const india = marketLines("in").join("\n");
-  check(india.includes("UPI"), "a written market carries its payment methods");
-  check(india.includes("India"), "and names itself");
-
   const portugal = marketLines("pt").join("\n");
-  check(portugal.includes("Português"), "an unwritten one carries its language");
+
+  for (const [name, body] of [["India", india], ["Portugal", portugal]] as const) {
+    check(body.includes("Build the page for shoppers THERE"), `${name} is asked to build for it`);
+    check(body.includes("how people pay"), `${name} is asked about payment`);
+    check(body.includes("returns window"), `${name} is asked about returns`);
+    check(body.includes("say less"), `${name} is told to stop where it is unsure`);
+  }
+
+  check(portugal.includes("Português"), "an unanchored market carries its language");
   check(portugal.includes("58,00"), "and its number format");
-  check(
-    portugal.includes("do not invent"),
-    "and says plainly that nothing else about it is known",
-  );
+  check(portugal.includes("Portugal"), "and names itself, three times over");
   check(
     !portugal.includes("UPI") && !portugal.includes("Alipay"),
-    "carrying no other market's customs with it",
+    "carrying no other market's specifics with it",
   );
-  check(portugal.length < india.length, "the honest brief is the shorter one");
+
+  check(india.includes("UPI"), "an anchored one adds the exact wording on top");
+  check(india.includes("it was checked"), "and says which side wins if they disagree");
+  check(india.length > portugal.length, "the anchored brief is the longer one");
 
   check(marketLines(null).length === 0, "no market says nothing at all");
   check(marketLines("latvia").length === 0, "an unknown id says nothing at all");
