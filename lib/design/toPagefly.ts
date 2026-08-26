@@ -358,6 +358,41 @@ function inkRule(opts: EmitOptions): string {
 }
 
 /**
+ * The first length in a CSS value, as a number of pixels.
+ *
+ * WRITTEN AFTER A PAGE SHIPPED WITH A 4,432-PIXEL GAP. `gap` takes a shorthand
+ * — `44px 32px` is a row gap and a column gap — and the code here read it by
+ * stripping every character that was not a digit, which turned two numbers into
+ * one enormous one. The export set that as a slider's spacing, every card
+ * collapsed to nothing, and the words came out one letter per line down a
+ * section thousands of pixels tall. The mockup was correct throughout, because
+ * a browser understands the shorthand.
+ *
+ * The row gap is taken because that is what `gap: X` means when a design writes
+ * one value, and a design writing two is describing a grid whose rows are the
+ * looser axis more often than not.
+ *
+ * `0` is a length. Returning the fallback for it — which `|| fallback` does —
+ * is how a deliberate flush-together grid becomes a 24px one.
+ */
+function firstLength(value: unknown, fallback: number): number {
+  if (value === undefined || value === null) return fallback;
+
+  const m = /(-?\d*\.?\d+)\s*(px|rem|em|%)?/.exec(String(value).trim());
+  if (!m) return fallback;
+
+  const n = Number(m[1]);
+  if (!Number.isFinite(n)) return fallback;
+
+  /* A percentage gap has no pixel meaning without the container's width, which
+     is not knowable here. The fallback is the honest answer. */
+  if (m[2] === "%") return fallback;
+
+  const px = m[2] === "rem" || m[2] === "em" ? n * 16 : n;
+  return Math.max(0, Math.round(px));
+}
+
+/**
  * No photograph taller than the screen it is shown on.
  *
  * A ratio the model picks is a shape, not a size, and the two stop agreeing at
@@ -906,7 +941,7 @@ function emitNode(
          fallback, because that is the number it draws when the design says
          nothing. */
       const css = styleAt(node, "all");
-      const gutter = Number(String(css.gap ?? 24).replace(/[^\d.]/g, "")) || 24;
+      const gutter = firstLength(css.gap, 24);
 
       /* And the dots' LOOK, which no setting can express — see
          SLIDESHOW_PARTS. Setting for the shape, CSS for the rest. */
@@ -1326,7 +1361,7 @@ function cardList(
   const columns =
     node.type === "col" ? 1 : (declaredColumns(css) ?? children.length);
 
-  const gap = Number(String(css.gap ?? css.rowGap ?? css.columnGap ?? 24).replace(/[^\d.]/g, "")) || 24;
+  const gap = firstLength(css.gap ?? css.rowGap ?? css.columnGap, 24);
 
   /* The layout properties move into the element's own data, so they are not ALSO
      written as CSS — `display:grid` on the root or on the native wrappers is
@@ -1546,6 +1581,9 @@ function needsFill(section: DesignSection): boolean {
     FILL_TYPES.has(n.type) || childrenOf(n).some(has);
   return section.children.some(has);
 }
+
+/** `firstLength`, so a shorthand gap cannot silently become one number again. */
+export const __firstLengthForTest = firstLength;
 
 export function pageflyFromTree(
   tree: DesignTree,

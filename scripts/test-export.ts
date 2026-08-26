@@ -52,6 +52,7 @@ async function open(
   media: { images?: Record<string, string>; videos?: Record<string, string> } = {},
 ) {
   const { pageflyFromTree } = await import("../lib/design/toPagefly");
+
   const { blob } = pageflyFromTree(
     tree as never,
     { name, bg: "#0A0A0A", ink: "#F6F6F4", fontBody: "Inter" },
@@ -92,6 +93,22 @@ const section = (children: unknown[], pattern: string) => ({
 });
 
 async function main(): Promise<void> {
+  const { __firstLengthForTest: px } = await import("../lib/design/toPagefly");
+
+  /* A page shipped with a 4,432px gap: `gap: "44px 32px"` had every non-digit
+     stripped out of it. Every case below is a value a design has actually
+     written. */
+  console.log("\ngap shorthand");
+  check(px("44px 32px", 24) === 44, "a two-value gap takes the row gap", String(px("44px 32px", 24)));
+  check(px("24px", 99) === 24, "a single value is itself");
+  check(px(24, 99) === 24, "a bare number is itself");
+  check(px("1.5rem", 99) === 24, "rem becomes pixels");
+  check(px(0, 24) === 0, "zero is a length, not a missing value");
+  check(px("0", 24) === 0, "…written as a string too");
+  check(px(undefined, 24) === 24, "absent falls back");
+  check(px("normal", 24) === 24, "a keyword falls back");
+  check(px("5%", 24) === 24, "a percentage has no pixel meaning here — falls back");
+
   /* ---- a row of cards is a card list ------------------------------------ */
 
   console.log("four feature cards in a row");
