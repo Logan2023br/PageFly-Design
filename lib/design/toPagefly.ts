@@ -34,7 +34,7 @@ import {
   type PFNode,
   type StyleData,
 } from "../pagefly/builder";
-import { WEBFONT_CSS_URL } from "../styleTokens";
+import { readableInk, WEBFONT_CSS_URL } from "../styleTokens";
 import { cleanBlock, type CleanBlock } from "./customBlock";
 import { DEVICES, styleAt, type Device } from "./derive";
 import {
@@ -546,9 +546,13 @@ export type EmitOptions = {
    */
   ink?: string;
   /**
-   * The page's accent. Only the form needs it: Form2's submit button is
-   * unstyled by default and renders as a bare native control, which is the one
-   * element on an imported page that looks like it belongs to a different site.
+   * The page's accent.
+   *
+   * Two composites need it, both for the same reason: the platform ships them
+   * unstyled and this file is the only place that knows the palette. Form2's
+   * submit button renders as a bare native control without it, and the buy
+   * button was emitted as a hard-coded near-black — which is the strongest
+   * thing on a white page and nearly invisible on a dark one.
    */
   accent?: string;
   /**
@@ -560,6 +564,15 @@ export type EmitOptions = {
    * page is the one detail that says the section came from somewhere else.
    */
   border?: string;
+  /**
+   * The style's corner radius, in pixels.
+   *
+   * Only the composites need it. Everything the design builds by hand carries
+   * its own `border-radius` in `css`, but a buy button is emitted by this file
+   * — so a store whose whole visual identity is soft corners was shipping the
+   * one square control on the page.
+   */
+  radius?: number;
   /** icon name → raw <svg> markup; icons are dropped when this is absent */
   iconSvg?: (name: string) => string | null;
   /* Custom blocks write their own CSS and JS, and both belong on the PAGE
@@ -939,6 +952,11 @@ function productBox(
 ): PFNode {
   const stacked = node.layout === "stacked";
 
+  /* Falls back to the old near-black only where no palette reached this call —
+     a page exported without tokens is the one case where guessing is all there
+     is, and near-black on an unknown surface is the safer guess. */
+  const atcBg = opts.accent ?? "#111114";
+
   /* The strip is turned on by the SETTING, not by CSS — see PRODUCT_MEDIA. The
      style below is spacing only; whether the list renders at all is data. */
   const EDGE = { bottom: "BOTTOM", left: "LEFT", right: "RIGHT", top: "TOP" } as const;
@@ -1069,13 +1087,26 @@ function productBox(
         : []),
       /* The label must read exactly as the mockup showed it — left unset,
          PageFly renders its own "Add to Cart", which may not be the words the
-         merchant just approved. */
+         merchant just approved.
+
+         THE ACCENT, NOT A HARD-CODED BLACK. `#111114` was written when a page
+         was always on white, where near-black is the strongest thing on the
+         surface. On a page whose own background is near-black it is the
+         weakest: the most important control on a product page arrives almost
+         invisible, and the merchant reads that as the generator not knowing
+         what the page looks like — which was exactly true.
+
+         The accent is the one colour on a page chosen to be looked at, so it
+         is what the buy button should be, and `readableInk` settles the label
+         against it rather than assuming white. `opts.accent` already reaches
+         this function; only the form was using it. */
       PRODUCT_ATC(
         {
           all: {
             "&":
-              "padding: 14px 22px; font-weight: 600;" +
-              " background-color: #111114; color: #ffffff; text-align: center;",
+              "padding: 15px 22px; font-weight: 600; text-align: center;" +
+              ` background-color: ${atcBg}; color: ${readableInk(atcBg)};` +
+              (opts.radius ? ` border-radius: ${opts.radius}px;` : ""),
           },
         },
         node.atcText,

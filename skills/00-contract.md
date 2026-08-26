@@ -99,6 +99,36 @@ behaves and the merchant plugs their review app in later. A `productList` or a
 `form` in there is refused, for the reason everything else on this page is: it
 would need a binding it cannot have.
 
+**THE BUY BOX IS THE PAGE.** Everything else on a product page argues for the
+purchase; this is where it happens. A buy box that reads as a form with a dark
+rectangle under it is the single fastest way for a good page to look generic,
+and it is the section a merchant judges the whole build by.
+
+Every row in `extras` must SAY something. The test is whether a shopper is
+better informed for having read it:
+
+  - `4.8 ★ 428 reviews` — a number and a count. Earns its place.
+  - `Ships free over €150 · arrives Tue 3 Sep` — two facts.
+  - `Verified reviews` under five empty stars — says nothing. A rating with no
+    rating is worse than no rating: it reads as a review widget that failed to
+    load.
+  - A row of six or eight small icons with no words — decoration pretending to
+    be trust. Three icons with three short labels beat eight bare glyphs, every
+    time.
+  - `SAVE 20%` when the price already shows `€390` struck through `€490` — the
+    same fact twice.
+
+Three to five rows is a buy box. Nine is a receipt.
+
+Set `swatches` to the number of variants the store actually sells, not the
+maximum. Eight pastel circles under a coat that comes in three colours is
+inventing inventory, and a shopper counts them.
+
+The cart button's colour, corners and the stepper's outline are NOT yours —
+they are emitted from the store's palette so the buy box matches the page. Do
+not set `css` on the `product` node trying to restyle them. What is yours is
+what the box CONTAINS: which flags are on, and what those rows say.
+
 **`productList`** is EVERY grid of real products. Never build a product grid by
 hand out of image + heading + text: those are dead pictures with invented names
 that stay wrong for ever.

@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useId, useMemo, useRef, useState 
 import type { CSSProperties } from "react";
 import { cleanBlock, previewJs } from "./customBlock";
 import { MOTION_CSS, motionClasses } from "./motion";
+import { readableInk } from "../styleTokens";
 import {
   Award,
   Check,
@@ -81,9 +82,28 @@ type Ctx = {
   images: Record<string, string>;
   /** background-video URL per query. At most one per page. */
   videos: Record<string, string>;
+  /**
+   * The page's palette, for the composites this file draws itself.
+   *
+   * Everything the design builds by hand arrives with its own `css`, so for
+   * most of this file the palette is already in the tree. The buy box is not:
+   * its cart button, stepper and stock line are drawn here, and they were drawn
+   * in fixed colours — a near-black button and `rgba(0,0,0,.16)` borders, which
+   * on a dark page are a button you cannot see and borders that are not there.
+   *
+   * The mockup must match the export. `toPagefly.ts` now emits these controls
+   * in the accent, so drawing them differently here would make the preview a
+   * picture of a page the merchant is not going to get.
+   */
+  palette: { accent: string; border: string; radius: number } | null;
 };
 
-const DesignCtx = createContext<Ctx>({ device: "all", images: {}, videos: {} });
+const DesignCtx = createContext<Ctx>({
+  device: "all",
+  images: {},
+  videos: {},
+  palette: null,
+});
 
 function useDesign() {
   return useContext(DesignCtx);
@@ -209,9 +229,17 @@ function Icon({ node, cls }: { node: Extract<DesignNode, { type: "icon" }>; cls?
 /* ---- composites --------------------------------------------------------- */
 
 function Product({ node, cls }: { node: Extract<DesignNode, { type: "product" }>; cls?: string }) {
-  const { device, images } = useDesign();
+  const { device, images, palette } = useDesign();
   const stacked = node.layout === "stacked" || device === "mobile";
   const src = images[node.query];
+
+  /* The buy box is the one composite this file draws rather than reads, so it
+     is the one place the palette has to be applied by hand. The fallbacks are
+     what every page got before the palette arrived here — correct on white,
+     which is the only surface they were ever written for. */
+  const atcBg = palette?.accent ?? "#111114";
+  const rule = palette?.border ?? "rgba(0,0,0,.16)";
+  const radius = palette?.radius ?? 0;
 
   return (
     <div
@@ -318,7 +346,7 @@ function Product({ node, cls }: { node: Extract<DesignNode, { type: "product" }>
                   width: 26,
                   height: 26,
                   borderRadius: 999,
-                  border: "1px solid rgba(0,0,0,.18)",
+                  border: `1px solid ${rule}`,
                   background: `hsl(${(i * 47) % 360} 34% 72%)`,
                 }}
               />
@@ -338,7 +366,7 @@ function Product({ node, cls }: { node: Extract<DesignNode, { type: "product" }>
                   placeItems: "center",
                   width: i === 1 ? 56 : 40,
                   height: 40,
-                  border: "1px solid rgba(0,0,0,.16)",
+                  border: `1px solid ${rule}`,
                   marginLeft: i === 0 ? 0 : -1,
                 }}
               >
@@ -367,9 +395,10 @@ function Product({ node, cls }: { node: Extract<DesignNode, { type: "product" }>
           style={{
             display: "inline-block",
             textAlign: "center",
-            padding: "14px 22px",
-            background: "#111114",
-            color: "#fff",
+            padding: "15px 22px",
+            background: atcBg,
+            color: readableInk(atcBg),
+            borderRadius: radius || undefined,
             fontWeight: 600,
           }}
         >
@@ -383,7 +412,8 @@ function Product({ node, cls }: { node: Extract<DesignNode, { type: "product" }>
               display: "inline-block",
               textAlign: "center",
               padding: "13px 22px",
-              border: "1px solid rgba(0,0,0,.24)",
+              border: `1px solid ${rule}`,
+              borderRadius: radius || undefined,
               fontWeight: 600,
             }}
           >
@@ -1071,17 +1101,20 @@ export function DesignRender({
   device,
   images = {},
   videos = {},
+  palette = null,
 }: {
   tree: DesignTree;
   device: Device;
   images?: Record<string, string>;
   videos?: Record<string, string>;
+  /** the page's own palette; see `Ctx.palette` for what needs it and why */
+  palette?: { accent: string; border: string; radius: number } | null;
 }) {
   const root = useRef<HTMLDivElement>(null);
   useReveal(root, tree);
 
   return (
-    <DesignCtx.Provider value={{ device, images, videos }}>
+    <DesignCtx.Provider value={{ device, images, videos, palette }}>
       <div ref={root} style={{ display: "contents" }}>
         {/* The exported page's stylesheet, verbatim. Injected per preview rather
             than once globally so a preview that is unmounted takes its styles

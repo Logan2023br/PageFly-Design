@@ -162,6 +162,14 @@ export const MockupPage = memo(function MockupPage({
           device={deviceForWidth(width)}
           images={page.design?.images ?? {}}
           videos={page.design?.videos ?? {}}
+          /* For the buy box, which `render.tsx` draws itself rather than reads
+             off the tree — and which the export now emits in the accent, so the
+             two have to agree. */
+          palette={{
+            accent: page.tokens.accent,
+            border: page.tokens.border,
+            radius: page.tokens.radius,
+          }}
         />
       </div>
     );

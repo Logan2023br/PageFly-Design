@@ -126,10 +126,13 @@ export function ExportProvider({ children }: { children: ReactNode }) {
         {
           images: page.design?.images ?? {},
           videos: page.design?.videos ?? {},
-          /* Form2's submit button is unstyled by default — a grey native
-             control on an otherwise designed page. */
+          /* Two composites the platform leaves unstyled: Form2's submit button
+             arrives as a grey native control, and the buy button used to be
+             emitted as a hard-coded near-black — invisible on a dark page, and
+             the wrong colour on every page that has an accent. */
           accent: page.tokens.accent,
           border: page.tokens.border,
+          radius: page.tokens.radius,
           iconSvg: (name) => iconMarkup(stageRef.current, name),
         },
       );

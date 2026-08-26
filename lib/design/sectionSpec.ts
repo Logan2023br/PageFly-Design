@@ -133,6 +133,17 @@ function systemPrompt(ask: SpecAsk): string {
     ``,
     sliceSkill("patterns", ask.order.patternIds),
     ``,
+    /* The band a merchant judges the build by, and the one whose contents are
+       most often padding. The colours are not mentioned because they are not
+       the model's to set — the exporter emits the cart button from the store's
+       palette, so a spec that argued about them would be arguing with code. */
+    `THE BUY BOX. Where a band holds a "product", say what goes with it. Its`,
+    `rows must each state a fact a shopper is better off knowing — a rating`,
+    `with a real number and a count, a delivery date, a returns window. Five`,
+    `empty stars labelled "verified reviews", or a strip of bare icons with no`,
+    `words, is decoration wearing the clothes of proof. Three to five rows is a`,
+    `buy box; nine is a receipt.`,
+    ``,
     `RULES.`,
     `1. Every band gets a spec. A band you skip is a band built by guesswork.`,
     `2. Vary between bands. Two bands with the same element list is the failure`,
