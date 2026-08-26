@@ -13,6 +13,7 @@ import {
   type Order,
   type OrderSection,
   type Slot,
+  type SpecNode,
 } from "../design/plan";
 import { audit } from "../design/audit";
 import { elementForPattern } from "../design/elementFor";
@@ -212,18 +213,58 @@ const PADDING_PX: Record<string, string> = {
 };
 
 /**
+ * One spec node as an indented line, its children beneath it.
+ *
+ * Indented text rather than the JSON it arrived as: everything around it in
+ * this prompt is lines of text, and a block of JSON in the middle reads as a
+ * different kind of instruction — a thing to copy rather than a thing to build
+ * from. Absent fields are omitted, so a plain element is a short line.
+ */
+function specLines(node: SpecNode, depth: number): string[] {
+  const pad = "  ".repeat(depth + 1);
+  const bits = [
+    node.el,
+    node.scale ?? "",
+    node.basis ? `basis ${node.basis}` : "",
+    node.gap !== undefined ? `gap ${node.gap}` : "",
+    node.ratio !== undefined ? `ratio ${node.ratio}` : "",
+    node.anim?.hover ? `hover:${node.anim.hover}` : "",
+    node.anim?.reveal ? `reveal:${node.anim.reveal}` : "",
+    node.anim?.delay !== undefined ? `delay:${node.anim.delay}` : "",
+    node.optional ? "(optional)" : "",
+  ].filter(Boolean);
+
+  return [
+    `${pad}${bits.join("  ")}`,
+    ...(node.children ?? []).flatMap((c) => specLines(c, depth + 1)),
+  ];
+}
+
+/**
  * The order, as the model reads it.
  *
- * One line per section and nothing else. Everything on the line is a decision
- * already made — which pattern, how dark, how much room, what moves — so there
- * is nothing here to weigh, only to build.
+ * One line per section, and — where stage 2b answered — the elements that go in
+ * it underneath. Everything here is a decision already made: which pattern, how
+ * dark, how much room, what moves, and what is inside. Nothing to weigh, only
+ * to build.
  */
 function orderLines(order: Order, bg: string, ink: string): string[] {
   return [
     `THE ORDER — build exactly these sections, in this order, one section each.`,
     `Copy the pattern id into the section's "pattern" field verbatim.`,
+    /* Only when there is something to explain. Unconditional, these three lines
+       would describe elements to every build on the older paths — where no
+       section ever lists any — and would change a cached prefix that has no
+       reason to move. */
+    ...(order.sections.some((s) => s.spec)
+      ? [
+          `Where a section lists elements beneath it, build those elements: the`,
+          `indentation is the nesting, and "oversized" and the rest are type`,
+          `roles you turn into sizes once you know how long the words are.`,
+        ]
+      : []),
     ``,
-    ...order.sections.map((s, i) =>
+    ...order.sections.flatMap((s, i) => [
       [
         `${i + 1} · ${s.role}`,
         s.pattern || "(no pattern — build the role plainly)",
@@ -250,11 +291,26 @@ function orderLines(order: Order, bg: string, ink: string): string[] {
       ]
         .filter(Boolean)
         .join(" · "),
-    ),
+      /* The elements, when stage 2b named them. Absent on every older path, and
+         then the band is described by its pattern id alone, exactly as before. */
+      ...(s.spec ? s.spec.nodes.flatMap((n) => specLines(n, 0)) : []),
+    ]),
     ``,
   ];
 }
 
+
+/**
+ * `orderLines`, for a test that must prove the old path did not move.
+ *
+ * Exported because the property that matters most about this change is a
+ * NEGATIVE one — a band with no spec must produce the byte-identical block it
+ * produced before specs existed — and a negative property nobody can run is a
+ * claim rather than a fact.
+ */
+export function __orderLinesForTest(order: Order, bg: string, ink: string): string[] {
+  return orderLines(order, bg, ink);
+}
 
 /* ==========================================================================
    TRAINING SECTIONS, read from the database as text.

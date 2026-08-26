@@ -2,6 +2,7 @@ import "server-only";
 
 import { childrenOf, type DesignNode, type DesignSection, type DesignTree } from "./schema";
 import type { Order } from "./plan";
+import { specBinding, specProblems } from "./specCheck";
 
 /* ==========================================================================
    The loop that was missing.
@@ -531,6 +532,22 @@ export function audit(
       `${unitless.length} counter${unitless.length === 1 ? " has" : "s have"} a bare number and ` +
         `no unit. Give each a suffix or prefix — %, ×, hrs, days, or a currency.`,
     );
+
+  /* ---- the spec was the spec ---------------------------------------------
+
+     Reported through the audit rather than through a checker of its own,
+     because the audit's problems already feed a repair call that hands them
+     straight back to the model that built the page. A separate checker would
+     need a second repair, and there is nothing about a missing element the
+     existing one cannot fix.
+
+     Silent on every path but stage 2b: `spec` is null everywhere else, so this
+     loop finds nothing and costs a walk of the order. */
+  for (const [i, s] of order.sections.entries()) {
+    const made = sections[i];
+    if (!s.spec || !made) continue;
+    problems.push(...specProblems(made, s.spec, specBinding()));
+  }
 
   return problems;
 }
