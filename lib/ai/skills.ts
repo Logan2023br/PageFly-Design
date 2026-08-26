@@ -116,12 +116,13 @@ export function loadSkills(want: SkillScope = "all"): string {
    so a loader that forgets the scope still cannot pick them up.
    ========================================================================== */
 
-export type SliceFile = "patterns" | "verticals" | "motion";
+export type SliceFile = "patterns" | "verticals" | "motion" | "markets";
 
 const SLICE_FILES: Record<SliceFile, string> = {
   patterns: "20-patterns.md",
   verticals: "30-verticals.md",
   motion: "40-motion.md",
+  markets: "60-markets.md",
 };
 
 const SLICED_DIR = join(SKILLS_DIR, "_sliced");
