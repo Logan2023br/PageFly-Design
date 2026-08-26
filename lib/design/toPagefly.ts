@@ -1214,7 +1214,19 @@ function productBox(
           .map((r) => slot[r]())
           .filter((n): n is PFNode => n !== null);
 
-        return [...built, ...missing];
+        /* A design that filled BOTH is a design that wrote in two shapes, not a
+           design that meant one of them to be thrown away. The first real
+           arranged column did exactly this — its `extras` held a delivery
+           promise with real dates and a three-item benefit grid — and dropping
+           them would have been the failure this file keeps naming: the design
+           correct, the export correct, and a part of the page gone with nothing
+           anywhere saying so. They go where `extras` has always gone, after the
+           column. */
+        const also = (node.extras ?? [])
+          .map((child) => emit(child, "vertical", opts))
+          .filter((n): n is PFNode => n !== null);
+
+        return [...built, ...missing, ...also];
       })()
     : [
         ...FIXED.map((name) => slot[name]()).filter((n): n is PFNode => n !== null),

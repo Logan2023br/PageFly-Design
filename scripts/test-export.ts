@@ -1118,6 +1118,39 @@ async function main(): Promise<void> {
     "the cart button is emitted once, not once per marker and once by habit",
   );
 
+  /* Both shapes filled. The first real arranged column put a delivery promise
+     and a benefit grid in `extras` while arranging `children`, and the first
+     cut of this code dropped them without a word. */
+  const both = await open({
+    sections: [
+      section(
+        [
+          {
+            type: "product",
+            title: "Overshirt",
+            price: "$480",
+            atcText: "Add to Bag",
+            children: [{ type: "bound", slot: "title" }, { type: "bound", slot: "price" }, { type: "bound", slot: "atc" }],
+            extras: [
+              {
+                type: "row",
+                children: [
+                  { type: "icon", name: "truck" },
+                  { type: "text", text: "Order by 2 PM Fri — arrives Tue 12 Nov" },
+                ],
+              },
+            ],
+          },
+        ],
+        "product-detail-gallery",
+      ),
+    ],
+  });
+  check(
+    both.items.some((i) => String(i.data?.value ?? "").includes("arrives Tue 12 Nov")),
+    "extras written beside an arranged column are kept, not dropped",
+  );
+
   /* A design that forgets one of the three parts a buy box cannot do without
      gets it appended. Losing the page over a missing marker would cost far more
      than a button in the wrong place. */

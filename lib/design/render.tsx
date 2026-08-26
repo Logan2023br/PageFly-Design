@@ -508,6 +508,11 @@ function BuyColumn({
         {REQUIRED.filter((r) => !asked.has(r)).map((name) => (
           <Fragment key={name}>{slots[name]}</Fragment>
         ))}
+        {/* Both shapes filled is two shapes written, not one meant to be
+            discarded — see the note in `toPagefly.productBox`. */}
+        {(node.extras ?? []).map((child, i) => (
+          <Node key={`x${i}`} node={child} />
+        ))}
       </div>
     </BoundCtx.Provider>
   );
