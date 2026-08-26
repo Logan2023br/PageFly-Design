@@ -4,6 +4,7 @@ import { designPageTree } from "../ai/designServer";
 import { readReferences } from "../ai/refVision";
 import { decideStructure } from "../design/structure";
 import { deckPlanEnabled, planDeck } from "../design/deckPlan";
+import { planSpecs, sectionSpecEnabled } from "../design/sectionSpec";
 import { verticalFor } from "../design/plan";
 import { getRepo } from "../db";
 import type { JobRecord, RunPageRecord, RunRecord } from "../db/types";
@@ -283,6 +284,64 @@ async function run(
     for (const r of deck.repairs) console.log(`[build] deck plan · ${r}`);
     for (const f of deck.fallbacks)
       console.log(`[build] deck plan · ${f.pageType} → older decider — ${f.reason}`);
+  }
+
+  /* ==========================================================================
+     STAGE 2b — WHAT IS INSIDE EACH BAND.
+
+     Concurrent and per page. The bands are already fixed, so nothing here needs
+     to see across pages, and one page's failure must not cost the others. A
+     page whose spec does not arrive keeps `spec: null` on every band and builds
+     exactly as it did before this stage existed — which is also what happens
+     when the flag is off, so the old path is never a second code path.
+     ========================================================================== */
+  if (sectionSpecEnabled() && deck.plans.size > 0) {
+    const specced = await Promise.all(
+      [...deck.plans.entries()].map(async ([pageType, order]) => ({
+        pageType,
+        order,
+        outcome: await planSpecs(
+          {
+            pageType,
+            order,
+            sell: brief.whatYouSell,
+            storeType: brief.storeType,
+            styleLabel: styleDef(brief.visualStyle)?.label ?? brief.visualStyle,
+            styleBlurb: styleDef(brief.visualStyle)?.blurb ?? "",
+            prompt: brief.prompt,
+            tokens: {
+              bg: palette?.bg ?? "#FFFFFF",
+              ink: palette?.ink ?? "#111114",
+              accent: palette?.accent ?? "#111114",
+              band: palette?.surfaceAlt ?? "#F7F7F8",
+            },
+          },
+          signal,
+        ),
+      })),
+    );
+
+    for (const { pageType, order, outcome } of specced) {
+      tokens += outcome.usage.input + outcome.usage.output;
+
+      if (outcome.reason) {
+        console.log(`[build] section spec · ${pageType} → no spec — ${outcome.reason}`);
+        continue;
+      }
+
+      for (const [i, spec] of outcome.specs) {
+        if (order.sections[i]) order.sections[i].spec = spec;
+      }
+
+      /* `dropped` is the number that says "prompt bug" rather than "model had a
+         bad day" — a band whose answer failed vetting named something outside
+         the closed sets, and the fix is the wording, not the checker. */
+      console.log(
+        `[build] section spec · ${pageType} · ${outcome.specs.size}/${order.sections.length} ` +
+          `bands by ${outcome.model} · ${outcome.dropped} dropped · ` +
+          `in ${outcome.usage.input} out ${outcome.usage.output}`,
+      );
+    }
   }
 
   /* Only for the page types the deck plan did not take. Asking for a section
