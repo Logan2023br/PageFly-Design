@@ -434,10 +434,25 @@ const icon = z.object({
  */
 const NOT_AN_EXTRA = new Set(["product", "productList", "form", "sticky"]);
 
+/**
+ * Ten, not six.
+ *
+ * Six was chosen when `extras` meant "a rating line and a couple of trust
+ * lines". A buy box that has to carry an offer picker, a benefit grid, a
+ * delivery promise and a guarantee runs past it — and `list` truncates in
+ * silence, so the eleventh block does not fail, it simply never appears. That
+ * is the worst shape a limit can have: the design is correct, the export is
+ * correct, and a section of the page is missing with nothing anywhere saying
+ * so.
+ *
+ * It is still a limit, because the row order under a cart button is a real
+ * design decision and an unbounded list is how a buy box becomes a landing
+ * page. A design that needs more than ten blocks there wants a second band.
+ */
 const productExtras: z.ZodType<DesignNode[]> = z.lazy(() =>
   list(
     node.refine((n) => !NOT_AN_EXTRA.has((n as { type: string }).type)),
-    6,
+    10,
   ),
 );
 

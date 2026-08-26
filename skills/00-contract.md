@@ -100,34 +100,81 @@ behaves and the merchant plugs their review app in later. A `productList` or a
 would need a binding it cannot have.
 
 **THE BUY BOX IS THE PAGE.** Everything else on a product page argues for the
-purchase; this is where it happens. A buy box that reads as a form with a dark
-rectangle under it is the single fastest way for a good page to look generic,
-and it is the section a merchant judges the whole build by.
+purchase; this is where it happens. It is the section a merchant judges the
+whole build by, and a column of grey one-liners under a coloured rectangle is
+what "a template did this" looks like.
 
-Every row in `extras` must SAY something. The test is whether a shopper is
-better informed for having read it:
+`extras` takes up to ten blocks and almost any element: `row`, `col`, `heading`,
+`text`, `icon`, `image`, `divider`, `accordion`, `counter`, `marquee`,
+`beforeAfter`. It is a layout area, not a list of captions. Nest freely — one
+`col` holding a bordered card counts as one block.
 
-  - `4.8 ★ 428 reviews` — a number and a count. Earns its place.
-  - `Ships free over €150 · arrives Tue 3 Sep` — two facts.
-  - `Verified reviews` under five empty stars — says nothing. A rating with no
-    rating is worse than no rating: it reads as a review widget that failed to
-    load.
-  - A row of six or eight small icons with no words — decoration pretending to
-    be trust. Three icons with three short labels beat eight bare glyphs, every
-    time.
-  - `SAVE 20%` when the price already shows `€390` struck through `€490` — the
-    same fact twice.
+**What a buy box can hold, when the store earns it.** Not a checklist and not
+an order. Pick what this product's decision actually needs and leave the rest
+out; a €20 refill and a €400 device are not deciding the same thing.
 
-Three to five rows is a buy box. Nine is a receipt.
+  - **A benefit grid.** Two or three across, each a small bordered `row` with
+    an `icon` and two or three words. Reads in one glance where five stacked
+    sentences do not.
+  - **An offer picker.** Two or three bordered cards — one bottle, three
+    bottles, subscribe — each with its price, its saving, and one carrying a
+    "MOST POPULAR" mark. If it only has to LOOK chosen, `row`/`col` with a
+    border and an accent ring is enough. If the cards should actually respond
+    to a click, write it as a `custom` block — see below. The merchant wires
+    the real selling plans to it in the editor either way.
+  - **Scarcity or momentum**, when it is true — a two-`row` bar where the inner
+    row's `width` is the percentage sold, or a line naming how many shipped
+    this month.
+  - **A delivery promise.** "Order today, arrives Tue 3 Sep" beats "fast
+    shipping" by the whole distance between a fact and an adjective.
+  - **A rating**, with the number and the count in it.
+  - **A guarantee or returns line**, stating the window.
+  - **An `accordion`** for ingredients, sizing or the full spec — detail a
+    buyer can open without pushing the cart button off the screen.
+
+**What is always wrong**, whatever the store:
+
+  - Five empty stars labelled "verified reviews". A rating with no rating reads
+    as a widget that failed to load.
+  - A strip of six or eight bare icons with no words. Three icons with three
+    labels beat it every time.
+  - `SAVE 20%` when the price already shows `€490` struck through to `€390` —
+    the same fact twice.
+  - A row that could sit unchanged on any store in the world. If it would be
+    true of a phone case and a face serum, it is filler.
+
+**WHEN NO ELEMENT FITS, WRITE ONE.** `custom` is allowed inside `extras` and it
+is the answer to "the vocabulary has no radio card / no unlock meter / no
+segmented toggle". You get `html` (4,000 chars), `stylesheet` (2,000) and `js`
+(1,500). The stylesheet is scoped to this block automatically — write `.card`,
+never `.pfd-c-3 .card` — and the script runs once inside a wrapper with `root`
+bound to the block's own element, so `root.querySelectorAll(".card")` is how you
+reach your own markup and nothing else on the page.
+
+A selectable offer picker is about forty lines of it: three `<button class="card">`,
+a `.card[aria-checked="true"]` rule for the chosen state, and a click handler
+that moves the attribute. That is a real control a shopper can press, and it is
+the difference between a screenshot of a good buy box and a good buy box.
+
+Three limits, and they are not style preferences:
+
+  - **No Liquid.** `{{ product.price }}` is not resolved on this path, so it
+    ships as those literal characters on a live storefront — visibly worse than
+    a static price the merchant edits once. Bind real product data with the
+    `product` node's own fields and flags, which do resolve.
+  - **No `<form>`, `<script>`, `<iframe>`.** Stripped on the way out. Use the
+    `js` field for behaviour and the `form` node for a real form.
+  - **Nothing an element already does.** A hover written by hand where `anim`
+    exists is a hover that survives no edit the merchant makes afterwards.
 
 Set `swatches` to the number of variants the store actually sells, not the
 maximum. Eight pastel circles under a coat that comes in three colours is
 inventing inventory, and a shopper counts them.
 
-The cart button's colour, corners and the stepper's outline are NOT yours —
+The cart button's colour and corners and the stepper's outline are NOT yours —
 they are emitted from the store's palette so the buy box matches the page. Do
-not set `css` on the `product` node trying to restyle them. What is yours is
-what the box CONTAINS: which flags are on, and what those rows say.
+not set `css` on the `product` node to restyle them. What is yours is what the
+box CONTAINS, and how it is arranged.
 
 **`productList`** is EVERY grid of real products. Never build a product grid by
 hand out of image + heading + text: those are dead pictures with invented names
