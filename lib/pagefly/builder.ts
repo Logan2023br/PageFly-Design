@@ -362,11 +362,39 @@ export function MEDIA_MAIN(styleData: StyleData) {
   return node("MediaMain3", {}, styleData, []);
 }
 
+/**
+ * The thumbnail strip under the main product image.
+ *
+ * `MediaListItem2`, NOT `MediaItem2`. `fields.md` lists both as children of a
+ * MediaList2 and says what separates them in five words — "older item
+ * generation; same purpose" — and the difference is not cosmetic. The editor
+ * renders the old generation happily, which is exactly why this survived: the
+ * strip looked correct in the editor, and on the live storefront clicking a
+ * thumbnail did nothing, because the click-to-swap behaviour belongs to the
+ * current generation.
+ *
+ * `slidesToShow` is per breakpoint and is what decides how many thumbnails are
+ * visible; left unset the list takes its own default and can crop the strip on
+ * a laptop. Six on desktop, four on a tablet — the count is a template, since
+ * the real media comes from the merchant's product.
+ */
 export function MEDIA_LIST(count: number, styleData: StyleData, itemStyle: StyleData) {
-  const items = Array.from({ length: Math.max(1, count) }, () =>
-    node("MediaItem2", {}, itemStyle, []),
+  const n = Math.max(1, count);
+  const items = Array.from({ length: n }, () => node("MediaListItem2", {}, itemStyle, []));
+  return node(
+    "MediaList2",
+    {
+      navStyle: "none",
+      slidesToShow: {
+        all: Math.min(6, n),
+        laptop: Math.min(6, n),
+        tablet: Math.min(4, n),
+        mobile: Math.min(4, n),
+      },
+    },
+    styleData,
+    items,
   );
-  return node("MediaList2", {}, styleData, items);
 }
 
 export function PRODUCT_TITLE(styleData: StyleData) {
@@ -962,7 +990,7 @@ const SLOT_RULES: Record<string, string[]> = {
 const UNIFORM_CHILDREN: Record<string, string> = {
   Accordion3: "Accordion3.Content.Wrapper",
   Slideshow: "SlideshowSlide",
-  MediaList2: "MediaItem2",
+  MediaList2: "MediaListItem2",
   ContentList2: "ContentListItem",
 };
 
@@ -1117,7 +1145,7 @@ export class Page {
          clicking a Form Field answered "Something went wrong" — its FormLabel
          was built with `{}`.
 
-         MediaMain3, MediaList2, MediaItem2 and ContentListItem are all emitted
+         MediaMain3, MediaList2, MediaListItem2 and ContentListItem are all emitted
          the same way and had the same exposure. `data: {}` is what an element
          with no settings is supposed to look like, and the bytes are nothing
          next to a class of bug that only shows up as a white screen. */

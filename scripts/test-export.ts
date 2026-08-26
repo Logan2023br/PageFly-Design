@@ -49,7 +49,15 @@ type Item = {
 async function open(
   tree: unknown,
   name = "probe",
-  media: { images?: Record<string, string>; videos?: Record<string, string> } = {},
+  /* `border` reaches the composites this file emits itself — the accordion's
+     row rule, the buy box's stepper — and a test that cannot pass one cannot
+     tell "took the palette" from "fell back to black". */
+  media: {
+    images?: Record<string, string>;
+    videos?: Record<string, string>;
+    border?: string;
+    accent?: string;
+  } = {},
 ) {
   const { pageflyFromTree } = await import("../lib/design/toPagefly");
 
@@ -57,7 +65,12 @@ async function open(
     tree as never,
     { name, bg: "#0A0A0A", ink: "#F6F6F4", fontBody: "Inter" },
     1180,
-    { images: media.images ?? {}, videos: media.videos ?? {} },
+    {
+      images: media.images ?? {},
+      videos: media.videos ?? {},
+      ...(media.border ? { border: media.border } : {}),
+      ...(media.accent ? { accent: media.accent } : {}),
+    },
   );
   const bytes = new Uint8Array(await blob.arrayBuffer());
   const files = unzipSync(bytes);
@@ -1172,6 +1185,50 @@ async function main(): Promise<void> {
      too, but a tree reaching the exporter unparsed — as here — must not be able
      to ship a blank button either. */
   check(bare?.data?.value === "Add to Cart", "an empty label falls back, never ships blank", String(bare?.data?.value));
+
+  /* Two defects the editor could not show, because the editor renders both the
+     old thumbnail generation and a doubled border without complaint. Only the
+     live storefront told the truth. */
+  console.log("\nwhat the editor rendered and the storefront did not");
+
+  const thumbs = arranged.items.find((i) => i.type === "MediaList2");
+  const thumbKids = (thumbs?.children ?? []).map(
+    (c) => arranged.items.find((x) => x.id === c)?.type ?? "?",
+  );
+  check(
+    thumbKids.length > 0 && thumbKids.every((t) => t === "MediaListItem2"),
+    "thumbnails are the CURRENT generation, or clicking one does nothing live",
+    thumbKids.join(" · "),
+  );
+  check(
+    !!(thumbs?.data?.slidesToShow as Record<string, unknown> | undefined)?.mobile,
+    "the strip states how many thumbnails are visible per breakpoint",
+  );
+
+  const acc = await open(
+    {
+      sections: [
+        section(
+          [{ type: "accordion", items: [{ q: "How is it used?", a: "Two drops." }] }],
+          "faq-accordion",
+        ),
+      ],
+    },
+    "probe",
+    { border: "#3A3A38" },
+  );
+  const accEl = acc.items.find((i) => i.type === "Accordion3")!;
+  const rowEl = acc.items.find((i) => i.type === "Accordion3.Content.Wrapper")!;
+  const headerRule = acc.cssOf(accEl.id, "all", "& .pf-header-item-wrapper");
+  const rowRule = acc.cssOf(rowEl.id, "all", "&");
+
+  check(!headerRule.includes("border-bottom"), "the header draws no border", headerRule.slice(0, 60));
+  check(rowRule.includes("border-bottom"), "the row is where the one border lives", rowRule);
+  check(
+    rowRule.includes("#3A3A38"),
+    "and it takes the page's border colour, not a black hairline invisible on a dark page",
+    rowRule,
+  );
 
   /* A design that forgets one of the three parts a buy box cannot do without
      gets it appended. Losing the page over a missing marker would cost far more

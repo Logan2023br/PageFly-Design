@@ -567,7 +567,7 @@ function ProductGrid({ node, cls }: { node: Extract<DesignNode, { type: "product
  * If they change there, this has to change with them.
  */
 function Accordion({ node, cls }: { node: Extract<DesignNode, { type: "accordion" }>; cls?: string }) {
-  const { device } = useDesign();
+  const { device, palette } = useDesign();
   /* `null` rather than a number: -1 would work, but the exporter's -1 means
      "none" and reusing it here invites the two to be compared as if they were
      the same kind of value. */
@@ -578,7 +578,13 @@ function Accordion({ node, cls }: { node: Extract<DesignNode, { type: "accordion
       {node.items.map((item, i) => {
         const isOpen = open === i;
         return (
-          <div key={i} data-pf="accordion-item" style={{ borderBottom: "1px solid rgba(0,0,0,.12)" }}>
+          <div
+            key={i}
+            data-pf="accordion-item"
+            /* From the palette, like the export's — a black hairline is
+               invisible on a near-black page, in both readers. */
+            style={{ borderBottom: `1px solid ${palette?.border ?? "rgba(0,0,0,.12)"}` }}
+          >
             <button
               type="button"
               data-pf="accordion-header"

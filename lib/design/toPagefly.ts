@@ -1554,7 +1554,21 @@ function accordionOf(
         all: { "&": "line-height: 1.6; opacity: .72; padding-bottom: 18px;" },
       }),
     ],
-    style: { all: { "&": "border-bottom: 1px solid rgba(0,0,0,.12);" } },
+    /* ONE border, on the row, from the palette.
+
+       There were two. This one, and a `border-bottom: 1px solid currentColor`
+       on `.pf-header-item-wrapper` below — and the live page drew both, which
+       is why an accordion that looked right in the editor arrived on the
+       storefront with a heavy rule and a faint one under every row. The mockup
+       draws one: `render.tsx` gives the item wrapper a hairline and the header
+       `border: 0`.
+
+       The colour comes from the palette rather than the hardcoded black it used
+       to be, because black at 12% on a near-black page is not a hairline, it is
+       nothing. */
+    style: {
+      all: { "&": `border-bottom: 1px solid ${opts.border ?? "rgba(0,0,0,.12)"};` },
+    },
   }));
 
   /* The clickable row and the answer panel are styled through the accordion's
@@ -1566,9 +1580,10 @@ function accordionOf(
     ...shell,
     all: {
       ...shell.all,
+      /* No border here. The row wrapper above carries it, and both drawing one
+         is what put two rules under every header on the live page. */
       "& .pf-header-item-wrapper":
-        `padding: 18px 0; font-size: 16px; font-weight: 600; ${inkRule(opts)}` +
-        " border-bottom: 1px solid currentColor;",
+        `padding: 18px 0; font-size: 16px; font-weight: 600; ${inkRule(opts)}`,
       "& .pf-accordion-body":
         `padding-bottom: 18px; line-height: 1.6; opacity: .72; ${inkRule(opts)}`,
       "& .pf-accordion-icon": `font-size: 18px; opacity: .5; ${inkRule(opts)}`,
