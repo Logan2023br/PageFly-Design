@@ -608,6 +608,17 @@ export type EmitOptions = {
    * one square control on the page.
    */
   radius?: number;
+  /**
+   * Inside a buy box: the bound element for a named slot.
+   *
+   * Set only while `productBox` emits a product's own children, and the reason
+   * it travels here rather than being handled at the top level is depth. A
+   * design that puts the price inside a row beside the words "per bottle" has
+   * placed a marker two levels down, and `emit` is the only thing that goes
+   * there. Absent everywhere else, which is how a stray marker on a landing
+   * page comes to nothing.
+   */
+  boundSlot?: (slot: string) => PFNode | null;
   /** icon name → raw <svg> markup; icons are dropped when this is absent */
   iconSvg?: (name: string) => string | null;
   /* Custom blocks write their own CSS and JS, and both belong on the PAGE
@@ -668,6 +679,13 @@ function emitNode(
 
     case "text":
       return P4(node.text, sd);
+
+    /* A marker for a bound part of a buy box. Inside one, `boundSlot` returns
+       the real element — the price, the cart button, whichever the design named
+       — and the marker's own `css` rides on it. Outside one it names a place
+       that does not exist, and comes to nothing. */
+    case "bound":
+      return opts.boundSlot?.(node.slot) ?? null;
 
     case "button":
       /* ==========================================================================
@@ -1028,20 +1046,24 @@ function productBox(
       : undefined,
   );
 
-  const info = FB(
-    {
-      all: {
-        "&":
-          "display: flex !important; flex-direction: column !important;" +
-          " gap: 14px !important; width: 100% !important;" +
-          " --pf-flex-layout-width: fill; --pf-flex-layout-height: hug;" +
-          " --pf-flex-layout-direction: vertical;",
-      },
-    },
-    [
+  /* ==========================================================================
+     THE SEVEN PARTS THAT CANNOT BE DRAWN, each behind a name.
+
+     They were written inline, in one sequence, which is how the sequence became
+     a rule nobody had decided on: the order title → price → swatches → qty →
+     stock → cart → express → rows was never PageFly's, it was this array's.
+     PageFly asks for a ProductBox holding a media element and one FlexBlock,
+     and about the inside of that FlexBlock it asks for nothing.
+
+     Named, they can be placed by whoever knows better — the design, when it
+     said, and this file's own order when it did not. */
+  const slot: Record<string, () => PFNode | null> = {
+    title: () =>
       PRODUCT_TITLE({
         all: { "&": `font-size: 28px; font-weight: 600; line-height: 1.2; ${inkRule(opts)}` },
       }),
+
+    price: () =>
       PRODUCT_PRICE(
         { all: { "&": "display: flex !important; gap: 10px; align-items: baseline;" } },
         { all: { "&": `font-size: 20px; ${inkRule(opts)}` } },
@@ -1049,9 +1071,10 @@ function productBox(
           ? { all: { "&": "font-size: 16px; opacity: .5; text-decoration: line-through;" } }
           : { all: { "&": "display: none !important;" } },
       ),
-      ...(node.swatches > 0
-        ? [
-            /* Styled through the documented swatch selectors, not through the
+
+    swatches: () =>
+      node.swatches > 0
+        ? /* Styled through the documented swatch selectors, not through the
                child nodes: a colour option renders `.pf-vs-color`, a size grid
                renders `.pf-vs-label`, and the OptionLabel/Swatch children carry
                almost none of it. Round dots for colours, square tiles for
@@ -1081,23 +1104,12 @@ function productBox(
                 },
               },
               { all: { "&": "display: flex !important; gap: 10px; flex-wrap: wrap;" } },
-            ),
-          ]
-        : []),
-      /* The label must read exactly as the mockup showed it — left unset,
-         PageFly renders its own "Add to Cart", which may not be the words the
-         merchant just approved. */
-      /* ==========================================================================
-         SLOT ORDER, and it is the platform's rather than ours.
+            )
+        : null,
 
-         `fields.md`: the express checkout goes on its own row BELOW the cart
-         button, and PAIRS with it rather than replacing it. Quantity and stock
-         go above — a shopper picks how many and checks it is available before
-         they commit, and a stepper under the button is a stepper nobody sees.
-         ========================================================================== */
-      ...(node.qty
-        ? [
-            PRODUCT_QUANTITY({
+    qty: () =>
+      node.qty
+        ? PRODUCT_QUANTITY({
               all: {
                 "&": "display: flex !important; align-items: stretch; width: fit-content;",
                 "& input":
@@ -1105,26 +1117,26 @@ function productBox(
                 "& button":
                   `width: 40px; border: 1px solid ${opts.border ?? "rgba(0,0,0,.16)"}; background: transparent; ${inkRule(opts)}`,
               },
-            }),
-          ]
-        : []),
-      ...(node.stock
-        ? [
-            /* The colours are passed because the component's defaults were
+          })
+        : null,
+
+    stock: () =>
+      node.stock
+        ? /* The colours are passed because the component's defaults were
                chosen against a white theme: on a near-black page the green is
                the only one of the three that reads. */
-            STOCK_INDICATOR({
+          STOCK_INDICATOR({
               all: {
                 "&": "font-size: 12.5px; letter-spacing: .06em; text-transform: uppercase;",
-              },
-            }),
-          ]
-        : []),
-      /* The label must read exactly as the mockup showed it — left unset,
-         PageFly renders its own "Add to Cart", which may not be the words the
-         merchant just approved.
+            },
+          })
+        : null,
 
-         THE ACCENT, NOT A HARD-CODED BLACK. `#111114` was written when a page
+    /* The label must read exactly as the mockup showed it — left unset,
+       PageFly renders its own "Add to Cart", which may not be the words the
+       merchant just approved.
+
+       THE ACCENT, NOT A HARD-CODED BLACK. `#111114` was written when a page
          was always on white, where near-black is the strongest thing on the
          surface. On a page whose own background is near-black it is the
          weakest: the most important control on a product page arrives almost
@@ -1135,6 +1147,7 @@ function productBox(
          is what the buy button should be, and `readableInk` settles the label
          against it rather than assuming white. `opts.accent` already reaches
          this function; only the form was using it. */
+    atc: () =>
       PRODUCT_ATC(
         {
           all: {
@@ -1146,24 +1159,85 @@ function productBox(
         },
         node.atcText,
       ),
-      ...(node.express
-        ? [
-            DYNAMIC_CHECKOUT({
-              all: {
-                "&": "width: 100%;",
-                "& .shopify-payment-button__button--unbranded":
-                  `width: 100%; padding: 13px 22px; background: transparent;` +
-                  ` border: 1px solid ${opts.border ?? "rgba(0,0,0,.24)"}; ${inkRule(opts)}`,
-              },
-            }),
-          ]
-        : []),
-      /* The design's own rows — a rating line, trust lines, a caption. Static
-         presentation only; the schema refuses anything that needs a binding. */
-      ...(node.extras ?? [])
-        .map((child) => emit(child, "vertical", opts))
-        .filter((n): n is PFNode => n !== null),
-    ],
+
+    express: () =>
+      node.express
+        ? DYNAMIC_CHECKOUT({
+            all: {
+              "&": "width: 100%;",
+              "& .shopify-payment-button__button--unbranded":
+                `width: 100%; padding: 13px 22px; background: transparent;` +
+                ` border: 1px solid ${opts.border ?? "rgba(0,0,0,.24)"}; ${inkRule(opts)}`,
+            },
+          })
+        : null,
+  };
+
+  /* ==========================================================================
+     THE COLUMN, arranged by whoever knew better.
+
+     `children` is the design's own arrangement and it wins outright: the
+     markers say where the bound parts go, everything between them is an
+     ordinary tree, and `boundSlot` lets a marker sit at ANY depth — a price
+     inside a row beside the words "per bottle" is a thing designs want and a
+     top-level-only rule would refuse.
+
+     Three parts are not optional however the column is arranged. A buy box
+     without a title, a price or a cart button is not a buy box, and a design
+     that forgets one gets it appended rather than losing the page — the same
+     bargain the rest of this file makes.
+
+     No `children` is the old fixed sequence, unchanged, which is what every
+     page built before this ran on and every saved run still has to render as.
+     ========================================================================== */
+  const FIXED = ["title", "price", "swatches", "qty", "stock", "atc", "express"];
+  const REQUIRED = ["title", "price", "atc"];
+
+  const arranged = node.children?.length
+    ? (() => {
+        const asked = new Set<string>();
+        const seek = (list: DesignNode[]): void => {
+          for (const n of list) {
+            if (n.type === "bound") asked.add(n.slot);
+            const kids = (n as { children?: DesignNode[] }).children;
+            if (Array.isArray(kids)) seek(kids);
+          }
+        };
+        seek(node.children);
+
+        const inner = { ...opts, boundSlot: (name: string) => slot[name]?.() ?? null };
+        const built = node.children
+          .map((child) => emit(child, "vertical", inner))
+          .filter((n): n is PFNode => n !== null);
+
+        const missing = REQUIRED.filter((r) => !asked.has(r))
+          .map((r) => slot[r]())
+          .filter((n): n is PFNode => n !== null);
+
+        return [...built, ...missing];
+      })()
+    : [
+        ...FIXED.map((name) => slot[name]()).filter((n): n is PFNode => n !== null),
+        /* The design's own rows, under the cart button. Only the fixed sequence
+           has them: a design that arranged the column put its rows where it
+           wanted them, and appending a second set below would be adding rows
+           nobody asked for twice. */
+        ...(node.extras ?? [])
+          .map((child) => emit(child, "vertical", opts))
+          .filter((n): n is PFNode => n !== null),
+      ];
+
+  const info = FB(
+    {
+      all: {
+        "&":
+          "display: flex !important; flex-direction: column !important;" +
+          " gap: 14px !important; width: 100% !important;" +
+          " --pf-flex-layout-width: fill; --pf-flex-layout-height: hug;" +
+          " --pf-flex-layout-direction: vertical;",
+      },
+    },
+    arranged,
   );
 
   /* Styling targets `& > form`: ProductBox renders a <form action="/cart/add">,

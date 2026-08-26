@@ -1031,6 +1031,126 @@ async function main(): Promise<void> {
     "with the words the design wrote",
   );
 
+  /* ---- a buy column the design arranged itself --------------------------- */
+
+  /* The order title → price → swatches → qty → stock → cart → express was never
+     PageFly's: a ProductBox asks for a media element and one FlexBlock and says
+     nothing about the inside of it. When the design arranges the column, the
+     markers say where the bound parts go and everything between them is its
+     own — which is how one store gets an offer picker above its cart button and
+     another a review slideshow below it. */
+  console.log("\na buy column the design arranged");
+
+  const arranged = await open({
+    sections: [
+      section(
+        [
+          {
+            type: "product",
+            layout: "sideBySide",
+            swatches: 2,
+            qty: true,
+            express: true,
+            title: "Night Serum",
+            price: "$68.00",
+            atcText: "Add to Bag",
+            children: [
+              {
+                type: "row",
+                css: { gap: "8px", alignItems: "center" },
+                children: [
+                  { type: "icon", name: "star" },
+                  { type: "text", text: "4.9 · 1,204 reviews" },
+                ],
+              },
+              { type: "bound", slot: "title" },
+              { type: "bound", slot: "price" },
+              { type: "bound", slot: "swatches" },
+              {
+                type: "custom",
+                label: "offer picker",
+                html: '<button class="card" aria-checked="true">Three bottles</button>',
+                stylesheet: '.card[aria-checked="true"]{border-color:currentColor}',
+                js: 'root.querySelectorAll(".card").forEach(function(c){c.onclick=function(){}})',
+              },
+              { type: "bound", slot: "qty" },
+              { type: "bound", slot: "atc" },
+              { type: "bound", slot: "express" },
+              {
+                type: "accordion",
+                items: [{ q: "How is it used?", a: "Two drops at night." }],
+              },
+            ],
+          },
+        ],
+        "product-detail-gallery",
+      ),
+    ],
+  });
+
+  const aInfo = arranged.items.find(
+    (i) =>
+      i.type === "FlexBlock" &&
+      i.children.some((c) => arranged.items.find((x) => x.id === c)?.type === "ProductATC2"),
+  );
+  const aOrder = (aInfo?.children ?? []).map(
+    (c) => arranged.items.find((x) => x.id === c)?.type ?? "?",
+  );
+  const aAt = (t: string) => aOrder.indexOf(t);
+
+  check(aAt("ProductTitle") >= 0 && aAt("ProductPrice2") >= 0, "the bound parts are real elements");
+  check(aOrder[0] !== "ProductTitle", "the design's own row came first", aOrder.join(" · "));
+  check(
+    aAt("ProductVariantSwatches") < aAt("ProductATC2"),
+    "the marker order is the column order",
+  );
+  check(
+    aAt("Accordion3") > aAt("ProductATC2"),
+    "and what the design put last is last",
+    aOrder.join(" · "),
+  );
+  check(
+    arranged.items.some((i) => String(i.data?.value ?? "").includes("1,204 reviews")),
+    "the design's own rating row is in the column",
+  );
+  check(
+    aOrder.filter((t) => t === "ProductATC2").length === 1,
+    "the cart button is emitted once, not once per marker and once by habit",
+  );
+
+  /* A design that forgets one of the three parts a buy box cannot do without
+     gets it appended. Losing the page over a missing marker would cost far more
+     than a button in the wrong place. */
+  const forgot = await open({
+    sections: [
+      section(
+        [
+          {
+            type: "product",
+            title: "Night Serum",
+            price: "$68.00",
+            atcText: "Add to Bag",
+            children: [
+              { type: "text", text: "Only the words, and no markers at all." },
+            ],
+          },
+        ],
+        "product-detail-gallery",
+      ),
+    ],
+  });
+  const fTypes = forgot.items.map((i) => i.type);
+  check(fTypes.includes("ProductATC2"), "a forgotten cart button is appended");
+  check(fTypes.includes("ProductTitle"), "so is a forgotten title");
+  check(fTypes.includes("ProductPrice2"), "and a forgotten price");
+
+  /* And the old shape is untouched: no `children` is the fixed sequence, with
+     `extras` under the cart button exactly where it always was. */
+  check(
+    !full.items.some((i) => i.type === "ProductBound"),
+    "a buy box with no arrangement emits no markers",
+  );
+
   /* ---- text on a photograph, three across ------------------------------- */
 
   /* `usecase-tiles-overlay` — "the highest-value non-hero pattern", and the one

@@ -47,7 +47,14 @@ const ELEMENTS = new Set([
   "marquee",
   "row",
   "col",
+  /* A marker for a bound part of a buy box. It is in the element set because
+     the design pass places it like an element; the tree schema treats it the
+     same way, and the exporter turns it into the real bound element. */
+  "bound",
 ]);
+
+/** The seven parts of a buy box that cannot be drawn — mirrors `schema.ts`. */
+const SLOTS = new Set(["title", "price", "swatches", "qty", "stock", "atc", "express"]);
 
 /** PageFly's canned button motion — mirrors `HOVERS` in `schema.ts`. */
 const HOVERS = new Set(["float", "shadow", "grow", "glow", "float-shadow", "grow-shadow"]);
@@ -104,11 +111,11 @@ function vetAnim(raw: unknown): SpecNode["anim"] {
 /**
  * A node's children, from either place a model puts them.
  *
- * `extras` is the tree schema's own name for the rows inside a `product` — the
- * buy box has no `children`, because its slot order is fixed and only the rows
- * under the cart button are free. A design model that has read the contract
- * uses `extras` there, correctly, and reading only `children` threw away the
- * entire buy box it had just designed.
+ * A buy box's column is `children` now, but `extras` was its name for as long
+ * as the column was fixed and only the rows under the cart button were free —
+ * and a model that learned the older shape still reaches for it. Reading both
+ * costs one line; reading only `children` threw away an entire designed buy box
+ * the first time it happened.
  */
 function kidsOf(o: Record<string, unknown>): unknown[] {
   const a = Array.isArray(o.children) ? o.children : [];
@@ -122,6 +129,12 @@ function vetNode(raw: unknown): SpecNode | null {
 
   const el = str(o.el);
   if (!ELEMENTS.has(el)) return null;
+
+  /* A marker naming no slot, or a slot nobody has, is not a marker. Dropping
+     it beats emitting a `bound` the exporter will silently resolve to nothing —
+     a buy box quietly missing its price is the failure this catches. */
+  if (el === "bound" && !SLOTS.has(str(o.slot))) return null;
+  const slot = el === "bound" ? str(o.slot) : undefined;
 
   const scale = SCALES.has(str(o.scale)) ? (str(o.scale) as Scale) : undefined;
   const basis = /^\d{1,3}%$/.test(str(o.basis)) ? str(o.basis) : undefined;
@@ -139,6 +152,7 @@ function vetNode(raw: unknown): SpecNode | null {
 
   return {
     el,
+    ...(slot ? { slot } : {}),
     ...(scale ? { scale } : {}),
     ...(note ? { note } : {}),
     ...(basis ? { basis } : {}),

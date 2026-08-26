@@ -1,7 +1,7 @@
 "use client";
 
-import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import { createContext, Fragment, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { cleanBlock, previewJs } from "./customBlock";
 import { MOTION_CSS, motionClasses } from "./motion";
 import { readableInk } from "../styleTokens";
@@ -107,6 +107,23 @@ const DesignCtx = createContext<Ctx>({
 
 function useDesign() {
   return useContext(DesignCtx);
+}
+
+/**
+ * The bound parts of the buy box currently being drawn, by name.
+ *
+ * A context rather than a prop because a `bound` marker may sit at any depth of
+ * the column a design arranged — a price inside a row beside the words "per
+ * bottle" is two levels down, and threading a prop through every container in
+ * this file to reach it would be threading it through containers that will
+ * never carry one. Null everywhere outside a buy box, which is what makes a
+ * stray marker on a landing page draw nothing.
+ */
+const BoundCtx = createContext<Record<string, ReactNode> | null>(null);
+
+function Bound({ slot }: { slot: string }) {
+  const slots = useContext(BoundCtx);
+  return <>{slots?.[slot] ?? null}</>;
 }
 
 function sx(node: { css?: Record<string, unknown>; mobile?: Record<string, unknown> }, device: Device): CSSProperties {
@@ -325,10 +342,39 @@ function Product({ node, cls }: { node: Extract<DesignNode, { type: "product" }>
         )}
       </div>
 
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 14 }}>
+      <BuyColumn node={node} rule={rule} atcBg={atcBg} radius={radius} />
+    </div>
+  );
+}
+
+/**
+ * The buy column — the seven bound parts, and whatever the design put between
+ * them.
+ *
+ * Split out of `Product` because it is now two shapes rather than one: an
+ * arrangement the design wrote, or this file's own order when it wrote none.
+ * Kept byte-for-byte identical to the export's two shapes, or the mockup is a
+ * picture of a page the merchant will not receive — which is the failure this
+ * whole file exists to prevent.
+ */
+function BuyColumn({
+  node,
+  rule,
+  atcBg,
+  radius,
+}: {
+  node: Extract<DesignNode, { type: "product" }>;
+  rule: string;
+  atcBg: string;
+  radius: number;
+}) {
+  const slots: Record<string, ReactNode> = {
+    title: (
         <div data-pf="product-title" style={{ fontSize: 28, fontWeight: 600, lineHeight: 1.2 }}>
           {node.title}
         </div>
+    ),
+    price: (
         <div data-pf="product-price" style={{ display: "flex", gap: 10, alignItems: "baseline", fontSize: 20 }}>
           <span>{node.price}</span>
           {node.compareAt && (
@@ -337,7 +383,8 @@ function Product({ node, cls }: { node: Extract<DesignNode, { type: "product" }>
             </span>
           )}
         </div>
-        {node.swatches > 0 && (
+    ),
+    swatches: node.swatches > 0 && (
           <div data-pf="product-swatches" style={{ display: "flex", gap: 8 }}>
             {Array.from({ length: node.swatches }, (_, i) => (
               <span
@@ -352,11 +399,8 @@ function Product({ node, cls }: { node: Extract<DesignNode, { type: "product" }>
               />
             ))}
           </div>
-        )}
-        {/* Quantity and stock ABOVE the button, express checkout BELOW it —
-            the order `fields.md` gives for the exported slots, so the two
-            readers put them in the same place. */}
-        {node.qty && (
+    ),
+    qty: node.qty && (
           <div data-pf="product-qty" style={{ display: "flex", width: "fit-content" }}>
             {["−", "1", "+"].map((glyph, i) => (
               <span
@@ -374,9 +418,8 @@ function Product({ node, cls }: { node: Extract<DesignNode, { type: "product" }>
               </span>
             ))}
           </div>
-        )}
-
-        {node.stock && (
+    ),
+    stock: node.stock && (
           <span
             data-pf="product-stock"
             style={{
@@ -388,8 +431,8 @@ function Product({ node, cls }: { node: Extract<DesignNode, { type: "product" }>
           >
             In stock
           </span>
-        )}
-
+    ),
+    atc: (
         <span
           data-pf="product-atc"
           style={{
@@ -404,8 +447,8 @@ function Product({ node, cls }: { node: Extract<DesignNode, { type: "product" }>
         >
           {node.atcText}
         </span>
-
-        {node.express && (
+    ),
+    express: node.express && (
           <span
             data-pf="product-express"
             style={{
@@ -419,15 +462,54 @@ function Product({ node, cls }: { node: Extract<DesignNode, { type: "product" }>
           >
             Buy it now
           </span>
-        )}
+    ),
+  };
 
+  const FIXED = ["title", "price", "swatches", "qty", "stock", "atc", "express"];
+  const REQUIRED = ["title", "price", "atc"];
+
+  const column = { flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 14 } as const;
+
+  if (!node.children?.length)
+    return (
+      <div style={column}>
+        {FIXED.map((name) => (
+          <Fragment key={name}>{slots[name]}</Fragment>
+        ))}
         {/* The design's own rows, under the buy controls. Same position as the
-            export puts them. */}
+            export puts them, and only on this path — a design that arranged the
+            column put its rows where it wanted them. */}
         {(node.extras ?? []).map((child, i) => (
           <Node key={i} node={child} />
         ))}
       </div>
-    </div>
+    );
+
+  /* Which bound parts the arrangement asked for, at any depth. What it did not
+     ask for and cannot do without is appended: a buy box with no cart button is
+     not a buy box, and dropping the page over it would cost far more than a
+     button in the wrong place. */
+  const asked = new Set<string>();
+  const seek = (list: DesignNode[]): void => {
+    for (const n of list) {
+      if (n.type === "bound") asked.add(n.slot);
+      const kids = (n as { children?: DesignNode[] }).children;
+      if (Array.isArray(kids)) seek(kids);
+    }
+  };
+  seek(node.children);
+
+  return (
+    <BoundCtx.Provider value={slots}>
+      <div style={column}>
+        {node.children.map((child, i) => (
+          <Node key={i} node={child} />
+        ))}
+        {REQUIRED.filter((r) => !asked.has(r)).map((name) => (
+          <Fragment key={name}>{slots[name]}</Fragment>
+        ))}
+      </div>
+    </BoundCtx.Provider>
   );
 }
 
@@ -916,6 +998,9 @@ function Node({ node }: { node: DesignNode }) {
       return <Divider node={node} cls={cls} />;
     case "icon":
       return <Icon node={node} cls={cls} />;
+    case "bound":
+      return <Bound slot={node.slot} />;
+
     case "product":
       return <Product node={node} cls={cls} />;
     case "productList":

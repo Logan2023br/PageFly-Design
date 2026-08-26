@@ -223,7 +223,7 @@ const PADDING_PX: Record<string, string> = {
 function specLines(node: SpecNode, depth: number): string[] {
   const pad = "  ".repeat(depth + 1);
   const bits = [
-    node.el,
+    node.el === "bound" && node.slot ? `bound:${node.slot}` : node.el,
     node.scale ?? "",
     node.note ? `→ ${node.note}` : "",
     node.basis ? `basis ${node.basis}` : "",

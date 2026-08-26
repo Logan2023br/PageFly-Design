@@ -69,6 +69,8 @@ export type SpecNode = {
   el: string;
   /** text-bearing elements only */
   scale?: Scale;
+  /** `bound` only: which part of the buy box goes at this position */
+  slot?: string;
   /**
    * One phrase saying what this element is FOR on this store's page.
    *

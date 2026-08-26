@@ -104,6 +104,24 @@ async function main(): Promise<void> {
     "a runaway note is cut to 200 characters",
   );
 
+  /* Markers for the bound parts of a buy box. A marker naming a slot nobody has
+     is worse than no marker: the exporter resolves it to nothing and the buy box
+     loses its price with no error anywhere. */
+  const marks = vetSpec({
+    nodes: [
+      { el: "bound", slot: "atc" },
+      { el: "bound", slot: "elbow" },
+      { el: "bound" },
+      { el: "text" },
+    ],
+  });
+  check(marks?.nodes.length === 2, "a marker with a real slot survives", String(marks?.nodes.length));
+  check(marks?.nodes[0].slot === "atc", "and keeps its slot");
+  check(
+    !marks?.nodes.some((n) => n.el === "bound" && n.slot === "elbow"),
+    "a slot nobody has is dropped, not passed on",
+  );
+
   check(vetSpec({ nodes: [] }) === null, "an empty node list is null, not an empty spec");
   check(vetSpec({ nodes: [{ el: "nope" }] }) === null, "a spec of only bad nodes is null");
   check(vetSpec(null) === null, "null in, null out");

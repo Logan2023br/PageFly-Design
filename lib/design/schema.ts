@@ -456,6 +456,53 @@ const productExtras: z.ZodType<DesignNode[]> = z.lazy(() =>
   ),
 );
 
+/* ==========================================================================
+   THE PARTS OF A BUY BOX THAT ARE BOUND TO A REAL PRODUCT.
+
+   A title, a price, a swatch row, a stepper, a stock line, a cart button and an
+   express button are the seven things on a product page that CANNOT be drawn.
+   Drawn, they are pictures: the price never changes, the swatches select
+   nothing, the button adds nothing to a cart. PageFly has a real element for
+   each, bound to the merchant's product, and that binding is the whole reason
+   an imported page is worth more than a screenshot.
+
+   What was never true is that their ORDER is fixed. PageFly requires exactly
+   two children of a ProductBox — the media and one FlexBlock — and inside that
+   FlexBlock it requires nothing at all. Every buy box this codebase has shipped
+   put title, price, swatches, quantity, stock, cart, express and then the extra
+   rows in that sequence because a function here wrote them in that sequence.
+
+   So a `bound` node is a MARKER: it says "the real price goes here" and carries
+   nothing else. The copy stays on the `product` node, where a merchant reading
+   the mockup expects to find it. Everything around the markers is an ordinary
+   tree, which is how one store gets a live-viewer counter above its cart button
+   and another gets a review slideshow below it without either being a special
+   case in code.
+
+   Outside a `product` a marker means nothing and is dropped.
+   ========================================================================== */
+const BOUND_SLOTS = ["title", "price", "swatches", "qty", "stock", "atc", "express"] as const;
+
+const bound = z.object({
+  type: z.literal("bound"),
+  slot: choice(BOUND_SLOTS, "title"),
+  ...styled,
+});
+
+/**
+ * A buy box the design composed itself, or nothing.
+ *
+ * Empty means "this design did not say", and then the old fixed sequence runs —
+ * which is what every page built before this existed still needs, and what a
+ * saved run from last week must keep rendering as.
+ */
+const productChildren: z.ZodType<DesignNode[]> = z.lazy(() =>
+  list(
+    node.refine((n) => !NOT_AN_EXTRA.has((n as { type: string }).type)),
+    16,
+  ),
+);
+
 const product = z.object({
   type: z.literal("product"),
   layout: choice(["sideBySide", "stacked"] as const, "sideBySide"),
@@ -526,6 +573,15 @@ const product = z.object({
    * allowed.
    */
   extras: productExtras,
+
+  /**
+   * The buy column, arranged by the design.
+   *
+   * When present it REPLACES the fixed sequence: the markers say where the
+   * bound parts go and everything between them is the design's own. When
+   * absent the old order runs, so nothing built before this existed changes.
+   */
+  children: productChildren,
 
   query: words(120, "product photography"),
   ...styled,
@@ -784,11 +840,13 @@ export type DesignNode =
       badge: string;
       badgeCorner: "TOP_LEFT" | "TOP_RIGHT" | "BOTTOM_LEFT" | "BOTTOM_RIGHT";
       extras: DesignNode[];
+      children: DesignNode[];
       query: string;
       css?: Css;
       mobile?: Css;
       anim?: Anim;
     }
+  | z.infer<typeof bound>
   | z.infer<typeof productList>
   | z.infer<typeof form>
   | z.infer<typeof custom>
@@ -844,6 +902,9 @@ const node: z.ZodType<DesignNode> = z.lazy(() =>
     divider,
     icon,
     product,
+    /* A marker, not an element. Outside a `product` the exporter and the
+       renderer both drop it — see `bound` above. */
+    bound,
     productList,
     form,
     custom,

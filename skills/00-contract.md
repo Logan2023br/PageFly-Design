@@ -42,7 +42,8 @@ This is the entire alphabet. There is nothing else.
 {"type":"icon","name":"truck","css":{}}
 {"type":"divider","css":{}}
 {"type":"product","title":"","price":"","compareAt":"","atcText":"","swatches":4,"query":"","layout":"sideBySide",
- "gallery":true,"galleryEdge":"bottom","qty":true,"stock":true,"express":true,"badge":"NEW","extras":[]}
+ "gallery":true,"galleryEdge":"bottom","qty":true,"stock":true,"express":true,"badge":"NEW","children":[]}
+{"type":"bound","slot":"atc"}                              only inside a product's children
 {"type":"productList","columns":3,"limit":6,"source":"collection","listLayout":"grid","query":""}
 {"type":"accordion","items":[{"q":"","a":""}]}
 {"type":"form","intent":"contact","fields":[{"label":"","kind":"text","required":true}],"submitText":""}
@@ -85,33 +86,56 @@ and all four are free:
   - `stock` — "In stock" / "Only 3 left" / "Sold out", from real inventory.
     Never write that line as copy: written as copy it says IN STOCK on a
     sold-out variant for ever.
-  - `express` — "Buy it now", Shopify's own express checkout, on its own row
-    under the cart button. It PAIRS with the cart button; it does not replace
-    it.
+  - `express` — "Buy it now", Shopify's own express checkout. It PAIRS with the
+    cart button; it does not replace it. Where it sits is up to you, but a
+    shopper who has already pressed the one above it never sees the second.
   - `badge` — a corner word over the photograph: `"NEW"`, `"-33%"`.
     `badgeCorner` places it. Never draw one: a box on top of an image needs
     `position`, which is forbidden.
-
-`extras` is for rows the fields do not cover — a rating line, three trust lines,
-a caption under the cart button. STATIC PRESENTATION ONLY: an `icon` and two
-numbers for `4.8 ★ 42 reviews` is right, because nothing binds and nothing
-behaves and the merchant plugs their review app in later. A `productList` or a
-`form` in there is refused, for the reason everything else on this page is: it
-would need a binding it cannot have.
 
 **THE BUY BOX IS THE PAGE.** Everything else on a product page argues for the
 purchase; this is where it happens. It is the section a merchant judges the
 whole build by, and a column of grey one-liners under a coloured rectangle is
 what "a template did this" looks like.
 
-`extras` takes up to ten blocks and almost any element: `row`, `col`, `heading`,
-`text`, `icon`, `image`, `divider`, `accordion`, `counter`, `marquee`,
-`beforeAfter`. It is a layout area, not a list of captions. Nest freely — one
-`col` holding a bordered card counts as one block.
+**YOU ARRANGE IT. There is no fixed order.** `product.children` is an ordinary
+tree — rows, columns, headings, icons, images, accordions, slideshows,
+counters, marquees, custom blocks, in whatever sequence this store needs.
 
-**What a buy box can hold, when the store earns it.** Not a checklist and not
-an order. Pick what this product's decision actually needs and leave the rest
-out; a €20 refill and a €400 device are not deciding the same thing.
+Seven parts of it cannot be drawn, because they are bound to the merchant's
+real product: the title, the price, the variant swatches, the quantity stepper,
+the stock line, the cart button and the express checkout. Drawn by hand they
+are pictures — a price that never changes, swatches that select nothing, a
+button that adds nothing to a cart. So you place them with a marker and the
+builder puts the real element there:
+
+```
+{"type":"bound","slot":"title"|"price"|"swatches"|"qty"|"stock"|"atc"|"express"}
+```
+
+A marker carries no words: `title`, `price`, `compareAt` and `atcText` stay on
+the `product` node, where a merchant looking at the mockup expects to find
+them. `qty`, `stock` and `express` still need their flag ON as well — the flag
+says whether the store has one, the marker says where it goes.
+
+Markers work at any depth. A price inside a row beside the words "per bottle"
+is `{"type":"row","children":[{"type":"bound","slot":"price"},{"type":"text",…}]}`.
+
+`title`, `price` and `atc` are the three a buy box cannot do without. Forget one
+and it is appended at the bottom, which is a working page and a worse one.
+
+Up to 16 blocks at the top level, nesting free — a bordered card holding six
+things is one block. Everything except `product`, `productList`, `form` and
+`sticky` is allowed, and those four are refused because each needs a binding or
+a behaviour that would fight the box's own.
+
+**Arrange it for how THIS product is decided.** A subscription serum, a €400
+device and a €12 refill do not get the same column. Some stores want the offer
+picker above the cart button because choosing the bundle IS the decision; some
+want proof first because the objection is trust; some want the spec accordion
+high because the buyer is comparing. That judgement is yours, per store.
+
+**What a buy box can hold.** A menu, not a checklist and not a sequence.
 
   - **A benefit grid.** Two or three across, each a small bordered `row` with
     an `icon` and two or three words. Reads in one glance where five stacked
@@ -143,7 +167,7 @@ out; a €20 refill and a €400 device are not deciding the same thing.
   - A row that could sit unchanged on any store in the world. If it would be
     true of a phone case and a face serum, it is filler.
 
-**WHEN NO ELEMENT FITS, WRITE ONE.** `custom` is allowed inside `extras` and it
+**WHEN NO ELEMENT FITS, WRITE ONE.** `custom` goes anywhere in the column and it
 is the answer to "the vocabulary has no radio card / no unlock meter / no
 segmented toggle". You get `html` (4,000 chars), `stylesheet` (2,000) and `js`
 (1,500). The stylesheet is scoped to this block automatically — write `.card`,
