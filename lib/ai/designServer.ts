@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getProvider, isAiEnabled, providerName, type Completion } from "./provider";
+import { getProvider, isAiEnabled, providerName, type Completion, type Usage } from "./provider";
 import { loadSkills, sliceSkill } from "./skills";
 import { DESIGN_SYSTEM } from "./designPrompt";
 import { designTreeSchema, walk, type DesignTree } from "../design/schema";
@@ -568,6 +568,58 @@ export async function designPageTree(
     return { used: false, reason: (err as Error).message.slice(0, 200), usage: NOTHING };
   }
 
+  /* ==========================================================================
+     AN EMPTY ANSWER IS WORTH ASKING TWICE. ONCE.
+
+     Measured on struct-v2: the same page, the same prompt, run six times, came
+     back three times as a working tree and three times as an EMPTY string after
+     seven to nine thousand thinking tokens. Not truncated — `json_object` mode
+     was on, the model simply reasoned and then said nothing. Same input, two
+     outcomes, so it is not the prompt.
+
+     Cheap, and that is what makes it worth doing rather than merely tempting: a
+     working page costs 45,000-50,000 output tokens, an empty one costs 8,000.
+     Retrying a page that returned nothing adds at most a sixth of a page to the
+     bill and turns a merchant's blank result into a page.
+
+     ONLY on empty, and only ONCE. A model that returns prose, or JSON the
+     schema rejects, has produced something to diagnose — asking again would
+     bury the evidence. And a second empty answer is a signal, not a fluke; the
+     repair loop below is already the one retry this call is allowed.
+     ========================================================================== */
+  /* What the abandoned attempt cost. Folded into the page's usage below rather
+     than dropped — both attempts are billed, and reporting only the second
+     would understate what the page cost. */
+  let discarded: Usage = { input: 0, output: 0 };
+
+  if (completion.text.trim() === "" && !completion.truncated) {
+    console.log(
+      `[design] ${input.pageType}: empty answer after ${completion.usage.output} output ` +
+        `tokens — asking once more`,
+    );
+    try {
+      const again = await provider.complete({
+        system,
+        user,
+        maxTokens: providerName() === "deepseek" ? 48_000 : 16_000,
+        signal: signal
+          ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])
+          : AbortSignal.timeout(TIMEOUT_MS),
+      });
+      discarded = completion.usage;
+      completion = again;
+    } catch {
+      /* The first answer is still empty and the reason below still describes
+         it. A failed retry must not turn a bad page into a thrown build. */
+    }
+  }
+
+  /** Everything this call has spent, including an attempt that was thrown away. */
+  const spent = (u: Usage): Usage => ({
+    input: u.input + discarded.input,
+    output: u.output + discarded.output,
+  });
+
   const raw = parseObject(completion.text);
   if (!raw)
     return {
@@ -587,8 +639,20 @@ export async function designPageTree(
                 completion.usage.output - completion.reasoning
               } for the JSON`
             : " — the tree was cut off mid-JSON")
-        : "model did not return JSON",
-      usage: completion.usage,
+        : /* NOT truncated, and still unparseable — so the ceiling is innocent
+             and the next person needs to know which of two very different
+             things happened. An empty answer after thousands of thinking
+             tokens is a model that reasoned itself into saying nothing, and no
+             amount of reading the prompt for malformed JSON will find that.
+             The first characters of a non-empty answer name the shape it came
+             back in, which is the whole diagnosis when the shape is prose. */
+          completion.text.trim() === ""
+          ? `model returned NOTHING — ${completion.usage.output} output tokens` +
+            (completion.reasoning ? `, ${completion.reasoning} of them thinking` : "") +
+            `, and an empty answer`
+          : `model did not return JSON — ${completion.usage.output} output tokens, ` +
+            `answer began: ${JSON.stringify(completion.text.trim().slice(0, 120))}`,
+      usage: spent(completion.usage),
     };
 
   const parsed = designTreeSchema.safeParse(raw);
@@ -597,13 +661,13 @@ export async function designPageTree(
     return {
       used: false,
       reason: `tree rejected: ${first?.path.join(".")} ${first?.message}`.slice(0, 180),
-      usage: completion.usage,
+      usage: spent(completion.usage),
     };
   }
 
   let tree = parsed.data;
   const nodes = walk(tree);
-  let usage = completion.usage;
+  let usage = spent(completion.usage);
   let auditFailures = 0;
 
   /* A model that returns one empty section satisfies the schema and would

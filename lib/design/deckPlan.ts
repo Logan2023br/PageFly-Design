@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getProvider, isAiEnabled, modelName, type Usage } from "../ai/provider";
-import { sliceSkill } from "../ai/skills";
+import { sliceIds, sliceSkill } from "../ai/skills";
 import { elementForPattern } from "./elementFor";
 import { sectionBounds } from "./sectionPlan";
 import {
@@ -95,6 +95,9 @@ const NO_BG_ROLES = new Set<SectionRole>(["commerce", "proof", "utility"]);
 
 /** Patterns whose whole design is that there is nothing behind the words. */
 const NO_BG_PATTERNS = new Set(["hero-type-only", "hero-product-lead"]);
+
+/** Every id `40-motion.md` actually defines. Read once — the file does not change. */
+const MOTION_IDS = new Set(sliceIds("motion"));
 
 export type DeckAsk = {
   sell: string;
@@ -194,7 +197,17 @@ function systemPrompt(ask: DeckAsk): string {
     `             cards, tables, spec rows and forms on a photograph are`,
     `             unreadable. The failure mode is not subtlety, it is a page`,
     `             where every band shouts and none of it reads.`,
-    `  motion    an id from the trade's motion register above, or null`,
+    /* THE IDS, not the register. The register is a SENTENCE — "editorial —
+       slow clip reveals, image-swap on card hover · no counters" — and asking
+       for "an id from the register" got exactly what it deserved: the model
+       kebab-cased the prose into `slow-clip-reveal` and `image-swap-on-card-
+       hover`, neither of which exists, so `sliceSkill` logged two misses and
+       the design call was handed motion names it had never seen. The register
+       says which of these fit the trade; this says what they are called. */
+    `  motion     one of these ids, or null — and nothing else:`,
+    `             ${sliceIds("motion").join(", ")}`,
+    `             The register above says which of them suit this trade, in`,
+    `             prose. Read it for the choice, take the id from this line.`,
     `  brief      ONE sentence: what this band actually contains on this store's`,
     `             page. Not a description of the pattern — the pattern is`,
     `             already named. What goes in it.`,
@@ -218,7 +231,19 @@ function systemPrompt(ask: DeckAsk): string {
     `   two filler bands. Every band must earn its place: a band of grids or`,
     `   cards is expensive to build, and a page of nothing but grids is a page`,
     `   that cannot be built at all.`,
-    `3. Open with a hero on any page that is not selling one product.`,
+    /* SAID PER PAGE TYPE, because said as a principle it was misread. The rule
+       was "open with a hero on any page that is not selling one product", and
+       with `Store type: Single-product store` the model concluded that every
+       page sells one product — three runs in a row opened `home` on a row of
+       spec bars. The store's type is not the page's job. */
+    `3. WHICH PAGES OPEN WITH A HERO. The store type does not change this — a`,
+    `   single-product store still has a home page, and it still opens with a`,
+    `   hero band.`,
+    ...ask.pageTypes.map((t) =>
+      pageHasOneProduct(t)
+        ? `     ${t} — opens with its buy box, NOT a hero`
+        : `     ${t} — band 1 MUST have role "hero"`,
+    ),
     `4. Do not use a buy-box pattern on a page that has no product of its own.`,
     `5. Two pages in this deck may share patterns where the page genuinely needs`,
     `   them. They may not share a sequence.`,
@@ -343,6 +368,8 @@ function vet(
   raw: unknown,
   banned: (id: string) => boolean,
   notes: string[],
+  /** the trade's own hero pattern, used only when the model chose none */
+  fallbackHero: string | null = null,
 ): OrderSection[] | null {
   if (!Array.isArray(raw)) return null;
 
@@ -377,13 +404,24 @@ function vet(
 
     const padding = str(b.padding) as Padding;
 
+    /* An invented motion id is worse than none. `sliceSkill` finds no block, so
+       the design call gets no instructions for it AND is told to apply a name
+       it has never seen — it then has to invent the behaviour, which is the
+       expensive kind of guessing. Dropped rather than repaired: there is no way
+       to know which real effect "slow-clip-reveal" meant. */
+    const motion = str(b.motion) || null;
+    const knownMotion = motion && MOTION_IDS.has(motion) ? motion : null;
+    if (motion && !knownMotion) {
+      notes.push(`${pageType}: dropped motion "${motion}" — not a motion id`);
+    }
+
     bands.push({
       role,
       pattern,
       signature: bool(b.signature),
       dark: bool(b.dark),
       padding: PADDINGS.includes(padding) ? padding : "standard",
-      motion: str(b.motion) || null,
+      motion: knownMotion,
       mayHaveBg: bool(b.bg),
       brief: str(b.brief) || null,
     });
@@ -437,12 +475,80 @@ function vet(
 
   if (bands.length < MIN_SECTIONS) return null;
 
+  enforceHero(pageType, bands, fallbackHero, cap, notes);
+  /* `enforceHero` empties the page when it cannot open it — a page with no
+     first screen is not a page, and the older decider will do better. */
+  if (bands.length < MIN_SECTIONS) return null;
+
   enforceSignature(pageType, bands, notes);
   enforceDark(pageType, bands, notes);
   enforcePadding(pageType, bands, notes);
   enforceBackgrounds(pageType, bands, notes);
 
   return bands;
+}
+
+/**
+ * A page that is not selling one product opens with a hero.
+ *
+ * Rule 3 of the prompt says so and the first real answer ignored it: a `home`
+ * page for a fashion store opened on `spec-bars` — a row of labelled bars where
+ * the first screen should be. Every arc in `plan.ts` starts with `hero` except
+ * `product`, which opens with its buy box on purpose; this is that guarantee,
+ * kept for the path where a model chose the sections instead of the arc.
+ *
+ * Moved rather than inserted. A hero further down the page is a hero the model
+ * did choose, so the page keeps its length and its bands; only the order is
+ * corrected. With no hero anywhere there is nothing to move and the page is
+ * left alone — inventing one would mean picking a hero pattern the model never
+ * asked for, which is overruling rather than repairing.
+ */
+function enforceHero(
+  pageType: string,
+  bands: OrderSection[],
+  fallbackHero: string | null,
+  cap: number,
+  notes: string[],
+): void {
+  if (pageHasOneProduct(pageType)) return;
+  if (bands[0]?.role === "hero") return;
+
+  const at = bands.findIndex((b) => b.role === "hero");
+  if (at !== -1) {
+    const [hero] = bands.splice(at, 1);
+    bands.unshift(hero);
+    notes.push(`${pageType}: the hero was at band ${at + 1} — moved it to the front`);
+    return;
+  }
+
+  /* No hero anywhere, three runs out of three. The trade's OWN hero goes in —
+     `30-verticals.md` names one per vertical, so this is reading an answer that
+     was already written down rather than inventing one. Without it the page
+     opens on whatever came first, and a home page opening on a row of spec bars
+     is what made the design call return an empty answer twice. */
+  if (!fallbackHero || roleFor(fallbackHero) !== "hero") {
+    notes.push(`${pageType}: no hero, and this trade names none — page refused`);
+    bands.length = 0;
+    return;
+  }
+
+  bands.unshift({
+    role: "hero",
+    pattern: fallbackHero,
+    signature: false,
+    dark: false,
+    padding: "statement",
+    motion: null,
+    mayHaveBg: true,
+    brief: null,
+  });
+  notes.push(`${pageType}: no hero anywhere — opened the page with "${fallbackHero}"`);
+
+  /* The insert can push a page one past its cap, the same way a pin can. */
+  if (bands.length > cap) {
+    const dropped = bands.pop();
+    notes.push(`${pageType}: over the cap after the hero — dropped "${dropped?.pattern}"`);
+  }
 }
 
 /** Exactly one, and never the hero. */
@@ -599,7 +705,7 @@ export async function planDeck(ask: DeckAsk, signal?: AbortSignal): Promise<Deck
       continue;
     }
 
-    const bands = vet(pageType, answered, banned, repairs);
+    const bands = vet(pageType, answered, banned, repairs, row.hero);
     if (!bands) {
       fallbacks.push({ pageType, reason: "the answer did not survive checking" });
       continue;
