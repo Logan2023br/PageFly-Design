@@ -91,6 +91,54 @@ For stores whose product does not photograph well, and for launch pages. The
 marquee under the type is what stops it reading as an empty page.
 <!--/-->
 
+<!--#hero-slideshow-->
+**hero-slideshow** — three openings, not one.
+```
+section  padding 0  full-bleed
+  slideshow  perView 1  autoplay true  → x3
+    overlay  query "<a DIFFERENT scene per slide>"  ratio 0.56  scrim "left"  align "bottom-left"
+      col  maxWidth 620  gap 18  padding 88px 56px
+        eyebrow · display 56-72 · body-lead <= 16 words · 1 button
+```
+For a store with more than one thing to lead with — a collection, a season, a
+campaign — and for any store whose single best photograph is not obviously
+better than its second. Each slide gets its OWN headline and its OWN photograph;
+three slides carrying one message is a carousel of the same page.
+*Fails when:* the slides are three crops of one shoot with one headline.
+<!--/-->
+
+<!--#hero-video-bleed-->
+**hero-video-bleed** — motion behind the words.
+```
+section  padding 0  full-bleed  bg {kind video, query "<subject in motion>", scrim strong}
+  col  minHeight 78vh  justify flex-end  gap 20  padding 96px 56px  maxWidth 680
+    eyebrow · display 64-88 · body-lead <= 18 words · 1 button
+```
+The strongest opening there is when the product MOVES — fabric, liquid, a
+machine running, a room being used. `scrim strong`, always: video is busier than
+a photograph and text over an unscrimmed one is unreadable for half its
+duration. One CTA.
+*Fails when:* the footage is a slow pan over a still object — that is a
+photograph with extra loading time, and the photograph is better.
+<!--/-->
+
+<!--#hero-split-media-->
+**hero-split-media** — the words hold one half, the media holds the other.
+```
+section  padding 0  full-bleed
+  row  gap 0  align stretch
+    col  basis 46%  gap 22  padding 96px 64px  justify center  background <band>
+      eyebrow · display 56-76 · body-lead <= 22 words · 1 button · 3 short proof lines
+    image  basis 54%  ratio 1.15
+```
+No scrim, no text over a photograph, nothing to read through. The type sits on
+a flat surface and stays legible at any size, which is why this is the safest
+hero for a store whose photography is uneven. The media half takes a video
+instead of an image where there is one.
+*Fails when:* the halves are 50/50 — the asymmetry is what stops it reading as
+a template.
+<!--/-->
+
 ## Proof and specification
 
 <!--#spec-grid-4x2-->

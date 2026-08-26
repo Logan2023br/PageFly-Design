@@ -54,6 +54,29 @@ type Band = {
 async function main(): Promise<void> {
   const { __vetForTest } = await import("../lib/design/deckPlan");
 
+  console.log("\nthe openings");
+
+  /* A hero was coming back as a photograph with a headline over it every time,
+     on every store. Three of the nine now exist for the stores that have
+     something better: footage, more than one thing to lead with, or photography
+     too uneven to read type through. */
+  const { patternsByRole, roleFor } = await import("@/lib/design/plan");
+  const heroes = patternsByRole().get("hero") ?? [];
+  check(heroes.length === 9, "nine openings to choose between", String(heroes.length));
+  for (const id of ["hero-video-bleed", "hero-slideshow", "hero-split-media"])
+    check(heroes.includes(id) && roleFor(id) === "hero", `${id} is a hero`);
+
+  const { __promptsForTest: heroPrompts } = await import("@/lib/design/deckPlan");
+  const sys = heroPrompts({
+    sell: "Fashion & apparel", storeType: "d2c", vertical: "fashion-apparel",
+    market: null, pageTypes: ["home"], prompt: "", styleLabel: "Bold",
+    styleBlurb: "", density: "normal",
+    tokens: { bg: "#fff", ink: "#111", accent: "#f00", band: "#eee" },
+    refSections: null, refStyle: null,
+  } as never).system;
+  check(sys.includes("hero-video-bleed"), "and the deck plan is told they exist");
+  check(sys.includes("not interchangeable"), "and told they are not the same choice");
+
   /* Real ids, so `roleFor` resolves and the band is not dropped as invented.
      Taken from `20-patterns.md` — a test built on made-up ids would pass by
      dropping everything, which is the opposite of what is being checked. */
