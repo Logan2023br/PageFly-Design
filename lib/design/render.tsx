@@ -357,6 +357,13 @@ function Product({ node, cls }: { node: Extract<DesignNode, { type: "product" }>
  * picture of a page the merchant will not receive — which is the failure this
  * whole file exists to prevent.
  */
+/* Stand-ins for the merchant's real option values, which arrive on import. Two
+   rows because the first group is usually the one with words in it. */
+const SAMPLE_VALUES = [
+  ["S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL", "6XL", "7XL", "8XL", "9XL"],
+  ["One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "11", "12"],
+];
+
 function BuyColumn({
   node,
   rule,
@@ -384,22 +391,96 @@ function BuyColumn({
           )}
         </div>
     ),
-    swatches: node.swatches > 0 && (
-          <div data-pf="product-swatches" style={{ display: "flex", gap: 8 }}>
-            {Array.from({ length: node.swatches }, (_, i) => (
-              <span
-                key={i}
-                style={{
-                  width: 26,
-                  height: 26,
-                  borderRadius: 999,
-                  border: `1px solid ${rule}`,
-                  background: `hsl(${(i * 47) % 360} 34% 72%)`,
-                }}
-              />
-            ))}
-          </div>
-    ),
+    swatches: (() => {
+      /* What the design asked for, or the old bare count as one unnamed group.
+         Eight identical circles under a coat that comes in three colours told a
+         shopper nothing — not what they were choosing, not how many there were,
+         not which one was picked. */
+      const groups =
+        node.variants?.length
+          ? node.variants
+          : node.swatches > 0
+            ? [{ name: "", values: node.swatches, as: "dots" as const }]
+            : [];
+      if (groups.length === 0) return null;
+
+      return (
+        <div data-pf="product-swatches" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {groups.map((g, gi) => (
+            <div key={gi} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {g.name && (
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    letterSpacing: ".08em",
+                    textTransform: "uppercase",
+                    opacity: 0.55,
+                  }}
+                >
+                  {g.name}
+                </span>
+              )}
+
+              {g.as === "dropdown" ? (
+                <div
+                  style={{
+                    padding: "12px 14px",
+                    border: `1px solid ${rule}`,
+                    borderRadius: radius || undefined,
+                    fontSize: 15,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <span>{g.name || "Choose"}</span>
+                  <span style={{ opacity: 0.5 }}>▾</span>
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  {Array.from({ length: g.values }, (_, i) =>
+                    g.as === "dots" ? (
+                      <span
+                        key={i}
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 999,
+                          border: `1px solid ${rule}`,
+                          /* Spread across the wheel rather than eight of one
+                             colour, so a row of colours reads as a row of
+                             colours. */
+                          background: `hsl(${(i * 47) % 360} 32% 68%)`,
+                          boxShadow: i === 0 ? `0 0 0 2px ${atcBg === "#111114" ? "#fff" : "transparent"}, 0 0 0 4px ${atcBg}` : undefined,
+                        }}
+                      />
+                    ) : (
+                      <span
+                        key={i}
+                        style={{
+                          minWidth: 48,
+                          padding: "10px 14px",
+                          border: `1px solid ${i === 0 ? atcBg : rule}`,
+                          borderRadius: radius || undefined,
+                          background: i === 0 ? atcBg : "transparent",
+                          color: i === 0 ? readableInk(atcBg) : undefined,
+                          textAlign: "center",
+                          fontSize: 14,
+                        }}
+                      >
+                        {SAMPLE_VALUES[gi]?.[i] ?? String(i + 1)}
+                      </span>
+                    ),
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    })(),
+
     qty: node.qty && (
           <div data-pf="product-qty" style={{ display: "flex", width: "fit-content" }}>
             {["−", "1", "+"].map((glyph, i) => (

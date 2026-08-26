@@ -418,6 +418,15 @@ export function PRODUCT_SWATCHES(
   styleData: StyleData,
   labelStyle: StyleData,
   swatchStyle: StyleData,
+  /**
+   * A display mode to force, when the caller knows the product's options.
+   *
+   * Empty by default, and that default is load-bearing: `useOptionSwatches`
+   * stays true and every option renders the way the merchant configured it.
+   * Passing `display` here also turns that off, so it is only safe when the
+   * product's options are actually known — one group, and not colour.
+   */
+  force: { display?: "dropdown" | "label" } = {},
 ) {
   return node(
     "ProductVariantSwatches",
@@ -439,6 +448,11 @@ export function PRODUCT_SWATCHES(
       useOptionSwatches: true,
       swatchesSpacing: { all: "10px" },
       optionsSpacing: { all: "18px" },
+      /* LAST, so it wins. Placed above the defaults it was silently overwritten
+         by the `useOptionSwatches: true` two lines up, and a forced display is
+         ignored while that is true — the call would have looked correct and
+         done nothing. */
+      ...(force.display ? { display: force.display, useOptionSwatches: false } : {}),
     },
     styleData,
     [

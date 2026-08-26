@@ -1230,6 +1230,81 @@ async function main(): Promise<void> {
     rowRule,
   );
 
+  /* ---- how a product is chosen ------------------------------------------- */
+
+  console.log("\nhow a product is chosen");
+
+  const chosen = await open(
+    {
+      sections: [
+        section(
+          [
+            {
+              type: "product",
+              title: "Overshirt",
+              price: "$480",
+              atcText: "Add to Bag",
+              variants: [
+                { name: "Colour", values: 6, as: "dots" },
+                { name: "Size", values: 5, as: "tiles" },
+              ],
+              children: [{ type: "bound", slot: "swatches" }, { type: "bound", slot: "atc" }],
+            },
+          ],
+          "product-detail-gallery",
+        ),
+      ],
+    },
+    "probe",
+    { border: "#3A3A38", accent: "#C6A667" },
+  );
+
+  const sw = chosen.items.find((i) => i.type === "ProductVariantSwatches")!;
+  const swCss = chosen.cssOf(sw.id, "all", "& .pf-variant-select");
+  check(swCss.includes("#3A3A38"), "the dropdown takes the page's border, not the browser's", swCss.slice(0, 60));
+  check(swCss.includes("appearance: none"), "and loses the native control's arrow");
+
+  const tile = chosen.cssOf(sw.id, "all", '& .pf-vs-label > input[type="radio"]:checked + label');
+  check(tile.includes("#C6A667"), "a chosen size tile takes the accent", tile.slice(0, 60));
+
+  const soldOut = chosen.cssOf(sw.id, "all", '& .pf-vs-label > input[type="radio"]:disabled + label');
+  check(
+    soldOut.includes("line-through"),
+    "and a sold-out one READS sold out, not merely faint",
+    soldOut.slice(0, 60),
+  );
+
+  /* Two groups means the merchant's own per-option config decides, because
+     nothing here knows whether their product is colour-and-size or size-only. */
+  check(
+    sw.data?.useOptionSwatches === true && sw.data?.display === undefined,
+    "two groups force no display — a forced colour grid breaks on a size option",
+  );
+
+  const oneSize = await open({
+    sections: [
+      section(
+        [
+          {
+            type: "product",
+            title: "Tee",
+            price: "$40",
+            atcText: "Add",
+            variants: [{ name: "Size", values: 5, as: "tiles" }],
+            children: [],
+          },
+        ],
+        "product-detail-gallery",
+      ),
+    ],
+  });
+  const oneSw = oneSize.items.find((i) => i.type === "ProductVariantSwatches")!;
+  check(oneSw.data?.display === "label", "one non-colour group is known enough to force tiles");
+  check(
+    oneSw.data?.useOptionSwatches === false,
+    "and turns off the merchant override, or the forced display is ignored",
+  );
+
   /* ---- a design that never mentioned phones ------------------------------
 
      The common case, and until now the broken one: a two-column band with no

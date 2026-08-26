@@ -41,7 +41,8 @@ This is the entire alphabet. There is nothing else.
 {"type":"image","query":"","ratio":1,"css":{}}             query = English stock-photo terms
 {"type":"icon","name":"truck","css":{}}
 {"type":"divider","css":{}}
-{"type":"product","title":"","price":"","compareAt":"","atcText":"","swatches":4,"query":"","layout":"sideBySide",
+{"type":"product","title":"","price":"","compareAt":"","atcText":"","query":"","layout":"sideBySide",
+ "variants":[{"name":"Colour","values":6,"as":"dots"},{"name":"Size","values":5,"as":"tiles"}],
  "gallery":true,"galleryEdge":"bottom","qty":true,"stock":true,"express":true,"badge":"NEW","children":[]}
 {"type":"bound","slot":"atc"}                              only inside a product's children
 {"type":"productList","columns":3,"limit":6,"source":"collection","listLayout":"grid","query":""}
@@ -192,9 +193,29 @@ Three limits, and they are not style preferences:
   - **Nothing an element already does.** A hover written by hand where `anim`
     exists is a hover that survives no edit the merchant makes afterwards.
 
-Set `swatches` to the number of variants the store actually sells, not the
-maximum. Eight pastel circles under a coat that comes in three colours is
-inventing inventory, and a shopper counts them.
+**HOW THE PRODUCT IS CHOSEN.** `variants` is the option groups, at most two,
+and it replaced a bare count that produced eight identical circles telling a
+shopper nothing — not what they were choosing, not how many there were, not
+which one was picked.
+
+  - `name` is what sits above the values: `Colour`, `Size`, `Length`.
+  - `values` is how many to draw. The number the store actually sells, not the
+    maximum: eight circles under a coat that comes in three colours is inventing
+    inventory, and a shopper counts them.
+  - `as` is how it should read. `dots` for colour, `tiles` for sizes and
+    anything with words in it, `dropdown` when there are more than about eight
+    values and a row of them would wrap into a block.
+
+One group when the product is chosen one way, two when it is chosen two ways. A
+product needing three wants a variant picker, not a row of swatches.
+
+Colour and Size do not look alike and should not be drawn alike. A single group
+called `Size` rendered as dots is six identical circles a shopper cannot read.
+
+What SHIPS may differ from what you drew, and that is deliberate: the merchant's
+real options are unknown while this page is being designed, so the export hands
+them to PageFly and styles every form rather than forcing one. Your `as` says
+how it was meant to read, and the styling follows whichever form arrives.
 
 The cart button's colour and corners and the stepper's outline are NOT yours —
 they are emitted from the store's palette so the buy box matches the page. Do

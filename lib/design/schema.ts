@@ -512,6 +512,37 @@ const product = z.object({
   /** must read exactly as it does in the mockup — merchants check this one */
   atcText: words(40, "Add to cart"),
   swatches: whole(0, 8, 0),
+
+  /**
+   * The option groups this product is chosen by, as the design sees them.
+   *
+   * `swatches` was a COUNT — eight circles, one colour, no label, no idea what
+   * they were for. A shopper picking a shirt chooses a colour and a size, and
+   * those two things do not look alike: colours are dots, sizes are tiles, and
+   * each wants its name above it.
+   *
+   * At most two groups, because a product needing three is a product needing a
+   * variant picker rather than a row of swatches.
+   *
+   * WHAT SHIPS IS NOT ALWAYS WHAT IS DRAWN, and that is deliberate. The mockup
+   * draws exactly this; the export hands the real options to PageFly, which
+   * renders each one the way the MERCHANT configured it. Their product's real
+   * options are unknown while this page is being designed — a hand-forced grid
+   * of colour dots collapses into broken labels the moment the product also has
+   * a size — so the export styles every form and forces none. `as` says how the
+   * design meant it to read, and the styling follows for whichever form arrives.
+   */
+  variants: list(
+    z.object({
+      /** "Colour", "Size", "Length" — the name shown above the values */
+      name: words(24, "Option"),
+      /** how many values to draw in the mockup; the real count comes from the
+          merchant's product */
+      values: whole(2, 12, 4),
+      as: choice(["dots", "tiles", "dropdown"] as const, "tiles"),
+    }),
+    2,
+  ),
   /**
    * The thumbnail strip under (or beside) the main photograph.
    *
@@ -872,6 +903,7 @@ export type DesignNode =
       compareAt?: string;
       atcText: string;
       swatches: number;
+      variants: { name: string; values: number; as: "dots" | "tiles" | "dropdown" }[];
       gallery: boolean;
       galleryEdge: "bottom" | "left" | "right" | "top";
       qty: boolean;

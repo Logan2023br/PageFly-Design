@@ -1088,40 +1088,92 @@ function productBox(
           : { all: { "&": "display: none !important;" } },
       ),
 
-    swatches: () =>
-      node.swatches > 0
-        ? /* Styled through the documented swatch selectors, not through the
-               child nodes: a colour option renders `.pf-vs-color`, a size grid
-               renders `.pf-vs-label`, and the OptionLabel/Swatch children carry
-               almost none of it. Round dots for colours, square tiles for
-               sizes, and the selected state marked — without it a merchant
-               cannot see which variant is chosen. */
-            PRODUCT_SWATCHES(
-              {
-                all: {
-                  "&": "display: flex !important; flex-direction: column !important; gap: 14px;",
-                  "& .pf-vs-color label":
-                    "width: 26px; height: 26px; border-radius: 999px;" +
-                    " border: 1px solid rgba(0,0,0,.14); cursor: pointer;",
-                  '& .pf-vs-color > input[type="radio"]:checked + label':
-                    "box-shadow: 0 0 0 2px #fff, 0 0 0 4px currentColor;",
-                  "& .pf-vs-label label":
-                    "min-width: 44px; padding: 8px 12px; border: 1px solid rgba(0,0,0,.18);" +
-                    " text-align: center; cursor: pointer;",
-                  '& .pf-vs-label > input[type="radio"]:checked + label':
-                    "border-color: currentColor;",
-                },
-              },
-              {
-                all: {
-                  "&":
-                    "font-size: 11px; font-weight: 600; letter-spacing: .08em;" +
-                    ` text-transform: uppercase; opacity: .55; ${inkRule(opts)}`,
-                },
-              },
-              { all: { "&": "display: flex !important; gap: 10px; flex-wrap: wrap;" } },
-            )
-        : null,
+    swatches: () => {
+      const groups = node.variants ?? [];
+      if (groups.length === 0 && node.swatches <= 0) return null;
+
+      const rule = opts.border ?? "rgba(0,0,0,.18)";
+      const accent = opts.accent ?? "currentColor";
+      const r = opts.radius ?? 0;
+
+      /* ======================================================================
+         EVERY FORM STYLED, NO FORM FORCED.
+
+         PageFly renders each option group the way the MERCHANT configured it —
+         a Colour option as dots, a Size option as tiles — and their product's
+         real options are unknown while this page is being designed. Forcing one
+         look is how a colour grid meets a size option and collapses into broken
+         one-character labels; `fields.md` says so in as many words.
+
+         So all four forms carry the page's own border, accent and radius, and
+         whichever arrives is the one that was designed for. The dropdown gets
+         the same treatment rather than being left as the browser's own control,
+         which is the single detail that says "imported from somewhere else".
+         ====================================================================== */
+      return PRODUCT_SWATCHES(
+        {
+          all: {
+            "&": "display: flex !important; flex-direction: column !important; gap: 16px;",
+
+            /* the dropdown */
+            "& .pf-variant-select":
+              `padding: 12px 14px; border: 1px solid ${rule}; background: transparent;` +
+              ` font-size: 15px; ${inkRule(opts)}` +
+              (r ? ` border-radius: ${r}px;` : "") +
+              " appearance: none; cursor: pointer; width: 100%;",
+
+            /* colour dots */
+            "& .pf-vs-color label":
+              `width: 28px; height: 28px; border-radius: 999px; border: 1px solid ${rule};` +
+              " cursor: pointer; transition: box-shadow .15s ease;",
+            '& .pf-vs-color > input[type="radio"]:checked + label':
+              `box-shadow: 0 0 0 2px ${opts.ink ?? "#fff"}, 0 0 0 4px ${accent};`,
+            '& .pf-vs-color > input[type="radio"]:disabled + label':
+              `opacity: .3; cursor: not-allowed;`,
+
+            /* text tiles — a size grid */
+            "& .pf-vs-label label":
+              `min-width: 48px; padding: 10px 14px; border: 1px solid ${rule};` +
+              ` text-align: center; cursor: pointer; font-size: 14px; ${inkRule(opts)}` +
+              (r ? ` border-radius: ${r}px;` : "") +
+              " transition: border-color .15s ease, background .15s ease;",
+            '& .pf-vs-label > input[type="radio"]:checked + label':
+              `border-color: ${accent}; background: ${accent}; color: ${readableInk(accent)};`,
+            /* Sold out has to READ as sold out. It ships at opacity .4, which is
+               indistinguishable from "faint" — a shopper clicks it and nothing
+               happens. */
+            '& .pf-vs-label > input[type="radio"]:disabled + label':
+              `opacity: .35; cursor: not-allowed; text-decoration: line-through;`,
+
+            /* image / square swatches */
+            "& .pf-vs-square label":
+              `border: 1px solid ${rule}; cursor: pointer;` + (r ? ` border-radius: ${r}px;` : ""),
+            '& .pf-vs-square > input[type="radio"]:checked + label': `border-color: ${accent};`,
+            '& .pf-vs-square > input[type="radio"]:disabled + label':
+              `opacity: .35; cursor: not-allowed;`,
+
+            /* round radios, the universal fallback */
+            "& .pf-vs-radio": `font-size: 14px; ${inkRule(opts)}`,
+            '& .pf-vs-radio > input[type="radio"]:checked + label': `color: ${accent};`,
+          },
+        },
+        {
+          all: {
+            "&":
+              "font-size: 11px; font-weight: 600; letter-spacing: .08em;" +
+              ` text-transform: uppercase; opacity: .55; ${inkRule(opts)}`,
+          },
+        },
+        { all: { "&": "display: flex !important; gap: 10px; flex-wrap: wrap;" } },
+        /* A design that named ONE group and asked for a dropdown or tiles knows
+           what it is looking at, so its choice is forced. Two groups, or none
+           named, and the merchant's own per-option config wins — it is the only
+           thing that can render a colour and a size correctly at once. */
+        groups.length === 1 && groups[0].as !== "dots"
+          ? { display: groups[0].as === "dropdown" ? "dropdown" : "label" }
+          : {},
+      );
+    },
 
     qty: () =>
       node.qty
