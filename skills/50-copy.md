@@ -87,6 +87,18 @@ block is a trust signal, not a weakness.
 
 ## Language
 
-Write in the language the merchant wrote their brief in. If they wrote in
-Vietnamese, the page is in Vietnamese — including the buttons, the eyebrows and
-the review signatures. Never mix two languages on one page.
+The page is written in the MARKET's language, when a market was given. It is
+named in the market block above, along with the currency and the number format
+that go with it.
+
+With no market, the page takes the language the merchant wrote their brief in.
+If they wrote in Vietnamese, the page is in Vietnamese.
+
+Both rules exist because they answer different questions. A brief is the
+language a merchant speaks to US in. A market is the language they speak to
+their BUYER in. A Vietnamese merchant selling into the United States wrote
+their brief in Vietnamese and needs an English page — that is the whole reason
+they chose a market at all.
+
+Either way: never mix two languages on one page. The buttons, the eyebrows and
+the review signatures are in the page's language too, not only the paragraphs.
