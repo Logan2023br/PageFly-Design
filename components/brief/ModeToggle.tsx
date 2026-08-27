@@ -22,13 +22,13 @@ const MODES: { id: BuildMode; label: string; icon: IconName; help: string }[] = 
     icon: "Rocket",
     /* What is given up, not what is gained. A merchant choosing between two
        buttons needs to know which one stops asking. */
-    help: "Three questions — we choose the style and the store type",
+    help: "One prompt — we read the trade, the style and the store type out of it",
   },
   {
     id: "detail",
     label: "Build Detail",
     icon: "ListChecks",
-    help: "Every question: style, store type, your own words, references",
+    help: "Every question: the trade, style, store type, references",
   },
 ];
 

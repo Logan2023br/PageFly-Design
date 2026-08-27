@@ -202,23 +202,27 @@ export const EMPTY_DRAFT: BriefDraft = {
 
    Two front doors onto the same brief. Build Detail is the form as it was —
    every question, the merchant answers all of them. Build Quickly asks three
-   (market, what you sell, which pages) and has a model answer the rest before
-   the build starts, so the brief that leaves this file is the same shape either
-   way and `briefSchema` above never learns that modes exist.
+   (market, one prompt, which pages) and has a model read the rest out of the
+   prompt before the build starts, so the brief that leaves this file is the
+   same shape either way and `briefSchema` above never learns that modes exist.
    ========================================================================== */
 
 export const BUILD_MODES = ["quick", "detail"] as const;
 export type BuildMode = (typeof BUILD_MODES)[number];
 
 /**
- * The fields Build Quickly hides and `lib/briefStyle.ts` fills in.
+ * The fields Build Quickly hides and `lib/quickBrief.ts` fills in.
  *
  * Named once, here, because three things have to agree about them: this file
  * stops demanding them, `BriefScreen` stops rendering their cards, and the
  * resolver has to actually produce one. A field added to this list without the
  * third would quietly stop being asked for and arrive at the generator empty.
  */
-export const QUICK_RESOLVED_FIELDS = ["visualStyle", "storeType"] as const;
+export const QUICK_RESOLVED_FIELDS = [
+  "whatYouSell",
+  "visualStyle",
+  "storeType",
+] as const;
 
 /**
  * Returns the single next thing the merchant has to do, or null when the
@@ -233,8 +237,13 @@ export function firstMissing(
   draft: BriefDraft,
   mode: BuildMode = "detail",
 ): string | null {
-  if (draft.whatYouSell.trim().length < 2) return "Tell us what you sell";
-  if (mode !== "quick") {
+  if (mode === "quick") {
+    /* The prompt carries the whole brief here, so it is the one field quick mode
+       cannot proceed without — and the only place it is ever required. In detail
+       mode it stays optional, as it has always been. */
+    if (draft.prompt.trim().length < 2) return "Tell us what to build";
+  } else {
+    if (draft.whatYouSell.trim().length < 2) return "Tell us what you sell";
     if (!draft.visualStyle) return "Pick a visual style";
     if (!draft.storeType) return "Pick a store type";
   }

@@ -30,7 +30,7 @@ export function BriefScreen() {
         </h1>
         <p className="mx-auto mt-4 max-w-md text-pf-body text-pf-muted">
           {quick
-            ? "Two answers. Every page comes back as a mockup."
+            ? "One prompt, and the pages you want. Every page comes back as a mockup."
             : "Four answers, three optional. Every page comes back as a mockup."}
         </p>
       </header>
@@ -47,15 +47,21 @@ export function BriefScreen() {
             sells frames every answer below it — the language, what the page has
             to promise — and it is the one question they can skip. */}
         <MarketPicker />
-        <SellInput />
 
-        {/* Build Quickly hides these four (brand colours ride inside the style
-            card). The first two are answered by a model
-            before the build starts (see `lib/briefStyle.ts`); the last three are
-            optional and go unanswered, exactly as they do today when a merchant
-            skips them. `AnimatePresence` because the pages card below moves a
-            long way when they leave, and a jump of that size reads as a
-            different screen rather than the same one with less on it. */}
+        {/* The one field quick mode DOES ask for, and it is the prompt rather
+            than the trade. A merchant describing colours and the sections they
+            want has told us what they sell on the way past; asked for the trade
+            in a 120-character box first, they answer "mugs" and stop. The card
+            reads differently in each mode — see `PromptField`. */}
+        {quick && <PromptField />}
+
+        {/* Build Quickly hides these five (brand colours ride inside the style
+            card). The first three are read out of the prompt by a model before
+            the build starts (see `lib/quickBrief.ts`); references go unasked,
+            exactly as they do today when a merchant skips them.
+            `AnimatePresence` because the pages card below moves a long way when
+            they leave, and a jump of that size reads as a different screen
+            rather than the same one with less on it. */}
         <AnimatePresence initial={false} mode="popLayout">
           {!quick && (
             <motion.div
@@ -67,6 +73,7 @@ export function BriefScreen() {
               transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
               className="grid gap-4"
             >
+              <SellInput />
               <StylePicker />
               <StoreTypePicker />
               <PromptField />

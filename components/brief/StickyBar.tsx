@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { requestStyleChoice } from "@/lib/briefStyle";
+import { requestQuickChoice } from "@/lib/quickBrief";
 import { describeSelection, totalSelected } from "@/lib/pageCatalog";
 import { useStore } from "@/lib/store";
 import { firstMissing } from "@/lib/validation";
@@ -19,6 +19,7 @@ export function StickyBar() {
   const draft = useStore((s) => s.draft);
   const mode = useStore((s) => s.mode);
   const start = useStore((s) => s.start);
+  const setSell = useStore((s) => s.setSell);
   const setStyle = useStore((s) => s.setStyle);
   const setStoreType = useStore((s) => s.setStoreType);
   /* Set by followBuild when a build ends with nothing designed. It was written
@@ -31,9 +32,9 @@ export function StickyBar() {
    *
    * A quick build makes a model call before the build starts, and it is the one
    * wait on this screen the merchant did not ask for. "Checking…" for two or
-   * three seconds of choosing a style reads as a hang.
+   * three seconds of reading their prompt reads as a hang.
    */
-  const [phase, setPhase] = useState<"idle" | "checking" | "styling">("idle");
+  const [phase, setPhase] = useState<"idle" | "checking" | "reading">("idle");
   const busy = phase !== "idle";
   const [blocked, setBlocked] = useState<string | null>(null);
 
@@ -63,27 +64,37 @@ export function StickyBar() {
         return;
       }
 
-      /* The two questions Build Quickly did not ask, answered here rather than
-         inside `start()`: the brief that reaches the server is then identical
-         to one a merchant filled in by hand, and nothing downstream — no
-         generator stage, no saved run, no Library card — has to know a mode
-         existed. Written into the draft, so a merchant who comes back to the
-         brief sees what was chosen for them and can change it.
+      /* The three questions Build Quickly did not ask, read out of the prompt
+         here rather than inside `start()`: the brief that reaches the server is
+         then identical to one a merchant filled in by hand, and nothing
+         downstream — no generator stage, no saved run, no Library card — has to
+         know a mode existed. Written into the draft, so a merchant who comes
+         back to the brief sees what was decided for them and can change it.
+
+         Only the fields still empty are written. Someone who answered in Build
+         Detail and then switched to Build Quickly keeps their own answers; the
+         model fills gaps, it does not overrule anyone.
 
          After the allowance check on purpose. Spending a model call on a build
          the allowance is about to refuse is money for nothing.
 
-         `requestStyleChoice` cannot reject and cannot return null: with no model
-         configured, or a model that is down, it resolves to the fallback pair.
-         The build always starts. */
-      if (mode === "quick" && (!draft.visualStyle || !draft.storeType)) {
-        setPhase("styling");
-        const choice = await requestStyleChoice({
-          sell: draft.whatYouSell,
+         `requestQuickChoice` cannot reject and cannot return an empty field:
+         with no model configured, or a model that is down, it resolves to the
+         fallbacks and cuts a subject line out of the prompt. The build always
+         starts. */
+      const needsSell = draft.whatYouSell.trim().length < 2;
+      if (mode === "quick" && (needsSell || !draft.visualStyle || !draft.storeType)) {
+        setPhase("reading");
+        const choice = await requestQuickChoice({
+          prompt: draft.prompt,
+          sell: needsSell ? undefined : draft.whatYouSell,
           verticalSlug: (draft as { verticalSlug?: string | null }).verticalSlug ?? null,
           market: draft.market,
-          prompt: draft.prompt,
         });
+        /* No slug: a slug is what a Step 1 chip sets, and nothing was clicked.
+           `verticalOf` guesses from the label instead, which is the same path a
+           merchant who typed their trade has always taken. */
+        if (needsSell) setSell(choice.sell);
         if (!draft.visualStyle) setStyle(choice.visualStyle);
         if (!draft.storeType) setStoreType(choice.storeType);
       }
@@ -105,6 +116,7 @@ export function StickyBar() {
   };
 
   const anchor: Record<string, string> = {
+    "Tell us what to build": "pfd-prompt",
     "Tell us what you sell": "pfd-sell",
     "Pick a visual style": "pfd-style",
     "Pick a store type": "pfd-store-type",
@@ -202,8 +214,8 @@ export function StickyBar() {
           title={ready ? undefined : missing ?? undefined}
           iconRight={busy ? undefined : "Sparkles"}
         >
-          {phase === "styling"
-            ? "Choosing a style…"
+          {phase === "reading"
+            ? "Reading your brief…"
             : phase === "checking"
               ? "Checking…"
               : "Create pages"}

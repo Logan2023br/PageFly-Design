@@ -105,6 +105,21 @@ export const PROMPT_SNIPPETS: {
 export const PROMPT_PLACEHOLDER =
   "Hand-thrown stoneware mugs, small batches. Audience: home cooks in their 30s. Tone: quiet and specific. Colors: #2F3B2F, #EFE7D8.";
 
+/**
+ * The same field, when it is the ONLY field.
+ *
+ * In Build Quickly this prompt is the whole brief — what the merchant does not
+ * put here, nothing else asks them for. So the placeholder is written as an
+ * example of a complete answer rather than an afterthought, and names the three
+ * things the form no longer has a card for: the trade, the colours, and what
+ * they want the page to actually contain.
+ */
+export const QUICK_PROMPT_PLACEHOLDER = `Hand-thrown stoneware mugs, small batches, sold to home cooks in their 30s.
+
+Main colours: #2F3B2F and #EFE7D8. Quiet and specific, lots of white space.
+
+On the page I want: a hero with one mug photographed close up, the glazing process in three steps, customer reviews, a size guide, and a newsletter signup at the end.`;
+
 /* Upload constraints (§4.5) ---------------------------------------------- */
 
 export const MAX_IMAGES = 6;

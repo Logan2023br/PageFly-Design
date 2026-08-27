@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { currentAccount } from "@/lib/account";
 import {
-  coerceStyleChoice,
-  fallbackStyleChoice,
-  styleChoiceSystemPrompt,
-  styleChoiceUserPrompt,
-  type StyleChoiceResponse,
-} from "@/lib/briefStyle";
+  coerceQuickChoice,
+  fallbackQuickChoice,
+  quickChoiceSystemPrompt,
+  quickChoiceUserPrompt,
+  type QuickChoiceResponse,
+} from "@/lib/quickBrief";
 import { parseObject } from "@/lib/ai/json";
 import { getProvider, isAiEnabled } from "@/lib/ai/provider";
 import { MAX_PROMPT_CHARS, MAX_SELL_CHARS } from "@/lib/briefOptions";
@@ -14,24 +14,28 @@ import { MAX_PROMPT_CHARS, MAX_SELL_CHARS } from "@/lib/briefOptions";
 /* ==========================================================================
    POST /api/ai/brief-style
 
-   The two questions Build Quickly does not ask. One small call — a few hundred
-   tokens in, one line out — made once per build, before it starts.
+   The three questions Build Quickly does not ask, read out of the one it does.
+   A single small call — a few hundred tokens in, one line out — made once per
+   build, before it starts.
 
    Declines rather than fails, in the same shape as `/api/ai/copy`: no model, a
-   timeout, an invented style id, all come back `ok: true` with the fallback pair
-   and `used: false`. A merchant who pressed Create pages must get pages. The
-   worst a broken model may cost them is a style they did not choose, which is
-   what Build Quickly already asked them to accept.
+   timeout, an invented style id, all come back `ok: true` with the fallback
+   answer and `used: false`. A merchant who pressed Create pages must get pages.
+   The worst a broken model may cost them is a subject line cut out of their own
+   prompt and a style they did not choose, which is what Build Quickly already
+   asked them to accept.
    ========================================================================== */
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 const bodySchema = z.object({
-  sell: z.string().trim().min(1).max(MAX_SELL_CHARS),
+  /** the merchant's own words. The whole brief, in quick mode. */
+  prompt: z.string().trim().min(1).max(MAX_PROMPT_CHARS),
+  /** set only when they had already answered it in detail mode */
+  sell: z.string().max(MAX_SELL_CHARS).optional(),
   verticalSlug: z.string().max(80).nullish(),
   market: z.string().max(40).nullish(),
-  prompt: z.string().max(MAX_PROMPT_CHARS).default(""),
 });
 
 export async function POST(request: Request) {
@@ -49,7 +53,11 @@ export async function POST(request: Request) {
   }
 
   const decline = (reason: string): Response =>
-    Response.json({ ok: true, ...fallbackStyleChoice(), reason } satisfies StyleChoiceResponse);
+    Response.json({
+      ok: true,
+      ...fallbackQuickChoice(body.prompt),
+      reason,
+    } satisfies QuickChoiceResponse);
 
   if (!isAiEnabled()) return decline("no model configured");
 
@@ -58,11 +66,11 @@ export async function POST(request: Request) {
 
   try {
     const completion = await provider.complete({
-      system: styleChoiceSystemPrompt(),
-      user: styleChoiceUserPrompt(body),
+      system: quickChoiceSystemPrompt(),
+      user: quickChoiceUserPrompt(body),
       /**
-       * The ANSWER is two ids and the braces around them — about thirty tokens.
-       * The budget is not for the answer.
+       * The ANSWER is a short phrase and two ids — about fifty tokens. The
+       * budget is not for the answer.
        *
        * A reasoning model bills its thinking against this same ceiling, and 500
        * was not enough for it: two of the first three calls came back with no
@@ -88,12 +96,14 @@ export async function POST(request: Request) {
           : "model did not return a JSON object",
       );
 
-    const choice = coerceStyleChoice(parsed);
+    const choice = coerceQuickChoice(parsed, body.prompt);
     return Response.json({
       ok: true,
       ...choice,
-      reason: choice.used ? undefined : "model named a style or store type that does not exist",
-    } satisfies StyleChoiceResponse);
+      reason: choice.used
+        ? undefined
+        : "model skipped a field or named one that does not exist",
+    } satisfies QuickChoiceResponse);
   } catch (err) {
     return decline((err as Error).message.slice(0, 200));
   }
