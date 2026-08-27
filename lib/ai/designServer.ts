@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getProvider, isAiEnabled, providerName, type Completion, type Usage } from "./provider";
-import { parseObject } from "./json";
+import { parseObject, worthAskingAgain } from "./json";
 import { loadSkills, sliceSkill } from "./skills";
 import { DESIGN_SYSTEM } from "./designPrompt";
 import { designTreeSchema, walk, type DesignTree } from "../design/schema";
@@ -677,7 +677,7 @@ export async function designPageTree(
   }
 
   /* ==========================================================================
-     AN EMPTY ANSWER IS WORTH ASKING TWICE. ONCE.
+     AN ANSWER THAT IS NOT AN ANSWER IS WORTH ASKING TWICE. ONCE.
 
      Measured on struct-v2: the same page, the same prompt, run six times, came
      back three times as a working tree and three times as an EMPTY string after
@@ -685,25 +685,35 @@ export async function designPageTree(
      was on, the model simply reasoned and then said nothing. Same input, two
      outcomes, so it is not the prompt.
 
+     This used to retry ONLY on empty, and that read the measurement too
+     narrowly. A real build then failed with 23,719 output tokens and an answer
+     beginning `{"plan":"hero · hero-full-bleed-scrim · 88vh knit street shot…`
+     — which is EXACTLY what `skills/00-contract.md` asks for, followed by a
+     stream that stopped being JSON. Not truncated either. There is no more
+     artefact to diagnose there than in an empty string: both are the model
+     failing to finish, and only one of them was being retried.
+
+     `worthAskingAgain` draws the line, and prose is still on the other side of
+     it — prose is something the model SAID, and what it said is the diagnosis.
+
      Cheap, and that is what makes it worth doing rather than merely tempting: a
      working page costs 45,000-50,000 output tokens, an empty one costs 8,000.
-     Retrying a page that returned nothing adds at most a sixth of a page to the
-     bill and turns a merchant's blank result into a page.
+     Retrying adds a fraction of a page to the bill and turns a merchant's blank
+     result into a page.
 
-     ONLY on empty, and only ONCE. A model that returns prose, or JSON the
-     schema rejects, has produced something to diagnose — asking again would
-     bury the evidence. And a second empty answer is a signal, not a fluke; the
-     repair loop below is already the one retry this call is allowed.
+     ONCE. A second unusable answer is a signal, not a fluke; the repair loop
+     below is already the one retry this call is allowed.
      ========================================================================== */
   /* What the abandoned attempt cost. Folded into the page's usage below rather
      than dropped — both attempts are billed, and reporting only the second
      would understate what the page cost. */
   let discarded: Usage = { input: 0, output: 0 };
 
-  if (completion.text.trim() === "" && !completion.truncated) {
+  if (worthAskingAgain(completion.text, completion.truncated)) {
     console.log(
-      `[design] ${input.pageType}: empty answer after ${completion.usage.output} output ` +
-        `tokens — asking once more`,
+      `[design] ${input.pageType}: unusable answer after ${completion.usage.output} output ` +
+        `tokens (${completion.text.trim() === "" ? "empty" : "JSON stopped mid-stream"}) ` +
+        `— asking once more`,
     );
     try {
       const again = await provider.complete({
