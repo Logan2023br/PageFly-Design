@@ -40,6 +40,22 @@ export function Showcase({ pages }: { pages: PageMockup[] }) {
   const half = Math.ceil(pages.length / 2);
   const rows = [pages.slice(0, half), pages.slice(half)];
 
+  /* ==========================================================================
+     SPEED IS PIXELS PER SECOND, not a duration.
+
+     It was a duration, and shrinking the cards from 340 to 212 quietly made
+     both rows two-thirds slower: the track got shorter, the time to cross it
+     did not, and a marquee at 14px/s reads as broken rather than calm. Any
+     future change to the card width or the deck size would have done it again.
+
+     So the duration is computed from the distance actually travelled — half the
+     track, which is one copy of the cards. The two rows differ slightly so they
+     never fall into step, which looks mechanical.
+     ========================================================================== */
+  const CARD = 212 + 16; // width plus the gap between cards
+  const secondsFor = (count: number, pxPerSecond: number) =>
+    Math.max(18, Math.round((count * CARD) / pxPerSecond));
+
   const card = (page: PageMockup) => (
     /* Small on purpose. A card is 3:4, so its height follows its width and one
        number sets both — at 340 the two rows were taller than most screens and
@@ -69,9 +85,9 @@ export function Showcase({ pages }: { pages: PageMockup[] }) {
       </div>
 
       <div className="grid gap-4">
-        <Marquee seconds={80}>{rows[0].map(card)}</Marquee>
+        <Marquee seconds={secondsFor(rows[0].length, 52)}>{rows[0].map(card)}</Marquee>
         {rows[1].length > 0 && (
-          <Marquee seconds={92} reverse>
+          <Marquee seconds={secondsFor(rows[1].length, 44)} reverse>
             {rows[1].map(card)}
           </Marquee>
         )}
