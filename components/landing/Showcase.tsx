@@ -41,7 +41,11 @@ export function Showcase({ pages }: { pages: PageMockup[] }) {
   const rows = [pages.slice(0, half), pages.slice(half)];
 
   const card = (page: PageMockup) => (
-    <div key={page.id} className="w-[300px] shrink-0 sm:w-[340px]">
+    /* Small on purpose. A card is 3:4, so its height follows its width and one
+       number sets both — at 340 the two rows were taller than most screens and
+       a visitor saw one and a half. These are a texture of work you scan, not
+       pages you read here; reading one is what the preview is for. */
+    <div key={page.id} className="w-[184px] shrink-0 sm:w-[212px]">
       <ResultCard
         page={page}
         index={pages.indexOf(page)}
