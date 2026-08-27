@@ -1,3 +1,5 @@
+import { Aura } from "./Aura";
+
 /* ==========================================================================
    What it has actually done.
 
@@ -34,7 +36,9 @@ export function Counts({ counts }: { counts: Counts }) {
   if (tiles.length === 0) return null;
 
   return (
-    <section className="mx-auto max-w-4xl px-5 py-14 sm:py-20">
+    <section className="relative py-14 sm:py-20">
+      <Aura variant="wash" />
+      <div className="mx-auto max-w-4xl px-5">
       <dl className="grid gap-4 sm:grid-cols-3">
         {tiles.map((t) => (
           <div
@@ -51,6 +55,7 @@ export function Counts({ counts }: { counts: Counts }) {
           </div>
         ))}
       </dl>
+      </div>
     </section>
   );
 }
