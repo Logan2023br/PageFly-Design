@@ -105,7 +105,16 @@ export function LandingScreen() {
           black in front of it would cut the effect in half. */}
       <Aura variant="sky" />
 
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-5 py-5">
+      {/* The SHELL width, not the content width. Every signed-in screen puts its
+          masthead in `max-w-[1600px]` with `px-4 sm:px-6` — see `DesignApp`,
+          `LibraryScreen`, `LoginScreen` — and this one was in `max-w-6xl`
+          (1152px) with the page's reading measure. On a wide monitor that put
+          the logo a third of the way in while the same logo on the next screen
+          sat at the edge, so the two headers did not look like one product.
+
+          Only the header moves. The sections below keep their narrower measures,
+          which is what they are for. */}
+      <header className="mx-auto flex w-full max-w-[1600px] items-center justify-between px-4 py-5 sm:px-6">
         <Link href="/" className="flex items-center gap-2.5">
           <Image
             src="/pagefly-icon.png"
