@@ -108,10 +108,15 @@ export function StickyBar() {
               <span className="mt-px shrink-0">
                 <Icon name="CircleAlert" size={13} />
               </span>
+              {/* The REASON, not a stand-in for it. The job row has carried
+                  one the whole time — `failures[0].reason` — and this printed a
+                  fixed sentence instead, which sent a merchant whose account
+                  was out of credit to support with a question their billing
+                  page answers. */}
               <span>
-                The page designer could not finish — nothing was built, and
-                none of your page allowance was used. Please try again, or
-                contact support if it keeps happening.
+                {buildError}
+                {" "}
+                Nothing was built, and none of your page allowance was used.
               </span>
             </p>
           )}

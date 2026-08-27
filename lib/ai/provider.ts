@@ -192,10 +192,25 @@ function anthropicProvider(role: Role): Provider {
          `getFinalMessage()` returns the same `Message` the non-streaming call
          does, so everything below is unchanged.
          ==================================================================== */
-      const res =
-        maxTokens > 16_000
-          ? await client.messages.stream(params, { signal }).finalMessage()
-          : await client.messages.create(params, { signal });
+      /* Wrapped so both vendors fail in the same words. The SDK throws an
+         `APIError` carrying a status and a message written for a developer;
+         unwrapped, an Anthropic account out of credit reaches a merchant as
+         SDK prose while the same DeepSeek condition reaches them as a
+         sentence. See `sayWhy`. */
+      let res: Anthropic.Message;
+      try {
+        res =
+          maxTokens > 16_000
+            ? await client.messages.stream(params, { signal }).finalMessage()
+            : await client.messages.create(params, { signal });
+      } catch (err) {
+        const status = (err as { status?: number }).status;
+        if (typeof status === "number")
+          throw new Error(
+            fromStatus(status, "Anthropic", (err as Error).message ?? ""),
+          );
+        throw err;
+      }
 
       const text = res.content
         .map((part) => (part.type === "text" ? part.text : ""))
@@ -228,6 +243,36 @@ function anthropicProvider(role: Role): Provider {
   };
 }
 
+/**
+ * Why a provider refused, in words the person reading it can act on.
+ *
+ * The raw form — `DeepSeek returned 402: {"error":{"message":...}}` — travels a
+ * long way: it becomes the job's `error`, which becomes the sentence a merchant
+ * sees. A build that stopped because the account is out of credit and says
+ * "could not finish" sends someone to support with a question their own billing
+ * page answers, and sends whoever reads the log looking for a bug that is not
+ * there.
+ *
+ * The status code is the whole signal. It is kept in the message anyway,
+ * because an operator wants it and it costs four characters.
+ */
+export function fromStatus(status: number, vendor: string, body = ""): string {
+  if (status === 402 || /insufficient|balance|quota|credit/i.test(body))
+    return `${vendor} refused the request: the account is out of credit. Top it up and build again. (${status})`;
+  if (status === 401 || status === 403)
+    return `${vendor} rejected the API key. Check it is set and still valid. (${status})`;
+  if (status === 429)
+    return `${vendor} is rate limiting this key. Wait a minute and build again. (429)`;
+  if (status >= 500)
+    return `${vendor} is having an outage — nothing here is wrong. Try again shortly. (${status})`;
+
+  return `${vendor} returned ${status}: ${body.slice(0, 200)}`;
+}
+
+async function sayWhy(res: Response, vendor: string): Promise<string> {
+  return fromStatus(res.status, vendor, await res.text().catch(() => ""));
+}
+
 /* ---- DeepSeek ------------------------------------------------------------ */
 
 function deepseekProvider(role: Role): Provider {
@@ -256,8 +301,7 @@ function deepseekProvider(role: Role): Provider {
         signal,
       });
 
-      if (!res.ok)
-        throw new Error(`DeepSeek returned ${res.status}: ${await res.text()}`);
+      if (!res.ok) throw new Error(await sayWhy(res, "DeepSeek"));
 
       const body = (await res.json()) as {
         choices: { message: { content: string }; finish_reason?: string }[];
