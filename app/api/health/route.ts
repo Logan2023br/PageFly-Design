@@ -6,7 +6,7 @@ import { stockProvider } from "@/lib/images/stock";
 import { databaseIsUnpooled, databaseSource, hasDatabase } from "@/lib/db";
 import { hasSessionSecret, hasStableSecret, keySource } from "@/lib/session";
 import { sheetSource } from "@/lib/sheet";
-import { showcaseIds, showcasePages } from "@/lib/showcase";
+import { showcaseIds, showcasePages, showcaseSource, showcaseStore } from "@/lib/showcase";
 
 /* ==========================================================================
    GET /api/health
@@ -82,10 +82,13 @@ export async function GET() {
        image renders as a grey plate — the page is still complete, but it looks
        like a wireframe, which is the exact complaint this replaced. */
     stockPhotos: stockProvider(),
-    /* How many runs the front door is TOLD to show, and how many pages it can
-       actually find. Two numbers rather than one because the gap between them is
-       the diagnosis: 0 and 0 is an unset variable, 6 and 0 is six ids that are
-       not in this database. */
+    /* WHERE the front door's pages come from, what it is told to look for, and
+       how many it actually found. Three fields rather than one because the gaps
+       between them are the diagnosis: `store` with 0 pages is a domain with no
+       saved runs in this database, `runs` with 0 pages is ids from another
+       environment, and `none` is a showcase switched off on purpose. */
+    showcaseSource: showcaseSource(),
+    showcaseStore: showcaseStore(),
     showcaseRuns: showcaseIds().length,
     showcasePages: showcase.pages,
   };
@@ -181,16 +184,23 @@ export async function GET() {
   /* Advisory, never blocking: a landing page without its marquee is a landing
      page. Worded as the fix rather than the fault — an operator reading this has
      already noticed the section is missing. */
-  if (checks.showcaseRuns === 0)
+  if (checks.showcaseSource === "none")
     advisory.push(
-      "SHOWCASE_RUNS is not set — the landing page shows no example pages. Set it " +
-        "to a comma-separated list of run ids from THIS database.",
+      "The showcase is off (SHOWCASE_STORE is empty) — the landing page shows no " +
+        "example pages.",
+    );
+  else if (checks.showcasePages === 0 && checks.showcaseSource === "store")
+    advisory.push(
+      `The landing page shows the Library of ${checks.showcaseStore}, and that store ` +
+        "has no saved runs with a design tree in this database. Build a deck as that " +
+        "store, or set SHOWCASE_STORE to one that has.",
     );
   else if (checks.showcasePages === 0)
     advisory.push(
       `SHOWCASE_RUNS names ${checks.showcaseRuns} run${checks.showcaseRuns === 1 ? "" : "s"} ` +
         "but none of them are in this database, so the landing page shows no " +
-        "example pages. Run ids do not carry between environments.",
+        "example pages. Run ids do not carry between environments — prefer " +
+        "SHOWCASE_STORE, which does.",
     );
 
   return Response.json(

@@ -13,13 +13,20 @@ import { Showcase } from "./Showcase";
 /* ==========================================================================
    The front door.
 
-   Public: no session, no account call, no model call. `/` is deliberately not
-   in the proxy's matcher — see `proxy.ts` — so this renders for anyone.
+   Public: no model call, and `/` is deliberately not in the proxy's matcher —
+   see `proxy.ts` — so this renders for anyone, signed in or not.
 
    DESIGN NOW IS A PLAIN LINK. `/design` is guarded and the guard already
    redirects to `/design/login?next=…` and returns you afterwards. A sign-in
    check here would be a second implementation of a rule that already exists,
    and two implementations of an auth rule is one more than is safe.
+
+   THE HEADER DOES read the session, and only the header. It showed "Sign in" to
+   someone already signed in — so the one control on the page told them to do
+   the thing they had already done, and gave them no way to see which store they
+   were signed in AS or to leave it. That is a display question, not an access
+   question: what the button SAYS changes, where it goes does not, and a failed
+   account call falls back to the signed-out header rather than to an error.
 
    The showcase is fetched client-side rather than server-rendered: it is the
    one part that touches the database, and a slow or missing database should
@@ -28,6 +35,50 @@ import { Showcase } from "./Showcase";
 
 export function LandingScreen() {
   const [pages, setPages] = useState<PageMockup[]>([]);
+  /**
+   * The signed-in store, or null.
+   *
+   * `undefined` while unknown, and the header renders NOTHING on the right
+   * until it resolves. Guessing "Sign in" first would flash the wrong control
+   * on every load for the people most likely to be here — the beta testers, who
+   * are all signed in.
+   */
+  const [domain, setDomain] = useState<string | null | undefined>(undefined);
+  const [signingOut, setSigningOut] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/account")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!alive) return;
+        setDomain(data?.ok ? (data.account?.domain ?? null) : null);
+      })
+      .catch(() => {
+        /* Signed out is the safe reading of "we could not tell". The worst it
+           costs is a Sign in button shown to someone who is already in, and
+           pressing it lands them straight back on /design. */
+        if (alive) setDomain(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const signOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await fetch("/api/auth/store", { method: "DELETE" });
+    } catch {
+      /* The cookie is httpOnly, so there is nothing to clear here. Reloading is
+         what makes the sign-out visible either way. */
+    }
+    /* A full reload rather than setState: every guarded route has to be
+       re-evaluated without the cookie, and this page's own showcase fetch
+       should run again as a stranger would see it. */
+    window.location.assign("/");
+  };
 
   useEffect(() => {
     let alive = true;
@@ -69,12 +120,37 @@ export function LandingScreen() {
           </span>
         </Link>
 
-        <Link
-          href="/design"
-          className="rounded-pf-md border border-pf-border px-3.5 py-2 text-[13.5px] font-semibold text-pf-text transition-colors hover:border-pf-border-hi"
-        >
-          Sign in
-        </Link>
+        {/* Nothing until the session is known — see `domain` above. */}
+        {domain === undefined ? null : domain ? (
+          <div className="flex min-w-0 items-center gap-1.5">
+            {/* The domain is a LINK to the workspace, not a label. Someone who
+                reads their own store name in a header is already reaching for
+                it, and "Design now" is a screen further down the page. */}
+            <Link
+              href="/design"
+              title={domain}
+              className="max-w-[200px] truncate rounded-pf-md px-2 py-1.5 text-[13px] text-pf-muted transition-colors hover:text-pf-text sm:max-w-[280px]"
+            >
+              {domain}
+            </Link>
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              disabled={signingOut}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-pf-md px-2 py-1.5 text-[12.5px] font-semibold text-pf-faint transition-colors hover:bg-pf-card hover:text-pf-text disabled:opacity-50"
+            >
+              <Icon name="LogOut" size={14} />
+              {signingOut ? "Signing out…" : "Sign out"}
+            </button>
+          </div>
+        ) : (
+          <Link
+            href="/design"
+            className="rounded-pf-md border border-pf-border px-3.5 py-2 text-[13.5px] font-semibold text-pf-text transition-colors hover:border-pf-border-hi"
+          >
+            Sign in
+          </Link>
+        )}
       </header>
 
       <section className="relative mx-auto max-w-4xl px-5 pb-4 pt-10 text-center sm:pt-16">
