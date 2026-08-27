@@ -186,8 +186,23 @@ function systemPrompt(ask: DeckAsk): string {
     `section. The group each sits in is the role it fills.`,
     ...vocabulary().map((l) => `  ${l}`),
     ``,
-    `THIS TRADE, from the design system:`,
+    /* Measured, not guessed: across seven real builds this block's named hero
+       was chosen six times. The model was not deciding, it was reading a table
+       — and one table entry per trade is how every apparel store in the world
+       gets the same opening. What follows is now the trade's DEFAULT rather
+       than its answer, and the merchant's own words outrank it. */
+    `THIS TRADE, from the design system. Read it as where a store of this kind`,
+    `STARTS, not where it lands:`,
     sliceSkill("verticals", [ask.vertical]) || `  ${ask.vertical}`,
+    ``,
+    `The hero and signature named there are the safe pick for a trade — what to`,
+    `build when the brief says nothing to contradict them. THE BRIEF OUTRANKS`,
+    `THEM. A merchant who says they shoot video, or that they are launching one`,
+    `product, or that their photography is inconsistent, has told you more about`,
+    `their opening than a trade default can know, and the default should lose.`,
+    ``,
+    `The BAN LIST is different and it is not a preference. Those patterns are`,
+    `wrong for this trade whatever the brief says.`,
     ``,
     `THE FIELDS, per band.`,
     ``,
@@ -281,8 +296,11 @@ function systemPrompt(ask: DeckAsk): string {
     `4. Do not use a buy-box pattern on a page that has no product of its own.`,
     `5. Two pages in this deck may share patterns where the page genuinely needs`,
     `   them. They may not share a sequence.`,
-    `6. This trade's own signature and hero are strong preferences. Its ban list`,
-    `   is not a preference.`,
+    `6. The trade's hero and signature are a starting point the brief may`,
+    `   overrule. Its ban list may not.`,
+    `7. Two stores in the same trade should not open the same way. If the only`,
+    `   reason for this hero is that the trade block names it, you have not`,
+    `   chosen one — say what about THIS store makes it right, in the brief.`,
     ``,
     /* Spliced only when the merchant chose one. Absent, the spread contributes
        NOTHING — not an empty string — so a build with no market produces the
