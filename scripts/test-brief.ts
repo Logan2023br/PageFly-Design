@@ -43,6 +43,7 @@ async function main(): Promise<void> {
     MAX_BRAND_COLORS,
     MAX_IMAGES,
     MAX_PROMPT_CHARS,
+    MAX_PROMPT_CHARS_STORED,
     MAX_SELL_CHARS,
     MAX_SLICES,
     STORE_TYPE_IDS,
@@ -103,6 +104,39 @@ async function main(): Promise<void> {
       overflow.data.referenceImages[0].slices === undefined,
       "and the overflow is dropped rather than kept at the wrong size",
     );
+
+  /* ---- the two prompt ceilings -------------------------------------------
+
+     The form's limit has moved three times (1,500 → 3,000 → 2,000) and the
+     Library holds runs built under every one of them. `briefSchema` is what
+     decodes those runs, so it validates against the HIGHEST the form has ever
+     allowed, not today's. Tying it to the input limit instead would make every
+     older run fail to decode — and `decodeRunPayload` fails quietly, so the
+     merchant's pages would just stop appearing.
+     -------------------------------------------------------------------- */
+
+  console.log("\nthe prompt has one ceiling to type into and another to read back");
+
+  check(
+    MAX_PROMPT_CHARS_STORED >= MAX_PROMPT_CHARS,
+    "the stored ceiling is never below the input ceiling",
+    `${MAX_PROMPT_CHARS} typed / ${MAX_PROMPT_CHARS_STORED} stored`,
+  );
+  check(
+    validateBrief(draft({ prompt: "y".repeat(MAX_PROMPT_CHARS) }) as never).success,
+    "a prompt at today's input limit validates",
+  );
+  check(
+    validateBrief(draft({ prompt: "y".repeat(MAX_PROMPT_CHARS_STORED) }) as never)
+      .success,
+    "and so does one saved when the limit was higher",
+    `${MAX_PROMPT_CHARS_STORED} chars`,
+  );
+  check(
+    !validateBrief(draft({ prompt: "y".repeat(MAX_PROMPT_CHARS_STORED + 1) }) as never)
+      .success,
+    "one character past the stored ceiling is still refused",
+  );
 
   /* ---- a full house, every optional field filled ------------------------ */
 

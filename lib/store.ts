@@ -5,6 +5,7 @@ import { create } from "zustand";
 import {
   MAX_BRAND_COLORS,
   MAX_IMAGES,
+  MAX_PROMPT_CHARS,
   type MarketId,
   type StoreTypeId,
 } from "./briefOptions";
@@ -223,7 +224,10 @@ export const useStore = create<State & Actions>((set, get) => ({
       const current = s.draft.prompt.trimEnd();
       if (current.includes(snippet)) return s;
       const next = current ? `${current}\n${snippet}` : snippet;
-      return { draft: { ...s.draft, prompt: next.slice(0, 1500) } };
+      /* The form's ceiling, not a number of its own. This said 1,500 while the
+         field allowed 3,000, so pressing a snippet chip on a long prompt threw
+         away everything past 1,500 characters the merchant had written. */
+      return { draft: { ...s.draft, prompt: next.slice(0, MAX_PROMPT_CHARS) } };
     }),
 
   addColor: (hex) => {

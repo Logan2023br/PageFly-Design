@@ -4,7 +4,7 @@ import {
   isKnownMarket,
   MAX_BRAND_COLORS,
   MAX_IMAGES,
-  MAX_PROMPT_CHARS,
+  MAX_PROMPT_CHARS_STORED,
   MAX_SELL_CHARS,
   MAX_SLICES,
   STORE_TYPE_IDS,
@@ -135,7 +135,10 @@ export const briefSchema = z.object({
 
   prompt: z
     .string()
-    .max(MAX_PROMPT_CHARS, `Keep this under ${MAX_PROMPT_CHARS} characters`)
+    /* The STORED ceiling, not the form's. This schema decodes saved runs as
+       well as validating new briefs, and runs built under an older, higher
+       limit must still open — see `MAX_PROMPT_CHARS_STORED`. */
+    .max(MAX_PROMPT_CHARS_STORED, `Keep this under ${MAX_PROMPT_CHARS_STORED} characters`)
     .default(""),
 
   brandColors: z

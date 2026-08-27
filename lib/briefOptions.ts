@@ -183,21 +183,35 @@ export const MAX_SELL_CHARS = 120;
 /**
  * How much a merchant may write about their own store.
  *
- * 3,000, raised from 1,500 because merchants were hitting it. What they write
- * here is the only part of the prompt that is about THIS store — everything
- * else is a trade table, a palette and a pattern vocabulary — so the ceiling
- * was capping the one input that makes two stores in a trade differ.
+ * 2,000. It was 1,500, then 3,000 because merchants were hitting it, now here.
+ * What they write is the only part of the prompt that is about THIS store —
+ * everything else is a trade table, a palette and a pattern vocabulary — so the
+ * ceiling caps the one input that makes two stores in a trade differ.
  *
  * It goes to all three model stages verbatim and is truncated at none of them.
  * (`designServer.ts` has a constant of the same name; that one caps a stored
  * TRAINING filing and has nothing to do with this.)
  *
  * The cost is small and worth stating: the merchant's words land in the part of
- * the prompt that is NOT cached, so 3,000 characters is roughly 750 uncached
- * input tokens per page rather than 375 — about a tenth of a cent on a page
- * that costs a few cents to build.
+ * the prompt that is NOT cached, so 2,000 characters is roughly 500 uncached
+ * input tokens per page rather than 375 — well under a tenth of a cent on a
+ * page that costs a few cents to build.
  */
-export const MAX_PROMPT_CHARS = 3000;
+export const MAX_PROMPT_CHARS = 2000;
+
+/**
+ * What a SAVED brief may hold, which is not the same number.
+ *
+ * The form's ceiling has moved three times. The Library has not: it holds runs
+ * built when it was 3,000, and `briefSchema` is what decodes them
+ * (`lib/runPayload.ts`). Validating a saved run against today's input limit
+ * would make every one of those runs fail to decode — and `decodeRunPayload`
+ * fails quietly, so the merchant's pages would simply stop appearing.
+ *
+ * So the form caps what can be TYPED and this caps what can be READ BACK. It
+ * only ever needs to be the highest the form has ever allowed.
+ */
+export const MAX_PROMPT_CHARS_STORED = 3000;
 
 /* ==========================================================================
    MARKETS — who the page is being sold to.
