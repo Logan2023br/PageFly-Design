@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Icon } from "../ui";
+import { ArtPages, ArtResults, ArtSell, ArtStyle } from "./StepArt";
 
 /* ==========================================================================
    Four steps, shown rather than described.
@@ -21,70 +22,36 @@ type Step = {
   title: string;
   /** what to press, and what happens — the tooltip */
   tip: string;
-  src: string;
-  alt: string;
+  /** a drawing of the screen; see `StepArt` for why it is not a screenshot */
+  art: () => React.ReactElement;
 };
 
 const STEPS: Step[] = [
   {
     n: "01",
     title: "Say what you sell",
+    art: ArtSell,
     tip: "Type it, or press a trade — the chips set which sections a page gets before you choose anything else.",
-    src: "/how/01-sell.png",
-    alt: "The brief's first card: a text field and a grid of trade chips.",
   },
   {
     n: "02",
     title: "Pick a look",
+    art: ArtStyle,
     tip: "Fifteen styles. Each one sets the palette, the type and the corner radius of every page in the build.",
-    src: "/how/02-style.png",
-    alt: "Fifteen visual style cards, one selected.",
   },
   {
     n: "03",
     title: "Choose your pages",
+    art: ArtPages,
     tip: "Tick what you need. The stepper next to a page builds more than one of it — three products, three different pages.",
-    src: "/how/03-pages.png",
-    alt: "The page picker with core, trust and conversion groups.",
   },
   {
     n: "04",
     title: "Get mockups back",
+    art: ArtResults,
     tip: "Every page comes back scrollable. Open one to see it at four screen sizes, then export it into the editor.",
-    src: "/how/04-results.png",
-    alt: "The results grid, each card showing a full page.",
   },
 ];
-
-/**
- * One screenshot, or an honest stand-in for it.
- *
- * A plain `<img>` rather than `next/image` because this has to survive the file
- * not being there. The shots are captured from the running app and dropped into
- * `public/how/`; until they are, a step still shows its number and title rather
- * than a broken-image glyph or a 500. A section that half-works while its
- * pictures are being taken beats one that cannot ship until they are.
- */
-function Shot({ step, className }: { step: Step; className: string }) {
-  const [missing, setMissing] = useState(false);
-
-  if (missing)
-    return (
-      <span
-        className={`${className} flex items-center justify-center bg-pf-bg-deep`}
-        aria-label={step.alt}
-      >
-        <span className="px-4 text-center text-[12.5px] text-pf-faint">
-          {step.n} · {step.title}
-        </span>
-      </span>
-    );
-
-  return (
-    /* eslint-disable-next-line @next/next/no-img-element */
-    <img src={step.src} alt={step.alt} className={className} onError={() => setMissing(true)} />
-  );
-}
 
 export function HowItWorks() {
   const [zoom, setZoom] = useState<Step | null>(null);
@@ -128,7 +95,7 @@ export function HowItWorks() {
                   full screen of scrolling before the counts. A screenshot cropped
                   from the top still shows the part that identifies the screen. */}
               <span className="relative block aspect-[2/1] overflow-hidden bg-pf-bg">
-                <Shot step={step} className="absolute inset-0 h-full w-full object-cover object-top" />
+                <step.art />
               </span>
               <span className="flex items-baseline gap-2 px-3.5 py-3">
                 <span className="text-[11px] font-semibold tabular-nums text-pf-faint">
@@ -183,7 +150,9 @@ export function HowItWorks() {
             >
               <Icon name="X" size={16} />
             </button>
-            <Shot step={zoom} className="h-auto w-full" />
+            <div className="aspect-[2/1] w-full">
+              <zoom.art />
+            </div>
             <p className="border-t border-pf-border px-4 py-3 text-[13px] text-pf-muted">
               <span className="font-semibold text-pf-text">{zoom.title}</span>{" "}
               — {zoom.tip}
