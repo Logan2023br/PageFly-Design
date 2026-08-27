@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { PageMockup } from "@/lib/generate/types";
 import { GradientWord } from "../ui";
+import { Aura } from "./Aura";
 import { Counts, type Counts as CountsData } from "./Counts";
 import { HowItWorks } from "./HowItWorks";
 import { Showcase } from "./Showcase";
@@ -49,7 +50,12 @@ export function LandingScreen() {
   }, []);
 
   return (
-    <main className="pfd-root min-h-dvh bg-pf-bg text-pf-body">
+    <main className="pfd-root relative min-h-dvh overflow-x-clip bg-pf-bg text-pf-body">
+      {/* Behind the masthead as well as the hero — the bloom reads as light
+          coming from off the top of the page, and a header sitting on flat
+          black in front of it would cut the effect in half. */}
+      <Aura variant="sky" />
+
       <header className="mx-auto flex max-w-6xl items-center justify-between px-5 py-5">
         <Link href="/" className="flex items-center gap-2.5">
           <Image
@@ -73,7 +79,7 @@ export function LandingScreen() {
         </Link>
       </header>
 
-      <section className="mx-auto max-w-4xl px-5 pb-4 pt-10 text-center sm:pt-16">
+      <section className="relative mx-auto max-w-4xl px-5 pb-4 pt-10 text-center sm:pt-16">
         <h1 className="font-display text-pf-hero font-semibold text-pf-text">
           See your store as <GradientWord>pages</GradientWord>
         </h1>
@@ -100,7 +106,8 @@ export function LandingScreen() {
       <HowItWorks />
       <Counts counts={counts} />
 
-      <section className="mx-auto max-w-3xl px-5 pb-20 text-center">
+      <section className="relative mx-auto max-w-3xl px-5 pb-24 pt-8 text-center">
+        <Aura variant="horizon" />
         <h2 className="font-display text-pf-h2 font-semibold text-pf-text">
           Your turn
         </h2>
