@@ -129,7 +129,11 @@ export function Aura({ variant }: { variant: "sky" | "horizon" }) {
     <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-[620px] overflow-hidden">
       {/* One very large circle, mostly below the fold. Only its top arc is in
           view, and an arc that wide reads as a horizon. A blurred ellipse would
-          have given the glow and none of the curve. */}
+          have given the glow and none of the curve.
+
+          The `inset 0 1px 0` highlight is the lit edge of that arc. At 2,600px
+          across it is very nearly straight, which is the point — a horizon is
+          a line you cannot quite see bending. */}
       <div
         className="absolute left-1/2 top-[38%] h-[1700px] w-[2600px] -translate-x-1/2 rounded-full"
         style={{

@@ -3,7 +3,12 @@ import { GradientWord } from "../ui";
 /* ==========================================================================
    What it has actually done.
 
-   A ROW, NOT THREE BOXES. Boxed, the tiles were dark rectangles sitting on a
+   A ROW, NOTHING ELSE. No boxes and no rules between — both were tried and
+   both did the same thing: a number is the loudest mark you can put on a
+   screen, and every line drawn near one competes with it. Space separates
+   three figures perfectly well.
+
+   The first attempt boxed them. Boxed, the tiles were dark rectangles sitting on a
    lighter wash — inverted contrast, so they read as three holes punched in the
    page rather than three facts. A number is the loudest thing you can put on a
    screen; putting a border round it makes it quieter, not louder.
@@ -39,16 +44,8 @@ export function Counts({ counts }: { counts: Counts }) {
 
   return (
     <dl className="mx-auto flex max-w-3xl flex-wrap items-start justify-center gap-y-8">
-      {tiles.map((t, i) => (
-        <div
-          key={t.label}
-          /* A hairline BETWEEN, never around. `first:border-l-0` rather than
-             rendering separators as their own elements: a separator element
-             has to know whether it is last, and a border does not. */
-          className={`flex-1 basis-40 px-6 text-center ${
-            i === 0 ? "" : "sm:border-l sm:border-pf-border"
-          }`}
-        >
+      {tiles.map((t) => (
+        <div key={t.label} className="flex-1 basis-40 px-6 text-center">
           <dd>
             <span className="block font-display text-[clamp(2.75rem,6vw,4rem)] font-semibold leading-none tracking-[-0.03em] tabular-nums">
               <GradientWord>{t.value}</GradientWord>
