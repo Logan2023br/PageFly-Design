@@ -164,7 +164,25 @@ export const MAX_BRAND_COLORS = BRAND_COLOR_ROLES.length;
 export const MAX_SLICES = 6;
 
 export const MAX_SELL_CHARS = 120;
-export const MAX_PROMPT_CHARS = 1500;
+
+/**
+ * How much a merchant may write about their own store.
+ *
+ * 3,000, raised from 1,500 because merchants were hitting it. What they write
+ * here is the only part of the prompt that is about THIS store — everything
+ * else is a trade table, a palette and a pattern vocabulary — so the ceiling
+ * was capping the one input that makes two stores in a trade differ.
+ *
+ * It goes to all three model stages verbatim and is truncated at none of them.
+ * (`designServer.ts` has a constant of the same name; that one caps a stored
+ * TRAINING filing and has nothing to do with this.)
+ *
+ * The cost is small and worth stating: the merchant's words land in the part of
+ * the prompt that is NOT cached, so 3,000 characters is roughly 750 uncached
+ * input tokens per page rather than 375 — about a tenth of a cent on a page
+ * that costs a few cents to build.
+ */
+export const MAX_PROMPT_CHARS = 3000;
 
 /* ==========================================================================
    MARKETS — who the page is being sold to.

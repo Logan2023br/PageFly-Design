@@ -25,7 +25,7 @@ export function BriefScreen() {
           See your store as <GradientWord>pages</GradientWord>
         </h1>
         <p className="mx-auto mt-4 max-w-md text-pf-body text-pf-muted">
-          Six quick answers. Every page comes back as a mockup.
+          Four answers, three optional. Every page comes back as a mockup.
         </p>
       </header>
 

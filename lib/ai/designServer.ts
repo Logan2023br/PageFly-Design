@@ -379,7 +379,7 @@ export function __orderLinesForTest(order: Order, bg: string, ink: string): stri
    — `structure.ts` owns it now, and it is given the reference itself.
 
    CAPPED AT THREE, raised from two now that a filing also reaches the merchant
-   who uploaded. Each one enters at ~400 tokens (see `MAX_PROMPT_CHARS`) in the
+   who uploaded. Each one enters at ~400 tokens (see `MAX_FILING_CHARS`) in the
    part of the prompt that is NOT cached, and the input is not even the real
    cost: Phase 3 measured that a more precise spec buys MORE reasoning, not less.
 
@@ -397,7 +397,12 @@ export function __orderLinesForTest(order: Order, bg: string, ink: string): stri
 const MAX_TRAINING = 3;
 
 /**
- * The ceiling on ONE filing as it enters the prompt.
+ * The ceiling on ONE FILING as it enters the prompt.
+ *
+ * Named for what it caps. It was `MAX_PROMPT_CHARS`, which is also the name of
+ * the merchant's own character limit in `briefOptions.ts` — two constants, one
+ * name, different jobs, and reading this one while looking for that one is a
+ * mistake anybody would make.
  *
  * ~400 tokens. The stored reading is capped at 3,000 characters, which is right
  * for the operator reading it on a card and too much to paste three of into a
@@ -409,14 +414,14 @@ const MAX_TRAINING = 3;
  * costs the last axes and leaves the earlier ones intact, which is a far better
  * failure than a sentence stopping halfway through a number.
  */
-const MAX_PROMPT_CHARS = 1440;
+const MAX_FILING_CHARS = 1440;
 
 function trim(analysis: string): string {
   const text = analysis.trim();
-  if (text.length <= MAX_PROMPT_CHARS) return text;
-  const cut = text.slice(0, MAX_PROMPT_CHARS);
+  if (text.length <= MAX_FILING_CHARS) return text;
+  const cut = text.slice(0, MAX_FILING_CHARS);
   const lastLine = cut.lastIndexOf("\n");
-  return (lastLine > MAX_PROMPT_CHARS * 0.6 ? cut.slice(0, lastLine) : cut).trimEnd();
+  return (lastLine > MAX_FILING_CHARS * 0.6 ? cut.slice(0, lastLine) : cut).trimEnd();
 }
 
 async function trainingLines(
