@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import type { PageMockup } from "@/lib/generate/types";
 import { GradientWord, Icon } from "../ui";
 import { Aura } from "./Aura";
-import { Counts, type Counts as CountsData } from "./Counts";
+import { Counts } from "./Counts";
 import { HowItWorks } from "./HowItWorks";
 import { Showcase } from "./Showcase";
 
@@ -28,7 +28,6 @@ import { Showcase } from "./Showcase";
 
 export function LandingScreen() {
   const [pages, setPages] = useState<PageMockup[]>([]);
-  const [counts, setCounts] = useState<CountsData>({});
 
   useEffect(() => {
     let alive = true;
@@ -37,7 +36,6 @@ export function LandingScreen() {
       .then((data) => {
         if (!alive || !data) return;
         setPages(Array.isArray(data.pages) ? data.pages : []);
-        setCounts(data.counts ?? {});
       })
       .catch(() => {
         /* Nothing. The sections render nothing when they have nothing, which is
@@ -115,7 +113,7 @@ export function LandingScreen() {
           argument: what it has done, then what you do next. */}
       <section className="relative px-5 pb-24 pt-16 text-center sm:pt-24">
         <Aura variant="horizon" />
-        <Counts counts={counts} />
+        <Counts />
         <div className="mx-auto mt-16 max-w-3xl">
         <h2 className="font-display text-pf-h2 font-semibold text-pf-text">
           Your turn

@@ -138,18 +138,35 @@ export function HowItWorks() {
                 the picture it was describing, which is the one thing a tooltip
                 on an image must not do.
 
+                LEFT-ALIGNED to the card, not centred on it. Centred, the two
+                right-hand tooltips hung out over the page edge on a laptop and
+                the card's own left edge was the only straight line either of
+                them did not share.
+
+                Brand purple rather than the panel colour. Every other floating
+                surface on this page is `bg-pf-bg-deep` with a hairline border,
+                which is right for something you read and wrong for something
+                that appears because you pointed at it — the tooltip has to
+                announce itself, and on a near-black page the only way to do that
+                is to stop being near-black. White text because `pf-body` on
+                purple is a grey on a colour, which is the one contrast pairing
+                this palette does not hold.
+
                 Shown on hover AND on keyboard focus: a tooltip only a mouse can
                 reach is a tooltip half the visitors never see. */}
             <span
               role="tooltip"
-              className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2.5 w-[min(24rem,92%)] -translate-x-1/2 rounded-pf-md border border-pf-border bg-pf-bg-deep p-3 text-center text-[12.5px] leading-snug text-pf-body opacity-0 shadow-pf-float transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+              className="pointer-events-none absolute bottom-full left-0 z-20 mb-2.5 w-[min(24rem,92%)] rounded-pf-md border border-pf-primary-hi/60 bg-pf-primary p-3 text-left text-[12.5px] leading-snug text-white opacity-0 shadow-pf-float transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
             >
               {step.tip}
               {/* Two triangles, one a pixel below the other: the back one is
                   the border colour and the front one the panel, which is how a
-                  CSS arrow keeps a 1px outline on its two visible sides. */}
-              <span className="absolute left-1/2 top-full -ml-[7px] border-x-[7px] border-t-[7px] border-x-transparent border-t-pf-border" />
-              <span className="absolute left-1/2 top-full -ml-[6px] -mt-px border-x-[6px] border-t-[6px] border-x-transparent border-t-pf-bg-deep" />
+                  CSS arrow keeps a 1px outline on its two visible sides. Moved
+                  off centre with the tooltip — an arrow still pointing at the
+                  middle of a card whose tooltip starts at its left edge points
+                  at nothing. */}
+              <span className="absolute left-7 top-full border-x-[7px] border-t-[7px] border-x-transparent border-t-pf-primary-hi/60" />
+              <span className="absolute left-7 top-full ml-px -mt-px border-x-[6px] border-t-[6px] border-x-transparent border-t-pf-primary" />
             </span>
           </li>
         ))}

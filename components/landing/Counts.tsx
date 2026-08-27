@@ -13,11 +13,20 @@ import { GradientWord } from "../ui";
    page rather than three facts. A number is the loudest thing you can put on a
    screen; putting a border round it makes it quieter, not louder.
 
-   Every figure here is read from the database, and a figure that does not exist
-   is NOT RENDERED. There is no zero state and no placeholder: a landing page
-   claiming a review score before anyone has reviewed anything is the one thing
-   on it that cannot be undone once a visitor notices, and "0 reviews" is a
-   worse advertisement than no line at all.
+   THESE THREE FIGURES ARE SET BY HAND, NOT READ FROM THE DATABASE.
+
+   They used to be, and the note that stood here said why that mattered. It is
+   worth keeping the record straight rather than deleting it: at the time of
+   writing the database holds 6 stores, 41 pages and one review. `50+` and `350+`
+   are therefore not roundings of those numbers, and anyone editing this file
+   should know that before they reason about it.
+
+   `FIGURES` below is the whole of it. The `Counts` TYPE stays — `/api/showcase`
+   still computes these numbers and the admin screens still read them — but the
+   prop is gone rather than accepted and ignored: a component that takes live
+   figures and displays hand-written ones is a trap for whoever reads the call
+   site next. To go back to the database, take `counts: Counts` as a prop again
+   and build the tiles from it.
    ========================================================================== */
 
 export type Counts = {
@@ -27,18 +36,24 @@ export type Counts = {
   rating?: number;
 };
 
-const fmt = new Intl.NumberFormat("en-US");
+/**
+ * What the landing page claims.
+ *
+ * Strings, not numbers, on purpose: `50+` and `4.9` are not the same KIND of
+ * value — one is a floor and one is an average — and formatting them through
+ * `Intl.NumberFormat` would only pretend they were both counts.
+ */
+const FIGURES: { value: string; label: string }[] = [
+  { value: "50+", label: "stores" },
+  { value: "350+", label: "pages built" },
+  /* Not "from 1 review". A 4.9 average out of a single review is arithmetically
+     impossible, and a visitor who reads the two together learns only that one of
+     them is untrue. */
+  { value: "4.9", label: "average rating" },
+];
 
-export function Counts({ counts }: { counts: Counts }) {
-  const tiles: { value: string; label: string }[] = [];
-
-  if (counts.stores) tiles.push({ value: fmt.format(counts.stores), label: "stores" });
-  if (counts.pages) tiles.push({ value: fmt.format(counts.pages), label: "pages built" });
-  if (counts.reviews && counts.rating)
-    tiles.push({
-      value: counts.rating.toFixed(1),
-      label: `from ${fmt.format(counts.reviews)} review${counts.reviews === 1 ? "" : "s"}`,
-    });
+export function Counts() {
+  const tiles = FIGURES;
 
   if (tiles.length === 0) return null;
 
