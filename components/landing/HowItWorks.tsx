@@ -111,7 +111,11 @@ export function HowItWorks() {
         </p>
       </div>
 
-      <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Two across, not four. These hold screenshots of a UI, and a quarter of
+          a 1,150px row is 270px — a whole brief screen shrunk past the point
+          where anyone can tell what they are looking at. Two rows of two gives
+          each one about 560px, which is a readable picture of a screen. */}
+      <ol className="grid gap-5 sm:grid-cols-2">
         {STEPS.map((step) => (
           <li key={step.n} className="group relative">
             <button
@@ -119,7 +123,7 @@ export function HowItWorks() {
               onClick={() => setZoom(step)}
               className="block w-full overflow-hidden rounded-pf-card border border-pf-border bg-pf-bg-deep text-left transition-colors hover:border-pf-border-hi focus:border-pf-primary-hi focus:outline-none"
             >
-              <span className="relative block aspect-[4/3] overflow-hidden bg-pf-bg">
+              <span className="relative block aspect-[16/10] overflow-hidden bg-pf-bg">
                 <Shot step={step} className="absolute inset-0 h-full w-full object-cover object-top" />
               </span>
               <span className="flex items-baseline gap-2 px-3.5 py-3">
@@ -132,13 +136,22 @@ export function HowItWorks() {
               </span>
             </button>
 
-            {/* Shown on hover AND on keyboard focus. A tooltip only a mouse can
+            {/* ABOVE the card, pointing down at it. Inside the card it covered
+                the picture it was describing, which is the one thing a tooltip
+                on an image must not do.
+
+                Shown on hover AND on keyboard focus: a tooltip only a mouse can
                 reach is a tooltip half the visitors never see. */}
             <span
               role="tooltip"
-              className="pointer-events-none absolute inset-x-2 bottom-[4.25rem] z-10 rounded-pf-md border border-pf-border bg-pf-bg-deep p-3 text-[12.5px] leading-snug text-pf-body opacity-0 shadow-pf-float transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+              className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2.5 w-[min(22rem,90%)] -translate-x-1/2 rounded-pf-md border border-pf-border bg-pf-bg-deep p-3 text-center text-[12.5px] leading-snug text-pf-body opacity-0 shadow-pf-float transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
             >
               {step.tip}
+              {/* Two triangles, one a pixel below the other: the back one is
+                  the border colour and the front one the panel, which is how a
+                  CSS arrow keeps a 1px outline on its two visible sides. */}
+              <span className="absolute left-1/2 top-full -ml-[7px] border-x-[7px] border-t-[7px] border-x-transparent border-t-pf-border" />
+              <span className="absolute left-1/2 top-full -ml-[6px] -mt-px border-x-[6px] border-t-[6px] border-x-transparent border-t-pf-bg-deep" />
             </span>
           </li>
         ))}
