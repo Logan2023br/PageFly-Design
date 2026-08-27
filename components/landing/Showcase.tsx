@@ -116,7 +116,17 @@ export function Showcase({ pages }: { pages: PageMockup[] }) {
       </div>
 
       {previewIndex !== null && pages[previewIndex] && (
-        <PreviewOverlay pages={pages} index={previewIndex} readOnly />
+        <PreviewOverlay
+          pages={pages}
+          index={previewIndex}
+          readOnly
+          /* The store steps through the store's own pages, and here there are
+             none — so the arrows looked enabled and did nothing. This walks the
+             list actually on screen, and wraps at both ends. */
+          onStep={(delta) =>
+            openPreview((previewIndex + delta + pages.length) % pages.length)
+          }
+        />
       )}
     </section>
   );

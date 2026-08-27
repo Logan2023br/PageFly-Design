@@ -138,6 +138,7 @@ export function PreviewOverlay({
   pages,
   index,
   readOnly = false,
+  onStep,
 }: {
   pages: PageMockup[];
   index: number;
@@ -150,6 +151,15 @@ export function PreviewOverlay({
    * able to look at the thing properly, and none of those cost anything.
    */
   readOnly?: boolean;
+  /**
+   * Move to another page, when the caller owns the list.
+   *
+   * The store's `stepPreview` walks the store's OWN pages, and on the front
+   * door those are empty — so the arrows and the arrow keys did nothing at all
+   * while looking perfectly enabled. A caller that passed `pages` in has to be
+   * able to say what next means in that list.
+   */
+  onStep?: (delta: number) => void;
 }) {
   const page = pages[index];
   const device = useStore((s) => s.device);
@@ -161,7 +171,8 @@ export function PreviewOverlay({
   const close = useStore((s) => s.closePreview);
   const brief = useStore((s) => s.brief);
   const briefs = useStore((s) => s.briefs);
-  const step = useStore((s) => s.stepPreview);
+  const stepInStore = useStore((s) => s.stepPreview);
+  const step = onStep ?? stepInStore;
   const regenerateOne = useStore((s) => s.regenerateOne);
   const hasSeenShortcuts = useStore((s) => s.hasSeenShortcuts);
   const markShortcutsSeen = useStore((s) => s.markShortcutsSeen);
