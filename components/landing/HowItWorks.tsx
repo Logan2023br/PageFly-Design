@@ -123,7 +123,11 @@ export function HowItWorks() {
               onClick={() => setZoom(step)}
               className="block w-full overflow-hidden rounded-pf-card border border-pf-border bg-pf-bg-deep text-left transition-colors hover:border-pf-border-hi focus:border-pf-primary-hi focus:outline-none"
             >
-              <span className="relative block aspect-[16/10] overflow-hidden bg-pf-bg">
+              {/* 2:1 — a band rather than a box. These sit two to a row at about
+                  560px, so 16:10 made each one 350px tall and the four of them a
+                  full screen of scrolling before the counts. A screenshot cropped
+                  from the top still shows the part that identifies the screen. */}
+              <span className="relative block aspect-[2/1] overflow-hidden bg-pf-bg">
                 <Shot step={step} className="absolute inset-0 h-full w-full object-cover object-top" />
               </span>
               <span className="flex items-baseline gap-2 px-3.5 py-3">
