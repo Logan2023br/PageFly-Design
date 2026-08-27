@@ -2,6 +2,7 @@
 
 import { AnimatePresence, MotionConfig } from "framer-motion";
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { Account } from "@/lib/account";
 import type { Brief } from "@/lib/validation";
@@ -200,17 +201,24 @@ export function LibraryScreen({
           <div className="relative mx-auto w-full max-w-[1600px] px-4 pb-8 pt-4 sm:px-6 sm:pt-6">
             <header className="flex items-center justify-between gap-4 border-b border-pf-border pb-3.5">
               <div className="flex min-w-0 items-center gap-2.5">
-                <Image
-                  src="/pagefly-icon.png"
-                  alt=""
-                  width={28}
-                  height={28}
-                  className="size-7 shrink-0 rounded-pf-sm"
-                  priority
-                />
-                <span className="hidden font-display text-[15px] font-semibold tracking-[-0.02em] text-pf-text sm:inline">
-                  PageFly <span className="text-pf-muted">Design</span>
-                </span>
+                {/* Linked for the same reason as the sign-in screen's and the
+                    design screen's. This was the last of three that were not. */}
+                <Link
+                  href="/"
+                  className="flex min-w-0 items-center gap-2.5 rounded-pf-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-pf-primary-hi"
+                >
+                  <Image
+                    src="/pagefly-icon.png"
+                    alt="PageFly Design — home"
+                    width={28}
+                    height={28}
+                    className="size-7 shrink-0 rounded-pf-sm"
+                    priority
+                  />
+                  <span className="hidden font-display text-[15px] font-semibold tracking-[-0.02em] text-pf-text sm:inline">
+                    PageFly <span className="text-pf-muted">Design</span>
+                  </span>
+                </Link>
                 <PageQuota />
               </div>
               <WorkspaceNav current="library" />

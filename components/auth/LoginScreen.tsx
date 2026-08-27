@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import Image from "next/image";
+import Link from "next/link";
 import { useState } from "react";
 import type { StoreAuthResponse } from "@/app/api/auth/store/route";
 import { Button, Eyebrow, GradientWord, Icon, Panel } from "../ui";
@@ -78,17 +79,27 @@ export function LoginScreen({ next }: { next: string }) {
 
       <div className="relative mx-auto w-full max-w-[1600px] px-4 pb-8 pt-4 sm:px-6 sm:pt-6">
         <header className="flex items-center gap-2 border-b border-pf-border pb-3.5">
-          <Image
-            src="/pagefly-icon.png"
-            alt=""
-            width={28}
-            height={28}
-            className="size-7 rounded-pf-sm"
-            priority
-          />
-          <span className="font-display text-[15px] font-semibold tracking-[-0.02em] text-pf-text">
-            PageFly <span className="text-pf-muted">Design</span>
-          </span>
+          {/* A link home, because a logo that does nothing is the one control
+              every visitor tries first — and on THIS screen they are more likely
+              to try it than anywhere else: a sign-in wall is exactly where
+              someone with no account goes looking for the way back out.
+              `/` needs no session, so it works signed in or out. */}
+          <Link
+            href="/"
+            className="flex items-center gap-2 rounded-pf-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-pf-primary-hi"
+          >
+            <Image
+              src="/pagefly-icon.png"
+              alt="PageFly Design — home"
+              width={28}
+              height={28}
+              className="size-7 rounded-pf-sm"
+              priority
+            />
+            <span className="font-display text-[15px] font-semibold tracking-[-0.02em] text-pf-text">
+              PageFly <span className="text-pf-muted">Design</span>
+            </span>
+          </Link>
         </header>
 
         <main className="grid place-items-center px-2 pt-[9vh] sm:pt-[12vh]">

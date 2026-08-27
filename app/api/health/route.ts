@@ -6,6 +6,7 @@ import { stockProvider } from "@/lib/images/stock";
 import { databaseIsUnpooled, databaseSource, hasDatabase } from "@/lib/db";
 import { hasSessionSecret, hasStableSecret, keySource } from "@/lib/session";
 import { sheetSource } from "@/lib/sheet";
+import { showcaseIds, showcasePages } from "@/lib/showcase";
 
 /* ==========================================================================
    GET /api/health
@@ -24,6 +25,26 @@ import { sheetSource } from "@/lib/sheet";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  /**
+   * The front door's marquee, which fails SILENTLY by design.
+   *
+   * `showcasePages` returns nothing when `SHOWCASE_RUNS` is unset, and that is
+   * the right default — an empty front door is recoverable and a published
+   * customer page is not. But it means the section can be missing in production
+   * for two entirely different reasons and look identical either way: nobody
+   * set the variable, or the runs it names are not in THIS database.
+   *
+   * That is precisely the "which of three things is missing" guessing game this
+   * endpoint was written to end, and the marquee was not covered by it. Counting
+   * the ids and the pages they resolve to separates the two in one request.
+   *
+   * The read is by id and its result is a count, so nothing about any store
+   * leaves here — the same rule the rest of this file follows.
+   */
+  const showcase = await showcasePages()
+    .then((pages) => ({ pages: pages.length, error: false }))
+    .catch(() => ({ pages: 0, error: true }));
+
   const checks = {
     database: hasDatabase(),
     /** which env var the connection string came from, or null */
@@ -61,6 +82,12 @@ export async function GET() {
        image renders as a grey plate — the page is still complete, but it looks
        like a wireframe, which is the exact complaint this replaced. */
     stockPhotos: stockProvider(),
+    /* How many runs the front door is TOLD to show, and how many pages it can
+       actually find. Two numbers rather than one because the gap between them is
+       the diagnosis: 0 and 0 is an unset variable, 6 and 0 is six ids that are
+       not in this database. */
+    showcaseRuns: showcaseIds().length,
+    showcasePages: showcase.pages,
   };
 
   /* Only in production. In development the file-backed driver takes over and the
@@ -150,6 +177,20 @@ export async function GET() {
   if (!checks.adminCredentialsOverridden)
     advisory.push(
       "Admin is on the default username and password. Set ADMIN_USERNAME and ADMIN_PASSWORD.",
+    );
+  /* Advisory, never blocking: a landing page without its marquee is a landing
+     page. Worded as the fix rather than the fault — an operator reading this has
+     already noticed the section is missing. */
+  if (checks.showcaseRuns === 0)
+    advisory.push(
+      "SHOWCASE_RUNS is not set — the landing page shows no example pages. Set it " +
+        "to a comma-separated list of run ids from THIS database.",
+    );
+  else if (checks.showcasePages === 0)
+    advisory.push(
+      `SHOWCASE_RUNS names ${checks.showcaseRuns} run${checks.showcaseRuns === 1 ? "" : "s"} ` +
+        "but none of them are in this database, so the landing page shows no " +
+        "example pages. Run ids do not carry between environments.",
     );
 
   return Response.json(
