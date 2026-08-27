@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "../ui";
 
 /* ==========================================================================
-   Bốn bước, chỉ ra chứ không kể lại.
+   Four steps, shown rather than described.
 
    The pictures are SCREENSHOTS of the running app, from `public/how-it-works/`.
    They replaced four drawn placeholders, and the reason is the one the
@@ -13,11 +13,10 @@ import { Icon } from "../ui";
    that UI changes and nobody notices for months. A screenshot is at least wrong
    visibly, and the person who changed the screen is the person looking at it.
 
-   Written in Vietnamese, because these four steps are not a pitch — they are
-   the instructions a beta merchant follows, and they were dictated in
-   Vietnamese by the person handing the product to them. The section heading
-   follows the steps rather than the rest of the page: a Vietnamese instruction
-   under an English title reads as a page half-translated.
+   These four are no longer the four answers of the brief — they are the round
+   trip a beta merchant has to be told: build it, look at it in the Library,
+   export it, import the .pagefly into the app. Filling in the brief is step one
+   of that, not all of it.
    ========================================================================== */
 
 type Step = {
@@ -35,27 +34,27 @@ type Step = {
 const STEPS: Step[] = [
   {
     n: "01",
-    title: "Tạo page",
+    title: "Create pages",
     src: "/how-it-works/01-create-page.png",
     width: 1600,
     height: 752,
-    tip: "Chọn các option trong Build Quickly hoặc Build Detail, sau đó bấm tạo page. (Lưu ý: phần viết thông tin page vui lòng điền đầy đủ như hướng dẫn để có page đẹp nhất.)",
+    tip: "Pick your options in Build Quickly or Build Detail, then press Create pages. (Note: fill the page description in as fully as the guide asks — it is what gets you the best-looking page.)",
   },
   {
     n: "02",
-    title: "Xem Page đã tạo",
+    title: "View your pages",
     src: "/how-it-works/02-view-pages.png",
     width: 1600,
     height: 783,
-    tip: "Xem các page đã build trong phần Library, hover vào để xem toàn giao diện của từng page và responsive từng kích thước màn hình. Dữ liệu vẫn sẽ được lưu khi bạn đăng nhập vào những lần sau.",
+    tip: "Every page you have built is in the Library. Hover one to see its whole layout, and how it responds at each screen size. Your pages are kept for the next time you sign in.",
   },
   {
     n: "03",
-    title: "Export Page",
+    title: "Export pages",
     src: "/how-it-works/03-export-page.png",
     width: 1600,
     height: 840,
-    tip: "Hover vào góc trái của từng page để export, dữ liệu export ra sẽ tạo 1 file .pagefly. Có thể export nhiều page.",
+    tip: "Hover the top-left corner of a page to export it. The export is one .pagefly file, and you can export more than one page at a time.",
   },
   {
     n: "04",
@@ -63,7 +62,7 @@ const STEPS: Step[] = [
     src: "/how-it-works/04-import-page.png",
     width: 1600,
     height: 883,
-    tip: "Import và add file .pagefly vào PageFly App để có thể xem page. Giao diện sau khi import sẽ giống giao diện trên Library của PageFly Design.",
+    tip: "Import the .pagefly file into the PageFly App to see the page. After importing it looks the same as it does in the PageFly Design Library.",
   },
 ];
 
@@ -85,10 +84,10 @@ export function HowItWorks() {
     <section className="mx-auto max-w-6xl px-5 py-14 sm:py-20">
       <div className="mx-auto mb-10 max-w-2xl text-center">
         <h2 className="font-display text-pf-h2 font-semibold text-pf-text">
-          Bốn bước để có page
+          Four steps, brief to live page
         </h2>
         <p className="mt-3 text-pf-body text-pf-muted">
-          Hover vào từng bước để xem hướng dẫn. Click để mở ảnh full size.
+          Hover a step to see what to do. Click to open it full size.
         </p>
       </div>
 
@@ -173,7 +172,7 @@ export function HowItWorks() {
             <button
               type="button"
               onClick={() => setZoom(null)}
-              aria-label="Đóng"
+              aria-label="Close"
               className="absolute right-3 top-3 z-10 rounded-pf-sm border border-pf-border bg-pf-bg-deep p-1.5 text-pf-muted hover:text-pf-text"
             >
               <Icon name="X" size={16} />
