@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { PageMockup } from "@/lib/generate/types";
-import { GradientWord } from "../ui";
+import { GradientWord, Icon } from "../ui";
 import { Aura } from "./Aura";
 import { Counts, type Counts as CountsData } from "./Counts";
 import { HowItWorks } from "./HowItWorks";
@@ -90,11 +90,14 @@ export function LandingScreen() {
         </p>
 
         <div className="mt-8 flex flex-col items-center gap-3">
-          <Link
-            href="/design"
-            className="rounded-pf-md bg-pf-primary px-6 py-3 text-[15px] font-semibold text-white shadow-pf-float transition-colors hover:bg-pf-primary-hi"
-          >
+          {/* The same sparkle the Create button carries at the end of the
+              brief, in the same place on the right. A visitor meets the mark
+              here and presses it again three screens later; two different
+              treatments of one action is two actions as far as anyone can
+              tell. */}
+          <Link href="/design" className="inline-flex items-center gap-2 rounded-pf-md bg-pf-primary px-6 py-3.5 text-[15px] font-semibold text-white shadow-pf-button transition-colors duration-150 hover:bg-pf-primary-hi">
             Design now
+            <Icon name="Sparkles" size={17} />
           </Link>
           <span className="text-[12.5px] text-pf-faint">
             Sign in with your store domain — nothing to install.
@@ -114,11 +117,9 @@ export function LandingScreen() {
         <p className="mx-auto mt-3 max-w-lg text-pf-body text-pf-muted">
           Four answers is all it needs. The first build takes about two minutes.
         </p>
-        <Link
-          href="/design"
-          className="mt-7 inline-block rounded-pf-md bg-pf-primary px-6 py-3 text-[15px] font-semibold text-white shadow-pf-float transition-colors hover:bg-pf-primary-hi"
-        >
+        <Link href="/design" className="mt-7 inline-flex items-center gap-2 rounded-pf-md bg-pf-primary px-6 py-3.5 text-[15px] font-semibold text-white shadow-pf-button transition-colors duration-150 hover:bg-pf-primary-hi">
           Design now
+          <Icon name="Sparkles" size={17} />
         </Link>
       </section>
 
