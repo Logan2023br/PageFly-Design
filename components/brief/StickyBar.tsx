@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { useState } from "react";
+import { requestStyleChoice } from "@/lib/briefStyle";
 import { describeSelection, totalSelected } from "@/lib/pageCatalog";
 import { useStore } from "@/lib/store";
 import { firstMissing } from "@/lib/validation";
@@ -16,17 +17,28 @@ const OVER_LIMIT =
    validation error — the user only has to act on the next one. */
 export function StickyBar() {
   const draft = useStore((s) => s.draft);
+  const mode = useStore((s) => s.mode);
   const start = useStore((s) => s.start);
+  const setStyle = useStore((s) => s.setStyle);
+  const setStoreType = useStore((s) => s.setStoreType);
   /* Set by followBuild when a build ends with nothing designed. It was written
      to the store and read by nobody: the merchant waited two minutes, landed
      back on the brief, and was given no reason at all. */
   const buildError = useStore((s) => s.buildError);
   const { account, refresh } = useAccount();
-  const [checking, setChecking] = useState(false);
+  /**
+   * What the click is doing, so the button can say it.
+   *
+   * A quick build makes a model call before the build starts, and it is the one
+   * wait on this screen the merchant did not ask for. "Checking…" for two or
+   * three seconds of choosing a style reads as a hang.
+   */
+  const [phase, setPhase] = useState<"idle" | "checking" | "styling">("idle");
+  const busy = phase !== "idle";
   const [blocked, setBlocked] = useState<string | null>(null);
 
   const total = totalSelected(draft.pages);
-  const missing = firstMissing(draft);
+  const missing = firstMissing(draft, mode);
   const ready = missing === null;
 
   const remaining = account ? Math.max(0, account.pageLimit - account.pagesUsed) : null;
@@ -40,9 +52,9 @@ export function StickyBar() {
    * since this screen loaded.
    */
   const create = async () => {
-    if (!ready || checking) return;
+    if (!ready || busy) return;
     setBlocked(null);
-    setChecking(true);
+    setPhase("checking");
     try {
       const fresh = await refresh();
       const left = fresh ? Math.max(0, fresh.pageLimit - fresh.pagesUsed) : null;
@@ -50,6 +62,32 @@ export function StickyBar() {
         setBlocked(OVER_LIMIT);
         return;
       }
+
+      /* The two questions Build Quickly did not ask, answered here rather than
+         inside `start()`: the brief that reaches the server is then identical
+         to one a merchant filled in by hand, and nothing downstream — no
+         generator stage, no saved run, no Library card — has to know a mode
+         existed. Written into the draft, so a merchant who comes back to the
+         brief sees what was chosen for them and can change it.
+
+         After the allowance check on purpose. Spending a model call on a build
+         the allowance is about to refuse is money for nothing.
+
+         `requestStyleChoice` cannot reject and cannot return null: with no model
+         configured, or a model that is down, it resolves to the fallback pair.
+         The build always starts. */
+      if (mode === "quick" && (!draft.visualStyle || !draft.storeType)) {
+        setPhase("styling");
+        const choice = await requestStyleChoice({
+          sell: draft.whatYouSell,
+          verticalSlug: (draft as { verticalSlug?: string | null }).verticalSlug ?? null,
+          market: draft.market,
+          prompt: draft.prompt,
+        });
+        if (!draft.visualStyle) setStyle(choice.visualStyle);
+        if (!draft.storeType) setStoreType(choice.storeType);
+      }
+
       await start();
     } catch (err) {
       /* `finally` alone reset the button and let the rejection go unhandled, so
@@ -62,7 +100,7 @@ export function StickyBar() {
           "Something went wrong starting the build. Try again.",
       );
     } finally {
-      setChecking(false);
+      setPhase("idle");
     }
   };
 
@@ -159,12 +197,16 @@ export function StickyBar() {
             why, and a dead button explains nothing. */}
         <Button
           size="lg"
-          disabled={!ready || checking}
+          disabled={!ready || busy}
           onClick={() => void create()}
           title={ready ? undefined : missing ?? undefined}
-          iconRight={checking ? undefined : "Sparkles"}
+          iconRight={busy ? undefined : "Sparkles"}
         >
-          {checking ? "Checking…" : "Create pages"}
+          {phase === "styling"
+            ? "Choosing a style…"
+            : phase === "checking"
+              ? "Checking…"
+              : "Create pages"}
         </Button>
       </motion.div>
     </motion.div>

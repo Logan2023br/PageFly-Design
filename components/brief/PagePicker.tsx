@@ -152,6 +152,7 @@ function Group({ cat, atCap }: { cat: CategoryDef; atCap: boolean }) {
 /* ---- the section -------------------------------------------------------- */
 
 export function PagePicker() {
+  const quick = useStore((s) => s.mode) === "quick";
   const selection = useStore((s) => s.draft.pages);
   const total = totalSelected(selection);
   const atCap = total >= MAX_TOTAL_PAGES;
@@ -159,7 +160,9 @@ export function PagePicker() {
   return (
     <SectionCard
       id="pfd-pages"
-      eyebrow="Step 6"
+      /* Quick mode shows two numbered cards, not the sixth of six. A form that
+         counts 1 then 6 has four steps the merchant will go looking for. */
+      eyebrow={quick ? "Step 2" : "Step 6"}
       title="Which pages?"
       help={`Repeatable pages have a stepper. ${MAX_TOTAL_PAGES} max.`}
       aside={

@@ -20,6 +20,7 @@ import {
   validateBrief,
   type Brief,
   type BriefDraft,
+  type BuildMode,
   type ReferenceImage,
 } from "./validation";
 import {
@@ -55,6 +56,14 @@ type PlanEntry = {
 
 type State = {
   screen: Screen;
+  /**
+   * Which brief the merchant is filling in — three questions or all of them.
+   *
+   * State rather than part of the draft, because it is not something the brief
+   * says: it is which questions were put on screen. The draft it produces is the
+   * same shape either way, and `briefSchema` never sees this.
+   */
+  mode: BuildMode;
   draft: BriefDraft;
   /** validated snapshot the current results were generated from */
   brief: Brief | null;
@@ -100,6 +109,9 @@ type State = {
 };
 
 type Actions = {
+  /** Switch which brief is on screen. Keeps every answer already given. */
+  setMode: (m: BuildMode) => void;
+
   /**
    * The trade, and its slug when the merchant clicked a chip rather than typed.
    *
@@ -163,6 +175,10 @@ let controller: AbortController | null = null;
 
 export const useStore = create<State & Actions>((set, get) => ({
   screen: "brief",
+  /* Quick by default. The three questions it asks are the three a merchant can
+     answer without deciding anything about design first, and Build Detail is one
+     press away for anyone who wants the rest. */
+  mode: "quick",
   draft: EMPTY_DRAFT,
   brief: null,
   briefs: {},
@@ -190,6 +206,8 @@ export const useStore = create<State & Actions>((set, get) => ({
   failFirstN: 0,
 
   /* ---- brief fields --------------------------------------------------- */
+
+  setMode: (m) => set({ mode: m }),
 
   setSell: (v, verticalSlug) =>
     set((s) => ({

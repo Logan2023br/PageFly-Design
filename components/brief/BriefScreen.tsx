@@ -1,9 +1,11 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
+import { useStore } from "@/lib/store";
 import { GradientWord } from "../ui";
 import { ImageUpload } from "./ImageUpload";
 import { MarketPicker } from "./MarketPicker";
+import { ModeToggle } from "./ModeToggle";
 import { PagePicker } from "./PagePicker";
 import { PromptField } from "./PromptField";
 import { SellInput } from "./SellInput";
@@ -12,6 +14,8 @@ import { StoreTypePicker } from "./StoreTypePicker";
 import { StylePicker } from "./StylePicker";
 
 export function BriefScreen() {
+  const quick = useStore((s) => s.mode) === "quick";
+
   return (
     <motion.div
       key="brief"
@@ -25,20 +29,52 @@ export function BriefScreen() {
           See your store as <GradientWord>pages</GradientWord>
         </h1>
         <p className="mx-auto mt-4 max-w-md text-pf-body text-pf-muted">
-          Four answers, three optional. Every page comes back as a mockup.
+          {quick
+            ? "Two answers. Every page comes back as a mockup."
+            : "Four answers, three optional. Every page comes back as a mockup."}
         </p>
       </header>
 
       <div className="mx-auto grid max-w-5xl gap-4">
+        {/* Which brief is being filled in, above the brief. Placed here rather
+            than in the top bar because it changes THIS form, and a control that
+            reshapes the page below it belongs to the page. */}
+        <div className="pb-2">
+          <ModeToggle />
+        </div>
+
         {/* Above the numbered steps rather than inside them. Where a merchant
             sells frames every answer below it — the language, what the page has
             to promise — and it is the one question they can skip. */}
         <MarketPicker />
         <SellInput />
-        <StylePicker />
-        <StoreTypePicker />
-        <PromptField />
-        <ImageUpload />
+
+        {/* Build Quickly hides these four (brand colours ride inside the style
+            card). The first two are answered by a model
+            before the build starts (see `lib/briefStyle.ts`); the last three are
+            optional and go unanswered, exactly as they do today when a merchant
+            skips them. `AnimatePresence` because the pages card below moves a
+            long way when they leave, and a jump of that size reads as a
+            different screen rather than the same one with less on it. */}
+        <AnimatePresence initial={false} mode="popLayout">
+          {!quick && (
+            <motion.div
+              key="detail-only"
+              layout
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              className="grid gap-4"
+            >
+              <StylePicker />
+              <StoreTypePicker />
+              <PromptField />
+              <ImageUpload />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <PagePicker />
       </div>
 
