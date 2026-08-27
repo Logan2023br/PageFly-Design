@@ -1,16 +1,18 @@
-import { Aura } from "./Aura";
+import { GradientWord } from "../ui";
 
 /* ==========================================================================
    What it has actually done.
 
-   Every tile here is read from the database, and a tile whose number does not
-   exist is NOT RENDERED. There is no zero state and no placeholder: a landing
-   page claiming a review score before anyone has reviewed anything is the one
-   thing on it that cannot be undone once a visitor notices, and "0 reviews" is
-   a worse advertisement than no line at all.
+   A ROW, NOT THREE BOXES. Boxed, the tiles were dark rectangles sitting on a
+   lighter wash — inverted contrast, so they read as three holes punched in the
+   page rather than three facts. A number is the loudest thing you can put on a
+   screen; putting a border round it makes it quieter, not louder.
 
-   So an empty database shows nothing here, and the section disappears. That is
-   correct on a fresh deploy rather than something to paper over.
+   Every figure here is read from the database, and a figure that does not exist
+   is NOT RENDERED. There is no zero state and no placeholder: a landing page
+   claiming a review score before anyone has reviewed anything is the one thing
+   on it that cannot be undone once a visitor notices, and "0 reviews" is a
+   worse advertisement than no line at all.
    ========================================================================== */
 
 export type Counts = {
@@ -29,33 +31,33 @@ export function Counts({ counts }: { counts: Counts }) {
   if (counts.pages) tiles.push({ value: fmt.format(counts.pages), label: "pages built" });
   if (counts.reviews && counts.rating)
     tiles.push({
-      value: `${counts.rating.toFixed(1)}`,
+      value: counts.rating.toFixed(1),
       label: `from ${fmt.format(counts.reviews)} review${counts.reviews === 1 ? "" : "s"}`,
     });
 
   if (tiles.length === 0) return null;
 
   return (
-    <section className="relative py-14 sm:py-20">
-      <Aura variant="wash" />
-      <div className="mx-auto max-w-4xl px-5">
-      <dl className="grid gap-4 sm:grid-cols-3">
-        {tiles.map((t) => (
-          <div
-            key={t.label}
-            className="rounded-pf-card border border-pf-border bg-pf-bg-deep px-5 py-6 text-center"
-          >
-            <dt className="sr-only">{t.label}</dt>
-            <dd>
-              <span className="block font-display text-[34px] font-semibold tabular-nums text-pf-text">
-                {t.value}
-              </span>
-              <span className="mt-1 block text-[13px] text-pf-muted">{t.label}</span>
-            </dd>
-          </div>
-        ))}
-      </dl>
-      </div>
-    </section>
+    <dl className="mx-auto flex max-w-3xl flex-wrap items-start justify-center gap-y-8">
+      {tiles.map((t, i) => (
+        <div
+          key={t.label}
+          /* A hairline BETWEEN, never around. `first:border-l-0` rather than
+             rendering separators as their own elements: a separator element
+             has to know whether it is last, and a border does not. */
+          className={`flex-1 basis-40 px-6 text-center ${
+            i === 0 ? "" : "sm:border-l sm:border-pf-border"
+          }`}
+        >
+          <dd>
+            <span className="block font-display text-[clamp(2.75rem,6vw,4rem)] font-semibold leading-none tracking-[-0.03em] tabular-nums">
+              <GradientWord>{t.value}</GradientWord>
+            </span>
+            <span className="mt-3 block text-[13px] text-pf-muted">{t.label}</span>
+          </dd>
+          <dt className="sr-only">{t.label}</dt>
+        </div>
+      ))}
+    </dl>
   );
 }

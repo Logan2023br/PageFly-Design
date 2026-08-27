@@ -103,7 +103,7 @@ function Starfield({ className }: { className: string }) {
   return <canvas ref={ref} className={className} aria-hidden />;
 }
 
-export function Aura({ variant }: { variant: "sky" | "horizon" | "wash" }) {
+export function Aura({ variant }: { variant: "sky" | "horizon" }) {
   if (variant === "sky")
     return (
       <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[560px] overflow-hidden">
@@ -122,45 +122,6 @@ export function Aura({ variant }: { variant: "sky" | "horizon" | "wash" }) {
           style={{ boxShadow: "0 0 0 1px rgba(154,107,255,.10)" }}
         />
         <Starfield className="absolute inset-0 h-full w-full" />
-      </div>
-    );
-
-  if (variant === "wash")
-    return (
-      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-        {/* The geometry is pagefly.io's own — an off-centre wash anchored high
-            and to the right, `120% 150% at 78% 0%`. Their hex is #535AF7, which
-            is bluer than this app's #6b2ff7, so the shape is borrowed and the
-            colour is not: a second indigo half a step away from the accent
-            reads as a mistake rather than a second brand.
-
-            Off-centre matters. The hero's bloom is centred and the horizon
-            below is centred, and a third centred glow between them would stack
-            into one soft column down the middle of the page. */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(120% 150% at 78% 0%, rgba(107,47,247,.16) 0%, rgba(77,28,196,.06) 42%, rgba(10,6,22,0) 72%)",
-          }}
-        />
-        {/* Two hairlines, fading out at both ends. They do more than the wash:
-            a band with edges reads as a shelf things are standing on, and the
-            tiles had been floating in the same black as everything else. */}
-        <div
-          className="absolute inset-x-0 top-0 h-px"
-          style={{
-            background:
-              "linear-gradient(90deg, transparent, rgba(154,107,255,.20) 22%, rgba(154,107,255,.20) 78%, transparent)",
-          }}
-        />
-        <div
-          className="absolute inset-x-0 bottom-0 h-px"
-          style={{
-            background:
-              "linear-gradient(90deg, transparent, rgba(154,107,255,.12) 22%, rgba(154,107,255,.12) 78%, transparent)",
-          }}
-        />
       </div>
     );
 

@@ -107,10 +107,16 @@ export function LandingScreen() {
 
       <Showcase pages={pages} />
       <HowItWorks />
-      <Counts counts={counts} />
 
-      <section className="relative mx-auto max-w-3xl px-5 pb-24 pt-8 text-center">
+      {/* The counts and the closing ask are ONE band now. Apart, they were two
+          quiet sections doing the same job — persuade — separated by a rule
+          that belonged to neither, and the wash behind the first had a hard top
+          edge cutting across the page. Together they are a single closing
+          argument: what it has done, then what you do next. */}
+      <section className="relative px-5 pb-24 pt-16 text-center sm:pt-24">
         <Aura variant="horizon" />
+        <Counts counts={counts} />
+        <div className="mx-auto mt-16 max-w-3xl">
         <h2 className="font-display text-pf-h2 font-semibold text-pf-text">
           Your turn
         </h2>
@@ -121,6 +127,7 @@ export function LandingScreen() {
           Design now
           <Icon name="Sparkles" size={17} />
         </Link>
+        </div>
       </section>
 
       <footer className="border-t border-pf-border px-5 py-8 text-center text-[12.5px] text-pf-faint">
