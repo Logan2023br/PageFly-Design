@@ -201,6 +201,41 @@
 }
 
 /* ==========================================================================
+   Marquee.
+
+   Two rows on the front door, moving in opposite directions. The track holds
+   the cards twice and travels exactly half its width, so the second copy lands
+   where the first began and the loop has no seam.
+
+   Direction is a separate class rather than a negative duration: `reverse`
+   reads at the call site, and a negative `animation-duration` is invalid CSS
+   that some engines quietly accept and others drop.
+   ========================================================================== */
+
+@keyframes pfd-marquee {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-50%, 0, 0); }
+}
+
+.pfd-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: pfd-marquee var(--pfd-marquee-duration, 70s) linear infinite;
+  will-change: transform;
+}
+
+.pfd-marquee-track.reverse {
+  animation-direction: reverse;
+}
+
+/* Readable on hover. A row that keeps moving while someone is trying to look
+   at a card is a row nobody looks at. */
+.pfd-marquee:hover .pfd-marquee-track,
+.pfd-marquee:focus-within .pfd-marquee-track {
+  animation-play-state: paused;
+}
+
+/* ==========================================================================
    Reduced motion.
    Motion becomes instant; nothing is disabled. Long-running decorative
    animations stop, but state changes still land at their end value.
@@ -214,5 +249,16 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* The marquee needs stopping, not hurrying. The rule above lands every
+     animation on its END value, and this one's end value is translated
+     half a track to the left — so the general rule would leave the row
+     visibly displaced rather than still. Two rows crossing in opposite
+     directions is a real trigger, and a stationary row of pages is still
+     a legible grid of pages. */
+  .pfd-marquee-track {
+    animation: none !important;
+    transform: none !important;
   }
 }

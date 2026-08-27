@@ -47,6 +47,24 @@ export function useExport(): ExportState {
   return ctx;
 }
 
+/**
+ * The same, for a screen where exporting is not on offer.
+ *
+ * The preview overlay is shared between the signed-in results grid and the
+ * public front door. Signed in it sits inside an `ExportProvider`; on the front
+ * door there is no provider and no reason for one — the PNG button is hidden
+ * there because a visitor has no account to export into. `useExport` throws in
+ * that case, which would take the whole landing page down over a button nobody
+ * can see.
+ *
+ * Null rather than a stub that silently does nothing: a caller has to notice
+ * it is absent, which is the difference between "no export here" and "export
+ * quietly broken".
+ */
+export function useExportOptional(): ExportState | null {
+  return useContext(Ctx);
+}
+
 const EXPORT_WIDTH = 1440;
 
 /* Every breakpoint the mockup supports, mapped to the keys PageFly styles

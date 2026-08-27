@@ -106,21 +106,29 @@ export function ProgressSteps() {
       className="flex items-center justify-between gap-4 border-b border-pf-border pb-3.5"
     >
       <div className="flex min-w-0 items-center gap-2.5">
-        {/* The real app icon, served from `public/`. It brings its own blue
-            field, so the primary background and white glyph this replaced would
-            only have stacked underneath it. `shrink-0` stays: this sits in a
-            flex row beside the store name, which is free to be long. */}
-        <Image
-          src="/pagefly-icon.png"
-          alt=""
-          width={28}
-          height={28}
-          className="size-7 shrink-0 rounded-pf-sm"
-          priority
-        />
-        <span className="hidden font-display text-[15px] font-semibold tracking-[-0.02em] text-pf-text sm:inline">
-          PageFly <span className="text-pf-muted">Design</span>
-        </span>
+        {/* A link home, because a logo that does nothing is the one control
+            every visitor tries first. `/` is the public front door and needs no
+            session, so this works signed in or out. */}
+        <Link
+          href="/"
+          className="flex min-w-0 items-center gap-2.5 rounded-pf-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-pf-primary-hi"
+        >
+          {/* The real app icon, served from `public/`. It brings its own blue
+              field, so the primary background and white glyph this replaced
+              would only have stacked underneath it. `shrink-0` stays: this sits
+              in a flex row beside the store name, which is free to be long. */}
+          <Image
+            src="/pagefly-icon.png"
+            alt="PageFly Design — home"
+            width={28}
+            height={28}
+            className="size-7 shrink-0 rounded-pf-sm"
+            priority
+          />
+          <span className="hidden font-display text-[15px] font-semibold tracking-[-0.02em] text-pf-text sm:inline">
+            PageFly <span className="text-pf-muted">Design</span>
+          </span>
+        </Link>
         <PageQuota />
       </div>
 

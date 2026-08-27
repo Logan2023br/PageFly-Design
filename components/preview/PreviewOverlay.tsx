@@ -7,7 +7,7 @@ import { briefForPage } from "@/lib/briefForPage";
 import { useStore } from "@/lib/store";
 import { MockupPage } from "../mockup/MockupPage";
 import { Button, Icon, Tag } from "../ui";
-import { useExport } from "../results/ExportProvider";
+import { useExportOptional } from "../results/ExportProvider";
 import { BriefPanel } from "./BriefPanel";
 import { DeviceFrame } from "./DeviceFrame";
 
@@ -137,9 +137,19 @@ function Viewport({
 export function PreviewOverlay({
   pages,
   index,
+  readOnly = false,
 }: {
   pages: PageMockup[];
   index: number;
+  /**
+   * Opened from the public front door, where there is no account.
+   *
+   * Hides Regenerate and PNG — one spends a page of an allowance the visitor
+   * does not have, the other needs a signed-in export context. Breakpoints,
+   * Scrub and Brief all stay: someone deciding whether to sign up should be
+   * able to look at the thing properly, and none of those cost anything.
+   */
+  readOnly?: boolean;
 }) {
   const page = pages[index];
   const device = useStore((s) => s.device);
@@ -155,7 +165,11 @@ export function PreviewOverlay({
   const regenerateOne = useStore((s) => s.regenerateOne);
   const hasSeenShortcuts = useStore((s) => s.hasSeenShortcuts);
   const markShortcutsSeen = useStore((s) => s.markShortcutsSeen);
-  const { exportOne, exporting } = useExport();
+  /* Optional: the front door has no ExportProvider and needs none — see
+     `useExportOptional`. The two buttons that would use it are hidden there. */
+  const exporter = useExportOptional();
+  const exportOne = exporter?.exportOne;
+  const exporting = exporter?.exporting ?? false;
 
   const reduced = useReducedMotion();
   const stageRef = useRef<HTMLDivElement>(null);
@@ -256,7 +270,7 @@ export function PreviewOverlay({
         case "b":
         case "B":
           e.preventDefault();
-          setShowBrief((v) => !v);
+          if (!readOnly) setShowBrief((v) => !v);
           break;
         case "?":
           e.preventDefault();
@@ -269,7 +283,7 @@ export function PreviewOverlay({
     /* `showBrief` is in here because Escape reads it. Without it the handler
        keeps the first render's value and Escape closes the whole overlay from
        under an open panel — the exact thing the branch above prevents. */
-  }, [close, step, setDevice, setZoom, nudgeZoom, showBrief]);
+  }, [close, step, setDevice, setZoom, nudgeZoom, showBrief, readOnly]);
 
   /* The hint shows once per session, then gets out of the way. */
   useEffect(() => {
@@ -439,16 +453,22 @@ export function PreviewOverlay({
               </button>
             </div>
 
-            <Button
-              size="sm"
-              variant={showBrief ? "primary" : "ghost"}
-              icon="ClipboardList"
-              aria-pressed={showBrief}
-              onClick={() => setShowBrief((v) => !v)}
-              title="What this page was built from (B)"
-            >
-              <span className="hidden lg:inline">Brief</span>
-            </Button>
+            {/* Not on the front door. The brief is a merchant's own words about
+                their business and the showcase endpoint deliberately does not
+                publish it — so this button would open an empty panel, which is
+                worse than not offering it. */}
+            {!readOnly && (
+              <Button
+                size="sm"
+                variant={showBrief ? "primary" : "ghost"}
+                icon="ClipboardList"
+                aria-pressed={showBrief}
+                onClick={() => setShowBrief((v) => !v)}
+                title="What this page was built from (B)"
+              >
+                <span className="hidden lg:inline">Brief</span>
+              </Button>
+            )}
 
             <Button
               size="sm"
@@ -461,27 +481,31 @@ export function PreviewOverlay({
               <span className="hidden lg:inline">Scrub</span>
             </Button>
 
-            <Button
-              size="sm"
-              variant="ghost"
-              icon="RotateCcw"
-              onClick={() => regenerateOne(page.id)}
-              title="Build a different version of this page"
-            >
-              <span className="hidden lg:inline">Regenerate</span>
-            </Button>
+            {!readOnly && (
+              <Button
+                size="sm"
+                variant="ghost"
+                icon="RotateCcw"
+                onClick={() => regenerateOne(page.id)}
+                title="Build a different version of this page"
+              >
+                <span className="hidden lg:inline">Regenerate</span>
+              </Button>
+            )}
 
-            <Button
-              size="sm"
-              variant="ghost"
-              icon="Download"
-              disabled={exporting}
-              onClick={() => void exportOne(page)}
-            >
-              <span className="hidden lg:inline">
-                {exporting ? "Exporting" : "PNG"}
-              </span>
-            </Button>
+            {!readOnly && (
+              <Button
+                size="sm"
+                variant="ghost"
+                icon="Download"
+                disabled={exporting}
+                onClick={() => void exportOne?.(page)}
+              >
+                <span className="hidden lg:inline">
+                  {exporting ? "Exporting" : "PNG"}
+                </span>
+              </Button>
+            )}
 
             <Button
               size="sm"

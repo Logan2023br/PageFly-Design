@@ -1,6 +1,7 @@
-import { redirect } from "next/navigation";
+import { LandingScreen } from "@/components/landing/LandingScreen";
 
-/* Thin entry point — the feature lives at /design. */
+/* The public front door. Everything behind a sign-in lives at /design, which
+   `proxy.ts` guards; this route is deliberately outside that matcher. */
 export default function Home() {
-  redirect("/design");
+  return <LandingScreen />;
 }

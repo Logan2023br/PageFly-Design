@@ -32,11 +32,21 @@ export function ResultCard({
   index,
   rebuilding,
   onOpen,
+  readOnly = false,
 }: {
   page: PageMockup;
   index: number;
   rebuilding: boolean;
   onOpen: () => void;
+  /**
+   * A card on the public front door.
+   *
+   * Drops the actions row — import to editor, export — because both need an
+   * account and a visitor has none; offering a button that cannot work is worse
+   * than offering none. Everything else stays: the page still scrolls under the
+   * pointer and still opens, which is the whole reason someone is looking.
+   */
+  readOnly?: boolean;
 }) {
   const reduced = useReducedMotion();
   const scroll = useMotionValue(0);
@@ -115,7 +125,7 @@ export function ResultCard({
       {/* Outside the thumbnail wrapper on purpose: that wrapper clips, and the
           tooltip on the locked button has to reach above the card's top edge.
           Positioned against the card root, which lands in the same place. */}
-      <CardActions page={page} />
+      {!readOnly && <CardActions page={page} />}
 
       <div className="flex items-center justify-between gap-2 border-t border-pf-border px-3.5 py-3">
         <span className="min-w-0">
