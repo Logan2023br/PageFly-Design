@@ -38,7 +38,7 @@ const STEPS: Step[] = [
     src: "/how-it-works/01-create-page.png",
     width: 1600,
     height: 752,
-    tip: "Pick your options in Build Quickly or Build Detail, then press Create pages. (Note: fill the page description in as fully as the guide asks — it is what gets you the best-looking page.)",
+    tip: "Pick your options in Build Quickly or Build Detail, then press Create pages.",
   },
   {
     n: "02",
@@ -46,7 +46,7 @@ const STEPS: Step[] = [
     src: "/how-it-works/02-view-pages.png",
     width: 1600,
     height: 783,
-    tip: "Every page you have built is in the Library. Hover one to see its whole layout, and how it responds at each screen size. Your pages are kept for the next time you sign in.",
+    tip: "Every page you have built is in the Library. Hover one to see its whole layout, and how it responds at each screen size.",
   },
   {
     n: "03",
@@ -54,7 +54,7 @@ const STEPS: Step[] = [
     src: "/how-it-works/03-export-page.png",
     width: 1600,
     height: 840,
-    tip: "Hover the top-left corner of a page to export it. The export is one .pagefly file, and you can export more than one page at a time.",
+    tip: "Hover the top-left corner of a page to export it. The export is one .pagefly file.",
   },
   {
     n: "04",
@@ -62,7 +62,7 @@ const STEPS: Step[] = [
     src: "/how-it-works/04-import-page.png",
     width: 1600,
     height: 883,
-    tip: "Import the .pagefly file into the PageFly App to see the page. After importing it looks the same as it does in the PageFly Design Library.",
+    tip: "Import the .pagefly file into the PageFly App to see the page.",
   },
 ];
 
