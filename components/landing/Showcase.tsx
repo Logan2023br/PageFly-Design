@@ -38,7 +38,10 @@ export function Showcase({ pages }: { pages: PageMockup[] }) {
   /* Split so the two rows are different pages rather than the same ones
      passing each other, which reads as a loop rather than a body of work. */
   const half = Math.ceil(pages.length / 2);
-  const rows = [pages.slice(0, half), pages.slice(half)];
+  const rows = [
+    pages.slice(0, half).map((p, i) => [p, i] as const),
+    pages.slice(half).map((p, i) => [p, half + i] as const),
+  ];
 
   /* ==========================================================================
      SPEED IS PIXELS PER SECOND, not a duration.
@@ -56,17 +59,28 @@ export function Showcase({ pages }: { pages: PageMockup[] }) {
   const secondsFor = (count: number, pxPerSecond: number) =>
     Math.max(18, Math.round((count * CARD) / pxPerSecond));
 
-  const card = (page: PageMockup) => (
+  /* ONE COPY HAS TO BE WIDER THAN THE SCREEN, or the track runs out halfway
+     through its own travel and shows bare page — which is what five cards did
+     on anything wider than about 2,200px. 2,600 covers an ultrawide with room
+     to spare; overshooting costs a few DOM nodes and nothing else. */
+  const repeatFor = (count: number) => Math.max(1, Math.ceil(2600 / (count * CARD)));
+
+  /* Keyed and indexed by POSITION, not by `page.id`.
+     A page id is "home" or "collection" — unique inside one run and repeated
+     across every other, so six runs of one store gave six cards all keyed
+     "collection". React warned, and `indexOf` would have found the first
+     match, so clicking the fourth Collection card opened the first one. */
+  const card = (page: PageMockup, at: number) => (
     /* Small on purpose. A card is 3:4, so its height follows its width and one
        number sets both — at 340 the two rows were taller than most screens and
        a visitor saw one and a half. These are a texture of work you scan, not
        pages you read here; reading one is what the preview is for. */
-    <div key={page.id} className="w-[184px] shrink-0 sm:w-[212px]">
+    <div key={`${page.id}-${at}`} className="w-[184px] shrink-0 sm:w-[212px]">
       <ResultCard
         page={page}
-        index={pages.indexOf(page)}
+        index={at}
         rebuilding={false}
-        onOpen={() => openPreview(pages.indexOf(page))}
+        onOpen={() => openPreview(at)}
         readOnly
       />
     </div>
@@ -84,11 +98,19 @@ export function Showcase({ pages }: { pages: PageMockup[] }) {
         </p>
       </div>
 
-      <div className="grid gap-4">
-        <Marquee seconds={secondsFor(rows[0].length, 52)}>{rows[0].map(card)}</Marquee>
+      {/* No gap: each row carries its own py-5 of headroom for the hover
+          lift, and a gap on top of that reads as a hole between them. */}
+      <div className="grid">
+        <Marquee seconds={secondsFor(rows[0].length, 52)} repeat={repeatFor(rows[0].length)}>
+          {rows[0].map(([p, at]) => card(p, at))}
+        </Marquee>
         {rows[1].length > 0 && (
-          <Marquee seconds={secondsFor(rows[1].length, 44)} reverse>
-            {rows[1].map(card)}
+          <Marquee
+            seconds={secondsFor(rows[1].length, 44)}
+            repeat={repeatFor(rows[1].length)}
+            reverse
+          >
+            {rows[1].map(([p, at]) => card(p, at))}
           </Marquee>
         )}
       </div>
