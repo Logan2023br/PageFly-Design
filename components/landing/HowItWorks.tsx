@@ -1,55 +1,69 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { Icon } from "../ui";
-import { ArtPages, ArtResults, ArtSell, ArtStyle } from "./StepArt";
 
 /* ==========================================================================
-   Four steps, shown rather than described.
+   Bốn bước, chỉ ra chứ không kể lại.
 
-   The pictures are SCREENSHOTS of the running app, not illustrations. A drawing
-   of a UI is wrong the first time that UI changes and nobody notices for
-   months; a screenshot is at least wrong visibly, and the person who changed
-   the screen is the person looking at it.
+   The pictures are SCREENSHOTS of the running app, from `public/how-it-works/`.
+   They replaced four drawn placeholders, and the reason is the one the
+   placeholders were written to admit: a drawing of a UI is wrong the first time
+   that UI changes and nobody notices for months. A screenshot is at least wrong
+   visibly, and the person who changed the screen is the person looking at it.
 
-   Four because four is what the product has. Three would have to merge picking
-   a look with picking pages, and those are the two answers a merchant spends
-   the longest on.
+   Written in Vietnamese, because these four steps are not a pitch — they are
+   the instructions a beta merchant follows, and they were dictated in
+   Vietnamese by the person handing the product to them. The section heading
+   follows the steps rather than the rest of the page: a Vietnamese instruction
+   under an English title reads as a page half-translated.
    ========================================================================== */
 
 type Step = {
   n: string;
   title: string;
-  /** what to press, and what happens — the tooltip */
+  /** what to do at this step — the tooltip, and the lightbox caption */
   tip: string;
-  /** a drawing of the screen; see `StepArt` for why it is not a screenshot */
-  art: () => React.ReactElement;
+  /** under `public/`, so `next/image` optimises and serves it as webp */
+  src: string;
+  /** the file's real size, for the lightbox to show it uncropped */
+  width: number;
+  height: number;
 };
 
 const STEPS: Step[] = [
   {
     n: "01",
-    title: "Say what you sell",
-    art: ArtSell,
-    tip: "Type it, or press a trade — the chips set which sections a page gets before you choose anything else.",
+    title: "Tạo page",
+    src: "/how-it-works/01-create-page.png",
+    width: 1600,
+    height: 752,
+    tip: "Chọn các option trong Build Quickly hoặc Build Detail, sau đó bấm tạo page. (Lưu ý: phần viết thông tin page vui lòng điền đầy đủ như hướng dẫn để có page đẹp nhất.)",
   },
   {
     n: "02",
-    title: "Pick a look",
-    art: ArtStyle,
-    tip: "Fifteen styles. Each one sets the palette, the type and the corner radius of every page in the build.",
+    title: "Xem Page đã tạo",
+    src: "/how-it-works/02-view-pages.png",
+    width: 1600,
+    height: 783,
+    tip: "Xem các page đã build trong phần Library, hover vào để xem toàn giao diện của từng page và responsive từng kích thước màn hình. Dữ liệu vẫn sẽ được lưu khi bạn đăng nhập vào những lần sau.",
   },
   {
     n: "03",
-    title: "Choose your pages",
-    art: ArtPages,
-    tip: "Tick what you need. The stepper next to a page builds more than one of it — three products, three different pages.",
+    title: "Export Page",
+    src: "/how-it-works/03-export-page.png",
+    width: 1600,
+    height: 840,
+    tip: "Hover vào góc trái của từng page để export, dữ liệu export ra sẽ tạo 1 file .pagefly. Có thể export nhiều page.",
   },
   {
     n: "04",
-    title: "Get mockups back",
-    art: ArtResults,
-    tip: "Every page comes back scrollable. Open one to see it at four screen sizes, then export it into the editor.",
+    title: "Import and live page",
+    src: "/how-it-works/04-import-page.png",
+    width: 1600,
+    height: 883,
+    tip: "Import và add file .pagefly vào PageFly App để có thể xem page. Giao diện sau khi import sẽ giống giao diện trên Library của PageFly Design.",
   },
 ];
 
@@ -71,10 +85,10 @@ export function HowItWorks() {
     <section className="mx-auto max-w-6xl px-5 py-14 sm:py-20">
       <div className="mx-auto mb-10 max-w-2xl text-center">
         <h2 className="font-display text-pf-h2 font-semibold text-pf-text">
-          Four answers, then it builds
+          Bốn bước để có page
         </h2>
         <p className="mt-3 text-pf-body text-pf-muted">
-          Hover a step to see what to press. Click to open it full size.
+          Hover vào từng bước để xem hướng dẫn. Click để mở ảnh full size.
         </p>
       </div>
 
@@ -83,7 +97,7 @@ export function HowItWorks() {
           where anyone can tell what they are looking at. Two rows of two gives
           each one about 560px, which is a readable picture of a screen. */}
       <ol className="grid gap-5 sm:grid-cols-2">
-        {STEPS.map((step) => (
+        {STEPS.map((step, i) => (
           <li key={step.n} className="group relative">
             <button
               type="button"
@@ -92,10 +106,24 @@ export function HowItWorks() {
             >
               {/* 2:1 — a band rather than a box. These sit two to a row at about
                   560px, so 16:10 made each one 350px tall and the four of them a
-                  full screen of scrolling before the counts. A screenshot cropped
-                  from the top still shows the part that identifies the screen. */}
+                  full screen of scrolling before the counts. Every screenshot is
+                  between 1.8:1 and 2.13:1, so `object-top` trims a sliver off
+                  the bottom and never the part that identifies the screen. */}
               <span className="relative block aspect-[2/1] overflow-hidden bg-pf-bg">
-                <step.art />
+                <Image
+                  src={step.src}
+                  alt={step.title}
+                  fill
+                  /* Two columns above 640px, one below — so the browser never
+                     fetches a 1,600px copy to paint a 560px card. */
+                  sizes="(max-width: 640px) 100vw, 560px"
+                  className="object-cover object-top"
+                  /* The first two are above the fold on a laptop; the last two
+                     are not, and eagerly loading 2.5MB of screenshots to paint
+                     a hero nobody has scrolled past yet is the whole reason
+                     `loading` exists. */
+                  priority={i < 2}
+                />
               </span>
               <span className="flex items-baseline gap-2 px-3.5 py-3">
                 <span className="text-[11px] font-semibold tabular-nums text-pf-faint">
@@ -115,7 +143,7 @@ export function HowItWorks() {
                 reach is a tooltip half the visitors never see. */}
             <span
               role="tooltip"
-              className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2.5 w-[min(22rem,90%)] -translate-x-1/2 rounded-pf-md border border-pf-border bg-pf-bg-deep p-3 text-center text-[12.5px] leading-snug text-pf-body opacity-0 shadow-pf-float transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+              className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2.5 w-[min(24rem,92%)] -translate-x-1/2 rounded-pf-md border border-pf-border bg-pf-bg-deep p-3 text-center text-[12.5px] leading-snug text-pf-body opacity-0 shadow-pf-float transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
             >
               {step.tip}
               {/* Two triangles, one a pixel below the other: the back one is
@@ -145,14 +173,22 @@ export function HowItWorks() {
             <button
               type="button"
               onClick={() => setZoom(null)}
-              aria-label="Close"
+              aria-label="Đóng"
               className="absolute right-3 top-3 z-10 rounded-pf-sm border border-pf-border bg-pf-bg-deep p-1.5 text-pf-muted hover:text-pf-text"
             >
               <Icon name="X" size={16} />
             </button>
-            <div className="aspect-[2/1] w-full">
-              <zoom.art />
-            </div>
+            {/* The image's OWN shape here, not the card's 2:1. Someone who
+                clicked to see it full size has asked for the part the card
+                cropped, and a lightbox that crops it too has answered nothing. */}
+            <Image
+              src={zoom.src}
+              alt={zoom.title}
+              width={zoom.width}
+              height={zoom.height}
+              sizes="(max-width: 1200px) 100vw, 1152px"
+              className="h-auto w-full"
+            />
             <p className="border-t border-pf-border px-4 py-3 text-[13px] text-pf-muted">
               <span className="font-semibold text-pf-text">{zoom.title}</span>{" "}
               — {zoom.tip}
