@@ -44,6 +44,7 @@ async function main(): Promise<void> {
     MAX_IMAGES,
     MAX_PROMPT_CHARS,
     MAX_PROMPT_CHARS_STORED,
+    PROMPT_EXAMPLE,
     MAX_SELL_CHARS,
     MAX_SLICES,
     STORE_TYPE_IDS,
@@ -136,6 +137,21 @@ async function main(): Promise<void> {
     !validateBrief(draft({ prompt: "y".repeat(MAX_PROMPT_CHARS_STORED + 1) }) as never)
       .success,
     "one character past the stored ceiling is still refused",
+  );
+
+  /* The app's own worked example has to fit the box it demonstrates. It is
+     shown by the Example button on both prompt fields and it is what merchants
+     are told to write like — a ceiling that refuses it is a ceiling teaching
+     something it will not accept. This has already been wrong twice: the first
+     example was 6 over, the second 169. */
+  check(
+    PROMPT_EXAMPLE.length <= MAX_PROMPT_CHARS,
+    "the Example prompt fits the field it is an example for",
+    `${PROMPT_EXAMPLE.length} / ${MAX_PROMPT_CHARS}`,
+  );
+  check(
+    validateBrief(draft({ prompt: PROMPT_EXAMPLE }) as never).success,
+    "and a brief written exactly like it validates",
   );
 
   /* ---- a full house, every optional field filled ------------------------ */

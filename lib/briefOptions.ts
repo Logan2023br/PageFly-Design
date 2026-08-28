@@ -183,7 +183,12 @@ export const MAX_SELL_CHARS = 120;
 /**
  * How much a merchant may write about their own store.
  *
- * 2,000. It was 1,500, then 3,000 because merchants were hitting it, now here.
+ * 2,200. It was 1,500, then 3,000, then 2,000, and now this — and the number
+ * is not arbitrary any more. `PROMPT_EXAMPLE` below is the structure this field
+ * asks merchants to follow, it is 2,169 characters, and a ceiling that refuses
+ * the app's own worked example is a ceiling teaching something it will not
+ * accept. The example sets the floor for this number.
+ *
  * What they write is the only part of the prompt that is about THIS store —
  * everything else is a trade table, a palette and a pattern vocabulary — so the
  * ceiling caps the one input that makes two stores in a trade differ.
@@ -193,11 +198,11 @@ export const MAX_SELL_CHARS = 120;
  * TRAINING filing and has nothing to do with this.)
  *
  * The cost is small and worth stating: the merchant's words land in the part of
- * the prompt that is NOT cached, so 2,000 characters is roughly 500 uncached
+ * the prompt that is NOT cached, so 2,200 characters is roughly 550 uncached
  * input tokens per page rather than 375 — well under a tenth of a cent on a
  * page that costs a few cents to build.
  */
-export const MAX_PROMPT_CHARS = 2000;
+export const MAX_PROMPT_CHARS = 2200;
 
 /**
  * The worked example, shown by the Example button on both prompt fields.
@@ -208,26 +213,30 @@ export const MAX_PROMPT_CHARS = 2000;
  * sections wanted on it. Nothing here is invented — it is the brief that
  * produced the best deck in this beta, trimmed to fit.
  *
- * Trimmed to fit LITERALLY: it arrived at 2,006 characters against a 2,000
- * ceiling, and an example that will not go in the box it demonstrates is not an
- * example. Two commas replaced two "and"s. If it ever needs the other six back,
- * MAX_PROMPT_CHARS is the number to move, not this.
+ * It sets MAX_PROMPT_CHARS rather than being cut to fit it. The first version
+ * was six characters over a 2,000 ceiling and two commas solved it; this one is
+ * 169 over, which is a paragraph, not a comma — and the paragraph is the part
+ * that names the interactions. An example that will not go in the box it
+ * demonstrates is not an example, so the ceiling moved. That is the direction
+ * the dependency runs: change this text, then check the number above it.
  */
-export const PROMPT_EXAMPLE = `Elevated everyday apparel - heavyweight knits, structured denim, tailored outerwear. Unisex, mid-premium, for people who care about fabric and fit.
+export const PROMPT_EXAMPLE = `Elevated everyday apparel - heavyweight knits, structured denim, tailored outerwear. Unisex, mid-premium, for people who care about fit.
 
-Main colours: #EDE8DE, #1C1A17, #A8894F. Quietly expensive, editorial, lots of white space. Serif headings in sentence case, sans for prices and sizes. Hairline 1px rules, small-caps eyebrows, square corners on every image, square buttons, no shadow. Brass accent at most twice per page. Motion restrained: fade-up 24px over 320ms, images revealing by clip-path wipe, no parallax or hover scaling.
+Main colours: #EDE8DE, #1C1A17 and #A8894F. Quietly expensive, editorial, lots of white space. Serif headings in sentence case, sans for prices and sizes. Hairline 1px rules, small-caps eyebrows, square corners and buttons. Brass accent at most twice per page. Fade-up 24px over 320ms, images revealing by clip-path wipe.
 
-Every page uses the same product card: a 4:5 image crossfading to a second photo on hover, swatch dots that swap the image, a badge top-left, the name, a fabric line like "14oz brushed cotton", and the price. Sizes show on hover, sold-out struck through.
+Same product card everywhere: a 4:5 image crossfading to a second photo on hover, swatch dots that swap the image, a badge top-left, the name, a fabric line like "14oz brushed cotton", the price. Sizes on hover, sold-out struck through.
 
-Home: 88vh hero with text bottom-left, four asymmetric category tiles, a new-in rail, two lookbook bands with reversed columns, shop-the-look with hotspots, bestsellers as a grid, reviews showing reviewer height and size bought.
+Interactions across the pages: a continuous marquee of short phrases; a before/after comparison with a draggable handle; buttons whose background wipes in from the left on hover and out to the right on leave, with a soft shadow lifting; a slideshow where clicking a thumbnail swaps the main image; and hotspot markers on editorial photos that open a small product card.
 
-Collection: text-only hero with no banner, a sticky filter rail with size as a button grid where unavailable sizes are dimmed, plus colour, fit and price, three-column grid, editorial break after row three.
+Home: 88vh hero with text bottom-left over a background image, its button changing background and lifting a box-shadow on hover, four asymmetric tiles, a new-in rail, two lookbook bands with reversed columns, a shop-the-look photo, bestsellers as a grid, reviews showing height and size.
 
-Product: stacked scrolling gallery not a carousel, a caption reading "Model is 5'9" / 175cm, wearing M", a sticky buy box where swatches swap the gallery and sold-out sizes are struck through with inline notify-me, a bar showing whether it runs small or true to size with the percentage from reviews, a Find My Size finder, a size drawer with cm/in toggle.
+Collection: text-only hero, no banner, a sticky filter rail with size as a button grid where unavailable sizes are dimmed, plus colour and price, three-column grid.
 
-About: no CTA until the final band, 80vh hero with one sentence, 620px centred opener, a pull quote, a five-milestone timeline.
+Product: stacked gallery, a caption reading "Model is 5'9", wearing M", a sticky buy box where swatches swap the gallery and sold-out sizes are struck through, a bar showing whether it runs small or true to size, a Find My Size finder, a size drawer with cm/in toggle.
 
-Blog article: 660px measure, standfirst and meta row, two shoppable inline cards.
+About: no CTA until the final band, 80vh hero with one sentence, 620px opener, a pull quote, a timeline.
+
+Blog article: 660px measure, standfirst and meta row, two inline product cards.
 
 Contact: three routing cards, order number field only for returns, FAQ.
 
