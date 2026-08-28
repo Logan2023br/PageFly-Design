@@ -190,6 +190,7 @@ export function Panel({
 /** A titled form section, as used down the whole brief. */
 export function SectionCard({
   eyebrow,
+  eyebrowAction,
   title,
   help,
   children,
@@ -197,8 +198,17 @@ export function SectionCard({
   id,
 }: {
   eyebrow: string;
+  /**
+   * A control belonging to the eyebrow rather than to the field.
+   *
+   * Separate from `aside`, which is pinned to the far right and holds a reading
+   * — a character counter. This sits against the eyebrow itself, which is where
+   * a control that acts on the whole section belongs: next to the label that
+   * names it, not across the card from it.
+   */
+  eyebrowAction?: ReactNode;
   title: string;
-  help?: string;
+  help?: ReactNode;
   children: ReactNode;
   aside?: ReactNode;
   id?: string;
@@ -210,7 +220,10 @@ export function SectionCard({
       <section id={id} className="grid gap-4">
         <header className="grid gap-1.5">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <Eyebrow>{eyebrow}</Eyebrow>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <Eyebrow>{eyebrow}</Eyebrow>
+              {eyebrowAction}
+            </div>
             {aside}
           </div>
           <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">

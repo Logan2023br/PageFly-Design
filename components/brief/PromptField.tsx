@@ -9,6 +9,7 @@ import {
 } from "@/lib/briefOptions";
 import { useStore } from "@/lib/store";
 import { Chip, Counter, SectionCard } from "../ui";
+import { PromptExampleButton } from "./PromptExample";
 
 /* ---- the field itself --------------------------------------------------- */
 
@@ -45,12 +46,16 @@ export function PromptField() {
     <SectionCard
       id="pfd-prompt"
       eyebrow={quick ? "Step 1" : "Step 4 · optional"}
+      /* Against the eyebrow rather than under the field: it is a control for
+         the whole section, and a merchant looks for help beside the label that
+         names the section, not after the box they have not filled in yet. */
+      eyebrowAction={<PromptExampleButton />}
       title={quick ? "What should we build?" : "Anything else?"}
-      help={
-        quick
-          ? "What you sell, your main colours, and the sections you want on the page."
-          : "The more specific, the less generic the mockups."
-      }
+      /* Both modes say the same thing now, and it is an instruction rather than
+         an aphorism. "The more specific, the less generic" is true and gives a
+         merchant nothing to do; the example gives them the structure, so the
+         help line's whole job is to send them to it. */
+      help="Please click the Example button to write yours in the right structure."
       aside={<Counter value={prompt.length} max={MAX_PROMPT_CHARS} />}
     >
       <div className="grid gap-3.5">

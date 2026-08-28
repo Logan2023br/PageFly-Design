@@ -200,6 +200,41 @@ export const MAX_SELL_CHARS = 120;
 export const MAX_PROMPT_CHARS = 2000;
 
 /**
+ * The worked example, shown by the Example button on both prompt fields.
+ *
+ * A merchant reading "the more specific, the less generic" has been told the
+ * principle and not the SHAPE. This is the shape: what you sell, then the look,
+ * then the one component every page shares, then a line per page naming the
+ * sections wanted on it. Nothing here is invented — it is the brief that
+ * produced the best deck in this beta, trimmed to fit.
+ *
+ * Trimmed to fit LITERALLY: it arrived at 2,006 characters against a 2,000
+ * ceiling, and an example that will not go in the box it demonstrates is not an
+ * example. Two commas replaced two "and"s. If it ever needs the other six back,
+ * MAX_PROMPT_CHARS is the number to move, not this.
+ */
+export const PROMPT_EXAMPLE = `Elevated everyday apparel - heavyweight knits, structured denim, tailored outerwear. Unisex, mid-premium, for people who care about fabric and fit.
+
+Main colours: #EDE8DE, #1C1A17, #A8894F. Quietly expensive, editorial, lots of white space. Serif headings in sentence case, sans for prices and sizes. Hairline 1px rules, small-caps eyebrows, square corners on every image, square buttons, no shadow. Brass accent at most twice per page. Motion restrained: fade-up 24px over 320ms, images revealing by clip-path wipe, no parallax or hover scaling.
+
+Every page uses the same product card: a 4:5 image crossfading to a second photo on hover, swatch dots that swap the image, a badge top-left, the name, a fabric line like "14oz brushed cotton", and the price. Sizes show on hover, sold-out struck through.
+
+Home: 88vh hero with text bottom-left, four asymmetric category tiles, a new-in rail, two lookbook bands with reversed columns, shop-the-look with hotspots, bestsellers as a grid, reviews showing reviewer height and size bought.
+
+Collection: text-only hero with no banner, a sticky filter rail with size as a button grid where unavailable sizes are dimmed, plus colour, fit and price, three-column grid, editorial break after row three.
+
+Product: stacked scrolling gallery not a carousel, a caption reading "Model is 5'9" / 175cm, wearing M", a sticky buy box where swatches swap the gallery and sold-out sizes are struck through with inline notify-me, a bar showing whether it runs small or true to size with the percentage from reviews, a Find My Size finder, a size drawer with cm/in toggle.
+
+About: no CTA until the final band, 80vh hero with one sentence, 620px centred opener, a pull quote, a five-milestone timeline.
+
+Blog article: 660px measure, standfirst and meta row, two shoppable inline cards.
+
+Contact: three routing cards, order number field only for returns, FAQ.
+
+Launch: pre-launch and live states, 92vh countdown hero, locked cards under a scrim that restore prices when live.`;
+
+
+/**
  * What a SAVED brief may hold, which is not the same number.
  *
  * The form's ceiling has moved three times. The Library has not: it holds runs
