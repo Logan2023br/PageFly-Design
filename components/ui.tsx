@@ -40,25 +40,25 @@ export function CountUp({
   const ref = useRef<HTMLSpanElement>(null);
   const inView = useInView(ref, { once: true, margin: "-40px" });
   const reduced = useReducedMotion();
-  const [shown, setShown] = useState(0);
   /**
-   * False for the server render and for the first frame after it.
+   * How far the count has got, or null for "not counting".
    *
-   * Flipped inside a `requestAnimationFrame` rather than in the effect body:
-   * the frame callback is an external-system callback, which is where React
-   * wants state set from, and a synchronous `setState` in an effect is a
-   * cascading render the linter refuses outright.
+   * ONE piece of state, and that is the point. The first version had two — a
+   * `hydrated` flag and the number — each flipped from its own
+   * `requestAnimationFrame`, so what you saw depended on which of the two
+   * landed first. On a dev server the bundle is there instantly and they always
+   * landed in the same order; over a real network they need not, and the
+   * animation went missing in production while working locally.
+   *
+   * Null until the row is actually on screen, so the server render and every
+   * frame before that show the ANSWER. Zero was what the server used to send —
+   * a visitor with JavaScript still loading, or off, read "0 stores" on the
+   * front door, which is the page's own claim, wrong.
    */
-  const [hydrated, setHydrated] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
   /* Nothing to animate: reduced motion, or a value of zero. Resolved during
      render rather than by setting state in the effect, which would cascade. */
   const skip = Boolean(reduced) || to === 0;
-
-  useEffect(() => {
-    if (skip) return;
-    const raf = requestAnimationFrame(() => setHydrated(true));
-    return () => cancelAnimationFrame(raf);
-  }, [skip]);
 
   useEffect(() => {
     if (!inView || skip) return;
@@ -72,7 +72,7 @@ export function CountUp({
       const t = Math.min(1, (now - start) / duration);
       /* Rounded to the DISPLAYED precision each frame, so a decimal counter
          steps through 0.0 … 4.9 rather than through float noise. */
-      setShown(Number((to * ease(t)).toFixed(decimals)));
+      setProgress(Number((to * ease(t)).toFixed(decimals)));
       if (t < 1) raf = requestAnimationFrame(step);
     };
 
@@ -80,17 +80,10 @@ export function CountUp({
     return () => cancelAnimationFrame(raf);
   }, [inView, to, duration, decimals, skip]);
 
-  /* Before hydration the ANSWER, after it the count. That order is the whole
-     point: zero was what the server used to render, so a visitor with
-     JavaScript still loading — or off — read "0 stores" on the front door. On
-     the admin dashboard nobody sees that, because nobody reaches it without JS.
-     On a public landing page it is the page's own claim, wrong.
-
-     This row sits near the foot of a long page, so the swap to zero happens
-     off-screen and is never watched. Someone who lands with it already in view
-     gets one frame of the true number before the count runs — which is the
-     right way round for a figure to be wrong for a frame. */
-  const value = skip || !hydrated ? to : shown;
+  /* The answer until the count starts, then the count. The swap to zero happens
+     on the first frame after the row appears, which is the frame the eye is
+     already tracking — and it is the only moment the two can disagree. */
+  const value = skip || progress === null ? to : progress;
 
   return (
     <span ref={ref}>
