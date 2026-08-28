@@ -1,12 +1,109 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, useInView, useReducedMotion } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { ICONS, type IconName } from "@/lib/icons";
 
 /* ==========================================================================
    App chrome primitives — the PageFly surface, not the mockups.
    ========================================================================== */
+
+/**
+ * Counts from zero to the value once, when it scrolls into view.
+ *
+ * requestAnimationFrame rather than a spring on a motion value: this needs a
+ * FORMATTED number on every frame, and animating a number then rounding it
+ * produces visible stutter near the end. Skipped entirely under reduced motion —
+ * a counter racing upward is exactly the kind of movement that setting turns
+ * off, and the reader still gets the number, immediately.
+ *
+ * `decimals` and `suffix` are what let one implementation serve both callers.
+ * The admin dashboard counts whole builds; the landing page counts to `4.9` and
+ * to `350+`, and a second copy of this that knew about decimals is how two
+ * counters end up easing differently on the same product.
+ *
+ * `useInView(once)` covers load and scroll with one rule: already on screen
+ * fires immediately, further down fires when it arrives.
+ */
+export function CountUp({
+  to,
+  duration = 900,
+  decimals = 0,
+  suffix = "",
+}: {
+  to: number;
+  duration?: number;
+  decimals?: number;
+  suffix?: string;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const inView = useInView(ref, { once: true, margin: "-40px" });
+  const reduced = useReducedMotion();
+  const [shown, setShown] = useState(0);
+  /**
+   * False for the server render and for the first frame after it.
+   *
+   * Flipped inside a `requestAnimationFrame` rather than in the effect body:
+   * the frame callback is an external-system callback, which is where React
+   * wants state set from, and a synchronous `setState` in an effect is a
+   * cascading render the linter refuses outright.
+   */
+  const [hydrated, setHydrated] = useState(false);
+  /* Nothing to animate: reduced motion, or a value of zero. Resolved during
+     render rather than by setting state in the effect, which would cascade. */
+  const skip = Boolean(reduced) || to === 0;
+
+  useEffect(() => {
+    if (skip) return;
+    const raf = requestAnimationFrame(() => setHydrated(true));
+    return () => cancelAnimationFrame(raf);
+  }, [skip]);
+
+  useEffect(() => {
+    if (!inView || skip) return;
+
+    let raf = 0;
+    let start: number | null = null;
+    const ease = (t: number) => 1 - Math.pow(1 - t, 3);
+
+    const step = (now: number) => {
+      start ??= now;
+      const t = Math.min(1, (now - start) / duration);
+      /* Rounded to the DISPLAYED precision each frame, so a decimal counter
+         steps through 0.0 … 4.9 rather than through float noise. */
+      setShown(Number((to * ease(t)).toFixed(decimals)));
+      if (t < 1) raf = requestAnimationFrame(step);
+    };
+
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [inView, to, duration, decimals, skip]);
+
+  /* Before hydration the ANSWER, after it the count. That order is the whole
+     point: zero was what the server used to render, so a visitor with
+     JavaScript still loading — or off — read "0 stores" on the front door. On
+     the admin dashboard nobody sees that, because nobody reaches it without JS.
+     On a public landing page it is the page's own claim, wrong.
+
+     This row sits near the foot of a long page, so the swap to zero happens
+     off-screen and is never watched. Someone who lands with it already in view
+     gets one frame of the true number before the count runs — which is the
+     right way round for a figure to be wrong for a frame. */
+  const value = skip || !hydrated ? to : shown;
+
+  return (
+    <span ref={ref}>
+      {value.toLocaleString(undefined, {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      })}
+      {/* Only once the count has arrived. A "+" sitting beside a number still
+          climbing claims "more than 12" on the way to 350. */}
+      {suffix && value >= to ? suffix : ""}
+    </span>
+  );
+}
 
 export function Icon({
   name,

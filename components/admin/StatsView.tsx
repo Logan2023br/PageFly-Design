@@ -1,10 +1,9 @@
 "use client";
 
-import { motion, useInView, useReducedMotion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import type { AdminStats } from "@/lib/db";
 import type { IconName } from "@/lib/icons";
-import { Icon, Panel } from "../ui";
+import { CountUp, Icon, Panel } from "../ui";
 
 /* ==========================================================================
    Thống kê.
@@ -103,44 +102,6 @@ function StatCard({
       <p className="mt-1.5 text-[11.5px] text-pf-muted">{footnote}</p>
     </Panel>
   );
-}
-
-/**
- * Counts from zero to the value once, when it scrolls into view.
- *
- * requestAnimationFrame rather than a spring on a motion value: this needs a
- * whole number on every frame, and animating a number then rounding it produces
- * visible stutter near the end. Skipped entirely under reduced motion — a
- * counter racing upward is exactly the kind of movement that setting turns off.
- */
-function CountUp({ to, duration = 900 }: { to: number; duration?: number }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-40px" });
-  const reduced = useReducedMotion();
-  const [shown, setShown] = useState(0);
-  /* Nothing to animate: reduced motion, or a value of zero. Resolved during
-     render rather than by setting state in the effect, which would cascade. */
-  const skip = Boolean(reduced) || to === 0;
-
-  useEffect(() => {
-    if (!inView || skip) return;
-
-    let raf = 0;
-    let start: number | null = null;
-    const ease = (t: number) => 1 - Math.pow(1 - t, 3);
-
-    const step = (now: number) => {
-      start ??= now;
-      const t = Math.min(1, (now - start) / duration);
-      setShown(Math.round(to * ease(t)));
-      if (t < 1) raf = requestAnimationFrame(step);
-    };
-
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [inView, to, duration, skip]);
-
-  return <span ref={ref}>{(skip ? to : shown).toLocaleString()}</span>;
 }
 
 /* ---- day bars ------------------------------------------------------------ */

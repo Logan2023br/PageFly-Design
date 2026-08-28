@@ -1,4 +1,6 @@
-import { GradientWord } from "../ui";
+"use client";
+
+import { CountUp, GradientWord } from "../ui";
 
 /* ==========================================================================
    What it has actually done.
@@ -39,17 +41,23 @@ export type Counts = {
 /**
  * What the landing page claims.
  *
- * Strings, not numbers, on purpose: `50+` and `4.9` are not the same KIND of
- * value — one is a floor and one is an average — and formatting them through
- * `Intl.NumberFormat` would only pretend they were both counts.
+ * Broken into parts rather than written as the strings "50+" and "4.9", because
+ * the numbers count up when the row scrolls into view and a counter cannot ease
+ * toward a string. `decimals` is what keeps the third one a rating all the way
+ * up — without it, 4.9 climbs through 1, 2, 3 and reads as a count of things.
  */
-const FIGURES: { value: string; label: string }[] = [
-  { value: "50+", label: "stores" },
-  { value: "350+", label: "pages built" },
+const FIGURES: {
+  to: number;
+  decimals: number;
+  suffix: string;
+  label: string;
+}[] = [
+  { to: 50, decimals: 0, suffix: "+", label: "stores" },
+  { to: 350, decimals: 0, suffix: "+", label: "pages built" },
   /* Not "from 1 review". A 4.9 average out of a single review is arithmetically
      impossible, and a visitor who reads the two together learns only that one of
      them is untrue. */
-  { value: "4.9", label: "average rating" },
+  { to: 4.9, decimals: 1, suffix: "", label: "average rating" },
 ];
 
 export function Counts() {
@@ -62,8 +70,13 @@ export function Counts() {
       {tiles.map((t) => (
         <div key={t.label} className="flex-1 basis-40 px-6 text-center">
           <dd>
+            {/* `tabular-nums` matters more here than anywhere else on the page:
+                without it every frame of the count re-measures and the three
+                figures jitter sideways against each other while they climb. */}
             <span className="block font-display text-[clamp(2.75rem,6vw,4rem)] font-semibold leading-none tracking-[-0.03em] tabular-nums">
-              <GradientWord>{t.value}</GradientWord>
+              <GradientWord>
+                <CountUp to={t.to} decimals={t.decimals} suffix={t.suffix} duration={1100} />
+              </GradientWord>
             </span>
             <span className="mt-3 block text-[13px] text-pf-muted">{t.label}</span>
           </dd>
