@@ -69,6 +69,34 @@ async function main(): Promise<void> {
   check(free.system.includes("THE ELEMENTS"), "and the element vocabulary");
   check(free.system.includes("ANSWER SHAPE"), "and the shape the answer arrives in");
 
+  console.log("\nthe standard the page is held to");
+
+  {
+    /* One paragraph, one place, every call that designs anything. A standard
+       that reads differently in two prompts is two standards. */
+    const { THE_STANDARD } = await import("../lib/design/standard");
+    const text = THE_STANDARD.join("\n");
+    const { __promptsForTest: deckPrompts } = await import("../lib/design/deckPlan");
+    const deck = deckPrompts({
+      sell: "Bomber", storeType: "d2c", vertical: "fashion-apparel", market: null,
+      pageTypes: ["home"], prompt: "", styleLabel: "Bold", styleBlurb: "",
+      density: "normal", tokens: { bg: "#fff", ink: "#111", accent: "#f00", band: "#eee" },
+      refSections: null, refStyle: null,
+    } as never).system;
+
+    check(free.system.includes(text), "free mode is held to it");
+    check(deck.includes(text), "so is the call that chooses bands");
+    check(text.length > 0 && free.system.split(text).length === 2, "and it is sent once, not twice");
+
+    /* The half that does work. Adjectives a model already believes it is
+       meeting rule nothing out; a question with a wrong answer does. */
+    /* Line-wrapped prose, so match with the wrapping collapsed — an assertion
+       that depends on where a line breaks is an assertion about column width. */
+    const flat = text.replace(/\s+/g, " ");
+    check(flat.includes("still remember about it an hour later"), "it carries a test, not only a compliment");
+    check(flat.includes("nobody will look twice"), "and names the failure it stands against");
+  }
+
   console.log("\nthe design opinions, gone from free and kept for banded");
 
   const banded = __specPromptsForTest({
@@ -94,6 +122,11 @@ async function main(): Promise<void> {
     check(!free.system.includes(needle), `free mode does not get ${what}`);
     check(banded.system.includes(needle), `and turning the flag off restores ${what}`);
   }
+  /* The standard is not one of them — it survives the flag in both positions. */
+  check(
+    banded.system.replace(/\s+/g, " ").includes("still remember about it an hour later"),
+    "the standard is not a design opinion the flag removes",
+  );
 
   /* The two that read as rules but are about the ANSWER, not the page. */
   check(free.system.includes("Specify. A section"), "free mode still has to give values");

@@ -7,6 +7,7 @@ import { PAGE_BY_ID } from "../pageCatalog";
 import { parseObject } from "../ai/json";
 import { elementForPattern } from "./elementFor";
 import { sectionBounds } from "./sectionPlan";
+import { THE_STANDARD } from "./standard";
 import {
   arcIndexOf,
   pageHasOneProduct,
@@ -202,6 +203,8 @@ function systemPrompt(ask: DeckAsk): string {
     `what order, which one is the signature, which invert to a dark band, how`,
     `much room each gets, which may carry a photograph behind it, what moves, and`,
     `in one sentence what goes inside each band.`,
+    ``,
+    ...THE_STANDARD,
     ``,
     `THE VOCABULARY. Use these pattern ids and no others. Inventing one loses the`,
     `section. The group each sits in is the role it fills.`,

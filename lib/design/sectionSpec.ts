@@ -14,6 +14,7 @@ import type {
 import { marketById } from "../briefOptions";
 import { marketLines } from "./marketLines";
 import { beginDropTally, dropTally, vetPageStyle, vetSpec } from "./specCheck";
+import { THE_STANDARD } from "./standard";
 
 /* ==========================================================================
    STAGE 2b — THE ELEMENTS INSIDE EACH BAND.
@@ -203,6 +204,8 @@ function systemPrompt(ask: SpecAsk): string {
           `There is no pattern library here and no house style. Design what THIS`,
           `store's page should be, from what the merchant told you.`,
           ``,
+          ...THE_STANDARD,
+          ``,
         ]
       : [
           `You decide what is INSIDE each band of one page.`,
@@ -210,6 +213,8 @@ function systemPrompt(ask: SpecAsk): string {
           `The bands are already chosen and their order is fixed. Your job is their`,
           `contents: which elements sit in each band, how they nest, how the space`,
           `divides between them, and what each one does on hover and on scroll.`,
+          ``,
+          ...THE_STANDARD,
           ``,
         ]),
     `YOU DO NOT WRITE COPY AND YOU DO NOT CHOOSE PHOTOGRAPHS. You have seen`,
