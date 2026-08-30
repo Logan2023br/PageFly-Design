@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Scale, SectionSpec, SpecNode } from "./plan";
+import type { Css, PageStyle, Scale, SectionSpec, SpecNode } from "./plan";
 import { childrenOf, type DesignNode, type DesignSection } from "./schema";
 
 /* ==========================================================================
@@ -64,6 +64,86 @@ const HOVERS = new Set(["float", "shadow", "grow", "glow", "float-shadow", "grow
 const REVEALS = new Set(["fade", "fade-up", "slide-left", "slide-right", "zoom"]);
 
 const SCALES = new Set<string>(["oversized", "large", "body", "caption", "eyebrow"]);
+
+/**
+ * Declarations a spec may not ask for — the same list `schema.ts` enforces on
+ * the tree, repeated here so the spec cannot promise what the page will drop.
+ *
+ * Catching it at the spec is worth the duplication: dropped at the tree, the
+ * build model has already spent output tokens writing it and the audit reports
+ * a section that "ignored the spec". Dropped here, the instruction is simply
+ * never issued.
+ */
+const BANNED_CSS = new Set([
+  "position",
+  "inset",
+  "top",
+  "right",
+  "bottom",
+  "left",
+  "zIndex",
+  "float",
+  "transform",
+]);
+
+/**
+ * A style object from the design model, kept to what the tree will accept.
+ *
+ * Bounded at 24 declarations per node. Not a taste limit: a node carrying forty
+ * properties is a node that has stopped deciding and started dumping a
+ * stylesheet, and every one of them is billed twice — once as stage 2b output
+ * and again as stage 3 input.
+ */
+function vetCss(raw: unknown): Css | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const out: Css = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (BANNED_CSS.has(k)) continue;
+    if (Object.keys(out).length >= 24) break;
+    if (typeof v === "string" && v.trim() !== "") out[k] = v.trim();
+    else if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/**
+ * The page-level block, cleaned.
+ *
+ * Same treatment as a node's css, applied to every entry — a banned property is
+ * no more allowed because it was written once at the top than it would be on a
+ * node. Names are bounded so a model cannot invent a hundred treatments and
+ * turn the shared block into the repetition it exists to prevent.
+ */
+export function vetPageStyle(raw: unknown): PageStyle | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+
+  const bag = (v: unknown, max: number): Record<string, Css> | undefined => {
+    if (!v || typeof v !== "object" || Array.isArray(v)) return undefined;
+    const out: Record<string, Css> = {};
+    for (const [k, raw2] of Object.entries(v as Record<string, unknown>)) {
+      if (Object.keys(out).length >= max) break;
+      const css = vetCss(raw2);
+      const name = str(k).slice(0, 40);
+      if (css && name) out[name] = css;
+    }
+    return Object.keys(out).length ? out : undefined;
+  };
+
+  /* Five type roles exist; a sixth would be a role no node can name. */
+  const type = bag(o.type, 8);
+  const treatments = bag(o.treatments, 12);
+  const motion = str(o.motion).slice(0, 400) || undefined;
+  const note = str(o.note).slice(0, 400) || undefined;
+
+  if (!type && !treatments && !motion && !note) return undefined;
+  return {
+    ...(type ? { type } : {}),
+    ...(treatments ? { treatments } : {}),
+    ...(motion ? { motion } : {}),
+    ...(note ? { note } : {}),
+  };
+}
 
 /**
  * Is the spec binding?
@@ -145,7 +225,14 @@ function vetNode(raw: unknown): SpecNode | null {
   /* The sentence saying what this element is FOR, which is the difference
      between "a text node here" and a design. Free text on purpose: it is read
      by a model, not matched by code, and the first run produced 58 of them. */
-  const note = str(o.note).slice(0, 200) || undefined;
+  /* Raised from 200. The cap was doing two jobs: bounding cost, and stopping
+     the note becoming a stylesheet in prose. `css` now carries the values, so
+     the note is back to being what it was named for — what the element is FOR —
+     and 320 characters is a sentence with a reason in it rather than a
+     truncated one. */
+  const note = str(o.note).slice(0, 320) || undefined;
+  const css = vetCss(o.css);
+  const use = str(o.use).slice(0, 40) || undefined;
 
   const kids = kidsOf(o)
     .map(vetNode)
@@ -160,6 +247,8 @@ function vetNode(raw: unknown): SpecNode | null {
     ...(gap !== undefined ? { gap: Math.max(0, Math.round(gap)) } : {}),
     ...(ratio !== undefined ? { ratio } : {}),
     ...(anim ? { anim } : {}),
+    ...(use ? { use } : {}),
+    ...(css ? { css } : {}),
     ...(o.optional === true ? { optional: true } : {}),
     ...(kids.length ? { children: kids } : {}),
   };

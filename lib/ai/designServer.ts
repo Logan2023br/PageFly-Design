@@ -12,6 +12,7 @@ import {
   seedFor,
   type Order,
   type OrderSection,
+  type PageStyle,
   type Slot,
   type SpecNode,
 } from "../design/plan";
@@ -259,6 +260,58 @@ function ceilingFor(order: Order | null): number {
  * different kind of instruction — a thing to copy rather than a thing to build
  * from. Absent fields are omitted, so a plain element is a short line.
  */
+/**
+ * One node's declarations as `{k: v; k: v}`.
+ *
+ * CSS-ish rather than JSON: everything around it in this prompt is text, and a
+ * JSON fragment in the middle reads as something to copy verbatim rather than
+ * something to apply — the same reason the spec is indented lines rather than
+ * the JSON it arrived as.
+ */
+function cssLine(css: Record<string, string | number>): string {
+  const body = Object.entries(css)
+    .map(([k, v]) => `${k}:${v}`)
+    .join("; ");
+  return `{${body}}`;
+}
+
+/**
+ * What every band shares, printed once above them.
+ *
+ * The whole reason `PageStyle` exists: a palette, a type scale and a motion
+ * curve are the same on band one and band nine, and repeating them nine times
+ * is billed nine times — as stage 2b's output at $25/MTok and again as this
+ * stage's input. Stated once here, referenced by `use:` and by `scale` below.
+ */
+function sharedStyleLines(style: PageStyle | null | undefined): string[] {
+  if (!style) return [];
+
+  const out: string[] = [``, `THE PAGE'S SHARED STYLE — applies to every band below.`];
+
+  if (style.type) {
+    out.push(`Type scale — a node's "scale" means these declarations:`);
+    for (const [role, css] of Object.entries(style.type))
+      out.push(`  ${role}  ${cssLine(css)}`);
+  }
+
+  if (style.treatments) {
+    out.push(`Treatments — a node marked use:NAME carries these:`);
+    for (const [name, css] of Object.entries(style.treatments))
+      out.push(`  ${name}  ${cssLine(css)}`);
+  }
+
+  if (style.motion) out.push(`Motion — ${style.motion}`);
+  if (style.note) out.push(style.note);
+
+  out.push(
+    `A node's own declarations are written after these and win where they`,
+    `overlap. Where a node says nothing, the shared value stands — do not`,
+    `re-decide it per band.`,
+    ``,
+  );
+  return out;
+}
+
 function specLines(node: SpecNode, depth: number): string[] {
   const pad = "  ".repeat(depth + 1);
   const bits = [
@@ -271,6 +324,10 @@ function specLines(node: SpecNode, depth: number): string[] {
     node.anim?.hover ? `hover:${node.anim.hover}` : "",
     node.anim?.reveal ? `reveal:${node.anim.reveal}` : "",
     node.anim?.delay !== undefined ? `delay:${node.anim.delay}` : "",
+    /* The treatment first, then the deltas — the order they are applied in, so
+       a reader resolves them the same way the builder is being asked to. */
+    node.use ? `use:${node.use}` : "",
+    node.css ? cssLine(node.css) : "",
     node.optional ? "(optional)" : "",
   ].filter(Boolean);
 
@@ -299,8 +356,18 @@ function orderLines(order: Order, bg: string, ink: string): string[] {
     ...(order.sections.some((s) => s.spec)
       ? [
           `Where a section lists elements beneath it, build those elements: the`,
-          `indentation is the nesting, and "oversized" and the rest are type`,
-          `roles you turn into sizes once you know how long the words are.`,
+          `indentation is the nesting.`,
+          ``,
+          `A line may carry three kinds of instruction, and they resolve in this`,
+          `order — later wins:`,
+          `  scale     the type role. Its declarations are in the shared style`,
+          `            above; apply them.`,
+          `  use:NAME  a treatment from the shared style; apply it whole.`,
+          `  {k:v}     this element's own declarations. Put them in the node's`,
+          `            "css" as written — they are measured, not suggestions.`,
+          ``,
+          `Where a line gives a value, do not substitute your own. Where it gives`,
+          `none, decide — the spec is silent about what it did not want fixed.`,
         ]
       : []),
     ``,
@@ -341,6 +408,78 @@ function orderLines(order: Order, bg: string, ink: string): string[] {
 
 
 /**
+ * The system and user prompt for one page.
+ *
+ * Lifted out of `designPageTree` so `__designPromptsForTest` can return the
+ * real thing rather than a reconstruction. Async because `trainingLines`
+ * reads the database.
+ */
+async function buildPrompts(
+  input: DesignInput,
+): Promise<{ system: string; user: string }> {
+  const order = input.order ?? null;
+  const system = order
+    ? [
+        loadSkills("design"),
+        sliceSkill("patterns", order.patternIds),
+        sliceSkill("verticals", [order.vertical]),
+        sliceSkill("motion", order.motionIds),
+      ]
+        .filter(Boolean)
+        .join("\n\n")
+    : (() => {
+        const skills = loadSkills("design");
+        return skills ? `${DESIGN_SYSTEM}\n\n${skills}` : DESIGN_SYSTEM;
+      })();
+
+  const t = input.tokens;
+  const user = [
+    `Store sells: ${input.sell}`,
+    input.storeType && `Store type: ${input.storeType}`,
+    input.prompt && `Merchant's own words: ${input.prompt}`,
+    ``,
+    `Visual style: ${input.styleLabel}${input.styleBlurb ? ` — ${input.styleBlurb}` : ""}`,
+    ``,
+    `Design this page: ${input.pageLabel || input.pageType}`,
+    ``,
+    `Palette and faces — work inside these, do not introduce others.`,
+    `Each colour has a job. Use it for that job.`,
+    ``,
+    `  background  ${t.bg}`,
+    `  text        ${t.ink}`,
+    `  accent      ${t.accent}   buttons, prices, badges, the one highlighted thing in a section`,
+    t.band && `  band        ${asHex(t.band)}   background of sections that step away from the page background`,
+    /* Stated as an instruction, not an offer. A border colour only reaches this
+       line because the merchant filled a slot labelled Borders — without saying
+       so outright it was handed over and used zero times in a 75-node page. */
+    t.border &&
+      `  border      ${asHex(t.border)}   card and section outlines, dividers. The merchant chose this colour, so cards and bands DO carry a visible 1px outline in it.`,
+    t.fontHeading && `  heading font-family: ${t.fontHeading}`,
+    t.fontBody && `  body font-family: ${t.fontBody}`,
+    `  corner radius ${t.radius}px`,
+    ``,
+    /* Once, above the bands. See `sharedStyleLines` for why it is not repeated
+       inside each of them. */
+    ...(order ? sharedStyleLines(order.style) : []),
+    ...(order ? orderLines(order, t.bg, t.ink) : [sectionPlanLine(input.pageType, detectVertical(input.sell), Boolean(input.refSections?.length))]),
+    ...(order ? [] : [animationLines(input.pageType, detectVertical(input.sell), input.deckSize ?? 1)]),
+    ...referenceLines(input.reference, input.refSections),
+    ...styleLines(input.refStyle),
+    /* Always. The two sources answer questions at different scales — see
+       `trainingLines`. */
+    ...(await trainingLines(order, Boolean(input.refSections?.length))),
+    ...(marketLines(input.market ?? null).length
+      ? [...marketLines(input.market ?? null), ``]
+      : []),
+    `Return the JSON object now.`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return { system, user };
+}
+
+/**
  * `orderLines`, for a test that must prove the old path did not move.
  *
  * Exported because the property that matters most about this change is a
@@ -350,6 +489,25 @@ function orderLines(order: Order, bg: string, ink: string): string[] {
  */
 export function __orderLinesForTest(order: Order, bg: string, ink: string): string[] {
   return orderLines(order, bg, ink);
+}
+
+/**
+ * The WHOLE prompt this stage sends, without sending it.
+ *
+ * `deckPlan` and `sectionSpec` each already expose theirs, for the reason both
+ * docblocks give: the prompt is the part of a model call that can be reviewed,
+ * and one that can only be seen by paying for a completion is one nobody
+ * reviews. This stage had only `__orderLinesForTest` — a tenth of the text —
+ * so the largest prompt of the three was the one that could not be read.
+ *
+ * Deliberately calls the same assembly the live path uses rather than
+ * reproducing it: a copy would drift, and a drifted copy of a prompt is worse
+ * than no copy, because it reads as evidence.
+ */
+export async function __designPromptsForTest(
+  input: DesignInput,
+): Promise<{ system: string; user: string }> {
+  return buildPrompts(input);
 }
 
 /* ==========================================================================
@@ -558,60 +716,7 @@ export async function designPageTree(
      after. A slice placed before them would throw the whole prefix away — it
      would look like it works, and the bill would be several times what it
      should be. Measured in v1: 4,864 of 4,892 input tokens were cache hits. */
-  const system = order
-    ? [
-        loadSkills("design"),
-        sliceSkill("patterns", order.patternIds),
-        sliceSkill("verticals", [order.vertical]),
-        sliceSkill("motion", order.motionIds),
-      ]
-        .filter(Boolean)
-        .join("\n\n")
-    : (() => {
-        const skills = loadSkills("design");
-        return skills ? `${DESIGN_SYSTEM}\n\n${skills}` : DESIGN_SYSTEM;
-      })();
-
-  const t = input.tokens;
-  const user = [
-    `Store sells: ${input.sell}`,
-    input.storeType && `Store type: ${input.storeType}`,
-    input.prompt && `Merchant's own words: ${input.prompt}`,
-    ``,
-    `Visual style: ${input.styleLabel}${input.styleBlurb ? ` — ${input.styleBlurb}` : ""}`,
-    ``,
-    `Design this page: ${input.pageLabel || input.pageType}`,
-    ``,
-    `Palette and faces — work inside these, do not introduce others.`,
-    `Each colour has a job. Use it for that job.`,
-    ``,
-    `  background  ${t.bg}`,
-    `  text        ${t.ink}`,
-    `  accent      ${t.accent}   buttons, prices, badges, the one highlighted thing in a section`,
-    t.band && `  band        ${asHex(t.band)}   background of sections that step away from the page background`,
-    /* Stated as an instruction, not an offer. A border colour only reaches this
-       line because the merchant filled a slot labelled Borders — without saying
-       so outright it was handed over and used zero times in a 75-node page. */
-    t.border &&
-      `  border      ${asHex(t.border)}   card and section outlines, dividers. The merchant chose this colour, so cards and bands DO carry a visible 1px outline in it.`,
-    t.fontHeading && `  heading font-family: ${t.fontHeading}`,
-    t.fontBody && `  body font-family: ${t.fontBody}`,
-    `  corner radius ${t.radius}px`,
-    ``,
-    ...(order ? orderLines(order, t.bg, t.ink) : [sectionPlanLine(input.pageType, detectVertical(input.sell), Boolean(input.refSections?.length))]),
-    ...(order ? [] : [animationLines(input.pageType, detectVertical(input.sell), input.deckSize ?? 1)]),
-    ...referenceLines(input.reference, input.refSections),
-    ...styleLines(input.refStyle),
-    /* Always. The two sources answer questions at different scales — see
-       `trainingLines`. */
-    ...(await trainingLines(order, Boolean(input.refSections?.length))),
-    ...(marketLines(input.market ?? null).length
-      ? [...marketLines(input.market ?? null), ``]
-      : []),
-    `Return the JSON object now.`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const { system, user } = await buildPrompts(input);
 
   let completion: Completion;
   try {

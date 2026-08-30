@@ -88,6 +88,26 @@ export type SpecNode = {
   ratio?: number;
   anim?: { hover?: string; reveal?: string; delay?: number };
   /**
+   * Exact declarations for THIS element, and only what differs from `PageStyle`.
+   *
+   * The field that closes the gap between what stage 2b could think and what it
+   * could say. It used to have `basis`, `gap` and `ratio` — three numbers — so
+   * a padding, a radius, a shadow, a letter-spacing or a font size had to be
+   * described in the `note` as English and translated back into CSS by the
+   * build model, which is a lossy round trip through prose for something that
+   * was already a value.
+   *
+   * Same key set the tree accepts, and the same ban list: `position`, `inset`,
+   * `top/right/bottom/left`, `zIndex`, `float` and `transform` are dropped here
+   * exactly as `schema.ts` drops them. That is not an oversight to fix — a
+   * mockup that lies about where a thing sits is worse than a plain one, and
+   * those properties fight PageFly's layout engine on export. A spec asking for
+   * them would be a spec the page cannot honour.
+   */
+  css?: Css;
+  /** a name from `PageStyle.treatments`, applied before `css` */
+  use?: string;
+  /**
    * Absent or false means the built section must contain it.
    *
    * Required is the default rather than optional because a spec whose every
@@ -98,6 +118,32 @@ export type SpecNode = {
 };
 
 export type SectionSpec = { nodes: SpecNode[] };
+
+/**
+ * The declarations every band on a page shares, written ONCE.
+ *
+ * Stage 2b used to say everything per node, in prose, capped at 200 characters.
+ * The palette, the type scale and the motion curve are the same on band one and
+ * band nine, so repeating them nine times bought nothing and cost output tokens
+ * at $25/MTok — the most expensive place in the pipeline to be redundant.
+ *
+ * So they are stated here and referenced below. A node carries only what
+ * DIFFERS from these, and `treatments` lets a recurring object — a card, a pill
+ * — be named once and applied by name.
+ */
+export type PageStyle = {
+  /** role → exact declarations, e.g. `heading: { fontSize: "clamp(52px,7.2vw,92px)" }` */
+  type?: Record<string, Css>;
+  /** name → declarations applied wherever a node says `use: name` */
+  treatments?: Record<string, Css>;
+  /** one line on the page's motion: durations, easing, stagger */
+  motion?: string;
+  /** anything that is true of the whole page and is not type or a treatment */
+  note?: string;
+};
+
+/** Exactly the shape `schema.ts` accepts on a node's `css`. */
+export type Css = Record<string, string | number>;
 
 export type OrderSection = {
   role: SectionRole;
@@ -154,6 +200,14 @@ export type OrderSection = {
 export type Slot = { role: SectionRole; pattern: string };
 
 export type Order = {
+  /**
+   * What every band of this page shares, from stage 2b.
+   *
+   * On the Order rather than on each `OrderSection` because that is exactly the
+   * property it has: one per page. Optional — the two older deciders never set
+   * it, and a page without one is the page as it was before this existed.
+   */
+  style?: PageStyle | null;
   vertical: string;
   archetype: "A" | "B" | "C" | "D" | "E" | "F" | "G";
   sections: OrderSection[];

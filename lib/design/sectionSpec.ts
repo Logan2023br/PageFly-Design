@@ -3,9 +3,9 @@ import "server-only";
 import { parseObject } from "../ai/json";
 import { getProvider, isAiEnabled, modelName, type Usage } from "../ai/provider";
 import { sliceSkill } from "../ai/skills";
-import type { Order, SectionSpec } from "./plan";
+import type { Order, PageStyle, SectionSpec } from "./plan";
 import { marketLines } from "./marketLines";
-import { vetSpec } from "./specCheck";
+import { vetPageStyle, vetSpec } from "./specCheck";
 
 /* ==========================================================================
    STAGE 2b — THE ELEMENTS INSIDE EACH BAND.
@@ -41,14 +41,25 @@ export function sectionSpecEnabled(): boolean {
 /**
  * Room for one page's elements plus the reasoning that produced them.
  *
- * A built section serialises to about 800 tokens WITH its copy and CSS; a spec
- * carrying neither is nearer 350, and a page is nine to eleven of them. The
- * rest is thinking, billed against the same ceiling — which is the arithmetic
- * that made a flat ceiling wrong for stage 2a and is worth respecting here.
+ * The arithmetic behind the old 24,000 was: a built section is about 800 tokens
+ * WITH its copy and CSS, a spec carrying neither is nearer 350, nine to eleven
+ * of them, and the rest is thinking billed against the same ceiling.
+ *
+ * THE SPEC NOW CARRIES CSS, so half that arithmetic is gone. A band with exact
+ * declarations on its nodes runs 700-900 tokens rather than 350, and the first
+ * run at the old ceiling did not truncate — it ABORTED at 180 seconds with
+ * nothing billed and nothing returned, which is the same outcome wearing a
+ * different name.
+ *
+ * 40,000 and seven minutes. The timeout matches `designServer`'s, and for the
+ * same reason given there: this stage's failure costs the page its design, and
+ * a ceiling that only prices failures must sit above what the work genuinely
+ * needs. The shared `pageStyle` block is what keeps this from growing with the
+ * band count — the palette and the type scale are written once, not nine times.
  */
-const MAX_TOKENS = 24_000;
+const MAX_TOKENS = 40_000;
 
-const TIMEOUT_MS = 180_000;
+const TIMEOUT_MS = 420_000;
 
 export type SpecAsk = {
   pageType: string;
@@ -68,6 +79,14 @@ export type SpecAsk = {
 export type SpecOutcome = {
   /** band index → its spec, only where one survived checking */
   specs: Map<number, SectionSpec>;
+  /**
+   * What every band shares, written once by the design model.
+   *
+   * Undefined when the answer carried none — every caller treats it as absent
+   * rather than empty, so a model that ignores the field costs the page its
+   * shared defaults and nothing else.
+   */
+  pageStyle?: PageStyle;
   usage: Usage;
   /** null when the call ran and produced something usable */
   reason: string | null;
@@ -99,8 +118,14 @@ function systemPrompt(ask: SpecAsk): string {
     `divides between them, and what each one does on hover and on scroll.`,
     ``,
     `YOU DO NOT WRITE COPY AND YOU DO NOT CHOOSE PHOTOGRAPHS. You have seen`,
-    `neither. Say a heading is oversized; someone who knows how long the words`,
-    `are will turn that into a size.`,
+    `neither. Everything else about how this page looks is yours to fix, in`,
+    `numbers, and the build model is expected to honour them.`,
+    ``,
+    `SAY IT IN VALUES, NOT IN ENGLISH. "A generous pill button with a warm`,
+    `glow" is a sentence the next model has to guess at;`,
+    `{"padding":"18px 34px","borderRadius":"999px","boxShadow":"0 0 48px`,
+    `rgba(227,154,95,.28)"} is the same intent with nothing left to guess.`,
+    `Put values in "css" and keep "note" for what the element is FOR.`,
     ``,
     `THE ELEMENTS. Use these and no others — an invented one is dropped and the`,
     `band loses it.`,
@@ -137,6 +162,45 @@ function systemPrompt(ask: SpecAsk): string {
     `LAYOUT — "basis" is a percentage string on a row's children ("44%"), "gap"`,
     `is pixels between children, "ratio" is an image's height divided by its`,
     `width (0.82 is landscape, 1.32 is portrait).`,
+    ``,
+    `CSS — exact declarations, per element, camelCase keys.`,
+    `  {"el":"heading","scale":"oversized","css":{"fontSize":"clamp(52px,7.2vw,92px)",`,
+    `   "lineHeight":"0.95","letterSpacing":"-0.015em","fontWeight":400}}`,
+    ``,
+    `Anything the page can carry belongs here: fontSize, fontWeight, fontStyle,`,
+    `letterSpacing, lineHeight, textTransform, color, background,`,
+    `backgroundImage (gradients), border, borderRadius, boxShadow, padding,`,
+    `margin, width, maxWidth, minHeight, aspectRatio, objectFit, opacity,`,
+    `backdropFilter, display, flexDirection, alignItems, justifyContent.`,
+    ``,
+    `SEVEN ARE REFUSED and asking for them wastes the instruction: position,`,
+    `inset, top, right, bottom, left, zIndex, float, transform. The page cannot`,
+    `carry them — a mockup that lies about where a thing sits is worse than a`,
+    `plain one, and they fight the editor on export. So no rotated cards, no`,
+    `absolute overlaps, no stacking order. Compose with rows, columns and`,
+    `overlay instead.`,
+    ``,
+    `SAY EACH SHARED THING ONCE. The palette, the type scale and the motion`,
+    `curve are the same in band one and band nine; repeating them nine times`,
+    `buys nothing and is billed every time. Open your answer with "pageStyle":`,
+    ``,
+    `  "pageStyle": {`,
+    `    "type": {"oversized":{"fontSize":"clamp(52px,7.2vw,92px)","lineHeight":"0.95",`,
+    `             "letterSpacing":"-0.015em","fontWeight":400},`,
+    `             "eyebrow":{"fontSize":"12px","fontWeight":600,"letterSpacing":".22em",`,
+    `             "textTransform":"uppercase"}},`,
+    `    "treatments": {"pill":{"padding":"18px 34px","borderRadius":"999px",`,
+    `                   "fontSize":"12px","letterSpacing":".16em","textTransform":"uppercase"},`,
+    `                   "card":{"borderRadius":"18px","overflow":"hidden",`,
+    `                   "border":"1px solid rgba(255,255,255,.08)"}},`,
+    `    "motion": "entry fade-up, 320ms cubic-bezier(.16,1,.3,1), 100ms stagger"`,
+    `  }`,
+    ``,
+    `A node then names a treatment with "use" and writes only what DIFFERS:`,
+    `{"el":"button","use":"pill","css":{"background":"#E39A5F","color":"#22150E"}}`,
+    ``,
+    `A node whose "scale" already covers it needs no "css" at all — the type`,
+    `entry applies. Only write "css" for what the shared block does not say.`,
     ``,
     /* The whole point of "review the skeleton" being real rather than
        rhetorical. Sliced to the patterns this page actually uses — nine to
@@ -205,12 +269,23 @@ function systemPrompt(ask: SpecAsk): string {
     `4. Mark a node "optional": true when it would be good but the band works`,
     `   without it. Everything else is required and will be checked for.`,
     ``,
-    `ANSWER SHAPE. One object, keyed by the band numbers below, no prose:`,
-    `{"bands":{"1":{"nodes":[{"el":"row","gap":72,"children":[`,
-    `{"el":"col","basis":"44%","children":[`,
-    `{"el":"heading","scale":"oversized","anim":{"reveal":"fade-up"}},`,
-    `{"el":"button","anim":{"hover":"float-shadow","reveal":"fade-up","delay":1}}]},`,
-    `{"el":"image","basis":"56%","ratio":0.82,"anim":{"hover":"grow"}}]}]}}}`,
+    `5. Specify. A band whose nodes carry no "css" and no "use" has been named`,
+    `   rather than designed, and the build model will invent the numbers.`,
+    ``,
+    `ANSWER SHAPE. One object — "pageStyle" once, then "bands" keyed by the band`,
+    `numbers below. No prose:`,
+    `{"pageStyle":{"type":{...},"treatments":{...},"motion":"..."},`,
+    ` "bands":{"1":{"nodes":[`,
+    `{"el":"row","gap":48,"css":{"maxWidth":"1240px","padding":"0 56px",`,
+    ` "alignItems":"center"},"children":[`,
+    `{"el":"col","basis":"46%","gap":34,"children":[`,
+    `{"el":"heading","scale":"oversized","note":"the promise, two lines",`,
+    ` "anim":{"reveal":"fade-up"}},`,
+    `{"el":"button","use":"pill","css":{"background":"#E39A5F","color":"#22150E",`,
+    ` "boxShadow":"0 0 48px rgba(227,154,95,.28)"},`,
+    ` "anim":{"hover":"float-shadow","reveal":"fade-up","delay":1}}]},`,
+    `{"el":"image","basis":"54%","ratio":0.82,"use":"card",`,
+    ` "anim":{"hover":"grow"}}]}]}}}`,
   ].join("\n");
 }
 
@@ -222,6 +297,9 @@ function userPrompt(ask: SpecAsk): string {
   lines.push(
     `PALETTE. background ${ask.tokens.bg} · ink ${ask.tokens.ink} · ` +
       `accent ${ask.tokens.accent} · band ${ask.tokens.band}`,
+    `Use these four and nothing else. Every colour you write in "css" must be`,
+    `one of them, or a transparency of one — a fifth colour is a colour the`,
+    `page's palette does not have.`,
     ``,
     `THE PAGE. ${ask.pageType} — ${ask.order.sections.length} bands.`,
     ``,
@@ -291,10 +369,28 @@ export async function planSpecs(ask: SpecAsk, signal?: AbortSignal): Promise<Spe
     };
   }
 
-  const parsed = parseObject(text) as { bands?: Record<string, unknown> } | null;
+  const parsed = parseObject(text) as
+    | { bands?: Record<string, unknown>; pageStyle?: unknown }
+    | null;
   if (!parsed?.bands || typeof parsed.bands !== "object")
-    return { ...empty("no usable JSON in the answer"), usage, model: provider.model };
+    /* WHICH failure, in the reason. "No usable JSON" covered three different
+       things — an empty answer, prose, and an object with no `bands` key — and
+       they need three different fixes. The first characters name the shape, the
+       same way `designServer` names it, and that is the whole diagnosis when
+       the shape is prose or a key that moved. */
+    return {
+      ...empty(
+        text.trim() === ""
+          ? `the model returned nothing — ${usage.output} output tokens`
+          : !parsed
+            ? `no JSON in ${text.length} characters — began: ${JSON.stringify(text.trim().slice(0, 120))}`
+            : `JSON with no "bands" key — top level was: ${Object.keys(parsed).join(", ") || "(empty)"}`,
+      ),
+      usage,
+      model: provider.model,
+    };
 
+  const pageStyle = vetPageStyle(parsed.pageStyle);
   const specs = new Map<number, SectionSpec>();
   let dropped = 0;
 
@@ -313,5 +409,5 @@ export async function planSpecs(ask: SpecAsk, signal?: AbortSignal): Promise<Spe
     specs.set(i, spec);
   }
 
-  return { specs, usage, reason: null, model: modelName("design"), dropped };
+  return { specs, pageStyle, usage, reason: null, model: modelName("design"), dropped };
 }

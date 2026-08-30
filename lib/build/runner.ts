@@ -334,6 +334,8 @@ async function run(
       for (const [i, spec] of outcome.specs) {
         if (order.sections[i]) order.sections[i].spec = spec;
       }
+      /* One per page, so it lands on the order rather than on every band. */
+      if (outcome.pageStyle) order.style = outcome.pageStyle;
 
       /* `dropped` is the number that says "prompt bug" rather than "model had a
          bad day" — a band whose answer failed vetting named something outside
