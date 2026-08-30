@@ -249,7 +249,24 @@ const PADDING_PX: Record<string, string> = {
  */
 function ceilingFor(order: Order | null): number {
   if (providerName() !== "deepseek") return 16_000;
-  return order?.sections.some((s) => s.spec) ? 64_000 : 48_000;
+  /* 96,000 on the specified path, raised from 64,000 when the spec started
+     carrying measured values.
+     
+     The reasoning above still holds and it is what forces the raise: the
+     ceiling prices FAILURES, so it has to sit above what a page genuinely
+     needs. What a page needs moved. Five builds of the same brief, output
+     tokens on the design call:
+     
+       52,607 · 107,026 · 114,758 · 71,392 · 63,538
+     
+     The last one is not the cheap one — it is the FAILURE. One call spent
+     63,538 of 64,000, stopped mid-JSON, and the retry did the same: a page
+     billed twice and delivered never. The four that worked spent more than
+     that across their two calls and produced a page.
+     
+     A page that needs 70,000 is billed 70,000 whether the ceiling is 64,000 or
+     96,000. The only thing 64,000 bought was the right to fail at it. */
+  return order?.sections.some((s) => s.spec) ? 96_000 : 48_000;
 }
 
 /**
@@ -349,6 +366,41 @@ function orderLines(order: Order, bg: string, ink: string): string[] {
   return [
     `THE ORDER — build exactly these sections, in this order, one section each.`,
     `Copy the pattern id into the section's "pattern" field verbatim.`,
+    /* Gated on the BACKGROUNDS, not on the specs. It sat inside the spec
+       block, and a build whose stage 2b failed got `bg:WRITE ONE` on its
+       hero with nothing anywhere saying what that meant — the run that
+       found this came back with zero backgrounds and the instruction
+       present but unexplained. The two are decided by different stages and
+       have to be conditioned separately. */
+    ...(order.sections.some((s) => s.mayHaveBg)
+      ? [
+          `A band marked bg:WRITE ONE gets a photograph behind it. Put it on the`,
+          `SECTION, not on a child, and write all three fields:`,
+          ``,
+          `  "bg": {"kind":"photo",`,
+          `         "query":"English search terms — the subject, the setting,`,
+          `                  the light. 'tailored wool overcoat on model, moody`,
+          `                  studio, editorial fashion photography', not 'fashion'",`,
+          `         "scrim":"soft"}`,
+          ``,
+          `"kind":"video" instead, where the thing itself MOVES and the movement`,
+          `is the argument — fabric falling, liquid pouring, a machine running,`,
+          `a flame. One per page at most, and only on a band the reader lands on`,
+          `rather than one they scroll past. Same three fields; the query names`,
+          `the motion: "espresso pouring into a cup, slow motion, warm light".`,
+          `A still photograph of a moving thing is the safer answer whenever the`,
+          `movement is not the point.`,
+          ``,
+          `The scrim is not optional on a band with text over it — it is what`,
+          `makes a heading readable on somebody else's photograph. "none" only`,
+          `where nothing sits on top.`,
+          ``,
+          `A band marked bg:WRITE ONE that comes back without one is the failure`,
+          `this line exists to prevent: the pattern builds its gradient, and the`,
+          `gradient darkens nothing.`,
+          ``,
+        ]
+      : []),
     /* Only when there is something to explain. Unconditional, these three lines
        would describe elements to every build on the older paths — where no
        section ever lists any — and would change a cached prefix that has no
@@ -368,6 +420,8 @@ function orderLines(order: Order, bg: string, ink: string): string[] {
           ``,
           `Where a line gives a value, do not substitute your own. Where it gives`,
           `none, decide — the spec is silent about what it did not want fixed.`,
+          ``,
+
         ]
       : []),
     ``,
@@ -390,10 +444,14 @@ function orderLines(order: Order, bg: string, ink: string): string[] {
            a shape; this is the subject. Only `deckPlan.ts` fills it — the two
            older deciders leave it null and the line disappears. */
         s.brief ? `→ ${s.brief}` : "",
-        /* Two words, on at most two lines of the order. The whole background
-           feature costs the prompt about eight tokens; the decision it replaces
-           would have cost eight judgements. */
-        s.mayHaveBg ? "bg:allowed" : "",
+        /* WRITE THE BACKGROUND, not "you may". Two words — `bg:allowed` — was
+           a permission slip buried in 55,000 characters of prompt, and it was
+           read as an option: across 59 shipped sections, ONE carried a
+           background photograph, and two of the nine bands on every page had
+           been granted one. The band that most needs a photograph is the hero,
+           and heroes were coming back as a scrim over a flat colour — the
+           gradient built, the photograph it exists to darken absent. */
+        s.mayHaveBg ? "bg:WRITE ONE" : "",
         s.motion ? `motion:${s.motion}` : "",
       ]
         .filter(Boolean)
