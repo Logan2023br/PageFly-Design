@@ -133,7 +133,12 @@ export function GeneratingScreen() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {plan.map((entry, i) => {
           const page = byId.get(entry.pageId);
-          const failed = failures.some((f) => f.pageId === entry.pageId);
+          /* `find`, not `some`. The reason is recorded by the runner, written
+             into the job row and sent to this browser, and this card threw it
+             away — so a build with a failed page said "couldn't build this one"
+             and the only way to learn WHY was to read the server log. */
+          const failure = failures.find((f) => f.pageId === entry.pageId);
+          const failed = failure !== undefined;
           /* Every page that has not landed is genuinely in flight — the model
              is given all of them at once. Marking only `settled` as building
              left the rest looking queued when nothing was waiting. */
@@ -163,11 +168,24 @@ export function GeneratingScreen() {
               >
                 <div className="relative aspect-[3/4] bg-pf-bg-deep">
                   {failed ? (
-                    <div className="grid size-full place-items-center gap-2 p-4 text-center">
+                    <div className="grid size-full place-content-center justify-items-center gap-2 p-4 text-center">
                       <Icon name="CircleAlert" size={18} />
                       <span className="text-[12px] text-pf-muted">
                         Couldn&apos;t build this one
                       </span>
+                      {/* The reason, in full on hover and clamped in the card.
+                          It is model-facing English rather than copy written
+                          for a merchant, and that is the point: it is the
+                          difference between "try again" and knowing whether
+                          trying again will help. */}
+                      {failure?.reason && (
+                        <span
+                          title={failure.reason}
+                          className="line-clamp-3 text-[11px] leading-snug text-pf-faint"
+                        >
+                          {failure.reason}
+                        </span>
+                      )}
                     </div>
                   ) : (
                     <WireframeMorph

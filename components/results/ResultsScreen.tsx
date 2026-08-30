@@ -27,14 +27,22 @@ function FailureNotice() {
         </span>
         <span>
           Couldn&apos;t build {failures.length} of {plan.length} page
-          {plan.length === 1 ? "" : "s"}:{" "}
-          <span className="text-pf-muted">
-            {failures
-              .map((f) => PAGE_BY_ID[f.label]?.label ?? f.label)
-              .join(", ")}
-            .
-          </span>{" "}
-          Try again for just those.
+          {plan.length === 1 ? "" : "s"}. Try again for just those.
+          {/* One line per page, each with the reason the runner recorded. The
+              list used to be page names joined by commas and nothing else, so
+              a merchant looking at a failed Contact page could not tell a
+              model that answered nothing from a tree that failed checking —
+              and neither could anyone reading a screenshot of it. */}
+          <span className="mt-1.5 grid gap-1 text-[12.5px] text-pf-muted">
+            {failures.map((f) => (
+              <span key={f.pageId}>
+                <span className="text-pf-text">
+                  {PAGE_BY_ID[f.label]?.label ?? f.label}
+                </span>
+                {f.reason ? ` — ${f.reason}` : ""}
+              </span>
+            ))}
+          </span>
         </span>
       </span>
       <Button
