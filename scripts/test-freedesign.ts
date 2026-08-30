@@ -206,6 +206,46 @@ async function main(): Promise<void> {
     "a buy box on a page with no product is still dropped",
   );
 
+  console.log("\nthe motionPlan nothing asked for");
+
+  {
+    /* An order excludes BOTH places that instruct the build model to write this
+       field — DESIGN_SYSTEM and the ## Animation block — so it arrives missing
+       and the repair is the only thing that has ever added one. On a measured
+       build the repair did not. It is written from the spec instead. */
+    const { __motionPlanFromForTest: from } = await import("../lib/ai/designServer");
+    const band = (pattern: string, nodes: unknown[]) => ({
+      role: "content", pattern, signature: false, dark: false, padding: "standard",
+      motion: null, mayHaveBg: false, brief: null, spec: { nodes },
+    });
+
+    const plan = from({
+      vertical: "free", archetype: "E", patternIds: [], motionIds: [],
+      sections: [
+        band("cover-plate", [
+          { el: "heading", anim: { reveal: "fade-up" } },
+          { el: "col", children: [{ el: "image", anim: { hover: "grow", reveal: "fade" } }] },
+        ]),
+        band("the-standfirst", [{ el: "text" }]),
+      ],
+    } as never);
+
+    check(plan.includes("cover-plate:"), "one line per section, named as the design named it");
+    check(plan.includes("fade-up") && plan.includes("fade"), "carrying the reveals it asked for");
+    check(plan.includes("grow"), "and the hovers, found at any depth");
+    check(
+      /the-standfirst: none/.test(plan),
+      "a section that asked for nothing says none — that is a real answer",
+      plan,
+    );
+
+    const silent = from({
+      vertical: "free", archetype: "E", patternIds: [], motionIds: [],
+      sections: [band("x", [{ el: "text" }])],
+    } as never);
+    check(silent.length > 0, "a page where nothing moves still gets a plan", silent);
+  }
+
   console.log("\nthe section that carries the page");
 
   {

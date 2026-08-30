@@ -658,6 +658,23 @@ export function isAdvisoryPin(pattern: string): boolean {
   return FORM_PINS.has(pattern);
 }
 
+/**
+ * The `vertical` a free design carries, and a sentinel rather than a trade.
+ *
+ * Free mode has no vertical: nothing looked one up, and the skill file that
+ * describes trades is exactly what the mode exists not to read. It still has to
+ * put SOMETHING in the field, because `Order` is the shape four deciders agree
+ * on — so it puts this, and everything that would otherwise go looking checks
+ * for it first. Without that, stage 3 asked `30-verticals.md` for a block named
+ * "free" on every page and logged a miss.
+ */
+export const FREE_VERTICAL = "free";
+
+/** True when this order was designed with no pattern library behind it. */
+export function isFreeOrder(order: { vertical: string }): boolean {
+  return order.vertical === FREE_VERTICAL;
+}
+
 /** True when this page type has ONE product in context — see `isBanned`. */
 export function pageHasOneProduct(pageType: string): boolean {
   return (PINNED[pageType]?.commerce ?? []).some((id) => id.startsWith("product-detail"));

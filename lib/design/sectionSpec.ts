@@ -3,6 +3,7 @@ import "server-only";
 import { parseObject } from "../ai/json";
 import { getProvider, isAiEnabled, modelName, type Usage } from "../ai/provider";
 import { sliceSkill } from "../ai/skills";
+import { FREE_VERTICAL } from "./plan";
 import type {
   Order,
   OrderSection,
@@ -768,7 +769,7 @@ export async function planSpecs(ask: SpecAsk, signal?: AbortSignal): Promise<Spe
       if (sections[i].dark && sections[i - 1].dark) sections[i].dark = false;
 
     const order: Order = {
-      vertical: "free",
+      vertical: FREE_VERTICAL,
       archetype: "E",
       patternIds: sections.map((s) => s.pattern),
       motionIds: [],

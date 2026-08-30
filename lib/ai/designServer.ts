@@ -7,6 +7,7 @@ import { DESIGN_SYSTEM } from "./designPrompt";
 import { designTreeSchema, walk, type DesignTree } from "../design/schema";
 import { animationLines } from "../design/animationPicker";
 import {
+  isFreeOrder,
   orderFromSlots,
   planPage,
   seedFor,
@@ -476,11 +477,21 @@ async function buildPrompts(
   input: DesignInput,
 ): Promise<{ system: string; user: string }> {
   const order = input.order ?? null;
+  /* A FREE ORDER HAS NOTHING TO LOOK UP. Its `patternIds` are names the design
+     model invented and its vertical is a sentinel, so every one of these
+     lookups misses — eleven `[skills] no block "cover-plate"` lines per page,
+     which read as a broken build rather than as a mode working correctly.
+     Asking is the bug, not the miss. */
+  const free = order ? isFreeOrder(order) : false;
   const system = order
     ? [
         loadSkills("design"),
-        sliceSkill("patterns", order.patternIds),
-        sliceSkill("verticals", [order.vertical]),
+        ...(free
+          ? []
+          : [
+              sliceSkill("patterns", order.patternIds),
+              sliceSkill("verticals", [order.vertical]),
+            ]),
         sliceSkill("motion", order.motionIds),
       ]
         .filter(Boolean)
@@ -721,6 +732,60 @@ async function trainingLines(
     ...found,
   ];
 }
+
+/**
+ * The `motionPlan` the page should have had, written from the spec it was built
+ * from.
+ *
+ * WHY THIS EXISTS RATHER THAN A PROMPT LINE. Two places tell the build model to
+ * write this field, and an order excludes BOTH of them: `DESIGN_SYSTEM` — where
+ * the output shape `{"motionPlan":"...","sections":[...]}` is stated — is only
+ * sent when there is no order, and so is the `## Animation` block that repeats
+ * it. Every build today has an order. So the field has had no instruction
+ * behind it at all, and the only thing producing one was the audit noticing it
+ * missing and the repair choosing to add it. On a measured free-design build
+ * the repair did not: ten sections, six audit problems, no motionPlan.
+ *
+ * Adding the instruction back would mean sending the animation register, which
+ * is a skill file this mode exists not to read. It is also unnecessary: the
+ * design model already decided the motion, element by element, in `anim`. The
+ * decision is not missing — only the sentence describing it is. So the sentence
+ * is written from the decision, deterministically, and cannot be forgotten.
+ *
+ * A section whose spec asked for nothing says so. "none" is a real answer here
+ * and always was; what the field is for is evidence that each section was
+ * considered, and a section that was considered and left still is evidence.
+ */
+function motionPlanFrom(order: Order): string {
+  const lines: string[] = [];
+
+  for (const s of order.sections) {
+    const hovers = new Set<string>();
+    const reveals = new Set<string>();
+
+    (function walkSpec(node: unknown): void {
+      if (Array.isArray(node)) return node.forEach(walkSpec);
+      if (!node || typeof node !== "object") return;
+      const o = node as Record<string, unknown>;
+      const anim = o.anim as { hover?: string; reveal?: string } | undefined;
+      if (anim?.hover) hovers.add(anim.hover);
+      if (anim?.reveal) reveals.add(anim.reveal);
+      for (const v of Object.values(o)) walkSpec(v);
+    })(s.spec?.nodes ?? []);
+
+    const moves = [
+      reveals.size ? `${[...reveals].join(" / ")} on entry` : "",
+      hovers.size ? `${[...hovers].join(" / ")} on hover` : "",
+    ].filter(Boolean);
+
+    lines.push(`${s.pattern}: ${moves.length ? moves.join(", ") : "none"}`);
+  }
+
+  return lines.join(". ") || "none — nothing on this page moves.";
+}
+
+/** `motionPlanFrom`, for the tests. */
+export const __motionPlanFromForTest = motionPlanFrom;
 
 export async function designPageTree(
   input: DesignInput,
@@ -1008,11 +1073,34 @@ export async function designPageTree(
         const repaired = designTreeSchema.safeParse(parseObject(repair.text));
         if (repaired.success && repaired.data.sections.length >= tree.sections.length) {
           tree = repaired.data;
+          /* SILENCE WAS THE BUG. The only test here is that the repair is not
+             thinner than what it replaced, so a repair that changed nothing at
+             all was accepted without a word — which is exactly what happened
+             to a page whose motionPlan the audit had asked for twice. Counting
+             what survives does not fix a repair; it stops one pretending. */
+          const left = audit(tree, order, input.tokens.bg, input.pageType);
+          if (left.length)
+            console.warn(
+              `[design] ${input.pageType} · repair left ${left.length}/${problems.length} ` +
+                `problem${left.length === 1 ? "" : "s"}: ${left.map((p) => p.slice(0, 48)).join(" | ")}`,
+            );
         }
       } catch {
         /* A failed repair costs the page nothing: the first tree still stands. */
       }
     }
+  }
+
+  /* THE FIELD NOTHING ASKED FOR. See `motionPlanFrom`: an order excludes both
+     places that instruct the build model to write this, so it arrives missing
+     more often than not and the repair is the only thing that has ever added
+     one. Written here from the spec's own `anim` decisions when it is absent —
+     never over one the model wrote, because a sentence it chose says more than
+     a sentence assembled from fields. */
+  if (order && !(tree as { motionPlan?: string }).motionPlan?.trim()) {
+    const written = motionPlanFrom(order);
+    tree = { ...tree, motionPlan: written };
+    console.log(`[design] ${input.pageType} · motionPlan written from the spec`);
   }
 
   /* Which nodes carry a photograph is a fact about the schema, so it is kept
