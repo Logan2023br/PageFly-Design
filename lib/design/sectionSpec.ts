@@ -3,7 +3,6 @@ import "server-only";
 import { parseObject } from "../ai/json";
 import { getProvider, isAiEnabled, modelName, type Usage } from "../ai/provider";
 import { sliceSkill } from "../ai/skills";
-import { sectionBounds } from "./sectionPlan";
 import type {
   Order,
   OrderSection,
@@ -69,6 +68,20 @@ export function sectionSpecEnabled(): boolean {
 const MAX_TOKENS = 40_000;
 
 const TIMEOUT_MS = 420_000;
+
+/**
+ * The most sections a free design may return before something is wrong.
+ *
+ * Not a design cap — free mode is asked for no length at all, and the prompt
+ * carries no range. This is the point past which the answer stops being a long
+ * page and starts being a build that returns nothing: stage 3 has a fixed
+ * output ceiling, and `deckPlan` records a ten-section home page that spent all
+ * of it thinking and produced no JSON. That ceiling is 96,000 now.
+ *
+ * Sixteen, against the eleven a real free design produced for a product page.
+ * If this ever fires, the number to change is this one.
+ */
+const FREE_SECTION_CEILING = 16;
 
 /**
  * Design with nothing in front of it — no bands, no patterns, no trade block.
@@ -302,53 +315,70 @@ function systemPrompt(ask: SpecAsk): string {
           ``,
         ]
       : []),
-    /* The band a merchant judges the build by, and the one whose contents are
-       most often padding. The colours are not mentioned because they are not
-       the model's to set — the exporter emits the cart button from the store's
-       palette, so a spec that argued about them would be arguing with code. */
-    `THE BUY BOX. Where a band holds a "product", YOU ARRANGE THE WHOLE COLUMN.`,
-    `There is no fixed order and no template — this is the section a merchant`,
-    `judges the page by, and a stack of grey one-liners is what a template`,
-    `looks like.`,
-    ``,
-    `Seven parts are bound to the real product and cannot be drawn: title,`,
-    `price, swatches, qty, stock, atc, express. Place each with`,
-    `{"el":"bound","slot":"atc"} wherever it belongs. Everything between them`,
-    `is an ordinary tree of your own — up to 16 blocks, nesting free.`,
-    ``,
-    `Arrange it for how THIS product is decided. A subscription serum, a €400`,
-    `device and a €12 refill do not get the same column: one wants the offer`,
-    `picker above the cart button because choosing the bundle IS the decision,`,
-    `one wants proof first because the objection is trust, one wants the spec`,
-    `accordion high because the buyer is comparing. Decide, per store.`,
-    ``,
-    `Reach for whichever of these THIS product's decision needs, and leave the`,
-    `rest out — a refill and a device are not deciding the same thing:`,
-    `  a benefit grid, two or three across, icon plus two words each`,
-    `  an offer picker — bottle / three / subscribe, one marked most popular`,
-    `  a delivery promise with a real date, not "fast shipping"`,
-    `  a rating carrying its number and its count`,
-    `  a guarantee naming its window`,
-    `  an accordion for the full spec, so detail costs no scroll`,
-    ``,
-    `When no element fits, say "custom" and describe what it does in the note —`,
-    `a card picker that responds to a click, an unlock meter, a segmented`,
-    `toggle. The builder writes real markup, style and script for it.`,
-    ``,
-    `THE PHOTOGRAPH. Say its shape on the product node — mediaRatio is height`,
-    `over width. 1 is square and right for a bottle; a garment wants 1.2-1.35 or`,
-    `it loses its hem; a rug or a desk wants 0.7-0.85. And mediaHover: magnifier`,
-    `for anything expensive or textured, none where the photography is editorial.`,
-    ``,
-    `HOW IT IS CHOSEN. Say the option groups on the product node — at most two,`,
-    `each with a name, how many values, and how it should read: dots for colour,`,
-    `tiles for sizes and anything with words, dropdown past about eight values.`,
-    `Colour and Size do not look alike and must not be drawn alike.`,
-    ``,
-    `Always wrong: empty stars labelled "verified reviews", a strip of bare`,
-    `icons with no words, and any row that would read the same on a phone case`,
-    `as on a face serum.`,
-    ``,
+    /* GROUP B — DESIGN OPINION, AND FREE MODE DOES NOT GET IT.
+
+       Everything from here to "Always wrong" tells the design model what a
+       good buy box contains, what shape a photograph of a garment should be,
+       and how a colour option differs from a size option. None of it is a
+       limit of the export — the elements and the CSS above are that — it is
+       taste, written down by someone who is not looking at this store.
+
+       Kept for the banded path, which was built around it and is measured
+       against it. Free mode is the bet that the model reaches these
+       conclusions better than a list can state them, and a bet you can read
+       the prompt for is a bet you can settle. FREE_DESIGN=false restores
+       every line of it, unchanged, without a deploy. */
+    ...(free
+      ? []
+      : [
+      /* The band a merchant judges the build by, and the one whose contents are
+         most often padding. The colours are not mentioned because they are not
+         the model's to set — the exporter emits the cart button from the store's
+         palette, so a spec that argued about them would be arguing with code. */
+      `THE BUY BOX. Where a band holds a "product", YOU ARRANGE THE WHOLE COLUMN.`,
+      `There is no fixed order and no template — this is the section a merchant`,
+      `judges the page by, and a stack of grey one-liners is what a template`,
+      `looks like.`,
+      ``,
+      `Seven parts are bound to the real product and cannot be drawn: title,`,
+      `price, swatches, qty, stock, atc, express. Place each with`,
+      `{"el":"bound","slot":"atc"} wherever it belongs. Everything between them`,
+      `is an ordinary tree of your own — up to 16 blocks, nesting free.`,
+      ``,
+      `Arrange it for how THIS product is decided. A subscription serum, a €400`,
+      `device and a €12 refill do not get the same column: one wants the offer`,
+      `picker above the cart button because choosing the bundle IS the decision,`,
+      `one wants proof first because the objection is trust, one wants the spec`,
+      `accordion high because the buyer is comparing. Decide, per store.`,
+      ``,
+      `Reach for whichever of these THIS product's decision needs, and leave the`,
+      `rest out — a refill and a device are not deciding the same thing:`,
+      `  a benefit grid, two or three across, icon plus two words each`,
+      `  an offer picker — bottle / three / subscribe, one marked most popular`,
+      `  a delivery promise with a real date, not "fast shipping"`,
+      `  a rating carrying its number and its count`,
+      `  a guarantee naming its window`,
+      `  an accordion for the full spec, so detail costs no scroll`,
+      ``,
+      `When no element fits, say "custom" and describe what it does in the note —`,
+      `a card picker that responds to a click, an unlock meter, a segmented`,
+      `toggle. The builder writes real markup, style and script for it.`,
+      ``,
+      `THE PHOTOGRAPH. Say its shape on the product node — mediaRatio is height`,
+      `over width. 1 is square and right for a bottle; a garment wants 1.2-1.35 or`,
+      `it loses its hem; a rug or a desk wants 0.7-0.85. And mediaHover: magnifier`,
+      `for anything expensive or textured, none where the photography is editorial.`,
+      ``,
+      `HOW IT IS CHOSEN. Say the option groups on the product node — at most two,`,
+      `each with a name, how many values, and how it should read: dots for colour,`,
+      `tiles for sizes and anything with words, dropdown past about eight values.`,
+      `Colour and Size do not look alike and must not be drawn alike.`,
+      ``,
+      `Always wrong: empty stars labelled "verified reviews", a strip of bare`,
+      `icons with no words, and any row that would read the same on a phone case`,
+      `as on a face serum.`,
+      ``,
+        ]),
     /* NOT IN FREE MODE. The market is something the merchant PICKED, in the
        same step they picked what they sell and which style — so free mode
        passes it as a fact, beside the others, and lets the design work out what
@@ -358,30 +388,33 @@ function systemPrompt(ask: SpecAsk): string {
        prevented knowledge, and left the page addressed to nobody while looking
        like it had been addressed to someone." */
     ...(!free && marketLines(ask.market).length ? [...marketLines(ask.market), ``] : []),
+    /* TWO RULES IN FREE MODE, AND NEITHER IS ABOUT THE PAGE.
+    
+       The three that went — every band gets a spec, vary between bands, motion
+       is punctuation — are opinions about what a good page looks like, and this
+       mode exists so the design model holds those rather than reads them.
+    
+       These two are about the ANSWER. "optional" is a field the checker reads,
+       and a node with no values is the one thing that makes this whole stage
+       pointless: it hands the decision back to the build model, which is the
+       problem stage 2b was added to solve. Cutting them would not free the
+       design, it would delete the reason the call is made. */
     `RULES.`,
     ...(free
-      ? [
-          `1. Decide the sections first, then fill them. How many, what each one`,
-          `   is, and what order they run in are the design — a good page is not`,
-          `   a good list of sections in an order nobody chose.`,
-          `2. Exactly ONE section carries the page: the most room and the best`,
-          `   photograph. Not the first one — a page whose only investment is its`,
-          `   first screen has nothing below the fold.`,
-          `3. Vary. Two sections with the same element list, or the same padding`,
-          `   down the whole page, is a page assembled rather than designed.`,
-        ]
+      ? []
       : [
           `1. Every band gets a spec. A band you skip is a band built by guesswork.`,
           `2. Vary between bands. Two bands with the same element list is the failure`,
           `   this step exists to prevent.`,
+          `3. Motion is punctuation. A page where everything moves reads as a page`,
+          `   where nothing does — leave most elements still.`,
         ]),
-    `3. Motion is punctuation. A page where everything moves reads as a page`,
-    `   where nothing does — leave most elements still.`,
-    `4. Mark a node "optional": true when it would be good but the band works`,
-    `   without it. Everything else is required and will be checked for.`,
+    `${free ? 1 : 4}. Mark a node "optional": true when it would be good but the`,
+    `   section works without it. Everything else is required and checked for.`,
     ``,
-    `5. Specify. A band whose nodes carry no "css" and no "use" has been named`,
-    `   rather than designed, and the build model will invent the numbers.`,
+    `${free ? 2 : 5}. Specify. A section whose nodes carry no "css" and no "use"`,
+    `   has been named rather than designed, and the build model will invent the`,
+    `   numbers.`,
     ``,
     ...(free
       ? [
@@ -452,25 +485,25 @@ function userPrompt(ask: SpecAsk): string {
   );
 
   if (ask.order === null) {
-    /* THE ONLY NUMBER FREE MODE IS GIVEN, and it is a token budget rather than
-       a shape. `sectionBounds` is the same table stage 1 used; without it a
-       ten-section home page was measured spending all of stage 3's output on
-       thinking and returning no JSON. Stated as a target and a ceiling so the
-       page is PLANNED at a length rather than cut to one — a page trimmed from
-       ten to nine loses its close. */
-    const b = sectionBounds(ask.pageType);
+    /* NO SECTION COUNT. `sectionBounds` said 8-11 for a product page and 6-8
+       for an About page, and the number was asked for as a token budget rather
+       than a shape — but a budget stated as a range is still a length someone
+       else chose, and how long a page should be is part of designing it.
+    
+       THE RISK THIS TAKES, recorded because it was measured and not guessed:
+       `deckPlan` carries a note about a ten-section home page whose stage 3
+       spent all 48,000 of its output tokens thinking and returned no JSON at
+       all. That ceiling is 96,000 now, and `FREE_SECTION_CEILING` below is a
+       crash guard rather than a cap — it fires loudly, and if it ever fires the
+       honest fix is that number, not a range in this prompt. */
     lines.push(
       `THE PAGE. ${ask.pageType}.`,
       ``,
-      `Aim for about ${b.target} sections and never more than ${b.cap}. That is`,
-      `a budget, not a shape: the next model has a fixed amount of room to build`,
-      `what you design, and a page past the ceiling is a page it cannot finish.`,
-      `A six-section page of real content beats an eight-section page carrying`,
-      `two sections that could sit on any store.`,
-      ``,
-      `Nothing else about this page has been decided. There is no list to pick`,
-      `from and no shape this page type is supposed to have — design what this`,
-      `store's ${ask.pageType} page should be.`,
+      `Nothing about this page has been decided — not its length, not its shape,`,
+      `not what a page of this kind is supposed to contain. How many sections it`,
+      `needs is part of what you are deciding: a page of six sections that each`,
+      `earn their place and a page of eleven can both be right, and which one`,
+      `this store's ${ask.pageType} page is, is yours to say.`,
       ``,
     );
   } else {
@@ -569,6 +602,38 @@ function vetFreeSection(
 }
 
 /**
+ * Which section carries the page, when the answer did not say — by INDEX.
+ *
+ * The prompt used to define a signature: "the most room and the best
+ * photograph". Free mode cut that sentence with the rest of the design
+ * opinions, and the next run marked a one-node accent ticker as the section
+ * carrying the page — the old fallback took the first section that was not the
+ * hero, which only worked while the model had been told what it was picking.
+ *
+ * So this reads the answer instead of a rule. The section with the most in it
+ * is the one the design spent itself on: a fact about what came back rather
+ * than an opinion about what should have. The hero stays out of it — it is the
+ * first screen, and a page whose only investment is its first screen has
+ * nothing below it.
+ */
+function pickSignature(sections: OrderSection[]): number {
+  const weight = (x: OrderSection) =>
+    JSON.stringify(x.spec?.nodes ?? []).split(`"el"`).length - 1;
+  let best = -1;
+  for (let i = 0; i < sections.length; i++) {
+    if (sections[i].role === "hero") continue;
+    if (best === -1 || weight(sections[i]) > weight(sections[best])) best = i;
+  }
+  return best === -1 ? 0 : best;
+}
+
+/** `pickSignature`, for the tests. */
+export const __pickSignatureForTest = (sections: OrderSection[]): number => {
+  const marked = sections.findIndex((s) => s.signature);
+  return sections.filter((s) => s.signature).length === 1 ? marked : pickSignature(sections);
+};
+
+/**
  * `vetFreeSection`, for the tests.
  *
  * Same reason `__specPromptsForTest` exists: free mode's checking is the only
@@ -639,8 +704,20 @@ export async function planSpecs(ask: SpecAsk, signal?: AbortSignal): Promise<Spe
     const sections: OrderSection[] = [];
     let dropped = 0;
 
-    const cap = sectionBounds(ask.pageType).cap;
-    for (const raw of parsed.sections.slice(0, cap)) {
+    /* A CRASH GUARD, NOT A CAP. Free mode asks for no length and trims to
+       none — but stage 3 has a finite output ceiling, and a page of forty
+       sections is a build that returns nothing rather than a long page. Set
+       well above any page a design has actually produced (eleven, on a product
+       page for Vietnam), so reaching it means something went wrong rather than
+       that a page was ambitious. Loud, because a silent trim would look exactly
+       like a model that chose to stop. */
+    if (parsed.sections.length > FREE_SECTION_CEILING)
+      console.warn(
+        `[spec] ${ask.pageType} · ${parsed.sections.length} sections is past the ` +
+          `crash guard of ${FREE_SECTION_CEILING} — trimmed. Raise FREE_SECTION_CEILING ` +
+          `or find out why the design ran away.`,
+      );
+    for (const raw of parsed.sections.slice(0, FREE_SECTION_CEILING)) {
       const section = vetFreeSection(raw, ask.pageType);
       if (!section) {
         dropped++;
@@ -660,9 +737,19 @@ export async function planSpecs(ask: SpecAsk, signal?: AbortSignal): Promise<Spe
        between them disappears. Everything else the answer said is kept. */
     const marked = sections.filter((s) => s.signature);
     if (marked.length !== 1) {
+      /* BY WEIGHT, NOT BY POSITION. The first version took the first section
+         that was not the hero, which was fine while the prompt still said what
+         a signature IS — "the most room and the best photograph". Free mode
+         cut that sentence, and the very next run marked a one-node accent
+         ticker as the section carrying the page.
+      
+         So the fallback reads the answer instead of a rule: the section with
+         the most in it is the one the design spent itself on, and that is a
+         fact about what came back rather than an opinion about what should
+         have. The hero is still excluded — it is the first screen, and a page
+         whose only investment is its first screen has nothing below it. */
       for (const s of sections) s.signature = false;
-      const pick = sections.find((s) => s.role !== "hero") ?? sections[0];
-      pick.signature = true;
+      sections[pickSignature(sections)].signature = true;
     }
     for (let i = 1; i < sections.length; i++)
       if (sections[i].dark && sections[i - 1].dark) sections[i].dark = false;

@@ -63,25 +63,55 @@ async function main(): Promise<void> {
     "the market travels as a fact, in the line the merchant's other answers are on",
   );
 
-  /* The banded path is untouched — it still gets the block it always got. */
+  /* WHAT STAYS is the export's limits and nothing else — the elements a page
+     can carry, the CSS it can carry, and the shape of the answer. */
+  check(free.system.includes("SEVEN ARE REFUSED"), "the export's CSS limits stay");
+  check(free.system.includes("THE ELEMENTS"), "and the element vocabulary");
+  check(free.system.includes("ANSWER SHAPE"), "and the shape the answer arrives in");
+
+  console.log("\nthe design opinions, gone from free and kept for banded");
+
   const banded = __specPromptsForTest({
-    pageType: "about", sell: "Knitwear", storeType: "d2c", market: "us",
-    styleLabel: "Editorial", styleBlurb: "", prompt: "",
-    tokens: { bg: "#FFFBF5", ink: "#12100E", accent: "#B4552C", band: "#F2ECE2" },
+    pageType: "product", sell: "Bomber", storeType: "single-product", market: "us",
+    styleLabel: "Bold", styleBlurb: "", prompt: "",
+    tokens: { bg: "#0F0F10", ink: "#F5F3EF", accent: "#D9482B", band: "#1A1A1C" },
     order: {
-      vertical: "fashion-apparel", archetype: "C", patternIds: ["story-band"],
-      motionIds: [],
-      sections: [{ role: "content", pattern: "story-band", signature: true,
+      vertical: "fashion-apparel", archetype: "C",
+      patternIds: ["product-detail-gallery"], motionIds: [],
+      sections: [{ role: "commerce", pattern: "product-detail-gallery", signature: true,
         dark: false, padding: "standard", motion: null, mayHaveBg: false, brief: null }],
     },
   } as never);
+
+  for (const [what, needle] of [
+    ["the buy-box list", "THE BUY BOX."],
+    ["the photograph ratios", "THE PHOTOGRAPH."],
+    ["the option-group advice", "HOW IT IS CHOSEN."],
+    ["the always-wrong list", "Always wrong:"],
+    ["motion is punctuation", "Motion is punctuation"],
+    ["the market block", "THE MARKET THIS SELLS INTO"],
+  ] as const) {
+    check(!free.system.includes(needle), `free mode does not get ${what}`);
+    check(banded.system.includes(needle), `and turning the flag off restores ${what}`);
+  }
+
+  /* The two that read as rules but are about the ANSWER, not the page. */
+  check(free.system.includes("Specify. A section"), "free mode still has to give values");
+  check(free.system.includes(`Mark a node "optional"`), "and still marks what is optional");
+
+  console.log("\nhow long the page is");
+
+  check(!/never more than \d/.test(free.user), "free mode is given no section count");
+  check(!/\d-\d+ sections/.test(free.user), "nor a range");
   check(
-    banded.system.includes("THE MARKET THIS SELLS INTO"),
-    "the banded path still gets the block it always got",
+    free.user.includes("not its length"),
+    "it is told the length is part of what it is deciding",
   );
-  /* Two things stay, and neither is taste — see the note on `freeDesignEnabled`. */
-  check(free.system.includes("SEVEN ARE REFUSED"), "the export's CSS limits stay");
-  check(/never more than \d/.test(free.user), "and the section budget stays");
+  check(
+    free.system.length < banded.system.length - 3000,
+    "the free prompt is thousands of characters shorter",
+    `free ${free.system.length} · banded ${banded.system.length}`,
+  );
 
   console.log("\nwhat the checking refuses, and what it keeps");
 
@@ -121,6 +151,29 @@ async function main(): Promise<void> {
     !JSON.stringify(shop?.spec ?? "").includes('"el":"product"'),
     "a buy box on a page with no product is still dropped",
   );
+
+  console.log("\nthe section that carries the page");
+
+  {
+    /* The prompt no longer says what a signature is, so the fallback may not
+       assume it. Reading the answer's own weight is what replaced it. */
+    const { __pickSignatureForTest: pick } = await import("../lib/design/sectionSpec");
+    const band = (role: string, nodes: number, signature = false) => ({
+      role, pattern: role, signature, dark: false, padding: "standard",
+      motion: null, mayHaveBg: false, brief: null,
+      spec: { nodes: Array.from({ length: nodes }, () => ({ el: "text" })) },
+    });
+
+    const picked = pick([
+      band("hero", 40), band("utility", 1), band("commerce", 15), band("proof", 18),
+    ] as never);
+    check(picked === 2 || picked === 3, "the heaviest non-hero section is chosen", `index ${picked}`);
+    check(picked !== 1, "not the one-node ticker that happened to come first");
+    check(picked !== 0, "and never the hero, however heavy");
+
+    const already = pick([band("hero", 40), band("media", 3, true), band("proof", 20)] as never);
+    check(already === 1, "an answer that marked exactly one is left alone", `index ${already}`);
+  }
 
   const nothing = vet({ role: "content" }, "about");
   check(nothing?.spec === null, "a section with no nodes is a band with no spec, not a crash");
