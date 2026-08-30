@@ -252,8 +252,15 @@ function vetNode(raw: unknown, buyBoxAllowed = true): SpecNode | null {
      bound to a product neither page is about.
   
      Dropped rather than corrected, like every other unrecognised thing here.
-     The band loses an element; it does not gain a shopfront it cannot mean. */
-  if (!buyBoxAllowed && (el === "product" || el === "bound")) return null;
+     The band loses an element; it does not gain a shopfront it cannot mean.
+
+     Tallied because a silent guard tells nobody how often it fires, and how
+     often stage 2b reaches for a buy box on a page that sells nothing is the
+     only measure of whether one guard is enough. */
+  if (!buyBoxAllowed && (el === "product" || el === "bound")) {
+    drops.set("(buy box, page has no product)", (drops.get("(buy box, page has no product)") ?? 0) + 1);
+    return null;
+  }
 
   /* A marker naming no slot, or a slot nobody has, is not a marker. Dropping
      it beats emitting a `bound` the exporter will silently resolve to nothing —
