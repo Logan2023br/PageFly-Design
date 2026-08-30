@@ -12,6 +12,7 @@ import type {
   SectionRole,
   SectionSpec,
 } from "./plan";
+import { marketById } from "../briefOptions";
 import { marketLines } from "./marketLines";
 import { beginDropTally, dropTally, vetPageStyle, vetSpec } from "./specCheck";
 
@@ -348,7 +349,15 @@ function systemPrompt(ask: SpecAsk): string {
     `icons with no words, and any row that would read the same on a phone case`,
     `as on a face serum.`,
     ``,
-    ...(marketLines(ask.market).length ? [...marketLines(ask.market), ``] : []),
+    /* NOT IN FREE MODE. The market is something the merchant PICKED, in the
+       same step they picked what they sell and which style — so free mode
+       passes it as a fact, beside the others, and lets the design work out what
+       a shopper there needs. Twenty lines telling a model how trade works in a
+       country it knows better than the person who wrote them is the same
+       mistake `marketLines` documents itself having made once already: "It
+       prevented knowledge, and left the page addressed to nobody while looking
+       like it had been addressed to someone." */
+    ...(!free && marketLines(ask.market).length ? [...marketLines(ask.market), ``] : []),
     `RULES.`,
     ...(free
       ? [
@@ -422,8 +431,15 @@ function systemPrompt(ask: SpecAsk): string {
 }
 
 function userPrompt(ask: SpecAsk): string {
+  /* Everything the merchant chose, on one line, in the step they chose it.
+     The market sits here rather than in an instruction block of its own —
+     it is an answer they gave, not a lesson for the model. */
+  const market = ask.market ? marketById(ask.market) : null;
   const lines: string[] = [
     `STORE. ${ask.sell} · ${ask.storeType} · ${ask.styleLabel} — ${ask.styleBlurb}`,
+    ...(ask.order === null && market
+      ? [`SELLING INTO. ${market.label} — write the page for shoppers there.`]
+      : []),
   ];
   if (ask.prompt) lines.push(`THE MERCHANT'S OWN WORDS. ${ask.prompt}`);
   lines.push(

@@ -53,6 +53,32 @@ async function main(): Promise<void> {
   check(!free.system.includes("**hero-split-media**"), "no pattern skeletons");
   check(!free.user.includes("hero-"), "and no pattern named in the page brief");
   check(free.system.includes("There is no pattern library here"), "it is told so, not left to infer");
+
+  /* The market is an answer the merchant gave in the brief, not a lesson. It
+     travels as a fact beside the others; the twenty-line block does not. */
+  check(!free.system.includes("THE MARKET THIS SELLS INTO"), "no market instruction block");
+  check(!free.system.includes("buy-now-pay-later"), "and no hand-written market block");
+  check(
+    free.user.includes("SELLING INTO. United States"),
+    "the market travels as a fact, in the line the merchant's other answers are on",
+  );
+
+  /* The banded path is untouched — it still gets the block it always got. */
+  const banded = __specPromptsForTest({
+    pageType: "about", sell: "Knitwear", storeType: "d2c", market: "us",
+    styleLabel: "Editorial", styleBlurb: "", prompt: "",
+    tokens: { bg: "#FFFBF5", ink: "#12100E", accent: "#B4552C", band: "#F2ECE2" },
+    order: {
+      vertical: "fashion-apparel", archetype: "C", patternIds: ["story-band"],
+      motionIds: [],
+      sections: [{ role: "content", pattern: "story-band", signature: true,
+        dark: false, padding: "standard", motion: null, mayHaveBg: false, brief: null }],
+    },
+  } as never);
+  check(
+    banded.system.includes("THE MARKET THIS SELLS INTO"),
+    "the banded path still gets the block it always got",
+  );
   /* Two things stay, and neither is taste — see the note on `freeDesignEnabled`. */
   check(free.system.includes("SEVEN ARE REFUSED"), "the export's CSS limits stay");
   check(/never more than \d/.test(free.user), "and the section budget stays");
