@@ -1,6 +1,8 @@
 import { builtinStores } from "@/lib/allowlist";
 import { canReadReferences } from "@/lib/ai/refVision";
 import { modelName, providerName } from "@/lib/ai/provider";
+import { deckPlanEnabled } from "@/lib/design/deckPlan";
+import { freeDesignEnabled, sectionSpecEnabled } from "@/lib/design/sectionSpec";
 import { skillNames } from "@/lib/ai/skills";
 import { stockProvider } from "@/lib/images/stock";
 import { databaseIsUnpooled, databaseSource, hasDatabase } from "@/lib/db";
@@ -77,6 +79,32 @@ export async function GET() {
     aiProvider: providerName(),
     /* What will really run, defaults resolved — not the raw env var. */
     aiModel: modelName(),
+    /* ==================================================================
+       THE DESIGN PIPELINE, AS THIS DEPLOYMENT ACTUALLY RUNS IT.
+
+       Added after an eighteen-minute build that nobody could explain from
+       outside the server. This endpoint reported `aiModel:
+       deepseek-v4-flash` and stopped — which is the model that BUILDS a
+       page, not either of the two that design it, and says nothing at all
+       about the three flags that decide whether those stages run.
+
+       Between them these six fields answer "what is production doing"
+       without shell access, and the gaps between them are the diagnosis:
+       `deckPlan: false` with `sectionSpec: true` is a spec written against
+       bands nobody chose, `designModel` equal to `aiModel` means the
+       expensive stages are quietly running on the cheap model, and
+       `freeDesign: true` means one long call per page rather than one
+       short call for the deck — which is the shape of a build that takes
+       twenty minutes rather than four.
+       ================================================================== */
+    designProvider: providerName("design"),
+    designModel: modelName("design"),
+    deckPlan: deckPlanEnabled(),
+    sectionSpec: sectionSpecEnabled(),
+    freeDesign: freeDesignEnabled(),
+    /* Which decider stage 1 falls back to, and the one flag that is ON
+       unless it is exactly "false" — so its absence is not its default. */
+    planner: process.env.USE_PLAN === "false" ? "slots (v1)" : "plan",
     skills: skillNames(),
     /* Which library the mockups' photographs come from. "none" means every
        image renders as a grey plate — the page is still complete, but it looks
