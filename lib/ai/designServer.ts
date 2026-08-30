@@ -973,7 +973,7 @@ export async function designPageTree(
      prefix is reused and a repair costs roughly the output of the fixes.
      ========================================================================== */
   if (order) {
-    const problems = audit(tree, order, input.tokens.bg);
+    const problems = audit(tree, order, input.tokens.bg, input.pageType);
     auditFailures = problems.length;
 
     if (problems.length > 0) {

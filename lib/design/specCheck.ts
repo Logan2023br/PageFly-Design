@@ -1,5 +1,6 @@
 import "server-only";
 
+import { pageHasOneProduct } from "./plan";
 import type { Css, PageStyle, Scale, SectionSpec, SpecNode } from "./plan";
 import { childrenOf, type DesignNode, type DesignSection } from "./schema";
 
@@ -233,12 +234,26 @@ function kidsOf(o: Record<string, unknown>): unknown[] {
   return [...a, ...b];
 }
 
-function vetNode(raw: unknown): SpecNode | null {
+function vetNode(raw: unknown, buyBoxAllowed = true): SpecNode | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const o = raw as Record<string, unknown>;
 
   const el = str(o.el);
   if (!ELEMENTS.has(el)) return null;
+
+  /* A BUY BOX ON A PAGE WITH NO PRODUCT.
+  
+     `deckPlan` already refuses a PATTERN that expands to a ProductBox on a page
+     type that has none — `pageHasOneProduct` gates it there. Nothing gated the
+     ELEMENTS, so the design model could put `{"el":"product"}` or a `bound`
+     slot inside any band it liked and every layer below would build it. What
+     that shipped: an About page and a Contact page each carrying a full buy box
+     — photograph, price, colour swatches, size grid, Add to bag, Buy it now —
+     bound to a product neither page is about.
+  
+     Dropped rather than corrected, like every other unrecognised thing here.
+     The band loses an element; it does not gain a shopfront it cannot mean. */
+  if (!buyBoxAllowed && (el === "product" || el === "bound")) return null;
 
   /* A marker naming no slot, or a slot nobody has, is not a marker. Dropping
      it beats emitting a `bound` the exporter will silently resolve to nothing —
@@ -264,7 +279,7 @@ function vetNode(raw: unknown): SpecNode | null {
   const use = str(o.use).slice(0, 40) || undefined;
 
   const kids = kidsOf(o)
-    .map(vetNode)
+    .map((k) => vetNode(k, buyBoxAllowed))
     .filter((n): n is SpecNode => n !== null);
 
   return {
@@ -291,7 +306,7 @@ function vetNode(raw: unknown): SpecNode | null {
  * "this band contains nothing". Null is the value every other path already uses
  * for "nothing upstream knew", and the prompt omits it entirely.
  */
-export function vetSpec(raw: unknown): SectionSpec | null {
+export function vetSpec(raw: unknown, pageType?: string): SectionSpec | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const list = (raw as Record<string, unknown>).nodes;
   if (!Array.isArray(list)) return null;
@@ -312,7 +327,13 @@ export function vetSpec(raw: unknown): SectionSpec | null {
     return o && str(o.el) === "section" ? kidsOf(o) : [n];
   });
 
-  const nodes = unwrapped.map(vetNode).filter((n): n is SpecNode => n !== null);
+  /* Undefined pageType means "no opinion" and everything is allowed — every
+     caller that has one passes it, and the older paths that never had a spec
+     never reach here at all. */
+  const buyBoxAllowed = pageType === undefined || pageHasOneProduct(pageType);
+  const nodes = unwrapped
+    .map((n) => vetNode(n, buyBoxAllowed))
+    .filter((n): n is SpecNode => n !== null);
   return nodes.length ? { nodes } : null;
 }
 

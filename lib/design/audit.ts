@@ -1,7 +1,7 @@
 import "server-only";
 
 import { childrenOf, type DesignNode, type DesignSection, type DesignTree } from "./schema";
-import type { Order } from "./plan";
+import { pageHasOneProduct, type Order } from "./plan";
 import { specBinding, specProblems } from "./specCheck";
 
 /* ==========================================================================
@@ -144,6 +144,15 @@ export function audit(
    * told it is wrong.
    */
   pageBg = "#FFFFFF",
+  /**
+   * Which page this is.
+   *
+   * Not on the `Order` — an order describes bands and says nothing about what
+   * the page is called — and the buy-box check below cannot be made without it.
+   * Optional so every existing caller keeps compiling; absent means the check
+   * does not run, which is the behaviour those callers already had.
+   */
+  pageType?: string,
 ): string[] {
   const problems: string[] = [];
   const sections = tree.sections ?? [];
@@ -532,6 +541,31 @@ export function audit(
       `${unitless.length} counter${unitless.length === 1 ? " has" : "s have"} a bare number and ` +
         `no unit. Give each a suffix or prefix — %, ×, hrs, days, or a currency.`,
     );
+
+  /* ---- a shopfront on a page that sells nothing ---------------------------
+
+     `deckPlan` refuses a PATTERN that expands to a ProductBox where the page
+     type has no product, and `vetSpec` now refuses the ELEMENT. This is the
+     third door: the build model can still write a `product` or a `bound` slot
+     into a band nobody specified one for.
+
+     What got through all three: an About page and a Contact page each carrying
+     a full buy box — photograph, price, colour swatches, size grid, Add to bag,
+     Buy it now — bound to a product neither page is about. A merchant reading
+     "Contact" and finding an Add to bag button is reading a broken page, and it
+     is the kind of broken that survives review because every part of it looks
+     correct on its own. */
+  if (pageType && !pageHasOneProduct(pageType)) {
+    const shop = all.filter((n) => n.type === "product" || n.type === "bound");
+    if (shop.length)
+      problems.push(
+        `This is a "${pageType}" page and it has ${shop.length} buy-box ` +
+          `element${shop.length === 1 ? "" : "s"} (${[...new Set(shop.map((n) => n.type))].join(", ")}). ` +
+          `A buy box binds to ONE product and this page is not about one — remove ` +
+          `${shop.length === 1 ? "it" : "them"}. Say what the page is for in words, ` +
+          `or link to the product; do not put a cart button on it.`,
+      );
+  }
 
   /* ---- the plan was written before the page ------------------------------
 

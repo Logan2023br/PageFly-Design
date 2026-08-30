@@ -412,7 +412,9 @@ export async function planSpecs(ask: SpecAsk, signal?: AbortSignal): Promise<Spe
     const answered = (parsed.bands as Record<string, unknown>)[String(i + 1)];
     if (answered === undefined) continue;
 
-    const spec = vetSpec(answered);
+    /* The page type decides whether a buy box may be specified at all — see
+       the note in `vetNode`. */
+    const spec = vetSpec(answered, ask.pageType);
     if (!spec) {
       dropped++;
       continue;
