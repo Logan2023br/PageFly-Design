@@ -456,21 +456,35 @@ async function main(): Promise<void> {
     } as never);
     /* The page list is in the USER prompt — the system half is the vocabulary
        and the rules, which are the same for every build and are cached. */
+    /* Line-wrapped prose, so match on the text with its wrapping collapsed —
+       a prompt is written to a column width and an assertion that depends on
+       where a line happens to break is an assertion about the column width. */
+    const flat = (s: string) => s.replace(/\s+/g, " ");
     check(
-      both.user.includes("product — MUST include product-detail-gallery"),
+      flat(both.user).includes("product — must include product-detail-gallery"),
       "the buy box is still stated as a requirement",
     );
+    /* THE PATTERN IS NOT NAMED. Printing "contact — usually ends on
+       lead-form-split" was the same hard-coding in softer words: the choice
+       had been made and the designer was reading it back, which is why every
+       contact page in every build came back on exactly that band. */
+    check(!both.user.includes("lead-form-split"), "the contact page's form band is not named");
+    check(!both.user.includes("newsletter-inline"), "nor the letter band");
     check(
-      both.user.includes("contact — usually ends on lead-form-split"),
-      "and the form as a habit, not a requirement",
+      both.user.includes("contact") && !both.user.includes("contact — "),
+      "contact is listed with nothing owed",
     );
     check(
-      both.user.includes("built without one"),
+      flat(both.system).includes("WHETHER and WHICH"),
+      "rule 1 leaves both the whether and the which to the designer",
+    );
+    check(
+      flat(both.system).includes("is built without one"),
       "with the consequence spelled out: leave it out and it stays out",
     );
     check(
-      !both.system.includes("an enquiry ends with the form. These are not matters of taste"),
-      "and rule 1 no longer claims an enforcement that was removed",
+      !flat(both.system).includes("an enquiry ends with the form. These are not matters of taste"),
+      "and no longer claims an enforcement that was removed",
     );
   }
 

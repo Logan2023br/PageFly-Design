@@ -298,8 +298,12 @@ function systemPrompt(ask: DeckAsk): string {
        describing an enforcement that no longer runs. */
     `1. A page that sells one product opens with its buy box. That is not a`,
     `   matter of taste and an answer that breaks it will be corrected.`,
-    `   A page whose whole purpose is to take an enquiry should end with the`,
-    `   form — that one is yours to judge, and nothing will add it for you.`,
+    `   A page whose whole purpose is to take an enquiry should end by taking`,
+    `   it, and a page that has earned the right to ask for an email may ask.`,
+    `   Both are yours to judge, WHETHER and WHICH — nothing is added for you`,
+    `   and no band is named for you. A page you end without a form is built`,
+    `   without one; a deck whose every page closes the same way is one ending`,
+    `   chosen once and reused.`,
     /* The lengths, per page type, resolved from the same table `vet` enforces.
        Told rather than trimmed to: a page cut from ten bands to nine loses its
        last band, which is the close — and a page that was PLANNED as nine has
@@ -424,7 +428,7 @@ function userPrompt(ask: DeckAsk): string {
     `  accent      ${ask.tokens.accent}`,
     `  band        ${ask.tokens.band}`,
     ``,
-    `Pages in this build, and what each one owes:`,
+    `Pages in this build, and the sections each one is REQUIRED to contain:`,
     /* Enforcement without instruction is how a product page came back with no
        product box. `vet` has always inserted a missing pin, and the model was
        never told the pin existed — so it designed eleven bands, had a twelfth
@@ -432,26 +436,21 @@ function userPrompt(ask: DeckAsk): string {
        line per page and buys a page designed AROUND its buy box rather than one
        repaired into having one.
 
-       TWO LISTS NOW, because they are two different promises. `vet` still
-       inserts a missing buy box; it no longer inserts a missing closing form.
-       Printing both under "REQUIRED" would have been the prompt claiming an
-       enforcement that is gone — and a model told something is required, then
-       shown it is not, learns the wrong thing about every other line here. */
+       ONLY THE PINS THAT ARE STILL ENFORCED. The closing forms were printed
+       here too, first as "must include" and then as "usually ends on", and both
+       were the same mistake in different words: the line named the PATTERN.
+       That is why every contact page in every build came back on exactly
+       `lead-form-split` and every letter page on exactly `newsletter-inline` —
+       the choice had already been made and the designer was reading it back.
+
+       Rule 1 still says a page whose purpose is to take an enquiry should end
+       with the form. That is the JOB, and choosing the band that does it is
+       what this call is for. The table still exists for the deterministic
+       planner, which runs when this model fails and has no judgement to use. */
     ...ask.pageTypes.map((t) => {
-      const pins = pinnedFor(t);
-      const must = pins.filter((p) => !isAdvisoryPin(p));
-      const usual = pins.filter((p) => isAdvisoryPin(p));
-      const parts = [
-        must.length ? `MUST include ${must.join(", ")}` : "",
-        usual.length ? `usually ends on ${usual.join(", ")}` : "",
-      ].filter(Boolean);
-      return parts.length ? `  ${t} — ${parts.join("; ")}` : `  ${t}`;
+      const must = pinnedFor(t).filter((p) => !isAdvisoryPin(p));
+      return must.length ? `  ${t} — must include ${must.join(", ")}` : `  ${t}`;
     }),
-    ``,
-    `"MUST" is checked and repaired. "Usually" is this page type's habit and`,
-    `nothing more: a page that has earned a better ending should have it, and a`,
-    `page you end without a form will be built without one. Every page in a`,
-    `deck closing on the same form is the failure that line guards against.`,
     ``,
     ...(r
       ? [

@@ -4,8 +4,9 @@ import { designPageTree } from "../ai/designServer";
 import { readReferences } from "../ai/refVision";
 import { decideStructure } from "../design/structure";
 import { deckPlanEnabled, planDeck } from "../design/deckPlan";
-import { planSpecs, sectionSpecEnabled } from "../design/sectionSpec";
+import { freeDesignEnabled, planSpecs, sectionSpecEnabled } from "../design/sectionSpec";
 import { verticalFor } from "../design/plan";
+import type { DeckOutcome } from "../design/deckPlan";
 import { getRepo } from "../db";
 import type { JobRecord, RunPageRecord, RunRecord } from "../db/types";
 import { buildPage, expandSelection } from "../generate/mock";
@@ -56,6 +57,26 @@ const styleDef = (id: string) => VISUAL_STYLES.find((s) => s.id === id);
 const live = new Map<string, AbortController>();
 
 let orphansChecked = false;
+
+/**
+ * What stage 1 returns when it is not run at all.
+ *
+ * Free mode has no deck-wide call, and every branch below already knows how to
+ * read a deck that produced nothing — it is what happens when `USE_DECK_PLAN`
+ * is off. Building the same empty shape rather than adding a second path is
+ * what keeps free mode from being a fork of this function. `plans` is filled in
+ * per page by the design call, so it is deliberately mutable here.
+ */
+function emptyDeck(reason: string): DeckOutcome {
+  return {
+    plans: new Map(),
+    usage: { input: 0, output: 0 },
+    fallbacks: [],
+    repairs: [],
+    reason,
+    model: null,
+  };
+}
 
 /** Fail anything left running by a process that no longer exists. Runs once. */
 async function checkOrphans(): Promise<void> {
@@ -236,7 +257,9 @@ async function run(
      second copy of it would drift within a release. `buildPage` costs no tokens
      and is a pure function of the brief, so the tokens it resolves for page one
      are the tokens every page in this build gets. */
-  const palette = deckPlanEnabled() && plan[0]
+  /* Free mode needs the palette for the same reason the deck plan does — it is
+     what the design call is told to build in — so the gate is either flag. */
+  const palette = (deckPlanEnabled() || freeDesignEnabled()) && plan[0]
     ? buildPage({
         brief,
         pageType: plan[0].pageType,
@@ -248,7 +271,18 @@ async function run(
       }).tokens
     : null;
 
-  const deck = await planDeck(
+  /* ==========================================================================
+     STAGE 1 — WHICH BANDS EACH PAGE HAS.
+
+     SKIPPED WHOLE in free mode. There is no deck-wide call, no pattern
+     vocabulary, no arc and no pin: the sections are decided per page by the
+     design call below, from the merchant's words. `empty()` is what every
+     downstream branch already handles when the flag is off, so free mode
+     travels the path a build with no stage 1 has always travelled.
+     ========================================================================== */
+  const deck = freeDesignEnabled()
+    ? emptyDeck("free design — stage 1 skipped")
+    : await planDeck(
     {
       sell: brief.whatYouSell,
       storeType: brief.storeType,
@@ -296,7 +330,64 @@ async function run(
      exactly as it did before this stage existed — which is also what happens
      when the flag is off, so the old path is never a second code path.
      ========================================================================== */
-  if (sectionSpecEnabled() && deck.plans.size > 0) {
+  if (freeDesignEnabled()) {
+    /* ONE CALL PER PAGE, AND IT IS THE WHOLE DESIGN. No bands are passed in
+       because none exist: `planSpecs` with a null order asks the model to
+       decide the sections and everything inside them, and hands back the
+       `Order` it decided. Concurrent, and a page that fails costs one page —
+       the same promise the banded path makes, for the same reason. */
+    const designed = await Promise.all(
+      wantedTypes.map(async (pageType) => ({
+        pageType,
+        outcome: await planSpecs(
+          {
+            pageType,
+            order: null,
+            sell: brief.whatYouSell,
+            storeType: brief.storeType,
+            market: brief.market ?? null,
+            styleLabel: styleDef(brief.visualStyle)?.label ?? brief.visualStyle,
+            styleBlurb: styleDef(brief.visualStyle)?.blurb ?? "",
+            prompt: brief.prompt,
+            tokens: {
+              bg: palette?.bg ?? "#FFFFFF",
+              ink: palette?.ink ?? "#111114",
+              accent: palette?.accent ?? "#111114",
+              band: palette?.surfaceAlt ?? "#F7F7F8",
+            },
+          },
+          signal,
+        ),
+      })),
+    );
+
+    for (const { pageType, outcome } of designed) {
+      tokens += outcome.usage.input + outcome.usage.output;
+
+      if (outcome.reason || !outcome.order) {
+        console.log(`[build] free design · ${pageType} → no design — ${outcome.reason}`);
+        continue;
+      }
+
+      deck.plans.set(pageType, outcome.order);
+
+      const refused = Object.entries(outcome.refused ?? {});
+      console.log(
+        `[build] free design · ${pageType} · ${outcome.order.sections.length} sections, ` +
+          `${outcome.specs.size} specced by ${outcome.model} · ${outcome.dropped} dropped · ` +
+          `in ${outcome.usage.input} out ${outcome.usage.output}` +
+          (refused.length
+            ? ` · REFUSED ${refused.map(([k, n]) => `${k}×${n}`).join(" ")}`
+            : ""),
+      );
+      console.log(
+        `[build] free design · ${pageType} · ` +
+          outcome.order.sections
+            .map((x) => `${x.signature ? "*" : ""}${x.pattern}`)
+            .join(" → "),
+      );
+    }
+  } else if (sectionSpecEnabled() && deck.plans.size > 0) {
     const specced = await Promise.all(
       [...deck.plans.entries()].map(async ([pageType, order]) => ({
         pageType,
