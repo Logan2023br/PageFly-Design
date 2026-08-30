@@ -58,6 +58,7 @@ async function open(
     border?: string;
     accent?: string;
     band?: string;
+    radius?: number;
   } = {},
 ) {
   const { pageflyFromTree } = await import("../lib/design/toPagefly");
@@ -72,6 +73,7 @@ async function open(
       ...(media.border ? { border: media.border } : {}),
       ...(media.accent ? { accent: media.accent } : {}),
       ...(media.band ? { band: media.band } : {}),
+      ...(media.radius === undefined ? {} : { radius: media.radius }),
     },
   );
   const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -466,6 +468,40 @@ async function main(): Promise<void> {
 
   const submit = form.items.find((i) => i.type === "Form2.Button2");
   check(submit?.data?.value === "Send enquiry", "the button says what was written", String(submit?.data?.value));
+
+  /* THE FIELD OUTLINE, which was the one control in this file that read no
+     palette. `rgba(0,0,0,.16)` and a 6px corner were written into the rule, so
+     a newsletter band on an inverted section exported a field outlined in a
+     colour that is not there — and nearly every page in a deck ends on one. */
+  {
+    const styled = await open(
+      {
+        sections: [
+          section(
+            [
+              {
+                type: "form", intent: "newsletter", submitText: "→",
+                fields: [{ label: "Email", kind: "email", required: true }],
+              },
+            ],
+            "newsletter-inline",
+          ),
+        ],
+      },
+      "probe",
+      { border: "rgba(250,247,242,.22)", accent: "#B4552C", radius: 14 },
+    );
+    const wrap = styled.items.find((i) => i.type === "Form2");
+    const rule = styled.cssOf(wrap?.id ?? "", "all", "& input");
+    check(rule.includes("rgba(250,247,242,.22)"), "the input takes the page's border", rule.slice(0, 70));
+    check(rule.includes("border-radius: 14px"), "and the page's radius");
+    /* White is the browser's default and the brightest thing on a dark band. */
+    check(rule.includes("background: transparent"), "and does not paint itself white");
+
+    const btn = styled.cssOf(wrap?.id ?? "", "all", "& button");
+    check(btn.includes("#B4552C"), "the button takes the accent", btn.slice(0, 60));
+    check(btn.includes("border-radius: 14px"), "and the same radius as the field beside it");
+  }
 
   /* ---- a stack is one per row, not N across ----------------------------- */
 

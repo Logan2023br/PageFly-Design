@@ -855,7 +855,28 @@ function CustomBlock({ node, cls }: { node: Extract<DesignNode, { type: "custom"
  * here would suggest it had sent something. The exported Form2 is the live one.
  */
 function Form({ node, cls }: { node: Extract<DesignNode, { type: "form" }>; cls?: string }) {
-  const { device } = useDesign();
+  const { device, palette } = useDesign();
+
+  /* THE SAME BUG THE BUY BOX HAD, IN THE COMPONENT THE FIX DID NOT REACH.
+
+     `Ctx.palette` was added because the buy box was drawn in fixed colours — a
+     near-black button and `rgba(0,0,0,.16)` borders, invisible on a dark page.
+     The form is drawn by hand for exactly the same reason and was left on the
+     fixed colours, which is how a newsletter band on an inverted section
+     shipped with a field outline nobody can see and a submit button the same
+     colour as the ground behind it.
+
+     The button was worse than invisible: `background: currentColor` with a
+     white label blended by `mix-blend-mode: difference` renders whatever the
+     inherited text colour happens to be, and `toPagefly` emits that same
+     button in the ACCENT with white text. So the preview was not a dim picture
+     of the exported page, it was a picture of a different page. Both now read
+     the palette, and the fallbacks are what every page got before it arrived —
+     correct on white, which is where they came from. */
+  const rule = palette?.border ?? "rgba(0,0,0,.16)";
+  const radius = palette?.radius ?? 6;
+  const submitBg = palette?.accent ?? "#111114";
+
   return (
     <div
       data-pf="form"
@@ -870,8 +891,8 @@ function Form({ node, cls }: { node: Extract<DesignNode, { type: "form" }>; cls?
           </span>
           <div
             style={{
-              border: "1px solid rgba(0,0,0,.16)",
-              borderRadius: 6,
+              border: `1px solid ${rule}`,
+              borderRadius: radius,
               padding: "12px 14px",
               /* A message field is taller in PageFly too — inputType 1 is the
                  multi-line control, not a styling choice made here. */
@@ -884,14 +905,15 @@ function Form({ node, cls }: { node: Extract<DesignNode, { type: "form" }>; cls?
         data-pf="form-submit"
         style={{
           alignSelf: "flex-start",
-          borderRadius: 6,
+          borderRadius: radius,
           padding: "13px 26px",
-          background: "currentColor",
+          background: submitBg,
+          color: "#FFFFFF",
           fontSize: 14,
           fontWeight: 600,
         }}
       >
-        <span style={{ mixBlendMode: "difference", color: "#FFFFFF" }}>{node.submitText}</span>
+        {node.submitText}
       </div>
     </div>
   );

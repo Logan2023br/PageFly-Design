@@ -779,11 +779,22 @@ function emitNode(
          sub-selectors, not on itself: `& input`, `& button`. Left off, the
          merchant gets PageFly's unstyled defaults — a native grey button in the
          system font sitting inside a page that looks nothing like it. */
+      /* The button already took the accent. The INPUT did not take anything —
+         it carried `rgba(0,0,0,.16)` and a 6px corner written here, so a
+         newsletter band on an inverted section exported a field outlined in a
+         colour that is not there, and a store built on square corners got its
+         one rounded control on the page it asks for an email. Same three
+         values every other composite in this file reads. */
+      const inputRule = opts.border ?? "rgba(0,0,0,.16)";
+      const inputRadius = opts.radius ?? 6;
       const styled = withParts(sd, {
         "& > form": "display: flex; flex-direction: column; gap: 12px;",
+        /* Transparent, not the browser's white: an input painted white on a
+           dark band is the brightest thing in the section. */
         "& input":
-          `border: 1px solid rgba(0,0,0,.16); border-radius: 6px; padding: 12px 14px; width: 100%;${inkRule(opts)}`,
-        "& button": `background-color: ${opts.accent ?? "#111111"}; color: #FFFFFF; border: 0; border-radius: 6px; padding: 13px 26px; cursor: pointer;`,
+          `border: 1px solid ${inputRule}; border-radius: ${inputRadius}px; padding: 12px 14px;` +
+          ` width: 100%; background: transparent;${inkRule(opts)}`,
+        "& button": `background-color: ${opts.accent ?? "#111111"}; color: #FFFFFF; border: 0; border-radius: ${inputRadius}px; padding: 13px 26px; cursor: pointer;`,
       });
       /* The label carries the field's name, so it is type the merchant reads —
          and giving it a style is also what guarantees it a style entry at all.
