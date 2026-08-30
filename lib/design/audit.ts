@@ -533,6 +533,43 @@ export function audit(
         `no unit. Give each a suffix or prefix — %, ×, hrs, days, or a currency.`,
     );
 
+  /* ---- the plan was written before the page ------------------------------
+
+     `motionPlan` is the first field the prompt asks for and the only mechanism
+     that makes the build model consider motion band by band. Its docblock in
+     `schema.ts` says what it is for: told to choose freely it reached for the
+     same two fields on every page, and made to name a decision per section it
+     has to visit each one.
+
+     It has never arrived. Fourteen pages checked across local and production,
+     `motionPlan: null` on all fourteen — because the prompt requires it and the
+     schema marks it optional, so a model that skips it costs nothing and
+     nobody is told. The consequence is measurable in the same pages: `fade-up`
+     is 79% of every reveal shipped.
+
+     Checked here rather than made required in the schema, and that is
+     deliberate. `spare(600)` is optional so a model that forgets the field
+     costs a line of reasoning and not the whole page — turning it into a hard
+     requirement would throw away a page that is otherwise good. The audit is
+     the right place: it asks for the missing thing and hands the page back to
+     be fixed, which is what a forgotten field deserves. */
+  const plan = (tree as { motionPlan?: string }).motionPlan?.trim() ?? "";
+  if (!plan)
+    problems.push(
+      `The page has no "motionPlan". Write it as the FIRST field of the object: ` +
+        `one short line per section — its role, what moves there, and why. ` +
+        `"none" is a valid answer for a section and needs its reason. ` +
+        `Then make the sections match what you wrote.`,
+    );
+  else if (plan.length < 40)
+    /* A page is five to eleven bands. Anything this short named one of them and
+       called it a plan — and a plan for one band is the default it exists to
+       prevent. */
+    problems.push(
+      `The "motionPlan" is ${plan.length} characters for ${sections.length} sections. ` +
+        `Name a decision for each one, not for the page as a whole.`,
+    );
+
   /* ---- the spec was the spec ---------------------------------------------
 
      Reported through the audit rather than through a checker of its own,
