@@ -100,8 +100,11 @@ async function main(): Promise<void> {
   const noted = vetSpec({ nodes: [{ el: "text", note: "the review count as a real figure" }] });
   check(noted?.nodes[0].note === "the review count as a real figure", "a note is kept");
   check(
-    (vetSpec({ nodes: [{ el: "text", note: "x".repeat(400) }] })?.nodes[0].note ?? "").length === 200,
-    "a runaway note is cut to 200 characters",
+    /* 320, not the 200 this asserted for months after the cap moved. The note
+       stopped being a stylesheet in prose when `css` took the values, so it was
+       let back out to a sentence with a reason in it. */
+    (vetSpec({ nodes: [{ el: "text", note: "x".repeat(400) }] })?.nodes[0].note ?? "").length === 320,
+    "a runaway note is cut to 320 characters",
   );
 
   /* Markers for the bound parts of a buy box. A marker naming a slot nobody has

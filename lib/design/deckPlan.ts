@@ -3,6 +3,7 @@ import "server-only";
 import { getProvider, isAiEnabled, modelName, type Usage } from "../ai/provider";
 import { sliceIds, sliceSkill } from "../ai/skills";
 import { marketLines } from "./marketLines";
+import { PAGE_BY_ID } from "../pageCatalog";
 import { parseObject } from "../ai/json";
 import { elementForPattern } from "./elementFor";
 import { sectionBounds } from "./sectionPlan";
@@ -171,6 +172,25 @@ function vocabulary(): string[] {
   return out;
 }
 
+/**
+ * One line per page type saying what a visitor came to it for.
+ *
+ * Taken from the page picker rather than restated here, so the model reads the
+ * sentence the merchant read when they ticked the box. A type the catalogue
+ * does not know — a retired id, a landing page built from a custom slug — is
+ * skipped rather than described as "a page", because a placeholder tells the
+ * model less than silence and costs the same.
+ */
+function pageJobs(pageTypes: string[]): string[] {
+  const out: string[] = [];
+  for (const t of pageTypes) {
+    const def = PAGE_BY_ID[t];
+    if (!def) continue;
+    out.push(`     ${t} — ${def.blurb}`);
+  }
+  return out;
+}
+
 function systemPrompt(ask: DeckAsk): string {
   const row = verticalRow(ask.vertical);
 
@@ -301,12 +321,68 @@ function systemPrompt(ask: DeckAsk): string {
         ? `     ${t} — opens with its buy box, NOT a hero`
         : `     ${t} — band 1 MUST have role "hero"`,
     ),
-    `4. Do not use a buy-box pattern on a page that has no product of its own.`,
-    `5. Two pages in this deck may share patterns where the page genuinely needs`,
+    /* WHAT THE PAGE TYPE IS FOR — added because nothing here said it.
+
+       Rules 2 and 3 tell the model how LONG each page type is and whether it
+       opens with a hero, and that was the whole of what it knew about the
+       difference between an About page and a sizing guide.
+
+       WHAT THE RULE ACTUALLY BOUGHT, measured on the same five-page deck run
+       either side of this edit rather than assumed. It did NOT fix the arcs:
+       without the rule the model already picked `size-fit-guide` to carry the
+       sizing page and `lead-form-split` to close the contact page. What it
+       fixed was the filler. `guarantee-row` appeared on four of the five pages
+       — it is the band that fits anywhere, which is exactly why it kept being
+       reached for — and afterwards on two, both times for a reason: above the
+       fold on the FAQ, where the rule's own example puts the answer a visitor
+       came for. The About page stopped closing on a shipping promise and
+       closed on a quiet newsletter line instead; the sizing page swapped a
+       generic accordion for a comparison table. One run each of a model that
+       does not repeat itself, so read it as a direction, not a delta.
+
+       The descriptions are the merchant's own: the same sentence they read on
+       the page picker before they ticked it, rather than a second table written
+       here. One description of what a page is for, and the model reads the one
+       the merchant did. A type with no catalogue entry — a retired id, a
+       landing page on a custom slug — contributes no line rather than a
+       placeholder, because "a page" tells the model less than silence.
+
+       The RULE is unconditional even when the list is empty. It was written
+       the other way first, dropped whole when no type was known, and left the
+       numbering reading 1, 2, 3, 5 — a hole that says a rule was removed and
+       does not say which. The principle holds for a page type nobody has
+       described; only the descriptions are missing. */
+    `4. WHAT EACH PAGE TYPE IS FOR, and what would make this one worth`,
+    ...(pageJobs(ask.pageTypes).length
+      ? [
+          `   looking at. A visitor arrives at a page having already decided what`,
+          `   they came for:`,
+          ...pageJobs(ask.pageTypes),
+          `   That is the FLOOR, not the design. It describes what every store's`,
+          `   version of this page already does, and a page that only clears it is`,
+        ]
+      : [
+          `   looking at. Every page type answers a question the visitor already`,
+          `   had when they clicked, and answering it is the FLOOR, not the`,
+          `   design — a page that only clears it is`,
+        ]),
+    `   a page nobody remembers. For each one, ask what this page type can do`,
+    `   better than the store doing the minimum, and build the structure`,
+    `   around THAT rather than around a shape that would fit any page: the`,
+    `   workshop at full bleed on an About page, the table built big enough`,
+    `   to actually settle the question on a sizing page, the answer a`,
+    `   visitor came for sitting above the fold on an FAQ instead of behind`,
+    `   an accordion. Make it the signature band, and say in that band's`,
+    `   brief why it is that band and not the safe one.`,
+    `   The arc that answers one page type does not answer another. If two`,
+    `   pages in this deck could swap their section lists without anyone`,
+    `   noticing, you designed one page and copied it.`,
+    `5. Do not use a buy-box pattern on a page that has no product of its own.`,
+    `6. Two pages in this deck may share patterns where the page genuinely needs`,
     `   them. They may not share a sequence.`,
-    `6. The trade's hero and signature are a starting point the brief may`,
+    `7. The trade's hero and signature are a starting point the brief may`,
     `   overrule. Its ban list may not.`,
-    `7. Two stores in the same trade should not open the same way. If the only`,
+    `8. Two stores in the same trade should not open the same way. If the only`,
     `   reason for this hero is that the trade block names it, you have not`,
     `   chosen one — say what about THIS store makes it right, in the brief.`,
     ``,

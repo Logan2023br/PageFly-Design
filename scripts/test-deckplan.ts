@@ -398,6 +398,66 @@ async function main(): Promise<void> {
     check(out?.[1].brief === null, "and a band without one carries null, not undefined");
   }
 
+  console.log("\nwhat each page type is for");
+
+  {
+    const prompt = (pageTypes: string[]) =>
+      heroPrompts({
+        sell: "Fashion & apparel", storeType: "d2c", vertical: "fashion-apparel",
+        market: null, pageTypes, prompt: "", styleLabel: "Bold",
+        styleBlurb: "", density: "normal",
+        tokens: { bg: "#fff", ink: "#111", accent: "#f00", band: "#eee" },
+        refSections: null, refStyle: null,
+      } as never).system;
+
+    const five = prompt(["home", "about", "contact", "size-guide", "faq"]);
+    check(five.includes("4. WHAT EACH PAGE TYPE IS FOR"), "the rule is in the prompt");
+    for (const [type, words] of [
+      ["about", "why the brand exists"],
+      ["contact", "a map if you need one"],
+      ["size-guide", "cut returns"],
+      ["faq", "block a sale"],
+    ] as const)
+      check(five.includes(`${type} — `) && five.includes(words), `${type} is described`, words);
+
+    /* The description is the merchant's, not a second copy written in the
+       prompt — one sentence per page, in one place. */
+    const { PAGE_BY_ID } = await import("@/lib/pageCatalog");
+    check(
+      five.includes(`about — ${PAGE_BY_ID.about.blurb}`),
+      "and it is the sentence from the page picker, verbatim",
+    );
+
+    /* Only what was asked for: a rule listing pages nobody ordered is a rule
+       the model has to work out which lines apply to. */
+    check(!five.includes("cart — "), "a page type not in the deck is not listed");
+
+    check(
+      five.includes("swap their section lists"),
+      "two pages that could swap section lists are called out",
+    );
+
+    /* Renumbered when this went in, and a hole in the numbering is exactly
+       what the first version of it produced. */
+    const numbers = (s: string) => [...s.matchAll(/^(\d)\. /gm)].map((m) => Number(m[1])).join(",");
+    check(numbers(five) === "1,2,3,4,5,6,7,8", "the rules are numbered 1 to 8, once each", numbers(five));
+
+    /* A type the catalogue does not know contributes no LINE. It does not
+       take the rule with it — the principle holds for a page nobody has
+       described, and a missing 4 says a rule was cut without saying which. */
+    const unknown = prompt(["lp-workshop-2026"]);
+    check(unknown.includes("4. WHAT EACH PAGE TYPE IS FOR"), "an unknown type keeps the rule");
+    /* Sliced to rule 4 — rules 2 and 3 name every page type by design, so the
+       whole prompt is the wrong haystack for "was it described". */
+    const rule4 = unknown.slice(
+      unknown.indexOf("4. WHAT EACH PAGE TYPE"),
+      unknown.indexOf("5. Do not use a buy-box"),
+    );
+    check(!rule4.includes("lp-workshop-2026"), "and gets no invented description");
+    check(!unknown.includes("they came for:"), "the list's lead-in goes with the list");
+    check(numbers(unknown) === "1,2,3,4,5,6,7,8", "the numbering has no hole in it", numbers(unknown));
+  }
+
   console.log();
   console.log(failures === 0 ? "PASS" : `FAIL — ${failures} problem${failures === 1 ? "" : "s"}`);
   if (failures) process.exitCode = 1;
