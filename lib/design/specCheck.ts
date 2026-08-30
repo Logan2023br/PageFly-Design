@@ -94,16 +94,45 @@ const BANNED_CSS = new Set([
  * stylesheet, and every one of them is billed twice — once as stage 2b output
  * and again as stage 3 input.
  */
-function vetCss(raw: unknown): Css | undefined {
+function vetCss(raw: unknown, drops?: Map<string, number>): Css | undefined {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
   const out: Css = {};
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-    if (BANNED_CSS.has(k)) continue;
-    if (Object.keys(out).length >= 24) break;
+    /* Counted, not just skipped. A silently dropped declaration is a decision
+       the design model made and nobody can see it was refused — which is the
+       whole failure mode this pipeline keeps producing in other places. The
+       count reaches the build log, so "Opus asked for it and we threw it away"
+       stops being invisible. */
+    if (BANNED_CSS.has(k)) {
+      drops?.set(k, (drops.get(k) ?? 0) + 1);
+      continue;
+    }
+    if (Object.keys(out).length >= 24) {
+      drops?.set("(over 24)", (drops.get("(over 24)") ?? 0) + 1);
+      continue;
+    }
     if (typeof v === "string" && v.trim() !== "") out[k] = v.trim();
     else if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
   }
   return Object.keys(out).length ? out : undefined;
+}
+
+/**
+ * What the last `vetSpec` / `vetPageStyle` pass refused, by property name.
+ *
+ * Module-level rather than threaded through every signature: `vetNode` recurses
+ * and `vetSpec` is called once per band, so a return value would have to be
+ * merged at four call sites for a number that is only ever read once, for a log
+ * line. Reset by `beginDropTally`, read by `dropTally`.
+ */
+let drops = new Map<string, number>();
+
+export function beginDropTally(): void {
+  drops = new Map();
+}
+
+export function dropTally(): Record<string, number> {
+  return Object.fromEntries([...drops.entries()].sort((a, b) => b[1] - a[1]));
 }
 
 /**
@@ -123,7 +152,7 @@ export function vetPageStyle(raw: unknown): PageStyle | undefined {
     const out: Record<string, Css> = {};
     for (const [k, raw2] of Object.entries(v as Record<string, unknown>)) {
       if (Object.keys(out).length >= max) break;
-      const css = vetCss(raw2);
+      const css = vetCss(raw2, drops);
       const name = str(k).slice(0, 40);
       if (css && name) out[name] = css;
     }
@@ -231,7 +260,7 @@ function vetNode(raw: unknown): SpecNode | null {
      and 320 characters is a sentence with a reason in it rather than a
      truncated one. */
   const note = str(o.note).slice(0, 320) || undefined;
-  const css = vetCss(o.css);
+  const css = vetCss(o.css, drops);
   const use = str(o.use).slice(0, 40) || undefined;
 
   const kids = kidsOf(o)
@@ -358,6 +387,73 @@ export function specDelta(
 }
 
 /**
+ * Declarations the design named and the built page does not carry.
+ *
+ * `specDelta` above compares WHICH ELEMENTS exist and stops there, and for as
+ * long as a spec only named element types that was the whole of it. A spec now
+ * carries measured values — a padding, a glow, a hairline — and nothing was
+ * checking them, so the build model could write its own numbers over every one
+ * of them and the audit still passed. Measured on a nine-band page: of 114
+ * declarations the design specified, 37 never reached the tree, including the
+ * button glow the merchant's own brief had asked for.
+ *
+ * MATCHED BY VALUE, NOT BY NODE. Pairing spec nodes to built nodes is a tree
+ * diff with no stable ids to diff on — the build model reorders, wraps and
+ * splits, and a positional match reports twenty false problems on a page that
+ * honoured everything. Asking instead "does this exact declaration appear
+ * anywhere in this band" is weaker and it is sound: a `boxShadow` the design
+ * named and the band does not contain anywhere is missing however the tree
+ * moved underneath it.
+ *
+ * Properties whose value the build model is expected to choose are skipped —
+ * it writes the copy, so it owns what the copy needs.
+ */
+const BUILDER_OWNS = new Set([
+  /* Sized against words nobody had written when the spec was made. */
+  "width",
+  "height",
+  "minHeight",
+  "flexBasis",
+  "flex",
+  /* Set per node from the palette by the exporter and the audit both. */
+  "textAlign",
+  "objectFit",
+  "overflow",
+]);
+
+function valueProblems(section: DesignSection, spec: SectionSpec): string[] {
+  const want = new Map<string, string>();
+  for (const node of spec.nodes.flatMap((n) => flatten(n)))
+    for (const [k, v] of Object.entries(node.css ?? {}))
+      if (!BUILDER_OWNS.has(k)) want.set(`${k}:${String(v).trim()}`, k);
+
+  if (want.size === 0) return [];
+
+  const have = new Set<string>();
+  for (const node of walk(section))
+    for (const [k, v] of Object.entries(
+      (node as { css?: Record<string, unknown> }).css ?? {},
+    ))
+      have.add(`${k}:${String(v).trim()}`);
+
+  const missing = [...want.keys()].filter((d) => !have.has(d));
+  if (missing.length === 0) return [];
+
+  /* Eight at a time. The repair call has to read every problem and fix it in
+     one pass; forty declarations in one sentence is a sentence it skims. The
+     rest come back on the next build rather than being crammed into this one. */
+  const shown = missing.slice(0, 8);
+  return [
+    `Section "${section.pattern}" drops ${missing.length} value${missing.length === 1 ? "" : "s"} ` +
+      `the design specified. Put ${shown.length === 1 ? "it" : "them"} back, on the element ` +
+      `the design put ${shown.length === 1 ? "it" : "them"} on: ` +
+      shown.map((d) => `{${d}}`).join(" · ") +
+      (missing.length > shown.length ? ` … and ${missing.length - shown.length} more` : "") +
+      `. These are measured, not suggestions — do not substitute your own.`,
+  ];
+}
+
+/**
  * The spec's failures, phrased for the model that has to fix them.
  *
  * Sentences rather than a structure, because `audit()` returns sentences and
@@ -379,6 +475,8 @@ export function specProblems(
         `Add ${missing.length === 1 ? "it" : "them"} where the design places ` +
         `${missing.length === 1 ? "it" : "them"}.`,
     );
+
+  problems.push(...valueProblems(section, spec));
 
   if (binding && added.length)
     problems.push(

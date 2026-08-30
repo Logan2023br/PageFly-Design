@@ -5,7 +5,7 @@ import { getProvider, isAiEnabled, modelName, type Usage } from "../ai/provider"
 import { sliceSkill } from "../ai/skills";
 import type { Order, PageStyle, SectionSpec } from "./plan";
 import { marketLines } from "./marketLines";
-import { vetPageStyle, vetSpec } from "./specCheck";
+import { beginDropTally, dropTally, vetPageStyle, vetSpec } from "./specCheck";
 
 /* ==========================================================================
    STAGE 2b — THE ELEMENTS INSIDE EACH BAND.
@@ -88,6 +88,14 @@ export type SpecOutcome = {
    */
   pageStyle?: PageStyle;
   usage: Usage;
+  /**
+   * Declarations the design model asked for and the checker refused, by name.
+   *
+   * Empty on a clean answer. Non-empty means Opus decided something the page
+   * cannot carry — `transform`, `zIndex` and the rest — and the size of it is
+   * the honest measure of how much of stage 2b's thinking dies at the door.
+   */
+  refused?: Record<string, number>;
   /** null when the call ran and produced something usable */
   reason: string | null;
   model: string | null;
@@ -390,6 +398,9 @@ export async function planSpecs(ask: SpecAsk, signal?: AbortSignal): Promise<Spe
       model: provider.model,
     };
 
+  /* Counted across the whole answer — the page style and every band — so the
+     log line below can say what the design model asked for and did not get. */
+  beginDropTally();
   const pageStyle = vetPageStyle(parsed.pageStyle);
   const specs = new Map<number, SectionSpec>();
   let dropped = 0;
@@ -409,5 +420,5 @@ export async function planSpecs(ask: SpecAsk, signal?: AbortSignal): Promise<Spe
     specs.set(i, spec);
   }
 
-  return { specs, pageStyle, usage, reason: null, model: modelName("design"), dropped };
+  return { specs, pageStyle, usage, reason: null, model: modelName("design"), dropped, refused: dropTally() };
 }

@@ -340,10 +340,16 @@ async function run(
       /* `dropped` is the number that says "prompt bug" rather than "model had a
          bad day" — a band whose answer failed vetting named something outside
          the closed sets, and the fix is the wording, not the checker. */
+      const refused = Object.entries(outcome.refused ?? {});
       console.log(
         `[build] section spec · ${pageType} · ${outcome.specs.size}/${order.sections.length} ` +
           `bands by ${outcome.model} · ${outcome.dropped} dropped · ` +
-          `in ${outcome.usage.input} out ${outcome.usage.output}`,
+          `in ${outcome.usage.input} out ${outcome.usage.output}` +
+          /* What the design model asked for and could not have. Silent, this is
+             the pipeline throwing away a decision nobody knows was made. */
+          (refused.length
+            ? ` · REFUSED ${refused.map(([k, n]) => `${k}×${n}`).join(" ")}`
+            : ""),
       );
     }
   }
