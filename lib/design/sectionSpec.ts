@@ -108,11 +108,19 @@ const FREE_SECTION_CEILING = 16;
  * stage 3. It is also one long call PER PAGE rather than one short call for the
  * whole deck.
  *
- * A flag rather than a rewrite so it can be turned off without a deploy, which
- * is the same bet `USE_DECK_PLAN` and `USE_PLAN` made before it.
+ * A CONSTANT, NOT AN ENVIRONMENT VARIABLE, and that is deliberate. Every other
+ * switch here reads `process.env` so an operator can change it on the box
+ * without a deploy. This one is decided in the repository: the value is part of
+ * what the code says, it is reviewed and it is in the history, and there is no
+ * way for the running server to be doing something the source does not say.
+ *
+ * The cost is that turning it off is a deploy. That is the trade — flip the
+ * line, commit, ship.
  */
+export const FREE_DESIGN = true;
+
 export function freeDesignEnabled(): boolean {
-  return process.env.FREE_DESIGN === "true";
+  return FREE_DESIGN;
 }
 
 export type SpecAsk = {
@@ -331,8 +339,8 @@ function systemPrompt(ask: SpecAsk): string {
        Kept for the banded path, which was built around it and is measured
        against it. Free mode is the bet that the model reaches these
        conclusions better than a list can state them, and a bet you can read
-       the prompt for is a bet you can settle. FREE_DESIGN=false restores
-       every line of it, unchanged, without a deploy. */
+       the prompt for is a bet you can settle. Setting FREE_DESIGN to false
+       restores every line of it, unchanged. */
     ...(free
       ? []
       : [

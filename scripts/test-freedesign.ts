@@ -37,9 +37,30 @@ async function main(): Promise<void> {
   const { __vetFreeSectionForTest: vet, __specPromptsForTest, freeDesignEnabled } =
     await import("../lib/design/sectionSpec");
 
-  console.log("\nthe flag");
-  check(!freeDesignEnabled(), "off unless FREE_DESIGN is exactly true");
+  console.log("\nthe switch");
 
+  {
+    /* A constant, not an environment variable. The point is that the running
+       server cannot be doing something the source does not say — so this
+       asserts the two agree, and that no env var can talk either of them out
+       of it. */
+    const { FREE_DESIGN } = await import("../lib/design/sectionSpec");
+    check(typeof FREE_DESIGN === "boolean", "it is a constant in the source", String(FREE_DESIGN));
+    check(freeDesignEnabled() === FREE_DESIGN, "and the reader returns exactly it");
+
+    const before = process.env.FREE_DESIGN;
+    try {
+      process.env.FREE_DESIGN = FREE_DESIGN ? "false" : "true";
+      check(freeDesignEnabled() === FREE_DESIGN, "an env var of the same name changes nothing");
+    } finally {
+      if (before === undefined) delete process.env.FREE_DESIGN;
+      else process.env.FREE_DESIGN = before;
+    }
+  }
+
+  /* Every case below builds its own ask with `order: null`, which is what free
+     mode IS — the constant decides whether the RUNNER takes this path, not
+     whether the path behaves this way. So these hold either way it is set. */
   console.log("\nwhat the prompt no longer carries");
 
   const free = __specPromptsForTest({
