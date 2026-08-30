@@ -398,6 +398,82 @@ async function main(): Promise<void> {
     check(out?.[1].brief === null, "and a band without one carries null, not undefined");
   }
 
+  console.log("\nthe closing form is the designer's call");
+
+  {
+    const { isAdvisoryPin, pinnedFor } = await import("@/lib/design/plan");
+
+    check(isAdvisoryPin("lead-form-split"), "the enquiry form is advisory");
+    check(isAdvisoryPin("newsletter-inline"), "so is the newsletter");
+    for (const p of ["product-detail-gallery", "collection-grid-3up", "collection-featured-row"])
+      check(!isAdvisoryPin(p), `${p} is not — a page without it is broken, not different`);
+
+    /* Still in the table: the deterministic planner fills its conversion slot
+       from it, and a Contact page built without a model must still take the
+       enquiry. What changed is who may decline it. */
+    check(pinnedFor("contact").includes("lead-form-split"), "contact still pins the form");
+    check(pinnedFor("size-guide").includes("newsletter-inline"), "size-guide still pins the letter");
+
+    /* A page whose designer ended it on something else keeps that ending. This
+       is the whole fix: sixteen page types pin one of these two, so the repair
+       was bolting the same form to the foot of nearly every page in a deck. */
+    const { out, notes } = run(
+      [
+        { pattern: HERO },
+        { pattern: MEDIA },
+        { pattern: PROOF },
+        { pattern: CLOSE },
+      ],
+      "contact",
+    );
+    check(
+      out?.every((b) => b.pattern !== "lead-form-split") === true,
+      "a contact page with no form keeps no form",
+      out?.map((b) => b.pattern).join(","),
+    );
+    check(
+      !notes.some((n) => n.includes("lead-form-split")),
+      "and nothing is recorded, because nothing was done",
+    );
+
+    /* The buy box is the other half and it did NOT change. */
+    const shop = run([{ pattern: HERO }, { pattern: MEDIA }, { pattern: CLOSE }], "product");
+    check(
+      shop.out?.some((b) => b.pattern === "product-detail-gallery") === true,
+      "a product page with no buy box still gets one",
+      shop.out?.map((b) => b.pattern).join(","),
+    );
+
+    /* The prompt has to say the same thing the code does. A model told
+       something is REQUIRED and then shown it is not learns the wrong thing
+       about every other line in the prompt. */
+    const both = heroPrompts({
+      sell: "Fashion & apparel", storeType: "d2c", vertical: "fashion-apparel",
+      market: null, pageTypes: ["product", "contact"], prompt: "", styleLabel: "Bold",
+      styleBlurb: "", density: "normal",
+      tokens: { bg: "#fff", ink: "#111", accent: "#f00", band: "#eee" },
+      refSections: null, refStyle: null,
+    } as never);
+    /* The page list is in the USER prompt — the system half is the vocabulary
+       and the rules, which are the same for every build and are cached. */
+    check(
+      both.user.includes("product — MUST include product-detail-gallery"),
+      "the buy box is still stated as a requirement",
+    );
+    check(
+      both.user.includes("contact — usually ends on lead-form-split"),
+      "and the form as a habit, not a requirement",
+    );
+    check(
+      both.user.includes("built without one"),
+      "with the consequence spelled out: leave it out and it stays out",
+    );
+    check(
+      !both.system.includes("an enquiry ends with the form. These are not matters of taste"),
+      "and rule 1 no longer claims an enforcement that was removed",
+    );
+  }
+
   console.log("\nwhat each page type is for");
 
   {

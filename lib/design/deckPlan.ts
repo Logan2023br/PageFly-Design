@@ -11,6 +11,7 @@ import {
   arcIndexOf,
   pageHasOneProduct,
   patternsByRole,
+  isAdvisoryPin,
   pinnedFor,
   roleFor,
   verticalRow,
@@ -291,9 +292,14 @@ function systemPrompt(ask: DeckAsk): string {
     ``,
     `RULES, in the order they matter.`,
     ``,
-    `1. A page that sells one product opens with its buy box. A page that takes`,
-    `   an enquiry ends with the form. These are not matters of taste and an`,
-    `   answer that breaks them will be corrected.`,
+    /* HALF THIS RULE STOPPED BEING TRUE and the sentence had to follow. The
+       buy box is still inserted when it is missing; the closing form is not.
+       Leaving "will be corrected" over both would have been the prompt
+       describing an enforcement that no longer runs. */
+    `1. A page that sells one product opens with its buy box. That is not a`,
+    `   matter of taste and an answer that breaks it will be corrected.`,
+    `   A page whose whole purpose is to take an enquiry should end with the`,
+    `   form — that one is yours to judge, and nothing will add it for you.`,
     /* The lengths, per page type, resolved from the same table `vet` enforces.
        Told rather than trimmed to: a page cut from ten bands to nine loses its
        last band, which is the close — and a page that was PLANNED as nine has
@@ -418,17 +424,34 @@ function userPrompt(ask: DeckAsk): string {
     `  accent      ${ask.tokens.accent}`,
     `  band        ${ask.tokens.band}`,
     ``,
-    `Pages in this build, and the sections each one is REQUIRED to contain:`,
+    `Pages in this build, and what each one owes:`,
     /* Enforcement without instruction is how a product page came back with no
        product box. `vet` has always inserted a missing pin, and the model was
        never told the pin existed — so it designed eleven bands, had a twelfth
        bolted on at position 1, and went over the cap. Saying it here costs a
        line per page and buys a page designed AROUND its buy box rather than one
-       repaired into having one. */
+       repaired into having one.
+
+       TWO LISTS NOW, because they are two different promises. `vet` still
+       inserts a missing buy box; it no longer inserts a missing closing form.
+       Printing both under "REQUIRED" would have been the prompt claiming an
+       enforcement that is gone — and a model told something is required, then
+       shown it is not, learns the wrong thing about every other line here. */
     ...ask.pageTypes.map((t) => {
       const pins = pinnedFor(t);
-      return pins.length ? `  ${t} — must include ${pins.join(", ")}` : `  ${t}`;
+      const must = pins.filter((p) => !isAdvisoryPin(p));
+      const usual = pins.filter((p) => isAdvisoryPin(p));
+      const parts = [
+        must.length ? `MUST include ${must.join(", ")}` : "",
+        usual.length ? `usually ends on ${usual.join(", ")}` : "",
+      ].filter(Boolean);
+      return parts.length ? `  ${t} — ${parts.join("; ")}` : `  ${t}`;
     }),
+    ``,
+    `"MUST" is checked and repaired. "Usually" is this page type's habit and`,
+    `nothing more: a page that has earned a better ending should have it, and a`,
+    `page you end without a form will be built without one. Every page in a`,
+    `deck closing on the same form is the failure that line guards against.`,
     ``,
     ...(r
       ? [
@@ -573,6 +596,13 @@ function vet(
      something else. */
   for (const pin of pinnedFor(pageType)) {
     if (seen.has(pin) || banned(pin)) continue;
+    /* A FORM THE DESIGNER LEFT OUT STAYS OUT. Sixteen page types pin one, so
+       this loop was bolting the same closing form to the foot of nearly every
+       page in a deck — including pages that had already been given a better
+       ending. The prompt still names it as the ending this page type usually
+       earns; declining it is now a decision the designer is allowed to make,
+       and silence here is what makes it one. */
+    if (isAdvisoryPin(pin)) continue;
     const role = roleFor(pin);
     if (!role) continue;
     seen.add(pin);

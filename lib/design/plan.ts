@@ -630,6 +630,34 @@ export function pinnedFor(pageType: string): string[] {
   return Object.values(pins).flat().filter(Boolean) as string[];
 }
 
+/**
+ * The two pins that are a FORM, and are no longer inserted behind the designer.
+ *
+ * WHY THEY WERE SPLIT OUT. Sixteen page types pin one of these — eight end in
+ * `lead-form-split`, eight in `newsletter-inline` — so a deck of seven pages
+ * came back with the same form band bolted to the foot of nearly all of them,
+ * whether the page had earned it or not. The insert is silent: a designer that
+ * chose to end an About page on its own photograph got a newsletter appended
+ * underneath anyway, and the note saying so goes to a log nobody reads.
+ *
+ * They stay in `PINNED` because two things still want them. The deterministic
+ * planner fills its conversion slot from the table, and a Contact page built
+ * without a model must still take the enquiry. And the deck prompt still names
+ * them per page type — as the ending this page type usually earns, which the
+ * designer may overrule, rather than as a requirement.
+ *
+ * What changed is only the repair: a form the designer left out stays out.
+ * Every other pin — the buy box, the collection grids — is still correctness
+ * and is still inserted, because a product page without a buy box is not a
+ * page with a different ending, it is a broken page.
+ */
+const FORM_PINS = new Set(["lead-form-split", "newsletter-inline"]);
+
+/** True for a pin the designer may decline: see `FORM_PINS`. */
+export function isAdvisoryPin(pattern: string): boolean {
+  return FORM_PINS.has(pattern);
+}
+
 /** True when this page type has ONE product in context — see `isBanned`. */
 export function pageHasOneProduct(pageType: string): boolean {
   return (PINNED[pageType]?.commerce ?? []).some((id) => id.startsWith("product-detail"));
