@@ -189,6 +189,28 @@ async function main(): Promise<void> {
   check(specProblems(built("heading"), opt, false).length === 0, "an absent optional node is fine");
   check(specProblems(built("heading"), opt, true).length === 0, "…in binding mode too");
 
+  console.log("\nthe three stages agree on what an element is");
+
+  {
+    /* IT SHIPPED BROKEN ONCE. `countdown` went into this file's element set,
+       into the tree schema, into the renderer and into the exporter — and not
+       into `00-contract.md`, which is the alphabet stage 3 builds from and
+       opens by saying "This is the entire alphabet. There is nothing else." So
+       stage 2b asked for a timer, stage 3 had never heard of the node, and
+       built the nearest thing it knew: `custom` markup that counts nothing. */
+    const { readFileSync } = await import("node:fs");
+    const { ELEMENT_NAMES } = await import("@/lib/design/specCheck");
+    const contract = readFileSync("skills/00-contract.md", "utf8");
+
+    const unknown = ELEMENT_NAMES.filter((e) => !contract.includes(`{"type":"${e}"`));
+    check(
+      unknown.length === 0,
+      "every element stage 2b may ask for is in stage 3's alphabet",
+      unknown.length ? `missing: ${unknown.join(", ")}` : `${ELEMENT_NAMES.length} checked`,
+    );
+    check(contract.includes('"type":"countdown"'), "countdown among them — the one that was not");
+  }
+
   console.log(`\n${failures === 0 ? "PASS" : `${failures} FAILED`}\n`);
   process.exit(failures === 0 ? 0 : 1);
 }

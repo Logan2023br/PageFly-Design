@@ -56,6 +56,17 @@ const ELEMENTS = new Set([
   "bound",
 ]);
 
+/**
+ * The element names, for the test that keeps the three stages agreeing.
+ *
+ * Stage 2b may only ask for these; stage 3 builds from the alphabet in
+ * `00-contract.md`; the tree schema decides what survives. Three lists, and
+ * nothing made them agree — `countdown` was added to this one and to the schema
+ * and shipped, and stage 3 had never heard of it, so a page that asked for a
+ * timer got `custom` markup that counts nothing. The test reads this.
+ */
+export const ELEMENT_NAMES: string[] = [...ELEMENTS];
+
 /** The seven parts of a buy box that cannot be drawn — mirrors `schema.ts`. */
 const SLOTS = new Set(["title", "price", "swatches", "qty", "stock", "atc", "express"]);
 

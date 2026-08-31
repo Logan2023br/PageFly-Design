@@ -35,6 +35,18 @@ export type PFNode = {
    * and does nothing — see MD Json PageFly/page-json.md.
    */
   options?: Record<string, unknown>;
+  /**
+   * A third slot, and only Table2 has needed it.
+   *
+   * `fields.md` puts a table's cells in `content:{ rows:[[...]] }` and does not
+   * list `rows` among the element's four fields; `page-json.md` lists the node's
+   * keys and does not mention `content` at all. The two disagree, and that file
+   * says which wins: "If something here contradicts the editor, the editor is
+   * right." So the rows are written to both, the way `FORM_FIELD`'s label
+   * writes `text` and `value` — an unread key costs nothing, and a table the
+   * editor reports as empty costs the section.
+   */
+  content?: Record<string, unknown>;
   _kids: PFNode[];
   roomId?: string;
 };
@@ -71,8 +83,9 @@ function node(
   data: Record<string, unknown> = {},
   styleData: StyleData = null,
   kids: PFNode[] = [],
+  content?: Record<string, unknown>,
 ): PFNode {
-  return { type, data, styleData, _kids: kids };
+  return { type, data, styleData, _kids: kids, ...(content ? { content } : {}) };
 }
 
 /** Hide a node on every breakpoint except the ones listed. */
@@ -686,10 +699,26 @@ export function TABLE(
   const columns = rows.reduce((n, r) => Math.max(n, r.length), 0);
   const square = rows.map((r) => [...r, ...Array(Math.max(0, columns - r.length)).fill("")]);
 
+  /* THE TABLE THE EDITOR CALLED EMPTY.
+
+     Exported with the cells in `data.rows`, PageFly opened the section and said
+     "Your list is empty. To add new items, click the button below" — with the
+     Table2 sitting there carrying every row. `fields.md` says where they go and
+     the field table backs it up by NOT listing `rows` among the element's four
+     fields:
+
+         Cells go in `content:{ rows:[[header…],[row…]] }` (string[][])
+
+     Written to all three places the two documents point at — the sibling
+     `content`, a `content` inside `data`, and `data.rows` as it was. Extra keys
+     are unread, not harmful; a size chart that arrives blank is a section the
+     merchant has to build by hand. When an import confirms which one the editor
+     reads, delete the other two. */
   return node(
     "Table2",
     {
       rows: square,
+      content: { rows: square },
       rowHeaders: 1,
       columnHeadersPosition: opts.headerColumn ? "left" : "disable",
       ...(opts.headerColumn ? { columnHeaders: 1 } : {}),
@@ -702,6 +731,7 @@ export function TABLE(
       node("Table2.ColumnBody", {}, null, []),
       node("Table2.Body", {}, null, []),
     ],
+    { rows: square },
   );
 }
 
@@ -1208,6 +1238,8 @@ type Item = {
   updatedAt: string;
   data?: Record<string, unknown>;
   options?: Record<string, unknown>;
+  /** Table2's cells — see `PFNode.content` for why this slot exists. */
+  content?: Record<string, unknown>;
   roomId?: string;
 };
 
@@ -1306,6 +1338,7 @@ export class Page {
          next to a class of bug that only shows up as a white screen. */
       item.data = n.data;
       if (n.options && Object.keys(n.options).length) item.options = n.options;
+      if (n.content && Object.keys(n.content).length) item.content = n.content;
       if (n.roomId !== undefined) item.roomId = n.roomId;
       items.push(item);
       parentChildren.push(id);

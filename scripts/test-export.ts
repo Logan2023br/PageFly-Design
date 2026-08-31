@@ -1590,6 +1590,21 @@ async function main(): Promise<void> {
   check(cells?.[0]?.[0] === "Size", "the header row is row zero");
   check(cells?.[2]?.[1] === "102 cm", "and the values arrive verbatim");
 
+  /* WHERE THE EDITOR LOOKS. Exported with the rows only in `data.rows`, PageFly
+     opened the section and said "Your list is empty" with every row present in
+     the file. `fields.md` puts them in `content:{rows}` and backs it up by not
+     listing `rows` among the element's four fields; `page-json.md` does not
+     mention a `content` slot at all. Both are written until an import says
+     which one is read. */
+  const sibling = (tbl as { content?: { rows?: string[][] } } | undefined)?.content?.rows;
+  check(sibling?.length === 3, "the rows are also in the sibling content slot", String(sibling?.length));
+  const inData = (tbl?.data?.content as { rows?: string[][] } | undefined)?.rows;
+  check(inData?.length === 3, "and in a content object inside data", String(inData?.length));
+  check(
+    sibling?.[2]?.[1] === "102 cm" && inData?.[2]?.[1] === "102 cm",
+    "all three carry the same cells",
+  );
+
   const slots = (tbl?.children ?? []).map(
     (c) => chart.items.find((x) => x.id === c)?.type ?? "?",
   );
