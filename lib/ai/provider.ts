@@ -84,8 +84,40 @@ const PREFIX: Record<Role, string | null> = {
   design: "DESIGN",
 };
 
+/* ==========================================================================
+   WHO DESIGNS, DECIDED IN THE SOURCE.
+
+   These were `DESIGN_PROVIDER` and `DESIGN_MODEL`, read from the environment.
+   The deployment never set them — and a role that names no provider of its own
+   inherits the default one entirely, so the design stages resolved to whatever
+   `AI_PROVIDER` was, which is DeepSeek. That was invisible until `/api/health`
+   started reporting it: every Opus result in this project's design work came
+   from a laptop, and production had never run the stage at all.
+
+   So they are constants now, for the same reason `FREE_DESIGN` is: the value is
+   reviewed, it is in the history, and there is no way for the running server to
+   be designing with a model the source does not name. An operator cannot set
+   these, and cannot forget to.
+
+   THE KEY IS STILL AN ENVIRONMENT VARIABLE and always will be — a secret does
+   not belong in a repository. `keyFor` falls back to `ANTHROPIC_API_KEY`, which
+   this deployment already has (it is what reads the merchant's reference
+   uploads). Without a key `providerName("design")` returns "none" and the
+   design stage says "no design model configured" rather than quietly running on
+   something cheaper, which is the failure mode worth keeping.
+   ========================================================================== */
+export const DESIGN_PROVIDER = "anthropic";
+export const DESIGN_MODEL = "claude-opus-5";
+
 /** `DESIGN_MODEL` for the design role, `AI_MODEL` for the default one. */
 function roleVar(role: Role, name: "PROVIDER" | "MODEL" | "API_KEY"): string | undefined {
+  /* The design role's vendor and model come from the source, not the box. Its
+     KEY does not — see above. */
+  if (role === "design") {
+    if (name === "PROVIDER") return DESIGN_PROVIDER;
+    if (name === "MODEL") return DESIGN_MODEL;
+  }
+
   const prefix = PREFIX[role];
   if (!prefix) {
     return name === "PROVIDER"
