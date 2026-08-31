@@ -844,6 +844,46 @@ const counter = z.object({
   ...styled,
 });
 
+/**
+ * A real countdown, not a picture of one.
+ *
+ * PageFly has a `CountDown` element with a documented field table — start mode,
+ * end time, which units show, whether labels show — and until this node existed
+ * a page that wanted one got `Custom.HTML`: markup that counts nothing, in an
+ * element the merchant cannot configure from the editor. A flash sale is the
+ * single most common reason to want a timer, and shipping a dead one is worse
+ * than shipping none.
+ *
+ * `endsAt` is an ISO instant, which is what `endType: "specific"` reads. A
+ * countdown with no end is not a countdown, so it is required and a node
+ * without a usable one is dropped by the union rather than defaulted — a timer
+ * silently counting to the wrong moment is the failure this guards.
+ */
+const countdown = z.object({
+  type: z.literal("countdown"),
+  /** ISO instant the timer ends on — `2026-11-24T23:59:00Z` */
+  endsAt: z
+    .string()
+    .trim()
+    .refine((v) => !Number.isNaN(Date.parse(v)), { message: "not a date" }),
+  /**
+   * Which units are shown, largest first.
+   *
+   * A 72-hour sale wants days, hours, minutes and seconds; a two-hour drop
+   * wants hours, minutes and seconds and looks broken carrying a zero for days.
+   */
+  units: z
+    .array(z.enum(["w", "d", "h", "m", "s"]))
+    .min(1)
+    .max(5)
+    .default(["d", "h", "m", "s"]),
+  /** the unit names under the numbers — off for a bare 47:12:08 */
+  labels: flag(true),
+  /** one line above the timer, when the timer needs saying */
+  caption: words(80),
+  ...styled,
+});
+
 /* `slideshow` is NOT declared here. It holds design nodes, so it has to be
    built inside the `z.lazy` below alongside `row` and `col` — declared out
    here it would reference `node` before `node` exists, and TypeScript reports
@@ -983,6 +1023,16 @@ export type DesignNode =
       anim?: Anim;
       slides: DesignNode[];
     }
+  | {
+      type: "countdown";
+      endsAt: string;
+      units: ("w" | "d" | "h" | "m" | "s")[];
+      labels: boolean;
+      caption: string;
+      css?: Css;
+      mobile?: Css;
+      anim?: Anim;
+    }
   | { type: "row"; css?: Css; mobile?: Css; anim?: Anim; children: DesignNode[] }
   | { type: "col"; css?: Css; mobile?: Css; anim?: Anim; children: DesignNode[] };
 
@@ -1003,6 +1053,7 @@ const node: z.ZodType<DesignNode> = z.lazy(() =>
     custom,
     beforeAfter,
     counter,
+    countdown,
     accordion,
     table,
     /* Only when the brief or the reference asks for a carousel. A row of three

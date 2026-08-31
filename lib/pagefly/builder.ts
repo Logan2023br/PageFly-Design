@@ -853,6 +853,75 @@ export const SCRIM_CSS: Record<string, string> = {
  * initialPosition, handleStyle. Nothing is invented here, so there is no
  * fallback to leave behind.
  */
+/**
+ * A real countdown, from PageFly's own element.
+ *
+ * BEFORE THIS, a page that wanted a timer got `Custom.HTML` — markup that
+ * counts nothing, styled to look like a clock, in an element the merchant
+ * cannot configure from the editor. A flash sale is the commonest reason to
+ * want one, and a dead timer above a sale is worse than no timer.
+ *
+ * The field names come from `MD Json PageFly/fields.md`. Two of them are
+ * objects wearing a string's type in that table, and the note beside each gives
+ * it away — the same trap `FORM_FIELD`'s `label` fell into and the reason its
+ * comment is as long as it is:
+ *
+ *   label     "Object { on, reverse }"          — visibility and position
+ *   timeData  "Object w/d/h/m/s each { on, text }" — which units, and their names
+ *
+ * So `timeData` carries every unit, with `on` deciding which are drawn. Writing
+ * only the wanted units would leave the rest undefined rather than off, and an
+ * undefined unit is one PageFly decides about itself.
+ *
+ * `endType: "specific"` with an ISO `endTime` — a sale ends at an instant, not
+ * after a duration from whenever the page happens to load. `countdownType` is
+ * `specific` for the same reason: `first`/`every` restart per visitor, which is
+ * a scarcity trick rather than a deadline.
+ */
+const UNIT_NAMES: Record<string, string> = {
+  w: "weeks",
+  d: "days",
+  h: "hours",
+  m: "mins",
+  s: "secs",
+};
+
+export function COUNTDOWN(
+  endsAt: string,
+  units: string[],
+  labels: boolean,
+  styleData: StyleData,
+) {
+  const shown = new Set(units);
+  const timeData = Object.fromEntries(
+    Object.entries(UNIT_NAMES).map(([u, text]) => [u, { on: shown.has(u), text }]),
+  );
+
+  return node(
+    "CountDown",
+    {
+      countdownType: "specific",
+      endType: "specific",
+      endTime: endsAt,
+      repeat: "never",
+      /* Left visible when it ends. A sale page whose timer vanishes at midnight
+         reads as a page that lost a section, and the copy around it still says
+         the sale is on — the merchant edits both or neither. */
+      hideIfInactive: false,
+      styleCountDown: "basic",
+      showColon: !labels,
+      label: { on: labels, reverse: false },
+      timeData,
+      targetStyle: "CountDown",
+    },
+    styleData,
+    /* CountdownNumber and CountdownLabel are documented as slots, "one per time
+       unit shown" — filled by the element from `timeData` rather than by us.
+       Emitting our own would be two sets of numbers. */
+    [],
+  );
+}
+
 export function BEFORE_AFTER(
   before: string,
   after: string,

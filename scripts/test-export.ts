@@ -505,6 +505,65 @@ async function main(): Promise<void> {
 
   /* ---- a stack is one per row, not N across ----------------------------- */
 
+  /* ---- the countdown, which used to be markup that counted nothing ------ */
+
+  console.log("\na countdown");
+
+  {
+    const cd = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "countdown",
+              endsAt: "2026-11-24T23:59:00.000Z",
+              units: ["d", "h", "m", "s"],
+              labels: true,
+              caption: "Sale ends",
+            },
+          ],
+          "cta-band-full",
+        ),
+      ],
+    });
+
+    const timer = cd.items.find((i) => i.type === "CountDown");
+    check(Boolean(timer), "PageFly's own element, not Custom.HTML");
+    check(
+      cd.items.every((i) => i.type !== "Custom.HTML"),
+      "and no raw markup pretending to be one",
+    );
+
+    const d = (timer?.data ?? {}) as Record<string, unknown>;
+    check(d.endType === "specific" && d.endTime === "2026-11-24T23:59:00.000Z",
+      "it ends at the instant the design named", `${d.endType} ${d.endTime}`);
+    /* `first`/`every` restart per visitor, which is a scarcity trick rather
+       than a deadline — a sale ends when it ends. */
+    check(d.countdownType === "specific", "not a per-visitor timer", String(d.countdownType));
+
+    /* Two fields the field table types as strings and documents as objects —
+       the same trap FormLabel fell into. */
+    const label = d.label as { on?: boolean } | undefined;
+    check(typeof label === "object" && label?.on === true, "label is an object with on:true");
+    const time = d.timeData as Record<string, { on?: boolean; text?: string }> | undefined;
+    check(typeof time === "object", "timeData is an object, not a string");
+    check(
+      time?.d?.on === true && time?.s?.on === true && time?.w?.on === false,
+      "every unit is written, with `on` deciding which are drawn",
+      JSON.stringify(time),
+    );
+    check(time?.h?.text === "hours", "and each carries its name");
+
+    /* The caption is a sibling: CountDown contains only its number and label
+       slots, and a paragraph inside them is one the element does not know it has. */
+    const caption = cd.items.find((i) => i.type === "Paragraph4");
+    check(Boolean(caption), "the caption is emitted");
+    check(
+      !JSON.stringify(timer ?? {}).includes("Sale ends"),
+      "and is not pushed inside the timer",
+    );
+  }
+
   console.log("\nfour spec bars stacked in a col");
 
   /* The exact shape that shipped wrong: a col holding four cols, each a

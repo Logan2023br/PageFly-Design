@@ -91,6 +91,45 @@ async function main(): Promise<void> {
     "and the button to near-black — correct on the white page it came from",
   );
 
+  console.log("\na countdown, on a static render");
+
+  {
+    const html = renderToStaticMarkup(
+      React.createElement(DesignRender, {
+        tree: {
+          motionPlan: "none",
+          sections: [
+            {
+              type: "section", role: "conversion", pattern: "cta-band-full",
+              children: [
+                {
+                  type: "countdown", endsAt: "2026-11-24T23:59:00.000Z",
+                  units: ["d", "h", "m", "s"], labels: true, caption: "Sale ends",
+                },
+              ],
+            },
+          ],
+        },
+        device: "all", images: {}, videos: {},
+        palette: { accent: "#B4552C", border: "rgba(0,0,0,.16)", radius: 6 },
+      } as never),
+    );
+    const cd = html.slice(html.indexOf('data-pf="countdown"'));
+
+    check(html.includes('data-pf="countdown"'), "it is drawn");
+    check(cd.includes("Sale ends"), "with its caption");
+    for (const u of ["days", "hours", "mins", "secs"]) check(cd.includes(u), `and the ${u} label`);
+    check(!cd.includes("weeks"), "and only the units it asked for");
+
+    /* THE FIRST PAINT CARRIES DASHES. Reading the clock during render is
+       impure — the server pass and the client pass would disagree, which is a
+       hydration mismatch. The figures arrive a tick after mount and then tick,
+       which is also the more useful preview: a merchant watching the seconds
+       move can see the timer points at a real moment. */
+    check(cd.includes("--"), "the static pass shows dashes, not invented digits");
+    check(!/>\s*\d\d\s*</.test(cd.slice(0, 400)), "and no frozen numbers");
+  }
+
   console.log();
   console.log(failures === 0 ? "PASS" : `FAIL — ${failures} problem${failures === 1 ? "" : "s"}`);
   if (failures) process.exitCode = 1;

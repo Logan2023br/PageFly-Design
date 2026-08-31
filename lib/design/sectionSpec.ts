@@ -241,7 +241,17 @@ function systemPrompt(ask: SpecAsk): string {
     `  text and marks   heading, text, button, icon, divider`,
     `  media            image, slideshow, marquee, overlay, beforeAfter`,
     `  commerce         product, productList, form`,
-    `  behaviour        accordion, table, counter, sticky, custom`,
+    `  behaviour        accordion, table, counter, countdown, sticky, custom`,
+    ``,
+    /* PageFly HAS a countdown element with a documented field table, and until
+       this line existed a page that wanted one asked for `custom` — markup that
+       counts nothing, in a block the merchant cannot configure. A sale is the
+       commonest reason to want one, so it is the commonest way that happened. */
+    `A "countdown" is the real PageFly timer and needs "endsAt" as an ISO`,
+    `instant — {"el":"countdown","endsAt":"2026-11-24T23:59:00Z",`,
+    `"units":["d","h","m","s"],"labels":true}. Never build one out of "custom":`,
+    `that is markup that does not count, and the merchant cannot set the date`,
+    `on it from the editor.`,
     `  layout           row, col`,
     ``,
     `Do NOT emit a "section" — the band already is one. Your top-level nodes go`,

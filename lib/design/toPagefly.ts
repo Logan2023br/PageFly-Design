@@ -2,6 +2,7 @@ import {
   BEFORE_AFTER,
   BTN,
   CONTENT_LIST,
+  COUNTDOWN,
   CUSTOM_HTML,
   FB,
   FORM,
@@ -914,6 +915,22 @@ function emitNode(
       });
       /* Two copies of the row, so the second arrives as the first leaves. */
       return FB(filling(sd, "display: flex !important; flex-direction: row !important;"), [FB(null, kids), FB(null, kids.map(cloneNode))], cls);
+    }
+
+    case "countdown": {
+      /* PageFly's own element, not markup pretending to be one — see
+         `COUNTDOWN` in the builder for the two fields that are objects wearing
+         a string's type in the field table.
+
+         The caption is a sibling rather than a child: `CountDown` contains only
+         its number and label slots, and a paragraph pushed inside them is a
+         paragraph the element does not know it has. */
+      const timer = COUNTDOWN(node.endsAt, node.units, node.labels, sd);
+      if (!node.caption) return timer;
+      return FB(
+        { ...sd, all: { ...(sd?.all ?? {}), "&": `${sd?.all?.["&"] ?? ""} display: flex; flex-direction: column; gap: 10px;` } },
+        [P4(node.caption, null), timer],
+      );
     }
 
     case "counter": {

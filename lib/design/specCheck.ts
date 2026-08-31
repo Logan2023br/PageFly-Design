@@ -43,6 +43,7 @@ const ELEMENTS = new Set([
   "sticky",
   "beforeAfter",
   "counter",
+  "countdown",
   "accordion",
   "table",
   "slideshow",

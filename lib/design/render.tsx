@@ -1149,6 +1149,108 @@ function Counter({ node, cls }: { node: Extract<DesignNode, { type: "counter" }>
   );
 }
 
+/**
+ * The countdown, drawn at the time it would show if the page loaded now.
+ *
+ * STATIC, and computed from `endsAt` rather than faked. A mockup showing
+ * 00:00:00 tells a merchant nothing about whether the timer is set correctly,
+ * and one showing invented digits tells them something false. This renders the
+ * real remaining time, so a countdown pointed at the wrong date is visible in
+ * the preview rather than after the import.
+ *
+ * A finished sale shows zeros across the board, which is also true and also
+ * worth seeing.
+ */
+function Countdown({
+  node,
+  cls,
+}: {
+  node: Extract<DesignNode, { type: "countdown" }>;
+  cls?: string;
+}) {
+  const { device, palette } = useDesign();
+
+  const NAMES: Record<string, string> = {
+    w: "weeks",
+    d: "days",
+    h: "hours",
+    m: "mins",
+    s: "secs",
+  };
+  const SECONDS: Record<string, number> = { w: 604800, d: 86400, h: 3600, m: 60, s: 1 };
+
+  /* THE CLOCK STARTS AFTER MOUNT, and not because of a lint rule. Reading the
+     time during render is impure — the same markup would differ between the
+     server pass and the client one, which is the definition of a hydration
+     mismatch. So the first paint draws the frame with dashes and the real
+     figures arrive a tick later, ticking.
+
+     That is also the more useful mockup: a merchant watching the seconds move
+     can see the timer is pointed at a real moment, which a frozen snapshot of
+     `72 00 00` cannot tell them. A static render — the export preview — keeps
+     the dashes, and a picture of a clock is what it was always going to be. */
+  const [left, setLeft] = useState<number | null>(null);
+  useEffect(() => {
+    const end = Date.parse(node.endsAt);
+    const tick = () => setLeft(Math.max(0, Math.floor((end - Date.now()) / 1000)));
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [node.endsAt]);
+
+  /* `reduce` rather than a running `let`: the remainder threading through the
+     units is state carried between iterations, and a variable reassigned inside
+     a render is exactly what it looks like. */
+  const parts = node.units.reduce<{ rest: number; out: { u: string; n: number | null }[] }>(
+    (acc, u) => {
+      const n = Math.floor(acc.rest / SECONDS[u]);
+      acc.out.push({ u, n: left === null ? null : n });
+      return { rest: acc.rest - n * SECONDS[u], out: acc.out };
+    },
+    { rest: left ?? 0, out: [] },
+  ).out;
+
+  const rule = palette?.border ?? "rgba(0,0,0,.16)";
+
+  return (
+    <div
+      data-pf="countdown"
+      className={cls}
+      style={{ display: "flex", flexDirection: "column", gap: 10, ...sx(node, device) }}
+    >
+      {node.caption && <div style={{ fontSize: 13, opacity: 0.75 }}>{node.caption}</div>}
+      <div style={{ display: "flex", alignItems: "flex-end", gap: node.labels ? 18 : 8 }}>
+        {parts.map(({ u, n }, i) => (
+          <div key={u} style={{ display: "flex", alignItems: "flex-end", gap: node.labels ? 18 : 8 }}>
+            <div style={{ textAlign: "center" }}>
+              <div
+                style={{
+                  fontSize: 44,
+                  fontWeight: 700,
+                  lineHeight: 1,
+                  letterSpacing: "-0.02em",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {n === null ? "--" : String(n).padStart(2, "0")}
+              </div>
+              {node.labels && (
+                <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>{NAMES[u]}</div>
+              )}
+            </div>
+            {/* The colon belongs BETWEEN units and only when the labels are
+                off — `showColon` in the export is written the same way, so the
+                two do not disagree about what a bare timer looks like. */}
+            {!node.labels && i < parts.length - 1 && (
+              <div style={{ fontSize: 44, lineHeight: 1, opacity: 0.35, color: rule }}>:</div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ---- containers --------------------------------------------------------- */
 
 /**
@@ -1206,6 +1308,8 @@ function Node({ node }: { node: DesignNode }) {
       return <Marquee node={node} cls={cls} />;
     case "counter":
       return <Counter node={node} cls={cls} />;
+    case "countdown":
+      return <Countdown node={node} cls={cls} />;
     case "row":
     case "col":
       return (
