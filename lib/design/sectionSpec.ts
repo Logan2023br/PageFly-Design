@@ -659,7 +659,23 @@ export const __vetFreeSectionForTest = vetFreeSection;
 /* ---- the call ------------------------------------------------------------ */
 
 export async function planSpecs(ask: SpecAsk, signal?: AbortSignal): Promise<SpecOutcome> {
-  if (!sectionSpecEnabled()) return empty("USE_SECTION_SPEC is not true");
+  /* FREE MODE IS NOT GATED BY `USE_SECTION_SPEC`, and gating it was a bug that
+     reached production.
+
+     That flag means "also ask a second model what goes inside the bands stage 1
+     chose" — an addition to a pipeline that works without it. Free mode is not
+     an addition: it IS the design step, and stage 1 has already been skipped by
+     the time this is called. Gated, a server with the flag unset ran free mode,
+     got nothing back, produced no order, and fell through to the deterministic
+     arc — where `ceilingFor` allows 48,000 output tokens instead of 96,000
+     because no section carries a spec. The build model spent 36,264 of them
+     thinking, had 11,736 left for the JSON, and the page failed with the
+     merchant's allowance untouched and no sign of what had gone wrong.
+
+     Silently, which is the part that made it expensive: every symptom pointed
+     at the build model. */
+  if (ask.order !== null && !sectionSpecEnabled())
+    return empty("USE_SECTION_SPEC is not true");
   if (!isAiEnabled("design")) return empty("no design model configured");
   /* Free mode has no bands to have none of — the sections are what it returns. */
   if (ask.order !== null && ask.order.sections.length === 0) return empty("no bands");

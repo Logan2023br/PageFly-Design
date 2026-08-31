@@ -224,7 +224,7 @@ const PADDING_PX: Record<string, string> = {
 };
 
 /**
- * How much output this page is allowed, and why it is not one number.
+ * How much output this page is allowed. One number, after two were tried.
  *
  * The long note at the call site works out that a ceiling prices FAILURES
  * rather than successes — a page needing 25,000 is billed 25,000 whichever
@@ -245,10 +245,15 @@ const PADDING_PX: Record<string, string> = {
  * raising the ceiling does not answer it — it only stops the question costing a
  * page every time it is asked.
  *
- * So the specified path gets 64,000 and the old path keeps 48,000. A build with
- * no specs cannot be made to fail more expensively by a feature it never used.
+ * THE SPLIT IS GONE. It was "the specified path gets more, the old path keeps
+ * 48,000 — a build with no specs cannot be made to fail more expensively by a
+ * feature it never used", which reads as fairness and was a trapdoor: the old
+ * path is where a build LANDS when the design stage produces nothing, so the
+ * cheaper ceiling applied exactly when the page had least help. Production
+ * settled it, quoted below. `order` is no longer read; the parameter went with
+ * the split.
  */
-function ceilingFor(order: Order | null): number {
+function ceilingFor(): number {
   if (providerName() !== "deepseek") return 16_000;
   /* 96,000 on the specified path, raised from 64,000 when the spec started
      carrying measured values.
@@ -266,8 +271,18 @@ function ceilingFor(order: Order | null): number {
      that across their two calls and produced a page.
      
      A page that needs 70,000 is billed 70,000 whether the ceiling is 64,000 or
-     96,000. The only thing 64,000 bought was the right to fail at it. */
-  return order?.sections.some((s) => s.spec) ? 96_000 : 48_000;
+     96,000. The only thing 64,000 bought was the right to fail at it.
+
+     AND THE UNSPECIFIED PATH WAS 48,000 UNTIL PRODUCTION SETTLED IT. The two
+     numbers existed because a spec makes the answer longer, so a page built
+     without one was assumed to need less. It does not — it needs less OUTPUT
+     and exactly as much THINKING, and thinking is billed against the same
+     ceiling. The page that proved it failed with its own budget quoted back:
+     "ran out of output budget at 48000 tokens — 36264 of them spent thinking,
+     leaving 11736 for the JSON. Nothing was built." Eleven thousand tokens is
+     not a page. The same argument that raised the other number raises this
+     one, and there is now one number. */
+  return 96_000;
 }
 
 /**
@@ -893,7 +908,7 @@ export async function designPageTree(
 
          See `ceilingFor` — "the heaviest page there is" stopped being that
          page the moment a design pass started specifying its elements. */
-      maxTokens: ceilingFor(order),
+      maxTokens: ceilingFor(),
       /* A DeepSeek page measured 100-172 seconds against Haiku's 45, so the
          old 240s ceiling left almost no headroom on a slow one. */
       signal: signal
@@ -947,7 +962,7 @@ export async function designPageTree(
       const again = await provider.complete({
         system,
         user,
-        maxTokens: ceilingFor(order),
+        maxTokens: ceilingFor(),
         signal: signal
           ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])
           : AbortSignal.timeout(TIMEOUT_MS),
@@ -1056,7 +1071,7 @@ export async function designPageTree(
             `Return the SAME page with those fixed and nothing else changed.`,
             `Same JSON shape. Do not rewrite copy that was not named above.`,
           ].join("\n"),
-          maxTokens: ceilingFor(order),
+          maxTokens: ceilingFor(),
           signal: signal
             ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])
             : AbortSignal.timeout(TIMEOUT_MS),

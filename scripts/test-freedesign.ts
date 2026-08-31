@@ -206,6 +206,50 @@ async function main(): Promise<void> {
     "a buy box on a page with no product is still dropped",
   );
 
+  console.log("\nwhat free mode does NOT depend on");
+
+  {
+    /* IT REACHED PRODUCTION. `USE_SECTION_SPEC` means "also ask a second model
+       what goes inside the bands stage 1 chose" — an addition to a pipeline
+       that works without it. Free mode is not an addition, it IS the design
+       step, and gating it meant a server with the flag unset ran free mode, got
+       nothing, and fell through to the arc path with a smaller output ceiling.
+       The page failed and every symptom pointed at the build model. */
+    const before = process.env.USE_SECTION_SPEC;
+    try {
+      delete process.env.USE_SECTION_SPEC;
+      const { planSpecs } = await import("../lib/design/sectionSpec");
+      const ask = {
+        pageType: "about", sell: "Knitwear", storeType: "d2c", market: null,
+        styleLabel: "Editorial", styleBlurb: "", prompt: "",
+        tokens: { bg: "#fff", ink: "#111", accent: "#f00", band: "#eee" },
+      };
+
+      /* The banded path still refuses — that flag still means what it meant. */
+      const banded = await planSpecs({
+        ...ask,
+        order: { vertical: "x", archetype: "C", patternIds: [], motionIds: [], sections: [] },
+      } as never);
+      check(
+        banded.reason === "USE_SECTION_SPEC is not true",
+        "the banded path still needs the flag",
+        String(banded.reason),
+      );
+
+      /* Free mode gets past it. It will stop at the next gate — no model is
+         configured in a test — and that is the point: a DIFFERENT reason. */
+      const free = await planSpecs({ ...ask, order: null } as never);
+      check(
+        free.reason !== "USE_SECTION_SPEC is not true",
+        "free mode does not",
+        String(free.reason),
+      );
+    } finally {
+      if (before === undefined) delete process.env.USE_SECTION_SPEC;
+      else process.env.USE_SECTION_SPEC = before;
+    }
+  }
+
   console.log("\nthe motionPlan nothing asked for");
 
   {
