@@ -18,6 +18,14 @@
    The audience is named for the same reason. "For merchants" is nobody;
    someone who looks at storefronts for a living and will hold this next to the
    best one they saw this month is a real reader with a real bar.
+
+   THE SECOND HALF names two sections and asks for more invention in them: the
+   opening and the buy box. It is not the checklist that used to sit further
+   down this prompt — that was cut deliberately, because a list of what a good
+   buy box contains is how every store in a trade ends up with the same one.
+   This asks for the opposite of a list, and carries its own test: a hero that
+   survives having its words swapped for a competitor's was never this store's
+   hero. That test has a wrong answer. "Beautiful" does not.
    ========================================================================== */
 
 export const THE_STANDARD: string[] = [
@@ -32,4 +40,30 @@ export const THE_STANDARD: string[] = [
   `answer to that is a section that is merely present — and a page of those`,
   `is exactly what this stands against. It will be correct, and nobody will`,
   `look twice.`,
+  ``,
+  /* THE TWO THAT CARRY THE PAGE.
+
+     Deliberately not a checklist of what a good hero or a good buy box
+     contains — the 1,541-character version of exactly that was cut from this
+     prompt on purpose, because a list of what to include is how every store in
+     a trade ends up with the same opening. This asks for MORE invention in two
+     named places and says how to tell whether it happened.
+
+     The test is the substitutable one, and it has a wrong answer: a hero that
+     survives having its words swapped for a competitor's was never this
+     store's hero. "Beautiful" has no wrong answer, which is why it is not the
+     instruction. */
+  `THE OPENING AND THE BUY BOX get more invention than anything else on the`,
+  `page. They are where a visitor decides, they are what a merchant judges the`,
+  `build by, and they are the two that most often arrive as a template: a`,
+  `headline over a photograph, and a stack of grey one-liners beside a price.`,
+  ``,
+  `Build both for THIS store specifically — its material, its proof, the thing`,
+  `only it can say — and compose them out of real structure rather than one`,
+  `block with type on it. Reach past the obvious arrangement.`,
+  ``,
+  `The test: if this opening could sit on a competitor's page with only the`,
+  `words changed, it is not this store's opening. Same for the buy box — if`,
+  `the column beside the price would read identically for a different product`,
+  `in the same trade, it has been filled in rather than designed.`,
 ];

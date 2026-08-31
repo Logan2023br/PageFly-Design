@@ -116,6 +116,19 @@ async function main(): Promise<void> {
     const flat = text.replace(/\s+/g, " ");
     check(flat.includes("still remember about it an hour later"), "it carries a test, not only a compliment");
     check(flat.includes("nobody will look twice"), "and names the failure it stands against");
+
+    /* The two sections a merchant decides on, asked for by name — and asked
+       for as invention rather than as a list of what to include. The list was
+       cut from this prompt on purpose; putting one back here would undo it. */
+    check(flat.includes("THE OPENING AND THE BUY BOX"), "the two that carry the page are named");
+    check(
+      flat.includes("could sit on a competitor's page with only the words changed"),
+      "with the substitutable test, which has a wrong answer",
+    );
+    check(
+      !flat.includes("benefit grid") && !flat.includes("offer picker"),
+      "and no checklist of what to put in them — that is what was removed",
+    );
   }
 
   console.log("\nthe design opinions, gone from free and kept for banded");
