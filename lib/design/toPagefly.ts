@@ -30,7 +30,6 @@ import {
   STOCK_INDICATOR,
   ACCORDION,
   ACCORDION_HEADER,
-  TABLE,
   Page,
   type DeviceKey,
   type PFNode,
@@ -752,16 +751,8 @@ function emitNode(
        columns stop aligning the moment two cells hold different lengths, it
        carries no header semantics, and on a phone it either overflows the page
        or collapses into nonsense. */
-    case "table": {
-      if (node.rows.length === 0) return null;
-      return TABLE(node.rows, sd, {
-        headerColumn: node.headerColumn,
-        /* Hug when the first column is a long label and the rest are short
-           values — a spec sheet. Fill when every column carries about the same,
-           which is a size chart. Decided from the shape rather than asked. */
-        width: node.rows.every((r) => r.length > 0 && r[0].length > 18) ? "hug" : "fill",
-      });
-    }
+    case "table":
+      return tableAsFlex(node.rows, node.headerColumn, sd, opts);
 
     case "accordion":
       return accordionOf(node, sd, opts);
@@ -1677,6 +1668,84 @@ function walkNode(n: DesignNode): DesignNode[] {
   const out: DesignNode[] = [n];
   for (const kid of childrenOf(n)) out.push(...walkNode(kid));
   return out;
+}
+
+
+/**
+ * A table, built out of flex blocks rather than PageFly's Table2.
+ *
+ * TWO ATTEMPTS AT THE REAL ELEMENT FAILED, and the editor said why. It shows
+ * "Please add an item in General -> Rows or General -> Columns" — so Table2 has
+ * `rows` and `columns` LIST fields in its General tab, and `fields.md` lists
+ * four fields for the element and neither of them is there. The documentation
+ * is incomplete, and both attempts were guesses at a shape nobody wrote down:
+ * `data.rows` did nothing, and a sibling `content` key did worse than nothing —
+ * it was outside the six keys `page-json.md` allows on a node, and the import
+ * reported success while the page never reached the editor's list.
+ *
+ * So this stops guessing. A row is a FlexBlock, a cell is a Paragraph, and both
+ * are emitted correctly everywhere else in this file. It renders, the merchant
+ * can edit any cell as ordinary text, and nothing here depends on a field table
+ * that is missing entries.
+ *
+ * WHAT IT COSTS, since it is a real trade. Table2's per-breakpoint
+ * `columnsWidth` is gone, so the columns are even flex children and a wide
+ * table scrolls rather than reflowing. The editor's table panel is gone with
+ * it. And a six-by-four table is about thirty items instead of five. A table
+ * that renders beats a table that is configurable and empty.
+ *
+ * The first row is the header and the first column is one too when the design
+ * asked for it — `headerColumn` is right for a size chart and wrong for a spec
+ * list, which is why the design gets to say.
+ */
+function tableAsFlex(
+  rows: string[][],
+  headerColumn: boolean,
+  sd: StyleData,
+  opts: EmitOptions,
+): PFNode | null {
+  if (rows.length === 0) return null;
+
+  const rule = opts.border ?? "rgba(0,0,0,.14)";
+  const ink = inkRule(opts);
+  const columns = rows.reduce((n, r) => Math.max(n, r.length), 0);
+  if (columns === 0) return null;
+
+  /* Padded here, as `TABLE` padded before it: a ragged row is a table with
+     holes in it, and this function is reachable from a tree nobody parsed. */
+  const square = rows.map((r) => [...r, ...Array(Math.max(0, columns - r.length)).fill("")]);
+
+  const cell = (text: string, header: boolean, first: boolean): PFNode =>
+    P4(text, {
+      all: {
+        "&":
+          `flex: 1 1 0; min-width: 0; padding: 12px 14px; font-size: 14px;` +
+          ` line-height: 1.4; ${ink}` +
+          (header
+            ? ` font-weight: 600; letter-spacing: .04em; text-transform: uppercase; font-size: 12.5px;`
+            : "") +
+          (first && headerColumn ? ` font-weight: 600;` : "") +
+          /* Digits in a column have to line up or the table reads as a list. */
+          (/\d/.test(text) ? ` font-variant-numeric: tabular-nums;` : ""),
+      },
+    });
+
+  const line = (cells: string[], i: number): PFNode =>
+    FB(
+      {
+        all: {
+          "&":
+            `display: flex; flex-direction: row; align-items: stretch; width: 100%;` +
+            (i < square.length - 1 ? ` border-bottom: 1px solid ${rule};` : ""),
+        },
+      },
+      cells.map((c, n) => cell(c, i === 0, n === 0)),
+    );
+
+  return FB(
+    filling(sd, `display: flex; flex-direction: column; width: 100%; overflow-x: auto;`),
+    square.map(line),
+  );
 }
 
 function accordionOf(

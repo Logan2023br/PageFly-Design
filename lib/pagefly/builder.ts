@@ -35,18 +35,6 @@ export type PFNode = {
    * and does nothing — see MD Json PageFly/page-json.md.
    */
   options?: Record<string, unknown>;
-  /**
-   * A third slot, and only Table2 has needed it.
-   *
-   * `fields.md` puts a table's cells in `content:{ rows:[[...]] }` and does not
-   * list `rows` among the element's four fields; `page-json.md` lists the node's
-   * keys and does not mention `content` at all. The two disagree, and that file
-   * says which wins: "If something here contradicts the editor, the editor is
-   * right." So the rows are written to both, the way `FORM_FIELD`'s label
-   * writes `text` and `value` — an unread key costs nothing, and a table the
-   * editor reports as empty costs the section.
-   */
-  content?: Record<string, unknown>;
   _kids: PFNode[];
   roomId?: string;
 };
@@ -83,9 +71,8 @@ function node(
   data: Record<string, unknown> = {},
   styleData: StyleData = null,
   kids: PFNode[] = [],
-  content?: Record<string, unknown>,
 ): PFNode {
-  return { type, data, styleData, _kids: kids, ...(content ? { content } : {}) };
+  return { type, data, styleData, _kids: kids };
 }
 
 /** Hide a node on every breakpoint except the ones listed. */
@@ -684,6 +671,20 @@ export function ACCORDION(
  * phone scrolls inside its own wrapper rather than pushing the page sideways —
  * that rule is in the page stylesheet, not here.
  */
+/**
+ * PageFly's own Table2 — NO LONGER EMITTED, and kept only as the record of why.
+ *
+ * The editor rejects every shape we could find for its cells: it answers
+ * "Please add an item in General -> Rows or General -> Columns", so the element
+ * has `rows` and `columns` list fields that `fields.md` does not list among its
+ * four. `data.rows` did nothing; a sibling `content` key did worse, because it
+ * is outside the six keys `page-json.md` allows on a node — the import reported
+ * success and the page never reached the editor's list.
+ *
+ * `tableAsFlex` in `toPagefly.ts` builds tables out of FlexBlocks and
+ * Paragraphs instead. Delete this when the real field shape is documented, or
+ * restore it the moment it is.
+ */
 export function TABLE(
   rows: string[][],
   styleData: StyleData,
@@ -709,11 +710,15 @@ export function TABLE(
 
          Cells go in `content:{ rows:[[header…],[row…]] }` (string[][])
 
-     Written to all three places the two documents point at — the sibling
-     `content`, a `content` inside `data`, and `data.rows` as it was. Extra keys
-     are unread, not harmful; a size chart that arrives blank is a section the
-     merchant has to build by hand. When an import confirms which one the editor
-     reads, delete the other two. */
+     WRITTEN INSIDE `data`, AND ONLY INSIDE IT. The first attempt also put a
+     `content` key beside `data` on the item, because `fields.md` reads that
+     way. It was the only key in a 222-item export that `page-json.md` does not
+     list among a node's six, and an import that reported success while the
+     editor showed nothing is exactly what an out-of-schema key would produce.
+     Unverified either way — but a guess that can cost the whole page is worse
+     than a table that arrives empty, so the guess goes and the two safe
+     placements stay. `data` is documented as "the element's own settings",
+     which is where an unread extra key costs nothing. */
   return node(
     "Table2",
     {
@@ -731,7 +736,6 @@ export function TABLE(
       node("Table2.ColumnBody", {}, null, []),
       node("Table2.Body", {}, null, []),
     ],
-    { rows: square },
   );
 }
 
@@ -1238,8 +1242,6 @@ type Item = {
   updatedAt: string;
   data?: Record<string, unknown>;
   options?: Record<string, unknown>;
-  /** Table2's cells — see `PFNode.content` for why this slot exists. */
-  content?: Record<string, unknown>;
   roomId?: string;
 };
 
@@ -1338,7 +1340,6 @@ export class Page {
          next to a class of bug that only shows up as a white screen. */
       item.data = n.data;
       if (n.options && Object.keys(n.options).length) item.options = n.options;
-      if (n.content && Object.keys(n.content).length) item.content = n.content;
       if (n.roomId !== undefined) item.roomId = n.roomId;
       items.push(item);
       parentChildren.push(id);

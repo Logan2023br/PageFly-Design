@@ -1578,65 +1578,70 @@ async function main(): Promise<void> {
     { border: "#3A3A38" },
   );
 
-  const tbl = chart.items.find((i) => i.type === "Table2");
-  check(!!tbl, "the table became a Table2, not a nest of FlexBlocks");
+  /* NOT Table2. Two shapes for its cells were tried and the editor rejected
+     both — it answers "Please add an item in General -> Rows or General ->
+     Columns", so the element has `rows` and `columns` list fields that
+     `fields.md` does not list among its four. `data.rows` did nothing, and a
+     sibling `content` key did worse: outside the six keys `page-json.md`
+     allows on a node, it made an import report success while the page never
+     reached the editor's list. Built from primitives that do work instead. */
+  check(
+    !chart.items.some((i) => i.type === "Table2"),
+    "the table is NOT PageFly's Table2 — its cell shape is undocumented",
+  );
   check(
     !chart.items.some((i) => i.type === "ContentList2"),
     "and not a card list either",
   );
 
-  const cells = tbl?.data?.rows as string[][] | undefined;
-  check(cells?.length === 3, "the cells are DATA, not children", String(cells?.length));
-  check(cells?.[0]?.[0] === "Size", "the header row is row zero");
-  check(cells?.[2]?.[1] === "102 cm", "and the values arrive verbatim");
+  const known = new Set(["__v", "id", "type", "children", "styles", "createdAt", "updatedAt", "data", "options", "roomId"]);
+  const strays = [...new Set(chart.items.flatMap((i) => Object.keys(i)))].filter((k) => !known.has(k));
+  check(strays.length === 0, "no item carries a key the format does not document", strays.join(", "));
 
-  /* WHERE THE EDITOR LOOKS. Exported with the rows only in `data.rows`, PageFly
-     opened the section and said "Your list is empty" with every row present in
-     the file. `fields.md` puts them in `content:{rows}` and backs it up by not
-     listing `rows` among the element's four fields; `page-json.md` does not
-     mention a `content` slot at all. Both are written until an import says
-     which one is read. */
-  const sibling = (tbl as { content?: { rows?: string[][] } } | undefined)?.content?.rows;
-  check(sibling?.length === 3, "the rows are also in the sibling content slot", String(sibling?.length));
-  const inData = (tbl?.data?.content as { rows?: string[][] } | undefined)?.rows;
-  check(inData?.length === 3, "and in a content object inside data", String(inData?.length));
+  /* Three rows of three, as Paragraphs inside FlexBlocks. */
+  const cellText = chart.items
+    .filter((i) => i.type === "Paragraph4")
+    .map((i) => String((i.data as Record<string, unknown>)?.value ?? ""));
+  for (const want of ["Size", "Chest", "102 cm"])
+    check(cellText.includes(want), `the cell "${want}" arrives verbatim`);
+  check(cellText.length >= 9, "every cell of a 3x3 becomes its own editable node", `${cellText.length}`);
+
+  /* A header row that does not read as one is a list of nine phrases. */
+  const headerCell = chart.items.find(
+    (i) => i.type === "Paragraph4" && (i.data as Record<string, unknown>)?.value === "Size",
+  );
+  const headerCss = chart.cssOf(headerCell?.id ?? "");
+  check(headerCss.includes("uppercase"), "row zero is set as the header", headerCss.slice(0, 60));
+  check(headerCss.includes("flex: 1 1 0"), "and every cell shares the width evenly");
+
+  /* Digits that do not line up turn a size chart back into prose. */
+  const numeric = chart.items.find(
+    (i) => i.type === "Paragraph4" && (i.data as Record<string, unknown>)?.value === "102 cm",
+  );
   check(
-    sibling?.[2]?.[1] === "102 cm" && inData?.[2]?.[1] === "102 cm",
-    "all three carry the same cells",
+    chart.cssOf(numeric?.id ?? "").includes("tabular-nums"),
+    "a cell carrying digits gets tabular figures",
   );
 
-  const slots = (tbl?.children ?? []).map(
-    (c) => chart.items.find((x) => x.id === c)?.type ?? "?",
+  /* Wide tables scroll rather than crushing the page — the one thing Table2's
+     per-breakpoint columnsWidth used to do, done by hand. */
+  const scroller = chart.items.find(
+    (i) => i.type === "FlexBlock" && chart.cssOf(i.id).includes("overflow-x: auto"),
   );
-  check(
-    slots.join(",") === "Table2.RowHeader,Table2.ColumnHeader,Table2.ColumnBody,Table2.Body",
-    "four slots, in the order the validator requires",
-    slots.join(" · "),
-  );
-  check(
-    tbl?.data?.columnHeadersPosition === "left",
-    "headerColumn true puts the row labels down the left",
-  );
-  check(
-    (tbl?.data?.columnsWidth as Record<string, string> | undefined)?.mobile === "hug",
-    "columns hug on a phone, whatever they do on a desktop",
-  );
+  check(Boolean(scroller), "the table scrolls inside its own box");
 
   /* Ragged input is a table with holes in it. The schema pads; assert the
-     exporter never sees a short row. */
+     exporter never emits a short row. */
   const ragged = await open({
     sections: [
-      section(
-        [{ type: "table", rows: [["A", "B", "C"], ["1"]] }],
-        "size-fit-guide",
-      ),
+      section([{ type: "table", rows: [["A", "B", "C"], ["1"]] }], "size-fit-guide"),
     ],
   });
-  const raggedCells = ragged.items.find((i) => i.type === "Table2")?.data?.rows as string[][];
+  const raggedCells = ragged.items.filter((i) => i.type === "Paragraph4");
   check(
-    raggedCells?.[1]?.length === 3,
+    raggedCells.length === 6,
     "a short row is padded to the widest, not left with holes",
-    JSON.stringify(raggedCells?.[1]),
+    `${raggedCells.length} cells`,
   );
 
   /* A design that forgets one of the three parts a buy box cannot do without
