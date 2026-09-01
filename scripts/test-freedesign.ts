@@ -303,6 +303,50 @@ async function main(): Promise<void> {
     check(silent.length > 0, "a page where nothing moves still gets a plan", silent);
   }
 
+  console.log("\nthe page opens on its first screen");
+
+  {
+    /* IT WENT MISSING when free mode skipped stage 1. `enforceHero` lived in
+       `deckPlan` and nothing replaced it, so a home page came back with no
+       banner and nothing noticed. Only the half that transfers was restored:
+       a hero further down moves to the front; no hero anywhere is left alone,
+       because inventing one would overrule the design rather than repair it. */
+    const { __openOnHeroForTest: open } = await import("../lib/design/sectionSpec");
+    const band = (role: string) => ({
+      role, pattern: role, signature: false, dark: false, padding: "standard",
+      motion: null, mayHaveBg: false, brief: null, spec: null,
+    });
+
+    const moved = [band("content"), band("proof"), band("hero"), band("conversion")];
+    const specs = new Map([[0, { nodes: [{ el: "text" }] }], [2, { nodes: [{ el: "image" }] }]]);
+    open("home", moved as never, specs as never);
+    check(moved[0].role === "hero", "a hero at band 3 is moved to the front", moved.map((b) => b.role).join(","));
+    check(moved.length === 4, "and the page keeps every band it had");
+    /* The spec map is keyed by position; it has to travel with them. */
+    check(
+      JSON.stringify(specs.get(0)) === JSON.stringify({ nodes: [{ el: "image" }] }),
+      "the hero's spec travels with it",
+      JSON.stringify(specs.get(0)),
+    );
+    check(
+      JSON.stringify(specs.get(1)) === JSON.stringify({ nodes: [{ el: "text" }] }),
+      "and the band it displaced keeps its own",
+    );
+
+    const already = [band("hero"), band("content")];
+    open("home", already as never, new Map() as never);
+    check(already[0].role === "hero", "a page already opening on one is untouched");
+
+    const none = [band("content"), band("proof")];
+    open("home", none as never, new Map() as never);
+    check(none[0].role === "content", "no hero anywhere is left alone, not invented");
+
+    /* A product page opens on its buy box, on purpose, and always has. */
+    const shop = [band("commerce"), band("hero")];
+    open("product", shop as never, new Map() as never);
+    check(shop[0].role === "commerce", "a product page still opens on its buy box");
+  }
+
   console.log("\nthe section that carries the page");
 
   {

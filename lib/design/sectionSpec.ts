@@ -3,7 +3,7 @@ import "server-only";
 import { parseObject } from "../ai/json";
 import { getProvider, isAiEnabled, modelName, type Usage } from "../ai/provider";
 import { sliceSkill } from "../ai/skills";
-import { FREE_VERTICAL } from "./plan";
+import { FREE_VERTICAL, pageHasOneProduct } from "./plan";
 import type {
   Order,
   OrderSection,
@@ -425,7 +425,18 @@ function systemPrompt(ask: SpecAsk): string {
        design, it would delete the reason the call is made. */
     `RULES.`,
     ...(free
-      ? []
+      ? [
+          /* Not taste, and the old prompt said so in as many words. A page
+             whose first screen is a row of spec bars is a page nobody scrolls,
+             and the background rule carries its own measurement: across 59
+             shipped sections exactly one had a photograph behind it. */
+          `1. THE PAGE OPENS ON A HERO — a first screen, full width, carrying`,
+          `   the one thing this store wants seen before anything is read. It`,
+          `   takes a photograph or a video behind it ("bg": true) unless the`,
+          `   design genuinely wants a flat ground, because a hero on flat`,
+          `   colour spends the first impression on nothing. The exception is a`,
+          `   page selling one product: that opens on its buy box.`,
+        ]
       : [
           `1. Every band gets a spec. A band you skip is a band built by guesswork.`,
           `2. Vary between bands. Two bands with the same element list is the failure`,
@@ -433,10 +444,10 @@ function systemPrompt(ask: SpecAsk): string {
           `3. Motion is punctuation. A page where everything moves reads as a page`,
           `   where nothing does — leave most elements still.`,
         ]),
-    `${free ? 1 : 4}. Mark a node "optional": true when it would be good but the`,
+    `${free ? 2 : 4}. Mark a node "optional": true when it would be good but the`,
     `   section works without it. Everything else is required and checked for.`,
     ``,
-    `${free ? 2 : 5}. Specify. A section whose nodes carry no "css" and no "use"`,
+    `${free ? 3 : 5}. Specify. A section whose nodes carry no "css" and no "use"`,
     `   has been named rather than designed, and the build model will invent the`,
     `   numbers.`,
     ``,
@@ -658,6 +669,45 @@ export const __pickSignatureForTest = (sections: OrderSection[]): number => {
 };
 
 /**
+ * The page opens on its first screen.
+ *
+ * `enforceHero` in `deckPlan` guaranteed this, and its own note says why: "a
+ * `home` page for a fashion store opened on `spec-bars` — a row of labelled
+ * bars where the first screen should be." Free mode skips stage 1, so nothing
+ * called it, and a home page came back with no banner at all.
+ *
+ * ONLY THE HALF THAT TRANSFERS. `enforceHero` could also INSERT a hero taken
+ * from the trade block; free mode has no trade block and no pattern ids, and
+ * inventing a section the design never asked for is overruling it rather than
+ * repairing it. So a hero further down moves to the front — every band the
+ * design chose is kept and only the order is corrected — and no hero anywhere
+ * is left alone.
+ *
+ * The spec map is keyed by position, so it travels with them.
+ *
+ * A page that pins one product is exempt: it opens on its buy box, on purpose,
+ * and always has.
+ */
+function openOnHero(
+  pageType: string,
+  sections: OrderSection[],
+  specs: Map<number, SectionSpec>,
+): void {
+  if (pageHasOneProduct(pageType) || sections[0]?.role === "hero") return;
+  const at = sections.findIndex((s) => s.role === "hero");
+  if (at <= 0) return;
+  const [hero] = sections.splice(at, 1);
+  sections.unshift(hero);
+  const moved = new Map<number, SectionSpec>();
+  for (const [i, spec] of specs) moved.set(i === at ? 0 : i < at ? i + 1 : i, spec);
+  specs.clear();
+  for (const [i, spec] of moved) specs.set(i, spec);
+}
+
+/** `openOnHero`, for the tests. */
+export const __openOnHeroForTest = openOnHero;
+
+/**
  * `vetFreeSection`, for the tests.
  *
  * Same reason `__specPromptsForTest` exists: free mode's checking is the only
@@ -770,6 +820,26 @@ export async function planSpecs(ask: SpecAsk, signal?: AbortSignal): Promise<Spe
 
     if (sections.length === 0)
       return { ...empty("no section survived checking"), usage, model: provider.model, dropped };
+
+    /* THE PAGE OPENS ON ITS FIRST SCREEN, and free mode lost that when it
+       skipped stage 1.
+    
+       `enforceHero` in `deckPlan` guaranteed it, and its own note says why:
+       "a `home` page for a fashion store opened on `spec-bars` — a row of
+       labelled bars where the first screen should be." Free mode never calls
+       it, so nothing has required a hero since, and a home page came back with
+       no banner at all.
+    
+       Only the half that transfers. `enforceHero` could also INSERT a hero
+       taken from the trade block, and free mode has no trade block and no
+       pattern ids — inventing a section the design did not ask for would be
+       overruling it rather than repairing it. So: a hero further down is moved
+       to the front, which keeps every band the design chose and corrects only
+       the order. No hero anywhere is left alone.
+    
+       A page that pins one product is exempt: it opens on its buy box, on
+       purpose, and always has. */
+    openOnHero(ask.pageType, sections, specs);
 
     /* THE REPAIRS THAT ARE NOT TASTE. Exactly one section carries the page, and
        two inverted sections may not touch — the second is a rendering fact, not
