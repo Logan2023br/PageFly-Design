@@ -754,6 +754,9 @@ function emitNode(
     case "table":
       return tableAsFlex(node.rows, node.headerColumn, sd, opts);
 
+    case "tabs":
+      return tabsOf(node, sd, opts);
+
     case "accordion":
       return accordionOf(node, sd, opts);
 
@@ -1745,6 +1748,122 @@ function tableAsFlex(
   return FB(
     filling(sd, `display: flex; flex-direction: column; width: 100%; overflow-x: auto;`),
     square.map(line),
+  );
+}
+
+
+/**
+ * Tabs where clicking one shows its own panel.
+ *
+ * WHAT WAS THERE BEFORE. A design that wanted three tabs got three Paragraphs
+ * and ONE panel: "REGULAR / OVERSIZED / TALL" read as a tab bar, nothing was
+ * clickable, and two of the three contents had nowhere to live. There was no
+ * node for tabs, so the design had no way to ask for them.
+ *
+ * WHY NOT PageFly's Tabs3. Its placement rule says "emit the type alone, no
+ * child nodes. Fill via `content.items:[{label,content}]`" — and an item-level
+ * `content` key is the thing that made two exports import successfully and
+ * never reach the editor's list. Its safe variant, inside `data`, is what
+ * Table2 ignored. Both documented routes are the ones already known to fail.
+ *
+ * SO THIS USES THE MECHANISM Tabs3 ITSELF USES. Its own description says "CSS
+ * radio-state switching", and its own note says active-tab styling "is a
+ * sibling-state rule: `& .pf-tab-radio:checked ~ ...`". A hidden radio per tab,
+ * a label per radio, and `:has()` to reach the panels — which are REAL PageFly
+ * nodes, not markup, so a table or a buy box inside a tab stays a table or a
+ * buy box.
+ *
+ * The class goes on the WRAPPER rather than on the Custom.HTML, because that is
+ * what puts the radios and the panels inside one scope: `scopeSelector` turns a
+ * leading `&` into `.pfd-c-N`, so `&:has(#…:checked) .panel` reaches across
+ * from one to the other. Nothing here escapes the block.
+ *
+ * WITHOUT `:has()` every panel shows, stacked. That is the honest degradation —
+ * all the content, no switching — and it is written as an explicit @supports
+ * rather than left to chance.
+ *
+ * WHAT IT COSTS: the tab LABELS live in the Custom.HTML, so a merchant edits
+ * them in the code box rather than by clicking the word. Panel contents are
+ * ordinary nodes and edit normally.
+ */
+/**
+ * A tab label, safe inside the markup this file writes.
+ *
+ * `cleanHtml` strips tags and event attributes AFTER this runs, so an ampersand
+ * or a stray `<` in a label written by a model would otherwise arrive as broken
+ * markup rather than as the characters it meant.
+ */
+function escapeHtml(v: string): string {
+  return v
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function tabsOf(
+  node: Extract<DesignNode, { type: "tabs" }>,
+  sd: StyleData,
+  opts: EmitOptions,
+): PFNode | null {
+  if (node.items.length < 2) return null;
+
+  const n = (opts.customCount!.value += 1);
+  const rule = opts.border ?? "rgba(0,0,0,.16)";
+  const accent = opts.accent ?? "currentColor";
+  const ink = inkRule(opts);
+  const open = Math.min(node.open, node.items.length - 1);
+  const rid = (k: number) => `pfd-t-${n}-${k}`;
+  const pcl = (k: number) => `pfd-p-${n}-${k}`;
+
+  const bar = [
+    `<div class="pfd-bar">`,
+    ...node.items.map(
+      (t, k) =>
+        `<input type="radio" name="pfd-tabs-${n}" id="${rid(k)}"${k === open ? " checked" : ""}>` +
+        `<label for="${rid(k)}">${escapeHtml(t.label)}</label>`,
+    ),
+    `</div>`,
+  ].join("");
+
+  const css = [
+    `& .pfd-bar{display:flex;flex-wrap:wrap;gap:28px;border-bottom:1px solid ${rule};}`,
+    /* Off-screen rather than `display:none`: a hidden radio is still focusable
+       this way, so the bar can be driven from a keyboard. */
+    `& .pfd-bar input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;}`,
+    `& .pfd-bar label{cursor:pointer;padding:12px 0;margin-bottom:-1px;font-size:12.5px;` +
+      `letter-spacing:.12em;text-transform:uppercase;opacity:.5;` +
+      `border-bottom:2px solid transparent;transition:opacity .2s ease;${ink}}`,
+    `& .pfd-bar label:hover{opacity:.8;}`,
+    ...node.items.map((_, k) => `& .${pcl(k)}{display:none !important;}`),
+    ...node.items.map(
+      (_, k) =>
+        `&:has(#${rid(k)}:checked) .${pcl(k)}{display:flex !important;}` +
+        `&:has(#${rid(k)}:checked) .pfd-bar label[for="${rid(k)}"]` +
+        `{opacity:1;border-bottom-color:${accent};}`,
+    ),
+    /* No `:has()` — show everything rather than nothing. */
+    `@supports not selector(:has(*)){` +
+      node.items.map((_, k) => `& .${pcl(k)}{display:flex !important;}`).join("") +
+      `}`,
+  ].join("");
+
+  const clean = cleanBlock({ html: bar, stylesheet: css }, n);
+  opts.customBlocks!.push(clean);
+
+  return FB(
+    filling(sd, "display: flex; flex-direction: column; gap: 28px; width: 100%;"),
+    [
+      CUSTOM_HTML(clean.html, null),
+      ...node.items.map((t, k) =>
+        FB(
+          { all: { "&": "display: flex; flex-direction: column; gap: 22px; width: 100%;" } },
+          t.children.map((c) => emit(c, "vertical", opts)).filter(Boolean) as PFNode[],
+          pcl(k),
+        ),
+      ),
+    ],
+    clean.className,
   );
 }
 

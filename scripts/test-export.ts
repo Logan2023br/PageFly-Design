@@ -505,6 +505,79 @@ async function main(): Promise<void> {
 
   /* ---- a stack is one per row, not N across ----------------------------- */
 
+  /* ---- tabs, which used to be three words above one block --------------- */
+
+  console.log("\ntabs");
+
+  {
+    const tabs = await open(
+      {
+        sections: [
+          section(
+            [
+              {
+                type: "tabs",
+                open: 1,
+                items: [
+                  { label: "Regular", children: [{ type: "text", text: "Regular fit" }] },
+                  { label: "Oversized", children: [{ type: "text", text: "Oversized fit" }] },
+                  { label: "Tall", children: [{ type: "table", rows: [["Size", "XS"], ["Chest", "96"]] }] },
+                ],
+              },
+            ],
+            "size-fit-guide",
+          ),
+        ],
+      },
+      "probe",
+      { border: "#3A3A38", accent: "#C9A24B" },
+    );
+
+    /* EACH TAB GETS ITS OWN PANEL. Three labels over one shared block was the
+       bug: two thirds of the content had nowhere to live. */
+    const panels = tabs.items.filter((i) =>
+      /^pfd-p-\d+-\d+$/.test(String((i.data as Record<string, unknown>)?.className ?? "")),
+    );
+    check(panels.length === 3, "three tabs, three panels", `${panels.length}`);
+
+    const texts = tabs.items
+      .filter((i) => i.type === "Paragraph4")
+      .map((i) => String((i.data as Record<string, unknown>)?.value ?? ""));
+    for (const want of ["Regular fit", "Oversized fit", "Chest"])
+      check(texts.includes(want), `panel content "${want}" arrives`);
+
+    /* A panel holds REAL nodes, so a table inside a tab is still a table. */
+    check(
+      texts.includes("Size") && texts.includes("96"),
+      "a table inside a tab is built, not flattened to prose",
+    );
+
+    /* The bar is one Custom.HTML carrying a radio and a label per tab. */
+    const bar = tabs.items.find((i) => i.type === "Custom.HTML");
+    const code = String((bar?.data as Record<string, unknown>)?.code ?? "");
+    check((code.match(/<input type="radio"/g) ?? []).length === 3, "one radio per tab");
+    for (const l of ["Regular", "Oversized", "Tall"])
+      check(code.includes(`>${l}</label>`), `the label "${l}" is in the bar`);
+    check(/id="pfd-t-\d+-1"\s+checked/.test(code), "open:1 is the tab that starts checked");
+
+    /* The class goes on the WRAPPER, which is what puts the radios and the
+       panels inside one scope — see `tabsOf`. */
+    const wrapCls = tabs.items.find(
+      (i) => /^pfd-c-\d+$/.test(String((i.data as Record<string, unknown>)?.className ?? "")) &&
+        i.type === "FlexBlock",
+    );
+    check(Boolean(wrapCls), "the block class sits on the wrapper, not the markup");
+
+    const css = tabs.customCSS;
+    check(css.includes(":has("), "switching is a :has() rule, reaching from radio to panel");
+    check(css.includes("#C9A24B"), "the open tab is underlined in the accent");
+    check(
+      css.includes("@supports not selector(:has(*))"),
+      "and without :has() every panel shows rather than none",
+    );
+    check(!tabs.items.some((i) => i.type === "Tabs3"), "not Tabs3 — its fill route is the one that broke imports");
+  }
+
   /* ---- the countdown, which used to be markup that counted nothing ------ */
 
   console.log("\na countdown");

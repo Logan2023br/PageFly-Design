@@ -91,6 +91,44 @@ async function main(): Promise<void> {
     "and the button to near-black — correct on the white page it came from",
   );
 
+  console.log("\ntabs, on a static render");
+
+  {
+    const html = renderToStaticMarkup(
+      React.createElement(DesignRender, {
+        tree: {
+          motionPlan: "none",
+          sections: [
+            {
+              type: "section", role: "content", pattern: "size-fit-guide",
+              children: [
+                {
+                  type: "tabs", open: 1,
+                  items: [
+                    { label: "Regular", children: [{ type: "text", text: "Regular fit" }] },
+                    { label: "Oversized", children: [{ type: "text", text: "Oversized fit" }] },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        device: "all", images: {}, videos: {},
+        palette: { accent: "#C9A24B", border: "rgba(0,0,0,.16)", radius: 0 },
+      } as never),
+    );
+    const t = html.slice(html.indexOf('data-pf="tabs"'));
+
+    check(html.includes('data-pf="tabs"'), "it is drawn");
+    check(t.includes("Regular") && t.includes("Oversized"), "both labels are in the bar");
+    check(t.includes("Regular fit") && t.includes("Oversized fit"), "and both panels are rendered");
+
+    /* One open, the rest hidden — a merchant approving this needs to see that
+       tab two has content, which is why `open` is honoured rather than ignored. */
+    check((t.match(/display:none/g) ?? []).length === 1, "exactly one panel is hidden");
+    check(t.includes("#C9A24B"), "the open tab is underlined in the accent");
+  }
+
   console.log("\na countdown, on a static render");
 
   {

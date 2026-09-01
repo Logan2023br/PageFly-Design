@@ -241,12 +241,21 @@ function systemPrompt(ask: SpecAsk): string {
     `  text and marks   heading, text, button, icon, divider`,
     `  media            image, slideshow, marquee, overlay, beforeAfter`,
     `  commerce         product, productList, form`,
-    `  behaviour        accordion, table, counter, countdown, sticky, custom`,
+    `  behaviour        accordion, tabs, table, counter, countdown, sticky, custom`,
     ``,
     /* PageFly HAS a countdown element with a documented field table, and until
        this line existed a page that wanted one asked for `custom` — markup that
        counts nothing, in a block the merchant cannot configure. A sale is the
        commonest reason to want one, so it is the commonest way that happened. */
+    /* A design asked for three tabs and got three text nodes above one block,
+       because there was no element to ask with. Naming the shape here is what
+       stops "REGULAR / OVERSIZED / TALL" being three words and a paragraph. */
+    `"tabs" needs two or more items and EACH ITEM CARRIES ITS OWN CHILDREN:`,
+    `{"el":"tabs","open":0,"items":[{"label":"Regular","children":[…]},`,
+    `{"label":"Oversized","children":[…]}]}. Three labels over one shared`,
+    `panel is not tabs. Anything can go in a tab — a table, an image, a buy`,
+    `box — because a panel holds real elements, not markup.`,
+    ``,
     `A "countdown" is the real PageFly timer and needs "endsAt" as an ISO`,
     `instant — {"el":"countdown","endsAt":"2026-11-24T23:59:00Z",`,
     `"units":["d","h","m","s"],"labels":true}. Never build one out of "custom":`,

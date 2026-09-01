@@ -1033,6 +1033,14 @@ export type DesignNode =
       mobile?: Css;
       anim?: Anim;
     }
+  | {
+      type: "tabs";
+      open: number;
+      items: { label: string; children: DesignNode[] }[];
+      css?: Css;
+      mobile?: Css;
+      anim?: Anim;
+    }
   | { type: "row"; css?: Css; mobile?: Css; anim?: Anim; children: DesignNode[] }
   | { type: "col"; css?: Css; mobile?: Css; anim?: Anim; children: DesignNode[] };
 
@@ -1067,6 +1075,27 @@ const node: z.ZodType<DesignNode> = z.lazy(() =>
       autoplay: flag(false),
       ...styled,
       slides: list(node, 12).refine((v) => v.length > 0),
+    }),
+    /**
+     * Tabs, and every tab has its own panel.
+     *
+     * WHAT THIS FIXES. A design that wanted three tabs got three Paragraphs
+     * and ONE panel underneath: the labels read as tabs, nothing was
+     * clickable, and two thirds of the content had nowhere to live. There was
+     * no node for it, so the design had no way to ask.
+     *
+     * Two or more, because one tab is a heading. Six at most: past that the
+     * bar wraps and a tab nobody can see is content nobody reads.
+     */
+    z.object({
+      type: z.literal("tabs"),
+      /** which panel is open on arrival, zero-based */
+      open: whole(0, 5, 0),
+      ...styled,
+      items: list(
+        z.object({ label: saying(40), children: list(node, 16) }),
+        6,
+      ).refine((v) => v.length > 1, { message: "one tab is a heading, not a tab" }),
     }),
     /* Both hold children, so both are built here rather than above — declared
        outside the lazy union they would reference `node` before it exists, and

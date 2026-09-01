@@ -56,6 +56,7 @@ This is the entire alphabet. There is nothing else.
 {"type":"marquee","speed":28,"children":[]}
 {"type":"counter","value":"92","suffix":"%","label":"","css":{}}
 {"type":"countdown","endsAt":"2026-11-24T23:59:00Z","units":["d","h","m","s"],"labels":true,"caption":""}
+{"type":"tabs","open":0,"items":[{"label":"","children":[]},{"label":"","children":[]}]}
 {"type":"custom","label":"","html":"","stylesheet":"","js":""}
 ```
 
@@ -64,6 +65,9 @@ A section may also carry, when its order line says `bg:allowed`:
 ```
 "bg":{"kind":"photo","query":"","scrim":"soft"}    photo or video behind the band
 ```
+
+`tabs` needs two or more items and EACH ONE CARRIES ITS OWN CHILDREN. Three
+labels above one shared panel is not tabs — it is three words and a block.
 
 `countdown` is PageFly's own timer and `endsAt` is an ISO instant. Never build
 one out of `custom`: markup does not count down, and the merchant cannot set

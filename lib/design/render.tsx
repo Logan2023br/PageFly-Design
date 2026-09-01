@@ -1251,6 +1251,70 @@ function Countdown({
   );
 }
 
+/**
+ * Tabs, live in the mockup — clicking a label swaps the panel.
+ *
+ * Real state rather than a picture of the first tab: a merchant approving this
+ * needs to see that tab three has content, and a static render of tab one
+ * cannot tell them. It is the same reason the countdown ticks here.
+ */
+function Tabs({ node, cls }: { node: Extract<DesignNode, { type: "tabs" }>; cls?: string }) {
+  const { device, palette } = useDesign();
+  const [open, setOpen] = useState(Math.min(node.open, node.items.length - 1));
+  const rule = palette?.border ?? "rgba(0,0,0,.16)";
+  const accent = palette?.accent ?? "currentColor";
+
+  return (
+    <div
+      data-pf="tabs"
+      className={cls}
+      style={{ display: "flex", flexDirection: "column", gap: 28, ...sx(node, device) }}
+    >
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 28, borderBottom: `1px solid ${rule}` }}>
+        {node.items.map((t, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => setOpen(i)}
+            style={{
+              cursor: "pointer",
+              padding: "12px 0",
+              marginBottom: -1,
+              fontSize: 12.5,
+              letterSpacing: ".12em",
+              textTransform: "uppercase",
+              opacity: i === open ? 1 : 0.5,
+              background: "none",
+              border: "none",
+              borderBottom: `2px solid ${i === open ? accent : "transparent"}`,
+              color: "inherit",
+              fontFamily: "inherit",
+              fontWeight: 600,
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {node.items.map((t, i) => (
+        <div
+          key={i}
+          style={{
+            display: i === open ? "flex" : "none",
+            flexDirection: "column",
+            gap: 22,
+            width: "100%",
+          }}
+        >
+          {t.children.map((c, k) => (
+            <Node key={k} node={c} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ---- containers --------------------------------------------------------- */
 
 /**
@@ -1310,6 +1374,8 @@ function Node({ node }: { node: DesignNode }) {
       return <Counter node={node} cls={cls} />;
     case "countdown":
       return <Countdown node={node} cls={cls} />;
+    case "tabs":
+      return <Tabs node={node} cls={cls} />;
     case "row":
     case "col":
       return (

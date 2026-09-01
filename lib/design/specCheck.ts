@@ -44,6 +44,7 @@ const ELEMENTS = new Set([
   "beforeAfter",
   "counter",
   "countdown",
+  "tabs",
   "accordion",
   "table",
   "slideshow",
