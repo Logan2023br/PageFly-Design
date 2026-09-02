@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type { ReviewResponse } from "@/app/api/review/route";
 import { useAccount } from "../AccountProvider";
 import { Button, Icon } from "../ui";
+import { StarRating } from "./StarRating";
 
 /* ==========================================================================
    "Was this useful?" — a short wait after a build, once per store.
@@ -77,7 +78,6 @@ export function ReviewPrompt() {
   const [phase, setPhase] = useState<Phase>("hidden");
   const [dismissed, setDismissed] = useState(false);
   const [stars, setStars] = useState(0);
-  const [hover, setHover] = useState(0);
   const [comment, setComment] = useState("");
   const [error, setError] = useState<string | null>(null);
   /* `account` is server-rendered and never refetched, so its `hasReviewed` stays
@@ -156,7 +156,6 @@ export function ReviewPrompt() {
   };
 
   const open = phase !== "hidden";
-  const shown = hover || stars;
 
   return (
     <AnimatePresence>
@@ -243,40 +242,7 @@ export function ReviewPrompt() {
                 </button>
               </div>
 
-              {/* Hovering the nth star lights 1..n, which is what makes a star
-                  row read as a scale rather than as five separate buttons. */}
-              <div
-                className="flex items-center gap-1"
-                onMouseLeave={() => setHover(0)}
-                role="radiogroup"
-                aria-label="Rating out of 5"
-              >
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    role="radio"
-                    aria-checked={stars === n}
-                    aria-label={`${n} star${n === 1 ? "" : "s"}`}
-                    onMouseEnter={() => setHover(n)}
-                    onFocus={() => setHover(n)}
-                    onBlur={() => setHover(0)}
-                    onClick={() => setStars(n)}
-                    className="rounded-pf-sm p-0.5 transition-transform hover:scale-110"
-                  >
-                    <motion.span
-                      animate={{ scale: shown >= n ? 1 : 0.94 }}
-                      transition={{ duration: 0.12 }}
-                      className={`block ${shown >= n ? "text-pf-warn" : "text-pf-faint"}`}
-                    >
-                      <Star filled={shown >= n} />
-                    </motion.span>
-                  </button>
-                ))}
-                <span className="ml-1.5 text-[12px] tabular-nums text-pf-muted">
-                  {shown ? `${shown}/5` : ""}
-                </span>
-              </div>
+              <StarRating value={stars} onChange={setStars} />
 
               <textarea
                 value={comment}
@@ -317,21 +283,5 @@ export function ReviewPrompt() {
         </motion.div>
       )}
     </AnimatePresence>
-  );
-}
-
-/** Drawn rather than taken from the icon set: the set's Star has one outline
-    shape, and this needs a filled and an unfilled state at the same weight. */
-function Star({ filled }: { filled: boolean }) {
-  return (
-    <svg width={22} height={22} viewBox="0 0 24 24" aria-hidden>
-      <path
-        d="M12 3.2l2.62 5.3 5.85.85-4.24 4.13 1 5.82L12 16.57l-5.23 2.75 1-5.82L3.53 9.35l5.85-.85z"
-        fill={filled ? "currentColor" : "none"}
-        stroke="currentColor"
-        strokeWidth={1.6}
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }

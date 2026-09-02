@@ -38,6 +38,37 @@ export type StoreRecord = {
   blocked: boolean;
 };
 
+/**
+ * A store record for a domain we hold a review for and nothing else.
+ *
+ * The public feedback link accepts a rating for any domain, and deliberately
+ * does NOT write to `stores` — that table is the sign-in allowlist. So the
+ * admin listing has to be able to show a domain that has no store row, and
+ * this is the shape it shows it in: everything unknown, `pageLimit` zero
+ * because no allowance was ever granted, and `blocked` false because nobody
+ * barred it either.
+ *
+ * Lives beside StoreRecord rather than in a driver so both drivers answer with
+ * the same row for the same absence.
+ */
+export function reviewOnlyStore(domain: string): StoreRecord {
+  return {
+    domain,
+    email: null,
+    storeName: null,
+    shopifyPlan: null,
+    currentPlan: null,
+    daysUsed: null,
+    country: null,
+    userType: null,
+    status: null,
+    pageLimit: 0,
+    firstSeenAt: null,
+    lastSeenAt: null,
+    blocked: false,
+  };
+}
+
 export type RunRecord = {
   id: string;
   domain: string;

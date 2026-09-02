@@ -1,5 +1,6 @@
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { buildStats } from "./postgresRepo";
+import { reviewOnlyStore } from "./types";
 import type {
   JobRecord,
   TrainingItem,
@@ -432,14 +433,26 @@ export function createMemoryRepo(file: string): Repo {
 
     async listStoreSummaries() {
       sync();
-      return data.stores
-        .map((s): StoreSummary => {
-          const runs = data.runs.filter((r) => r.domain === s.domain);
-          const review = data.reviews.find((r) => r.domain === s.domain) ?? null;
+      /* Every domain we hold anything about, not only the ones in the store
+         list. A review can arrive from the public feedback link for a domain
+         that was never in the sheet, and listing only `stores` would record it
+         and then never show it to anyone — the same as not recording it. */
+      const domains = [
+        ...new Set([
+          ...data.stores.map((s) => s.domain),
+          ...data.reviews.map((r) => r.domain),
+        ]),
+      ];
+
+      return domains
+        .map((domain): StoreSummary => {
+          const runs = data.runs.filter((r) => r.domain === domain);
+          const review = data.reviews.find((r) => r.domain === domain) ?? null;
           return {
-            ...s,
+            ...(data.stores.find((s) => s.domain === domain) ??
+              reviewOnlyStore(domain)),
             runCount: runs.length,
-            pagesUsed: pagesOf(s.domain).length,
+            pagesUsed: pagesOf(domain).length,
             tokens: runs.reduce((sum, r) => sum + r.tokens, 0),
             lastRunAt:
               runs.map((r) => r.createdAt).sort().at(-1) ?? null,

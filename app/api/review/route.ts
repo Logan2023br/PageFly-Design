@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { currentAccount } from "@/lib/account";
 import { getRepo } from "@/lib/db";
+import { forwardReview } from "@/lib/review";
 
 /* ==========================================================================
    POST /api/review
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
     forwarded: false,
   });
 
-  const forwarded = await forward({
+  const forwarded = await forwardReview({
     domain: account.domain,
     storeName: account.storeName,
     email: account.email,
@@ -87,36 +88,4 @@ export async function POST(request: Request) {
   }
 
   return Response.json({ ok: true, alreadyReviewed: false } satisfies ReviewResponse);
-}
-
-/**
- * Hand the review to the n8n webhook, which is what writes the star rating into
- * the sheet.
- *
- * The URL is configuration, not code: REVIEW_WEBHOOK_URL. Until it is set this
- * returns false and the review sits in the database with forwarded = false,
- * which is exactly the state a later retry needs.
- */
-async function forward(payload: Record<string, unknown>): Promise<boolean> {
-  const url = process.env.REVIEW_WEBHOOK_URL;
-  if (!url) return false;
-
-  try {
-    /* Bounded: a hanging webhook must not hold the merchant's request open. The
-       review is already saved, so giving up here costs nothing but a retry. */
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        ...(process.env.REVIEW_WEBHOOK_SECRET
-          ? { "x-webhook-secret": process.env.REVIEW_WEBHOOK_SECRET }
-          : {}),
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(8000),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
 }

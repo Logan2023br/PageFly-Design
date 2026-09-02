@@ -847,25 +847,46 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
     async listStoreSummaries() {
       await ready();
       const { rows } = await db.query(
-        `select s.*,
+        /* Driven from every domain we hold anything about, not from `stores`
+           alone. The public feedback link records a rating for a domain that
+           may never have been in the sheet, and it deliberately does not write
+           to `stores` — that table is the sign-in allowlist. Joining from
+           `stores` would file those reviews somewhere nobody can read them.
+
+           `s.*` had to go with it: the store side is now nullable, so the
+           columns are named and the two that must not arrive as NULL —
+           page_limit and blocked — are given the values reviewOnlyStore()
+           gives them. */
+        `select d.domain,
+                s.email, s.store_name, s.shopify_plan, s.current_plan,
+                s.days_used, s.country, s.user_type, s.status,
+                coalesce(s.page_limit, 0)   as page_limit,
+                s.first_seen_at, s.last_seen_at,
+                coalesce(s.blocked, false)  as blocked,
                 coalesce(r.run_count,0)  as run_count,
                 coalesce(p.pages_used,0) as pages_used,
                 coalesce(r.tokens,0)     as tokens,
                 r.last_run_at,
                 v.stars, v.comment, v.created_at as review_at
-           from stores s
+           from (
+             select domain from stores
+             union
+             select domain from reviews
+           ) d
+           left join stores s on s.domain = d.domain
            left join (
              select domain, count(*)::int as run_count, sum(tokens)::int as tokens,
                     max(created_at) as last_run_at
                from runs group by domain
-           ) r on r.domain = s.domain
+           ) r on r.domain = d.domain
            left join (
              select r2.domain, count(*)::int as pages_used
                from run_pages p2 join runs r2 on r2.id = p2.run_id
               group by r2.domain
-           ) p on p.domain = s.domain
-           left join reviews v on v.domain = s.domain
-          order by coalesce(r.last_run_at, s.last_seen_at) desc nulls last, s.domain`,
+           ) p on p.domain = d.domain
+           left join reviews v on v.domain = d.domain
+          order by coalesce(r.last_run_at, s.last_seen_at, v.created_at)
+                   desc nulls last, d.domain`,
       );
 
       return rows.map((r): StoreSummary => {
