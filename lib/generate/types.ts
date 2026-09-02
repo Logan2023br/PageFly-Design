@@ -367,6 +367,15 @@ export type GenerateFailure = {
   pageId: string;
   label: string;
   reason: string;
+  /**
+   * The reason is the vendor's, not ours.
+   *
+   * An account out of credit is something the merchant can go and fix, and it
+   * reaches their screen unchanged. A page designer that answered in a shape
+   * we cannot read is ours, and they are told so in a sentence while the
+   * reason stays here for support. See lib/build/failureMessage.ts.
+   */
+  vendorFault?: boolean;
 };
 
 export type GenerateResult = {

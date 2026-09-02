@@ -8,6 +8,7 @@ import { freeDesignEnabled, planSpecs, sectionSpecEnabled } from "../design/sect
 import { verticalFor } from "../design/plan";
 import type { DeckOutcome } from "../design/deckPlan";
 import { getRepo } from "../db";
+import { SUPPORT_MESSAGE, merchantMessage } from "./failureMessage";
 import type { JobRecord, RunPageRecord, RunRecord } from "../db/types";
 import { buildPage, expandSelection } from "../generate/mock";
 import { CHROME_KINDS, INCLUDE_CHROME } from "../pageChrome";
@@ -577,6 +578,10 @@ async function run(
             pageId: entry.pageId,
             label: entry.label,
             reason: outcome.reason,
+            /* Carried through so the screen can tell an account problem the
+               merchant can fix from a designer problem only we can. The reason
+               itself stays here either way — this row is what support reads. */
+            vendorFault: outcome.vendorFault === true,
           });
           continue;
         }
@@ -648,9 +653,12 @@ async function run(
         pages: [],
         failures,
         tokens,
-        error:
-          failures[0]?.reason ??
-          "The page designer could not be reached. No pages were built.",
+        /* The merchant's version of it. The full reason stays in `failures`
+           above, which is where support and the log look — a page designer
+           that answered in the wrong shape is not something a merchant can
+           act on, and printing its token counts at them only reads as broken.
+           See lib/build/failureMessage.ts. */
+        error: merchantMessage(failures[0]),
       });
       return;
     }
@@ -667,10 +675,18 @@ async function run(
       tokens,
     });
   } catch (err) {
+    /* Logged here and nowhere else. The screen no longer carries the message,
+       so without this line an exception that killed a build would leave no
+       trace at all. */
+    console.error("[build] failed", err);
     await repo
       .updateJob(job.id, {
         status: "failed",
-        error: err instanceof Error ? err.message.slice(0, 300) : "Unknown error",
+        /* An exception that reached here is ours by definition — a stack
+           trace's message is not something a merchant can act on either. The
+           real one is still thrown and logged; this is only what the screen
+           says. */
+        error: SUPPORT_MESSAGE,
         pages: inOrder(pages),
         failures,
         tokens,

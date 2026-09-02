@@ -155,7 +155,21 @@ export type DesignOutcome =
       credits: { name: string; link: string }[];
       usage: { input: number; output: number };
     }
-  | { used: false; reason: string; usage: { input: number; output: number } };
+  | {
+      used: false;
+      reason: string;
+      /**
+       * The reason came from the VENDOR, not from a bad answer.
+       *
+       * Out of credit, a rejected key, rate limiting, an outage — `fromStatus`
+       * has already written those for a reader, and the merchant is the one
+       * who can act on them. Everything else here is our own designer
+       * answering in a shape we cannot use, which is ours to fix and theirs to
+       * be spared. See lib/build/failureMessage.ts.
+       */
+      vendorFault?: boolean;
+      usage: { input: number; output: number };
+    };
 
 const NOTHING = { input: 0, output: 0 };
 
@@ -916,7 +930,15 @@ export async function designPageTree(
         : AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (err) {
-    return { used: false, reason: (err as Error).message.slice(0, 200), usage: NOTHING };
+    /* The provider itself refused or could not be reached — `fromStatus` has
+       turned a status code into a sentence naming what to do about it, and
+       that sentence is for the merchant. */
+    return {
+      used: false,
+      reason: (err as Error).message.slice(0, 200),
+      vendorFault: true,
+      usage: NOTHING,
+    };
   }
 
   /* ==========================================================================
