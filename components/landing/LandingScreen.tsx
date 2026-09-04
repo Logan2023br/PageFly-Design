@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { PageMockup } from "@/lib/generate/types";
+import { cleanedUrl, loginParam } from "@/lib/autoSignIn";
+import type { StoreAuthResponse } from "@/app/api/auth/store/route";
 import { GradientWord, Icon } from "../ui";
 import { Aura } from "./Aura";
 import { Counts } from "./Counts";
@@ -45,6 +47,100 @@ export function LandingScreen() {
    */
   const [domain, setDomain] = useState<string | null | undefined>(undefined);
   const [signingOut, setSigningOut] = useState(false);
+  /* The ?login= link, mid-flight. Null when this is an ordinary visit, which is
+     almost every visit — the overlay and the message below both stay out of the
+     way until a link actually asks for a sign-in. */
+  const [linkSignIn, setLinkSignIn] = useState<"trying" | "refused" | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
+
+  /* ==========================================================================
+     /?login=their-store.myshopify.com
+
+     A link that signs a merchant in and drops them on the brief, rather than
+     showing them a form asking for the domain the link already carries.
+
+     THE SAME DOOR THE FORM USES. `POST /api/auth/store` is the only place in
+     this app allowed to say yes to a sign-in, and its own header says so. A
+     second grant path here would be a second thing to keep in step with the
+     allowlist, and the second one is the one that drifts.
+
+     THE PARAMETER IS STRIPPED BEFORE THE ANSWER COMES BACK, not after. While it
+     sits in the address bar it reaches browser history, the Referer header of
+     the next request, and every proxy log in between — none of which can be
+     unsent. Closing that window early costs nothing.
+
+     A REFUSAL KEEPS THEM HERE. Redirecting a merchant whose store is not on the
+     list to a sign-in form would ask them to type the domain that was just
+     rejected, which reads as the app not having heard them.
+     ========================================================================== */
+  useEffect(() => {
+    const wanted = loginParam(window.location.search);
+    if (!wanted) return;
+
+    /* The rule guards against an effect that sets state on every render and
+       drives a render loop. This one runs once, on mount, only when the URL
+       carries the parameter, and the page it belongs to is about to navigate
+       away — the extra pass it costs is the overlay appearing, which is the
+       whole point. The alternatives are worse: reading `window` during render
+       would make the client's first paint disagree with the prerendered HTML,
+       and deferring past an await would show the front door for a beat before
+       covering it. */
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLinkSignIn("trying");
+    try {
+      window.history.replaceState(null, "", cleanedUrl(window.location.href));
+    } catch {
+      /* Some embedded browsers refuse replaceState. The sign-in still runs —
+         a link that works with an untidy address bar beats one that does not
+         work at all. */
+    }
+
+    let alive = true;
+    void (async () => {
+      try {
+        const res = await fetch("/api/auth/store", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ domain: wanted }),
+        });
+
+        /* A crashed route answers with an HTML error page and res.json() throws
+           on it — the same trap LoginScreen documents. */
+        let body: StoreAuthResponse;
+        try {
+          body = (await res.json()) as StoreAuthResponse;
+        } catch {
+          if (alive) {
+            setLinkError(`The server returned an error (${res.status}).`);
+            setLinkSignIn("refused");
+          }
+          return;
+        }
+
+        if (!body.ok) {
+          if (alive) {
+            setLinkError(body.error);
+            setLinkSignIn("refused");
+          }
+          return;
+        }
+
+        /* Full navigation, not router.push: /design is behind the proxy guard,
+           which reads the cookie the browser has only just been given. The
+           overlay stays up through it — this component is about to be gone. */
+        window.location.assign("/design");
+      } catch {
+        if (alive) {
+          setLinkError("Could not reach the server. Check your connection.");
+          setLinkSignIn("refused");
+        }
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -100,6 +196,23 @@ export function LandingScreen() {
 
   return (
     <main className="pfd-root relative min-h-dvh overflow-x-clip bg-pf-bg text-pf-body">
+      {/* Over everything, and only for the seconds a ?login= link is in flight.
+          Without it the merchant sees the front door they were not asking for,
+          long enough to press something on it, and then the page navigates out
+          from under the press. */}
+      {linkSignIn === "trying" && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed inset-0 z-[60] grid place-items-center bg-pf-bg/85 backdrop-blur-sm"
+        >
+          <div className="grid justify-items-center gap-3">
+            <span className="size-7 animate-spin rounded-full border-2 border-pf-border border-t-pf-primary-hi" />
+            <p className="text-[13.5px] font-semibold text-pf-text">Signing you in…</p>
+          </div>
+        </div>
+      )}
+
       {/* Behind the masthead as well as the hero — the bloom reads as light
           coming from off the top of the page, and a header sitting on flat
           black in front of it would cut the effect in half. */}
@@ -182,6 +295,21 @@ export function LandingScreen() {
             Design now
             <Icon name="Sparkles" size={17} />
           </Link>
+          {/* The refusal sits here rather than replacing the line below it: the
+              merchant arrived on a link we sent, and "not on the list" is the
+              whole answer they need — the invitation to sign in by hand stays,
+              because a different store of theirs might be on it. */}
+          {linkSignIn === "refused" && linkError && (
+            <p
+              role="alert"
+              className="flex max-w-[380px] items-start gap-1.5 text-center text-[12.5px] font-semibold text-pf-danger"
+            >
+              <span className="mt-px shrink-0">
+                <Icon name="CircleAlert" size={13} />
+              </span>
+              {linkError}
+            </p>
+          )}
           <span className="text-[12.5px] text-pf-faint">
             Sign in with your store domain — nothing to install.
           </span>
