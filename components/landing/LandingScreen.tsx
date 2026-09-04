@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PageMockup } from "@/lib/generate/types";
 import { cleanedUrl, loginParam } from "@/lib/autoSignIn";
 import type { StoreAuthResponse } from "@/app/api/auth/store/route";
@@ -47,100 +47,101 @@ export function LandingScreen() {
    */
   const [domain, setDomain] = useState<string | null | undefined>(undefined);
   const [signingOut, setSigningOut] = useState(false);
-  /* The ?login= link, mid-flight. Null when this is an ordinary visit, which is
-     almost every visit — the overlay and the message below both stay out of the
-     way until a link actually asks for a sign-in. */
+  /* The store a ?login= link named, held until the merchant presses Design
+     now. Null on an ordinary visit, which is almost every visit.
+
+     A ref, not state: nothing renders it. It is read once inside the click
+     handler and cleared when it has been spent, and holding it in state would
+     make the page re-render on load for a value no pixel depends on. */
+  const linkDomain = useRef<string | null>(null);
   const [linkSignIn, setLinkSignIn] = useState<"trying" | "refused" | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
 
   /* ==========================================================================
      /?login=their-store.myshopify.com
 
-     A link that signs a merchant in and drops them on the brief, rather than
-     showing them a form asking for the domain the link already carries.
+     A link that lets a merchant press Design now once and land on the brief,
+     instead of on a form asking for the store domain the link already carries.
 
-     THE SAME DOOR THE FORM USES. `POST /api/auth/store` is the only place in
-     this app allowed to say yes to a sign-in, and its own header says so. A
-     second grant path here would be a second thing to keep in step with the
-     allowlist, and the second one is the one that drifts.
+     THE LINK IS REMEMBERED, NOT ACTED ON. Signing someone in the instant a page
+     loads takes the decision away from them — they asked for the front door and
+     got a redirect. So this only holds the domain, and the button they came to
+     press is what spends it.
 
-     THE PARAMETER IS STRIPPED BEFORE THE ANSWER COMES BACK, not after. While it
-     sits in the address bar it reaches browser history, the Referer header of
-     the next request, and every proxy log in between — none of which can be
-     unsent. Closing that window early costs nothing.
+     THE PARAMETER IS STRIPPED IMMEDIATELY ANYWAY. While it sits in the address
+     bar it reaches browser history, the Referer header of the next request, and
+     every proxy log in between, none of which can be unsent. Reading it once
+     into memory costs the merchant nothing and closes that window on load
+     rather than on click.
 
-     A REFUSAL KEEPS THEM HERE. Redirecting a merchant whose store is not on the
-     list to a sign-in form would ask them to type the domain that was just
-     rejected, which reads as the app not having heard them.
+     NOTHING HERE VALIDATES THE DOMAIN. `POST /api/auth/store` is the only place
+     in this app allowed to say yes to a sign-in, and its own header says so.
      ========================================================================== */
   useEffect(() => {
     const wanted = loginParam(window.location.search);
     if (!wanted) return;
 
-    /* The rule guards against an effect that sets state on every render and
-       drives a render loop. This one runs once, on mount, only when the URL
-       carries the parameter, and the page it belongs to is about to navigate
-       away — the extra pass it costs is the overlay appearing, which is the
-       whole point. The alternatives are worse: reading `window` during render
-       would make the client's first paint disagree with the prerendered HTML,
-       and deferring past an await would show the front door for a beat before
-       covering it. */
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLinkSignIn("trying");
+    linkDomain.current = wanted;
     try {
       window.history.replaceState(null, "", cleanedUrl(window.location.href));
     } catch {
-      /* Some embedded browsers refuse replaceState. The sign-in still runs —
-         a link that works with an untidy address bar beats one that does not
-         work at all. */
+      /* Some embedded browsers refuse replaceState. The link still works — one
+         that works with an untidy address bar beats one that does not work. */
     }
-
-    let alive = true;
-    void (async () => {
-      try {
-        const res = await fetch("/api/auth/store", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ domain: wanted }),
-        });
-
-        /* A crashed route answers with an HTML error page and res.json() throws
-           on it — the same trap LoginScreen documents. */
-        let body: StoreAuthResponse;
-        try {
-          body = (await res.json()) as StoreAuthResponse;
-        } catch {
-          if (alive) {
-            setLinkError(`The server returned an error (${res.status}).`);
-            setLinkSignIn("refused");
-          }
-          return;
-        }
-
-        if (!body.ok) {
-          if (alive) {
-            setLinkError(body.error);
-            setLinkSignIn("refused");
-          }
-          return;
-        }
-
-        /* Full navigation, not router.push: /design is behind the proxy guard,
-           which reads the cookie the browser has only just been given. The
-           overlay stays up through it — this component is about to be gone. */
-        window.location.assign("/design");
-      } catch {
-        if (alive) {
-          setLinkError("Could not reach the server. Check your connection.");
-          setLinkSignIn("refused");
-        }
-      }
-    })();
-
-    return () => {
-      alive = false;
-    };
   }, []);
+
+  /**
+   * Design now, for a visitor who arrived on a ?login= link.
+   *
+   * Falls through to the plain link in every other case: no link, or a store
+   * already signed in. `/design` is guarded by the proxy, which sends anyone
+   * without a cookie to the form — the behaviour this replaces only where a
+   * link said which store to sign in as.
+   */
+  const designNow = async (event: React.MouseEvent) => {
+    if (!linkDomain.current || domain || linkSignIn === "trying") return;
+
+    /* Only now, once the merchant has asked to go there. */
+    event.preventDefault();
+    setLinkSignIn("trying");
+    setLinkError(null);
+
+    try {
+      const res = await fetch("/api/auth/store", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ domain: linkDomain.current }),
+      });
+
+      /* A crashed route answers with an HTML error page and res.json() throws
+         on it — the same trap LoginScreen documents. */
+      let body: StoreAuthResponse;
+      try {
+        body = (await res.json()) as StoreAuthResponse;
+      } catch {
+        setLinkError(`The server returned an error (${res.status}).`);
+        setLinkSignIn("refused");
+        return;
+      }
+
+      if (!body.ok) {
+        setLinkError(body.error);
+        setLinkSignIn("refused");
+        /* Spent. A domain the list refused will be refused again, and leaving
+           it armed would make the button retry it on every press — the second
+           press should do what the button says and go to the sign-in form. */
+        linkDomain.current = null;
+        return;
+      }
+
+      /* Full navigation, not router.push: /design is behind the proxy guard,
+         which reads the cookie the browser has only just been given. */
+      window.location.assign("/design");
+    } catch {
+      setLinkError("Could not reach the server. Check your connection.");
+      setLinkSignIn("refused");
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -196,10 +197,9 @@ export function LandingScreen() {
 
   return (
     <main className="pfd-root relative min-h-dvh overflow-x-clip bg-pf-bg text-pf-body">
-      {/* Over everything, and only for the seconds a ?login= link is in flight.
-          Without it the merchant sees the front door they were not asking for,
-          long enough to press something on it, and then the page navigates out
-          from under the press. */}
+      {/* Over everything, for the seconds between the press and the brief.
+          Without it the button looks unpressed while the sign-in runs, and a
+          second press starts a second one. */}
       {linkSignIn === "trying" && (
         <div
           role="status"
@@ -291,7 +291,7 @@ export function LandingScreen() {
               here and presses it again three screens later; two different
               treatments of one action is two actions as far as anyone can
               tell. */}
-          <Link href="/design" className="inline-flex items-center gap-2 rounded-pf-md bg-pf-primary px-6 py-3.5 text-[15px] font-semibold text-white shadow-pf-button transition-colors duration-150 hover:bg-pf-primary-hi">
+          <Link href="/design" onClick={(e) => void designNow(e)} className="inline-flex items-center gap-2 rounded-pf-md bg-pf-primary px-6 py-3.5 text-[15px] font-semibold text-white shadow-pf-button transition-colors duration-150 hover:bg-pf-primary-hi">
             Design now
             <Icon name="Sparkles" size={17} />
           </Link>
@@ -334,7 +334,7 @@ export function LandingScreen() {
         <p className="mx-auto mt-3 max-w-lg text-pf-body text-pf-muted">
           Four answers is all it needs. The first build takes about two minutes.
         </p>
-        <Link href="/design" className="mt-7 inline-flex items-center gap-2 rounded-pf-md bg-pf-primary px-6 py-3.5 text-[15px] font-semibold text-white shadow-pf-button transition-colors duration-150 hover:bg-pf-primary-hi">
+        <Link href="/design" onClick={(e) => void designNow(e)} className="mt-7 inline-flex items-center gap-2 rounded-pf-md bg-pf-primary px-6 py-3.5 text-[15px] font-semibold text-white shadow-pf-button transition-colors duration-150 hover:bg-pf-primary-hi">
           Design now
           <Icon name="Sparkles" size={17} />
         </Link>
