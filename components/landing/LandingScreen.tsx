@@ -99,7 +99,15 @@ export function LandingScreen() {
    * link said which store to sign in as.
    */
   const designNow = async (event: React.MouseEvent) => {
-    if (!linkDomain.current || domain || linkSignIn === "trying") return;
+    /* NO `|| domain` HERE, and that was the bug. Skipping the link because a
+       session already existed meant every link opened the store already signed
+       in — an operator who had once signed in as one store then got that store
+       from every link they were sent, and nothing said why.
+
+       A link names a store. If it names the one already signed in, the sign-in
+       is one redundant request and the same destination; if it names a
+       different one, it is the whole point. Either way the link wins. */
+    if (!linkDomain.current || linkSignIn === "trying") return;
 
     /* Only now, once the merchant has asked to go there. */
     event.preventDefault();
