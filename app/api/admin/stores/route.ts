@@ -33,6 +33,16 @@ const addSchema = z.object({
   userType: z.string().max(100).nullish(),
   daysUsed: z.number().int().min(0).max(100_000).nullish(),
   pageLimit: z.number().int().min(0).max(10_000).optional(),
+  /* The rating, which lives in `reviews` rather than in `stores` — but is a
+     column the admin table shows, and this endpoint's promise is that every
+     column it shows is editable in one place.
+
+     Three states, and they are three: absent means "this form did not ask",
+     null means "clear it", 1-5 means "set it". Collapsing null into absent
+     would make the rating the one field an operator could write and never
+     take back. */
+  stars: z.number().int().min(1).max(5).nullish(),
+  comment: z.string().max(2000).nullish(),
 });
 
 export type StoresResponse =
@@ -98,6 +108,17 @@ export async function POST(request: Request) {
       blocked: false,
     },
   ]);
+
+  /* After the store row, and deliberately not inside the same await: a
+     rating that fails to save must not lose the eight fields that already did.
+     The operator sees the store updated and can try the rating again. */
+  if (body.stars !== undefined)
+    await repo.adminSetReview(
+      domain,
+      body.stars === null
+        ? null
+        : { stars: body.stars, comment: body.comment ?? null },
+    );
 
   return Response.json({ ok: true, domain } satisfies StoresResponse);
 }

@@ -375,6 +375,28 @@ export type Repo = {
   /* ---- reviews ---- */
   getReview(domain: string): Promise<ReviewRecord | null>;
   saveReview(review: ReviewRecord): Promise<void>;
+  /**
+   * An operator writing, correcting or removing a rating.
+   *
+   * SEPARATE FROM `saveReview` ON PURPOSE, and the separation is the feature.
+   * `saveReview` cannot change stars or comment — one review per store, for
+   * ever, enforced by the primary key rather than by hiding the form, so that
+   * a second tab cannot quietly replace what a merchant already said. That
+   * rule is about the MERCHANT. Feedback also arrives by mail and by chat, and
+   * a rating filed against the wrong store has no way back out.
+   *
+   * `null` DELETES the row rather than zeroing it. A nought-star row would sit
+   * in the stats as a rating nobody gave, and would keep the store out of the
+   * list the review invitations are built from — cleared has to mean "never
+   * said", because that is what it means to everything downstream.
+   *
+   * `createdAt` is preserved when a review already exists: it records when the
+   * merchant gave the feedback, not when somebody fixed a typo in it.
+   */
+  adminSetReview(
+    domain: string,
+    review: { stars: number; comment: string | null } | null,
+  ): Promise<void>;
 
   /* ---- build jobs ---- */
   createJob(job: JobRecord): Promise<void>;

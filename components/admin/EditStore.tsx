@@ -27,6 +27,10 @@ type Draft = {
   status: string;
   userType: string;
   pageLimit: string;
+  /* "" means no rating. The select offers it as an option, and it is the only
+     way an operator can take a rating back off a store. */
+  stars: string;
+  comment: string;
 };
 
 function draftOf(store: StoreSummary): Draft {
@@ -39,6 +43,8 @@ function draftOf(store: StoreSummary): Draft {
     status: store.status ?? "",
     userType: store.userType ?? "",
     pageLimit: String(store.pageLimit),
+    stars: store.review ? String(store.review.stars) : "",
+    comment: store.review?.comment ?? "",
   };
 }
 
@@ -83,6 +89,10 @@ export function EditStore({
           status: draft.status.trim(),
           userType: draft.userType.trim(),
           pageLimit: Number(draft.pageLimit) || 0,
+          /* null clears the rating, a number sets it. Always sent, because the
+             form always asked — see the three states on the route's schema. */
+          stars: draft.stars === "" ? null : Number(draft.stars),
+          comment: draft.comment.trim(),
         }),
       });
       const body = (await res.json()) as StoresResponse;
@@ -150,6 +160,60 @@ export function EditStore({
               onChange={set("pageLimit")}
               inputMode="numeric"
             />
+          </div>
+
+          {/* The rating sits below the store's own fields and behind a rule,
+              because it is not one of them: it lives in `reviews`, it is what
+              the merchant said rather than what the sheet knows, and an
+              operator editing it is correcting a record of someone else's
+              words. */}
+          <div className="mt-4 border-t border-pf-border pt-4">
+            <div className="flex items-baseline justify-between gap-3">
+              <h3 className="text-[12.5px] font-semibold text-pf-text">Review</h3>
+              <p className="text-[11px] text-pf-faint">
+                {store.review
+                  ? `Given ${new Date(store.review.createdAt).toLocaleDateString()}`
+                  : "No review yet"}
+              </p>
+            </div>
+
+            <div className="mt-2.5 grid gap-3 sm:grid-cols-[140px_1fr]">
+              <label className="grid gap-1.5">
+                <span className="text-[11.5px] font-semibold text-pf-body">Rating</span>
+                <select
+                  value={draft.stars}
+                  onChange={(e) => set("stars")(e.target.value)}
+                  className="h-9 w-full rounded-pf-md border border-pf-border bg-pf-bg px-2.5 text-[13px] text-pf-text outline-none transition-colors focus:border-pf-primary-hi"
+                >
+                  <option value="">— none</option>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <option key={n} value={n}>
+                      {n} star{n === 1 ? "" : "s"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="grid gap-1.5">
+                <span className="text-[11.5px] font-semibold text-pf-body">Comment</span>
+                <textarea
+                  value={draft.comment}
+                  onChange={(e) => set("comment")(e.target.value)}
+                  rows={2}
+                  maxLength={2000}
+                  className="w-full resize-none rounded-pf-md border border-pf-border bg-pf-bg px-2.5 py-2 text-[13px] text-pf-text outline-none transition-colors placeholder:text-pf-faint focus:border-pf-primary-hi"
+                  placeholder={draft.stars === "" ? "Pick a rating first" : "What they said"}
+                />
+              </label>
+            </div>
+
+            {/* Said out loud, because "none" looks like a blank field rather
+                than an instruction to delete something. */}
+            {draft.stars === "" && store.review && (
+              <p className="mt-2 text-[11.5px] font-semibold text-pf-warn">
+                Saving with no rating deletes this review.
+              </p>
+            )}
           </div>
 
           {error && (

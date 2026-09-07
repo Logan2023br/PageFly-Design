@@ -260,6 +260,41 @@ export function createMemoryRepo(file: string): Repo {
       flush();
     },
 
+    async adminSetReview(domain, review) {
+      sync();
+      const i = data.reviews.findIndex((r) => r.domain === domain);
+
+      if (!review) {
+        /* Deleted, not zeroed — see the note on the contract. */
+        if (i >= 0) data.reviews.splice(i, 1);
+        flush();
+        return;
+      }
+
+      /* Blank is nothing, not an empty string — see the postgres driver for why
+         the two must agree on this. */
+      const comment = review.comment?.trim() || null;
+
+      if (i >= 0) {
+        /* createdAt and forwarded both survive: one records when the merchant
+           gave the feedback, the other whether the webhook has had it. */
+        data.reviews[i] = {
+          ...data.reviews[i],
+          stars: review.stars,
+          comment,
+        };
+      } else {
+        data.reviews.push({
+          domain,
+          stars: review.stars,
+          comment,
+          createdAt: new Date().toISOString(),
+          forwarded: false,
+        });
+      }
+      flush();
+    },
+
     async listTrainingItems() {
       sync();
       return [...data.training]

@@ -562,6 +562,33 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       );
     },
 
+    async adminSetReview(domain, review) {
+      await ready();
+
+      if (!review) {
+        /* Deleted, not zeroed — see the note on the contract. */
+        await db.query("delete from reviews where domain = $1", [domain]);
+        return;
+      }
+
+      /* Blank is nothing, not an empty string. The admin table prints
+         `comment ?? "—"`, so a `""` would render as a comment that exists and
+         says nothing — and the two drivers would disagree about which it was.
+         Coerced here rather than in the route so every caller gets one rule. */
+      const comment = review.comment?.trim() || null;
+
+      /* `created_at` is only set on insert. An operator correcting a rating has
+         not changed the day the merchant gave it. */
+      await db.query(
+        `insert into reviews (domain,stars,comment,created_at,forwarded)
+         values ($1,$2,$3,now(),false)
+         on conflict (domain) do update set
+           stars = excluded.stars,
+           comment = excluded.comment`,
+        [domain, review.stars, comment],
+      );
+    },
+
     async listTrainingItems() {
       await ready();
       /* The first image only. Selecting the whole array here is what would make
