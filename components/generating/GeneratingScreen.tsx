@@ -26,13 +26,31 @@ function statusLine(done: number, total: number): string {
    Used only to say "about two minutes" — never to draw a countdown, because a
    countdown that runs out while the bar has not moved is worse than no number.
 
-   This was 55, which was Haiku's number and was left behind when the app moved
-   to DeepSeek v4-flash. v4-flash is a reasoning model: it spends 15,000-16,000
-   output tokens thinking before it writes any JSON, and one page measured
-   125-134 seconds against Haiku's 20-25. So the screen promised 55 seconds
-   while the work took over two minutes, and a merchant watching it had every
-   reason to think the build had hung. */
-const SECONDS_PER_ROUND = 115;
+   IT HAS BEEN WRONG TWICE, THE SAME WAY BOTH TIMES: the pipeline changed and
+   this number did not. It was 55 — Haiku's — and stayed there when the app
+   moved to DeepSeek v4-flash, which spends 15,000-16,000 output tokens
+   thinking before it writes any JSON and measured 125-134 seconds a page. Then
+   it was 115, and stayed there when free design put a second model in front of
+   stage 3: an Opus call that designs the whole page before DeepSeek builds it.
+   The screen said 3m 50s for eight pages while the work took forty minutes,
+   and a merchant watching it had every reason to think the build had hung —
+   which is exactly what the 55 did, one pipeline earlier.
+
+   900 comes from five real builds on the current pipeline, one page each,
+   end to end:
+
+     750s · 910s · 1050s · plus two that failed on the model rather than the
+     clock
+
+   Stage 2 is about 210-260 seconds of that and stage 3 the rest; a page that
+   needs a second attempt at stage 3 lands near the top of the range. 900 sits
+   in the middle rather than at the bottom, because a number that runs out
+   early is the failure this comment keeps describing.
+
+   THE RULE THIS KEEPS BREAKING: when a stage is added to the build, come back
+   here. The number is not a guess to be left alone, it is a measurement with a
+   shelf life. */
+const SECONDS_PER_ROUND = 900;
 const AT_ONCE = 4;
 
 function estimate(total: number): number {
