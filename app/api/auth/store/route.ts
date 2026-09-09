@@ -14,7 +14,12 @@ import { normalizeDomain, sheetSource } from "@/lib/sheet";
    DELETE                 sign out
 
    The allowlist decision happens here and nowhere else, so there is exactly one
-   place that can say yes.
+   place that can say yes to a store that is already on the list.
+
+   THERE IS A SECOND DOOR, and it is not this one. `/api/auth/provision` opens
+   a signed invite link, and it may CREATE the store before admitting it. Two
+   doors with two rules, kept apart on purpose: this route's rule is the beta
+   gate and must stay refusable, so nothing about invites was added to it.
    ========================================================================== */
 
 const bodySchema = z.object({ domain: z.string().min(3).max(255) });

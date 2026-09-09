@@ -4,8 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { PageMockup } from "@/lib/generate/types";
-import { cleanedUrl, loginParam } from "@/lib/autoSignIn";
+import { cleanedUrl, inviteParams, loginParam, type Invite } from "@/lib/autoSignIn";
 import type { StoreAuthResponse } from "@/app/api/auth/store/route";
+import type { ProvisionResponse } from "@/app/api/auth/provision/route";
 import { GradientWord, Icon } from "../ui";
 import { Aura } from "./Aura";
 import { Counts } from "./Counts";
@@ -54,6 +55,11 @@ export function LandingScreen() {
      handler and cleared when it has been spent, and holding it in state would
      make the page re-render on load for a value no pixel depends on. */
   const linkDomain = useRef<string | null>(null);
+  /* An INVITE — a link carrying a signature, which may create the store it
+     names. Held beside `linkDomain` rather than replacing it: a plain ?login=
+     link is a different thing with a different rule, and collapsing the two
+     would put every plain link through the door that creates stores. */
+  const invite = useRef<Invite | null>(null);
   const [linkSignIn, setLinkSignIn] = useState<"trying" | "refused" | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
 
@@ -82,6 +88,9 @@ export function LandingScreen() {
     if (!wanted) return;
 
     linkDomain.current = wanted;
+    /* Null unless the link also carries a signature. Checked here so the click
+       handler reads a decision rather than making one. */
+    invite.current = inviteParams(window.location.search);
     try {
       window.history.replaceState(null, "", cleanedUrl(window.location.href));
     } catch {
@@ -114,18 +123,35 @@ export function LandingScreen() {
     setLinkSignIn("trying");
     setLinkError(null);
 
+    /* TWO DOORS, AND THE LINK PICKS ONE. A signed invite goes to the route
+       that may create the store; a plain ?login= goes to the beta gate, which
+       refuses a store that is not on the list — the behaviour that shipped
+       first and is unchanged by any of this. */
+    const signed = invite.current;
+
     try {
-      const res = await fetch("/api/auth/store", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ domain: linkDomain.current }),
-      });
+      const res = signed
+        ? await fetch("/api/auth/provision", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              domain: signed.domain,
+              token: signed.token,
+              name: signed.name,
+              email: signed.email,
+            }),
+          })
+        : await fetch("/api/auth/store", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ domain: linkDomain.current }),
+          });
 
       /* A crashed route answers with an HTML error page and res.json() throws
          on it — the same trap LoginScreen documents. */
-      let body: StoreAuthResponse;
+      let body: StoreAuthResponse | ProvisionResponse;
       try {
-        body = (await res.json()) as StoreAuthResponse;
+        body = (await res.json()) as StoreAuthResponse | ProvisionResponse;
       } catch {
         setLinkError(`The server returned an error (${res.status}).`);
         setLinkSignIn("refused");
@@ -139,6 +165,7 @@ export function LandingScreen() {
            it armed would make the button retry it on every press — the second
            press should do what the button says and go to the sign-in form. */
         linkDomain.current = null;
+        invite.current = null;
         return;
       }
 

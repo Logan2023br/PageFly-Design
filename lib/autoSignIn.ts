@@ -25,8 +25,43 @@
    a browser.
    ========================================================================== */
 
-/** The name is in one place, so the link and the code that reads it agree. */
+/** The names are in one place, so the link and the code that reads it agree. */
 export const LOGIN_PARAM = "login";
+const NAME_PARAM = "name";
+const EMAIL_PARAM = "email";
+const TOKEN_PARAM = "t";
+
+/**
+ * An INVITE link — one that may create the store it names.
+ *
+ * Distinct from a plain `?login=` link, and the distinction is the point: that
+ * one signs a merchant into a store already on the beta list and is untouched
+ * by any of this. An invite carries a signature as well, and only a signature
+ * lets a store be created — so a URL missing `t` is not an invite, however
+ * many other parameters it has.
+ *
+ * `name` and `email` are optional: they only fill in a store that turns out
+ * not to exist, and a link without them still opens the one it names.
+ */
+export type Invite = {
+  domain: string;
+  token: string;
+  name: string;
+  email: string;
+};
+
+export function inviteParams(search: string): Invite | null {
+  const q = new URLSearchParams(search);
+  const domain = q.get(LOGIN_PARAM)?.trim();
+  const token = q.get(TOKEN_PARAM)?.trim();
+  if (!domain || !token) return null;
+  return {
+    domain,
+    token,
+    name: q.get(NAME_PARAM)?.trim() ?? "",
+    email: q.get(EMAIL_PARAM)?.trim() ?? "",
+  };
+}
 
 /**
  * The store domain a link is asking to sign in as, or null.
@@ -40,9 +75,16 @@ export function loginParam(search: string): string | null {
   return value ? value : null;
 }
 
-/** The same URL with every copy of the parameter gone, path and fragment intact. */
+/**
+ * The same URL with every invite parameter gone, path and fragment intact.
+ *
+ * All four, not just `login`. The signature is the credential of the pair, and
+ * leaving it in the address bar to reach history and the Referer header would
+ * defeat the reason the domain is stripped at all.
+ */
 export function cleanedUrl(href: string): string {
   const url = new URL(href);
-  url.searchParams.delete(LOGIN_PARAM);
+  for (const p of [LOGIN_PARAM, NAME_PARAM, EMAIL_PARAM, TOKEN_PARAM])
+    url.searchParams.delete(p);
   return url.toString();
 }

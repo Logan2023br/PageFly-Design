@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { normalizeDomain } from "./sheet";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { cookies } from "next/headers";
@@ -228,6 +229,51 @@ function unseal<T>(token: string | undefined, maxAgeSeconds: number): T | null {
   } catch {
     return null;
   }
+}
+
+/* ==========================================================================
+   INVITE LINKS.
+
+   /?login=<domain>&name=…&email=…&t=<token> creates a store and signs somebody
+   in, so the link is a credential and has to be unforgeable. `t` is an HMAC of
+   the domain under the same secret the session cookie uses — n8n asks the
+   server for a link, the secret never leaves this process, and a link issued
+   for one store is refused on every other.
+
+   THE DOMAIN IS SIGNED, NOT THE NAME OR THE EMAIL. Those two are only used to
+   fill in a store that does not exist yet, and neither grants anything: a
+   forged name is a wrong label on a store the signature already permitted.
+   Signing them too would mean a link broke whenever a mail client rewrote a
+   space in the name.
+
+   Normalised before signing and before checking, because a link comes back
+   through mail clients that add schemes, trailing slashes and capitals — and
+   `shop.myshopify.com` and `HTTPS://Shop.myshopify.com/` are the same store.
+   ========================================================================== */
+
+/** Thirty days. Long enough for someone who opens their mail late, short
+    enough that a link in an old inbox stops being a key eventually. */
+export const INVITE_MAX_AGE = 30 * 24 * 60 * 60;
+
+export function signInvite(domain: string): string {
+  /* `iat` is the caller's job — `unseal` refuses a payload without one, and
+     that is what makes the age check below possible at all. */
+  return seal({ d: normalizeDomain(domain), iat: Date.now() });
+}
+
+/**
+ * Is this token one we issued FOR THIS DOMAIN, and still young enough?
+ *
+ * Both halves matter. A valid token for another store is the forgery this
+ * exists to stop, so the domain is compared as well as the signature.
+ */
+export function verifyInvite(
+  token: string | undefined,
+  domain: string,
+  maxAgeSeconds: number = INVITE_MAX_AGE,
+): boolean {
+  const data = unseal<{ d?: string }>(token, maxAgeSeconds);
+  return data?.d !== undefined && data.d === normalizeDomain(domain);
 }
 
 const COOKIE_OPTIONS = {
