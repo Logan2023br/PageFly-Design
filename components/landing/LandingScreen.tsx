@@ -63,41 +63,6 @@ export function LandingScreen() {
   const [linkSignIn, setLinkSignIn] = useState<"trying" | "refused" | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
 
-  /* ==========================================================================
-     /?login=their-store.myshopify.com
-
-     A link that lets a merchant press Design now once and land on the brief,
-     instead of on a form asking for the store domain the link already carries.
-
-     THE LINK IS REMEMBERED, NOT ACTED ON. Signing someone in the instant a page
-     loads takes the decision away from them — they asked for the front door and
-     got a redirect. So this only holds the domain, and the button they came to
-     press is what spends it.
-
-     THE PARAMETER IS STRIPPED IMMEDIATELY ANYWAY. While it sits in the address
-     bar it reaches browser history, the Referer header of the next request, and
-     every proxy log in between, none of which can be unsent. Reading it once
-     into memory costs the merchant nothing and closes that window on load
-     rather than on click.
-
-     NOTHING HERE VALIDATES THE DOMAIN. `POST /api/auth/store` is the only place
-     in this app allowed to say yes to a sign-in, and its own header says so.
-     ========================================================================== */
-  useEffect(() => {
-    const wanted = loginParam(window.location.search);
-    if (!wanted) return;
-
-    linkDomain.current = wanted;
-    /* Null unless the link also carries a signature. Checked here so the click
-       handler reads a decision rather than making one. */
-    invite.current = inviteParams(window.location.search);
-    try {
-      window.history.replaceState(null, "", cleanedUrl(window.location.href));
-    } catch {
-      /* Some embedded browsers refuse replaceState. The link still works — one
-         that works with an untidy address bar beats one that does not work. */
-    }
-  }, []);
 
   /**
    * Design now, for a visitor who arrived on a ?login= link.
@@ -107,26 +72,20 @@ export function LandingScreen() {
    * without a cookie to the form — the behaviour this replaces only where a
    * link said which store to sign in as.
    */
-  const designNow = async (event: React.MouseEvent) => {
-    /* NO `|| domain` HERE, and that was the bug. Skipping the link because a
-       session already existed meant every link opened the store already signed
-       in — an operator who had once signed in as one store then got that store
-       from every link they were sent, and nothing said why.
-
-       A link names a store. If it names the one already signed in, the sign-in
-       is one redundant request and the same destination; if it names a
-       different one, it is the whole point. Either way the link wins. */
-    if (!linkDomain.current || linkSignIn === "trying") return;
-
-    /* Only now, once the merchant has asked to go there. */
-    event.preventDefault();
-    setLinkSignIn("trying");
-    setLinkError(null);
-
-    /* TWO DOORS, AND THE LINK PICKS ONE. A signed invite goes to the route
-       that may create the store; a plain ?login= goes to the beta gate, which
-       refuses a store that is not on the list — the behaviour that shipped
-       first and is unchanged by any of this. */
+  /**
+   * Spend the link: sign in as the store it names, then go to the brief.
+   *
+   * TWO DOORS, AND THE LINK PICKS ONE. A signed invite goes to the route that
+   * may create the store; a plain ?login= goes to the beta gate, which refuses
+   * a store that is not on the list — the behaviour that shipped first and is
+   * unchanged by any of this.
+   *
+   * WHATEVER SESSION EXISTS IS REPLACED. Both routes set the session cookie to
+   * the store the link names, so arriving on an invite for one store while
+   * signed in as another leaves you signed in as the one you were invited to.
+   * Nothing needs clearing first — a cookie is overwritten, not merged.
+   */
+  const spendLink = async () => {
     const signed = invite.current;
 
     try {
@@ -176,6 +135,88 @@ export function LandingScreen() {
       setLinkError("Could not reach the server. Check your connection.");
       setLinkSignIn("refused");
     }
+  };
+
+  /* ==========================================================================
+     /?login=their-store.myshopify.com
+
+     A link that lets a merchant press Design now once and land on the brief,
+     instead of on a form asking for the store domain the link already carries.
+
+     THE LINK IS REMEMBERED, NOT ACTED ON. Signing someone in the instant a page
+     loads takes the decision away from them — they asked for the front door and
+     got a redirect. So this only holds the domain, and the button they came to
+     press is what spends it.
+
+     THE PARAMETER IS STRIPPED IMMEDIATELY ANYWAY. While it sits in the address
+     bar it reaches browser history, the Referer header of the next request, and
+     every proxy log in between, none of which can be unsent. Reading it once
+     into memory costs the merchant nothing and closes that window on load
+     rather than on click.
+
+     NOTHING HERE VALIDATES THE DOMAIN. `POST /api/auth/store` is the only place
+     in this app allowed to say yes to a sign-in, and its own header says so.
+     ========================================================================== */
+  useEffect(() => {
+    const wanted = loginParam(window.location.search);
+    if (!wanted) return;
+
+    linkDomain.current = wanted;
+    const signed = inviteParams(window.location.search);
+    invite.current = signed;
+
+    try {
+      window.history.replaceState(null, "", cleanedUrl(window.location.href));
+    } catch {
+      /* Some embedded browsers refuse replaceState. The link still works — one
+         that works with an untidy address bar beats one that does not work. */
+    }
+
+    /* ======================================================================
+       A SIGNED INVITE SPENDS ITSELF NOW. A plain ?login= link waits for the
+       button, because arriving on the front door is not the same as asking to
+       leave it. An invite is not that: the merchant pressed PageFly Design
+       inside their store, something signed a link on their behalf, and this
+       page is a step on a journey they already started.
+
+       Waiting for a second press made that visible in the worst way. Someone
+       signed in as another store landed here, saw THAT store's name in the
+       header, and had every reason to believe the link had opened the wrong
+       account — the session was simply still the old one, because nothing had
+       replaced it yet. Spending the invite on load replaces it before there is
+       anything to misread.
+       ====================================================================== */
+    if (!signed) return;
+
+    /* The rule guards against effects that set state every render and drive a
+       render loop. This one runs once, on mount, only when the URL carried a
+       signature, and the pass it costs is the overlay appearing — which is the
+       point. */
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLinkSignIn("trying");
+    void spendLink();
+  }, []);
+
+  /**
+   * Design now, for a visitor who arrived on a plain ?login= link.
+   *
+   * NOT for an invite: that one has already spent itself on load — see the
+   * effect above — and by the time this button exists to be pressed the
+   * merchant is on the brief.
+   *
+   * NO `|| domain` GUARD. Skipping the link because a session already existed
+   * meant every link opened the store already signed in: someone who had once
+   * signed in as one store then got that store from every link they were sent,
+   * and nothing on the screen said why.
+   */
+  const designNow = async (event: React.MouseEvent) => {
+    if (!linkDomain.current || linkSignIn === "trying") return;
+
+    /* Only now, once the merchant has asked to go there. */
+    event.preventDefault();
+    setLinkSignIn("trying");
+    setLinkError(null);
+    await spendLink();
   };
 
   useEffect(() => {
