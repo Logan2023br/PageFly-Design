@@ -173,6 +173,35 @@ export type DesignOutcome =
 
 const NOTHING = { input: 0, output: 0 };
 
+/**
+ * How many times stage 3 is asked for the same page before giving up.
+ *
+ * IT WAS TWO, AND TWO LOSES A QUARTER OF THE PAGES. The failure this pipeline
+ * ships with is a model that spends its whole output budget thinking and then
+ * returns an empty string — measured on struct-v2 as three empties in six runs
+ * of the same page, and reproduced on a real Collection build that failed both
+ * attempts, spent 32,487 output tokens and delivered nothing. Independent at
+ * one in two, two attempts leave one page in four with no page at all.
+ *
+ * Four leaves about one in sixteen. The arithmetic is what chose the number,
+ * not taste.
+ *
+ * IT IS AFFORDABLE BECAUSE FAILURES ARE CHEAP AND FAST. A working page costs
+ * 45,000-50,000 output tokens; an empty one costs about 16,000 and comes back
+ * in roughly 75 seconds, because the model stops early — that is the failure.
+ * Three extra attempts on a page that would otherwise be lost is a fraction of
+ * one page's bill and about two minutes, and only ever spent on pages already
+ * failing. Nothing is added to a page that works: the loop breaks the moment
+ * an answer is usable.
+ *
+ * A NOTE ON WHAT THIS REPLACED. The old comment argued "a second unusable
+ * answer is a signal, not a fluke". That reasoning is sound about the PROMPT
+ * and wrong about this failure: the same input produced both a working tree
+ * and an empty string, so it is not a signal about anything — it is a coin.
+ * You do not stop flipping a coin because it came up tails twice.
+ */
+const ATTEMPTS = 4;
+
 const TIMEOUT_MS = 420_000;
 
 /**
@@ -974,12 +1003,15 @@ export async function designPageTree(
      would understate what the page cost. */
   let discarded: Usage = { input: 0, output: 0 };
 
-  if (worthAskingAgain(completion.text, completion.truncated)) {
+  for (let attempt = 1; attempt < ATTEMPTS; attempt++) {
+    if (!worthAskingAgain(completion.text, completion.truncated)) break;
+
     console.log(
       `[design] ${input.pageType}: unusable answer after ${completion.usage.output} output ` +
         `tokens (${completion.text.trim() === "" ? "empty" : "JSON stopped mid-stream"}) ` +
-        `— asking once more`,
+        `— attempt ${attempt + 1} of ${ATTEMPTS}`,
     );
+
     try {
       const again = await provider.complete({
         system,
@@ -989,13 +1021,21 @@ export async function designPageTree(
           ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)])
           : AbortSignal.timeout(TIMEOUT_MS),
       });
-      discarded = completion.usage;
+      /* Accumulated, not replaced. Every attempt is billed, and reporting only
+         the last would understate what the page cost by a factor of the
+         attempts it took. */
+      discarded = {
+        input: discarded.input + completion.usage.input,
+        output: discarded.output + completion.usage.output,
+      };
       completion = again;
     } catch {
-      /* The first answer is still empty and the reason below still describes
-         it. A failed retry must not turn a bad page into a thrown build. */
+      /* The last answer is still unusable and the reason below still describes
+         it. A failed attempt must not turn a bad page into a thrown build. */
+      break;
     }
   }
+
 
   /** Everything this call has spent, including an attempt that was thrown away. */
   const spent = (u: Usage): Usage => ({
