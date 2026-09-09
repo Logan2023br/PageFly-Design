@@ -301,9 +301,9 @@ const DEBUG = process.env.PFD_SCHEMA_DEBUG === "1";
    page with no motion, not a page with broken motion. */
 
 /** PageFly's canned button motion */
-const HOVERS = ["float", "shadow", "grow", "glow", "float-shadow", "grow-shadow"] as const;
+export const HOVERS = ["float", "shadow", "grow", "glow", "float-shadow", "grow-shadow"] as const;
 /** ours: plays once when the element scrolls into view */
-const REVEALS = ["fade", "fade-up", "slide-left", "slide-right", "zoom"] as const;
+export const REVEALS = ["fade", "fade-up", "slide-left", "slide-right", "zoom"] as const;
 
 type Hover = (typeof HOVERS)[number];
 type Reveal = (typeof REVEALS)[number];
