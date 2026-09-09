@@ -177,11 +177,27 @@ export async function startBuild(
      code, only a hope about it. A build that dies now says so. */
   void run(job, brief, variants, plan, controller.signal)
     .catch(async (err) => {
-      console.error("[build] died before it could report", err);
+      /* THE STACK, not just the message. A merchant saw the word "terminated"
+         on their brief — undici's fetch error for a connection cut mid-stream,
+         escaping raw from somewhere in `run`'s 420 lines of deck-level setup,
+         which sit outside its try. Every model helper down there guards its own
+         call and returns a reason, so reading the code does not say which one
+         threw. The stack does, and it costs one log line. */
+      console.error(
+        "[build] died before it could report:",
+        (err as Error)?.message,
+        "\n",
+        (err as Error)?.stack,
+        "\ncause:",
+        (err as { cause?: unknown })?.cause,
+      );
       await getRepo()
         .updateJob(jobId, {
           status: "failed",
-          error: (err as Error)?.message ?? "The build stopped unexpectedly.",
+          /* Never the raw message. "terminated" is a word from inside a HTTP
+             library; it tells a merchant nothing and tells support less than
+             the stack above already did. */
+          error: SUPPORT_MESSAGE,
         })
         .catch(() => {});
     })
