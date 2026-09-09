@@ -5,13 +5,10 @@ import { useState } from "react";
 import { requestQuickChoice } from "@/lib/quickBrief";
 import { describeSelection, totalSelected } from "@/lib/pageCatalog";
 import { useStore } from "@/lib/store";
-import { firstMissing } from "@/lib/validation";
+import { OVER_PAGE_LIMIT, firstMissing } from "@/lib/validation";
 import { useAccount } from "../AccountProvider";
 import { Button, Icon } from "../ui";
 
-/** Wording fixed by the brief. */
-const OVER_LIMIT =
-  "Bạn đã vượt quá số page build được cho phép, hãy liên hệ với support để hỗ trợ.";
 
 /* The sticky bar names the ONE thing still missing rather than listing every
    validation error — the user only has to act on the next one. */
@@ -60,7 +57,7 @@ export function StickyBar() {
       const fresh = await refresh();
       const left = fresh ? Math.max(0, fresh.pageLimit - fresh.pagesUsed) : null;
       if (left !== null && (left === 0 || total > left)) {
-        setBlocked(OVER_LIMIT);
+        setBlocked(OVER_PAGE_LIMIT);
         return;
       }
 

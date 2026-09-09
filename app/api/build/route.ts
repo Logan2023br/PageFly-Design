@@ -3,7 +3,7 @@ import { currentAccount, remainingPages } from "@/lib/account";
 import { cancelBuild, planFor, startBuild } from "@/lib/build/runner";
 import { getRepo } from "@/lib/db";
 import type { JobStatus } from "@/lib/db/types";
-import { briefSchema } from "@/lib/validation";
+import { OVER_PAGE_LIMIT, briefSchema } from "@/lib/validation";
 
 /* ==========================================================================
    POST /api/build   start one
@@ -123,8 +123,7 @@ export async function POST(request: Request) {
     return Response.json(
       {
         ok: false,
-        error:
-          "Bạn đã vượt quá số page build được cho phép, hãy liên hệ với support để hỗ trợ.",
+        error: OVER_PAGE_LIMIT,
       } satisfies BuildResponse,
       { status: 403 },
     );

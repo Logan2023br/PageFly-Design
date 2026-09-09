@@ -3,6 +3,7 @@ import { currentAccount, remainingPages } from "@/lib/account";
 import { getRepo } from "@/lib/db";
 import type { RunPageRecord, RunRecord } from "@/lib/db";
 import { MAX_RUN_PAYLOAD_CHARS } from "@/lib/runPayload";
+import { OVER_PAGE_LIMIT } from "@/lib/validation";
 
 /* ==========================================================================
    GET  /api/runs   the signed-in store's saved runs (drives Library)
@@ -109,8 +110,7 @@ export async function POST(request: Request) {
     return Response.json(
       {
         ok: false,
-        error:
-          "Bạn đã vượt quá số page build được cho phép, hãy liên hệ với support để hỗ trợ.",
+        error: OVER_PAGE_LIMIT,
       } satisfies SaveRunResponse,
       { status: 403 },
     );

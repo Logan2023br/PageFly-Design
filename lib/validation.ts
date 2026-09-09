@@ -170,6 +170,21 @@ export const briefSchema = z.object({
     ),
 });
 
+/**
+ * What a merchant is told when a build asks for more pages than they have left.
+ *
+ * ONE DEFINITION. It was written out three times — in the sticky bar, in
+ * `/api/build` and in `/api/runs` — and stayed Vietnamese in all three long
+ * after the rest of the merchant-facing app was English, because nobody
+ * changing one of them saw the other two.
+ *
+ * Worded for both cases it fires in: a store with nothing left, and a store
+ * with three pages left that selected seven. "You have used all your pages"
+ * would be false for the second, which is the commoner one.
+ */
+export const OVER_PAGE_LIMIT =
+  "This build needs more pages than your store has left. Contact support to raise the limit.";
+
 export type Brief = z.infer<typeof briefSchema>;
 export type ReferenceImage = z.infer<typeof referenceImageSchema>;
 
