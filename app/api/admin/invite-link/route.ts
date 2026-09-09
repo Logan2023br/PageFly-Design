@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
+import { publicOrigin } from "@/lib/publicOrigin";
 import { normalizeDomain } from "@/lib/sheet";
 import { INVITE_MAX_AGE, readAdminSession, signInvite } from "@/lib/session";
 
@@ -14,10 +15,9 @@ import { INVITE_MAX_AGE, readAdminSession, signInvite } from "@/lib/session";
    Authenticated the same way as that route and as /api/admin/sync: the header,
    or an admin session for anyone trying it from a signed-in tab.
 
-   The link is built from the request's own origin, so a call to production
-   mints production links and a call to localhost mints local ones. Nothing to
-   configure, and no way for a deploy to start handing out links to a host it
-   is not on.
+   The link's host comes from `publicOrigin` — see that file. Reading it off
+   the request alone was wrong behind nginx, where every link came out pointing
+   at `localhost:3000`.
    ========================================================================== */
 
 export const dynamic = "force-dynamic";
@@ -68,8 +68,7 @@ export async function POST(request: Request) {
       { status: 400 },
     );
 
-  const origin = process.env.PFD_PUBLIC_URL?.trim().replace(/\/+$/, "")
-    ?? new URL(request.url).origin;
+  const origin = publicOrigin(request);
 
   /* Every value encoded, because a store name with a space or an ampersand in
      it would otherwise cut the query string in half — and the half that went

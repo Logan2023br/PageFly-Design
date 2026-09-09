@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { getRepo } from "@/lib/db";
+import { publicOrigin } from "@/lib/publicOrigin";
 import { readAdminSession } from "@/lib/session";
 
 /* ==========================================================================
@@ -56,22 +57,6 @@ function secretMatches(header: string | null): boolean {
   // Hashed first so the compare is constant time regardless of length.
   const digest = (v: string) => createHash("sha256").update(v).digest();
   return timingSafeEqual(digest(header), digest(expected));
-}
-
-/**
- * Where the feedback link points.
- *
- * The request's own origin by default, so a call to the production host builds
- * production links and a call to localhost builds local ones — nothing to
- * configure and nothing to get out of step with the deployment. PFD_PUBLIC_URL
- * overrides it for the case the default cannot serve: a proxy that rewrites the
- * Host header, where the origin this process sees is not the one a merchant can
- * open.
- */
-function publicOrigin(request: Request): string {
-  const override = process.env.PFD_PUBLIC_URL?.trim();
-  if (override) return override.replace(/\/+$/, "");
-  return new URL(request.url).origin;
 }
 
 export async function GET(request: Request) {
