@@ -198,11 +198,16 @@ export const MAX_SELL_CHARS = 120;
  * TRAINING filing and has nothing to do with this.)
  *
  * The cost is small and worth stating: the merchant's words land in the part of
- * the prompt that is NOT cached, so 2,200 characters is roughly 550 uncached
+ * the prompt that is NOT cached, so 3,000 characters is roughly 750 uncached
  * input tokens per page rather than 375 — well under a tenth of a cent on a
  * page that costs a few cents to build.
+ *
+ * NOW EQUAL TO `MAX_PROMPT_CHARS_STORED`, which is the ceiling this may not
+ * pass: that one decides what a SAVED run can be read back as, and a form that
+ * accepts more than the Library can decode would write briefs that quietly
+ * stop opening. Raising this again means raising that one first.
  */
-export const MAX_PROMPT_CHARS = 2200;
+export const MAX_PROMPT_CHARS = 3000;
 
 /**
  * The worked example, shown by the Example button on both prompt fields.
