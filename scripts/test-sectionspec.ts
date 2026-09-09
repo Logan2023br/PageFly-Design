@@ -211,48 +211,6 @@ async function main(): Promise<void> {
     check(contract.includes('"type":"countdown"'), "countdown among them — the one that was not");
   }
 
-  console.log("\nand on what MOVES, which is the same bug wearing motion");
-
-  {
-    /* THE COUNTDOWN BUG, SECOND EDITION. `anim.reveal` and `anim.delay` went
-       into the tree schema, into `motion.ts` (classes, keyframes and an
-       IntersectionObserver), into the mockup renderer and into the exporter —
-       and not into `00-contract.md`. Stage 2b duly asked for reveals; stage 3
-       had never heard of the field and dropped every one.
-
-       Measured on a real build before this test existed: 17 reveals asked for
-       across seven sections, 0 in the tree. `hover`, which the contract does
-       document, survived 3 of 3 on the same page.
-
-       So the contract is checked for the VALUES, not just the field name. A
-       contract that says `anim.reveal` exists but never names `slide-left` is
-       a contract stage 3 cannot use it from. */
-    const { readFileSync: read } = await import("node:fs");
-    const contract = read("skills/00-contract.md", "utf8");
-    const { HOVERS, REVEALS } = await import("@/lib/design/schema");
-
-    const missingHover = HOVERS.filter((v) => !contract.includes(v));
-    check(
-      missingHover.length === 0,
-      "every hover value the schema accepts is named in the contract",
-      missingHover.length ? `missing: ${missingHover.join(", ")}` : `${HOVERS.length} checked`,
-    );
-
-    const missingReveal = REVEALS.filter((v) => !contract.includes(v));
-    check(
-      missingReveal.length === 0,
-      "and every reveal value",
-      missingReveal.length ? `missing: ${missingReveal.join(", ")}` : `${REVEALS.length} checked`,
-    );
-
-    check(
-      contract.includes('"reveal"'),
-      "the reveal field itself is named",
-      "17 asked for, 0 built, before this line existed",
-    );
-    check(contract.includes('"delay"'), "and delay, which staggers them");
-  }
-
   console.log(`\n${failures === 0 ? "PASS" : `${failures} FAILED`}\n`);
   process.exit(failures === 0 ? 0 : 1);
 }

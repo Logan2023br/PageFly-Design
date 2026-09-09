@@ -449,43 +449,6 @@ Allowed and encouraged: `display:grid` with `gridTemplateColumns`,
 `aspectRatio`, `maxWidth`, `borderTop`, `mixBlendMode`, `backgroundImage` with a
 gradient (not a photo — photos come from `overlay` and `image`).
 
-# Motion
-
-Two kinds, on any node, both optional, both written inside `anim`.
-
-`hover` fires under the cursor. Six values and no others:
-
-    float · shadow · grow · glow · float-shadow · grow-shadow
-
-    {"type":"button","text":"Add to cart","anim":{"hover":"grow-shadow"}}
-
-`reveal` plays ONCE, when the node scrolls into view. Five values and no
-others:
-
-    fade · fade-up · slide-left · slide-right · zoom
-
-    {"type":"image","src":"","anim":{"reveal":"fade-up"}}
-
-`delay` staggers a reveal, 0 to 6. Give siblings rising delays so a row of
-cards arrives one after another rather than all at once:
-
-    {"type":"col","anim":{"reveal":"fade-up","delay":0},"children":[]}
-    {"type":"col","anim":{"reveal":"fade-up","delay":1},"children":[]}
-    {"type":"col","anim":{"reveal":"fade-up","delay":2},"children":[]}
-
-A value outside these lists is dropped and the node arrives still. Write the
-field name exactly: `anim.reveal`, not `animation`, not `scroll`, not `entry`.
-
-WHEN THE SPEC ASKS FOR ONE, BUILD IT. A band's spec line carries `hover:…`,
-`reveal:…` and `delay:…` where the design called for them, and those are
-decisions already made — the same weight as a colour or a padding. A page that
-drops them is a page that ignored its own design.
-
-WHEN IT DOES NOT, MOTION IS STILL YOURS TO ADD, sparingly. A reveal on the
-things that carry a section — its heading, its images, its cards — and nothing
-on the small print. A page where everything moves reads as a page where
-nothing does.
-
 # Responsive
 
 Write `css` for desktop. Write `mobile` ONLY for properties that actually
