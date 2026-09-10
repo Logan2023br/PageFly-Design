@@ -2,6 +2,7 @@ import "server-only";
 
 import { childrenOf, type DesignNode, type DesignSection, type DesignTree } from "./schema";
 import { pageHasOneProduct, type Order } from "./plan";
+import { rowLayoutProblems } from "./rowLayout";
 import { specBinding, specProblems } from "./specCheck";
 
 /* ==========================================================================
@@ -427,6 +428,31 @@ export function audit(
       `${centred} sections are centred. Centre at most two — everything centred is the ` +
         `alignment nobody chose.`,
     );
+
+  /* ==========================================================================
+     ROWS THAT SQUASH.
+
+     A flex row with unsized children and no wrap fits everything onto one line
+     at whatever widths the contents want, and a row of columns that never
+     mentions the phone stays a row at 390px. Measured on a real build: 23 of
+     25 rows were flex, one carried `flexWrap`, half the multi-child rows had
+     children with no size — and the two that read correctly were the two
+     written as a grid.
+
+     Capped, and named by section. The repair call reads every problem in one
+     pass, so forty geometry complaints would crowd out the ones about content;
+     the rest come back on the next build. See `rowLayout.ts` for why only rows
+     carrying columns are judged. */
+  {
+    const geometry: string[] = [];
+    sections.forEach((section, i) => {
+      for (const node of walk(section)) {
+        for (const problem of rowLayoutProblems(node as unknown as Record<string, unknown>))
+          geometry.push(`Section ${i + 1}: ${problem}`);
+      }
+    });
+    problems.push(...geometry.slice(0, 6));
+  }
 
   sections.forEach((s, i) => {
     const next = sections[i + 1];
