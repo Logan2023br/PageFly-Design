@@ -1,6 +1,13 @@
 import "server-only";
 
-import { getProvider, isAiEnabled, providerName, type Completion, type Usage } from "./provider";
+import {
+  fromVendor,
+  getProvider,
+  isAiEnabled,
+  providerName,
+  type Completion,
+  type Usage,
+} from "./provider";
 import { parseObject, worthAskingAgain } from "./json";
 import { loadSkills, sliceSkill } from "./skills";
 import { DESIGN_SYSTEM } from "./designPrompt";
@@ -959,13 +966,15 @@ export async function designPageTree(
         : AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (err) {
-    /* The provider itself refused or could not be reached — `fromStatus` has
-       turned a status code into a sentence naming what to do about it, and
-       that sentence is for the merchant. */
+    /* THE VENDOR SAYING NO, OR THE NETWORK SAYING NOTHING. Only the first is
+       for the merchant: `fromStatus` turns a status code into a sentence naming
+       what to do about it, and `fromVendor` recognises its own work. A dropped
+       socket has no status, so `provider.ts` rethrows it raw — and marking that
+       as the vendor's is how the word "terminated" reached a brief. */
     return {
       used: false,
       reason: (err as Error).message.slice(0, 200),
-      vendorFault: true,
+      vendorFault: fromVendor(err),
       usage: NOTHING,
     };
   }

@@ -238,7 +238,7 @@ function anthropicProvider(role: Role): Provider {
       } catch (err) {
         const status = (err as { status?: number }).status;
         if (typeof status === "number")
-          throw new Error(
+          throw vendorError(
             fromStatus(status, "Anthropic", (err as Error).message ?? ""),
           );
         throw err;
@@ -288,6 +288,31 @@ function anthropicProvider(role: Role): Provider {
  * The status code is the whole signal. It is kept in the message anyway,
  * because an operator wants it and it costs four characters.
  */
+/**
+ * Did this error come from the VENDOR saying no, or from the network saying
+ * nothing?
+ *
+ * The distinction reached a merchant's screen the hard way. `designPageTree`
+ * marked every error from a provider call as the vendor's — reasoning that
+ * `fromStatus` had turned it into a sentence — and `fromStatus` only does that
+ * when there was an HTTP status. A dropped socket has none, so `terminated`
+ * travelled from inside undici all the way to a brief.
+ *
+ * Matching on the marker rather than on the prose, because the prose is ours to
+ * reword and a check that breaks when someone improves a sentence is a check
+ * nobody trusts.
+ */
+export function fromVendor(err: unknown): boolean {
+  return (err as { vendorSaidNo?: unknown })?.vendorSaidNo === true;
+}
+
+/** An error whose message `fromStatus` wrote, tagged so callers can tell. */
+export function vendorError(message: string): Error {
+  const err = new Error(message);
+  (err as Error & { vendorSaidNo?: boolean }).vendorSaidNo = true;
+  return err;
+}
+
 export function fromStatus(status: number, vendor: string, body = ""): string {
   if (status === 402 || /insufficient|balance|quota|credit/i.test(body))
     return `${vendor} refused the request: the account is out of credit. Top it up and build again. (${status})`;
@@ -333,7 +358,7 @@ function deepseekProvider(role: Role): Provider {
         signal,
       });
 
-      if (!res.ok) throw new Error(await sayWhy(res, "DeepSeek"));
+      if (!res.ok) throw vendorError(await sayWhy(res, "DeepSeek"));
 
       const body = (await res.json()) as {
         choices: { message: { content: string }; finish_reason?: string }[];
