@@ -10,6 +10,7 @@ import {
 } from "./provider";
 import { parseObject, worthAskingAgain } from "./json";
 import { loadSkills, sliceSkill } from "./skills";
+import { todayLine } from "../design/countdown";
 import { DESIGN_SYSTEM } from "./designPrompt";
 import { designTreeSchema, walk, type DesignTree } from "../design/schema";
 import { animationLines } from "../design/animationPicker";
@@ -568,6 +569,8 @@ async function buildPrompts(
 
   const t = input.tokens;
   const user = [
+    todayLine(),
+    ``,
     `Store sells: ${input.sell}`,
     input.storeType && `Store type: ${input.storeType}`,
     input.prompt && `Merchant's own words: ${input.prompt}`,

@@ -2,6 +2,7 @@ import "server-only";
 
 import { childrenOf, type DesignNode, type DesignSection, type DesignTree } from "./schema";
 import { pageHasOneProduct, type Order } from "./plan";
+import { countdownProblems } from "./countdown";
 import { rowLayoutProblems } from "./rowLayout";
 import { specBinding, specProblems } from "./specCheck";
 
@@ -444,11 +445,16 @@ export function audit(
      the rest come back on the next build. See `rowLayout.ts` for why only rows
      carrying columns are judged. */
   {
+    /* A timer is judged against the calendar, not the tree — see
+       `countdown.ts`. Same walk, same cap: a dead timer and a squashed row are
+       both geometry the repair call can fix in one pass. */
+    const now = Date.now();
     const geometry: string[] = [];
     sections.forEach((section, i) => {
       for (const node of walk(section)) {
-        for (const problem of rowLayoutProblems(node as unknown as Record<string, unknown>))
-          geometry.push(`Section ${i + 1}: ${problem}`);
+        const n = node as unknown as Record<string, unknown>;
+        for (const problem of rowLayoutProblems(n)) geometry.push(`Section ${i + 1}: ${problem}`);
+        for (const problem of countdownProblems(n, now)) geometry.push(`Section ${i + 1}: ${problem}`);
       }
     });
     problems.push(...geometry.slice(0, 6));

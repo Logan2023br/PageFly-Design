@@ -3,6 +3,7 @@ import "server-only";
 import { parseObject } from "../ai/json";
 import { getProvider, isAiEnabled, modelName, type Usage } from "../ai/provider";
 import { sliceSkill } from "../ai/skills";
+import { todayLine } from "./countdown";
 import { FREE_VERTICAL, pageHasOneProduct } from "./plan";
 import type {
   Order,
@@ -513,6 +514,8 @@ function userPrompt(ask: SpecAsk): string {
      it is an answer they gave, not a lesson for the model. */
   const market = ask.market ? marketById(ask.market) : null;
   const lines: string[] = [
+    todayLine(),
+    ``,
     `STORE. ${ask.sell} · ${ask.storeType} · ${ask.styleLabel} — ${ask.styleBlurb}`,
     ...(ask.order === null && market
       ? [`SELLING INTO. ${market.label} — write the page for shoppers there.`]
