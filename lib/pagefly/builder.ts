@@ -925,6 +925,9 @@ export function COUNTDOWN(
   units: string[],
   labels: boolean,
   styleData: StyleData,
+  /** typography for the figures, and for the unit names under them — see below */
+  numberStyle: StyleData = null,
+  labelStyle: StyleData = null,
 ) {
   const shown = new Set(units);
   const timeData = Object.fromEntries(
@@ -949,10 +952,35 @@ export function COUNTDOWN(
       targetStyle: "CountDown",
     },
     styleData,
-    /* CountdownNumber and CountdownLabel are documented as slots, "one per time
-       unit shown" — filled by the element from `timeData` rather than by us.
-       Emitting our own would be two sets of numbers. */
-    [],
+    /**
+     * THE SLOTS ARE OURS TO EMIT, and this is where the timer was lost.
+     *
+     * This used to be `[]`, on the reading that `fields.md` calling
+     * CountdownNumber and CountdownLabel "slots, one per time unit shown" meant
+     * the element stamps them out of `timeData` at render. It does not. "Slot"
+     * in that file says WHAT may go inside — these two and nothing else — not
+     * who puts it there. An imported CountDown with no children is an element
+     * with no figure to repeat, and it drew an empty box on a page whose own
+     * copy said the sale ends tonight. The layer tree told the story plainly:
+     * ours had no children under it, the same element dragged from PageFly's
+     * panel had exactly these two, and only that one counted.
+     *
+     * ONE OF EACH, not one per unit. The pair is a template the element repeats
+     * across whichever units `timeData` turns on — the same shape as
+     * `ProductList2`, which holds one ProductBox stamped over every product.
+     * Four CountdownNumbers here would be four sets of numbers, which is the
+     * mistake the old comment was guarding against and the reason it talked
+     * itself out of emitting any.
+     *
+     * Both are given a style, and not only so the numbers match the mockup: a
+     * node built with `null` gets NO entry in the parallel `styles` array, and
+     * an editor panel reading typography off `undefined` is exactly the crash
+     * `FORM_FIELD`'s FormLabel comment records.
+     */
+    [
+      node("CountdownNumber", {}, numberStyle, []),
+      node("CountdownLabel", {}, labelStyle, []),
+    ],
   );
 }
 
@@ -1173,6 +1201,11 @@ const SLOT_RULES: Record<string, string[]> = {
   /* Four slots, exactly once each and in this order. The cells are DATA — a
      Table2 handed a tree of cells renders an empty table. */
   Table2: ["Table2.RowHeader", "Table2.ColumnHeader", "Table2.ColumnBody", "Table2.Body"],
+  /* One figure and one unit name, which the element repeats across the units
+     `timeData` turns on. Listed here so the empty timer cannot come back
+     quietly: a CountDown with no children imports without complaint and draws
+     nothing, which is the worst shape a bug can take in this file. */
+  CountDown: ["CountdownNumber", "CountdownLabel"],
 };
 
 /** Parents whose children must ALL be one type (count is free). */

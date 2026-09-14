@@ -635,7 +635,50 @@ async function main(): Promise<void> {
       !JSON.stringify(timer ?? {}).includes("Sale ends"),
       "and is not pushed inside the timer",
     );
+
+    /* ---- THE SLOTS ARE OURS TO EMIT ------------------------------------
+
+       An imported CountDown with `children: []` drew NOTHING — an empty box
+       where the timer should be, in a page whose copy says the sale ends
+       tonight. The same element dragged from PageFly's own panel carries a
+       `CountdownNumber` and a `CountdownLabel` in the layer tree, and it
+       draws. `fields.md` calls them slots, which was read here as "the
+       element fills them" — it means "these and only these go inside".
+
+       Every other slot-bearing element in the builder already emits its own:
+       ProductQuantity's three, Form2.Field's two, Table2's four. The timer
+       was the single exception and the single one that rendered empty. */
+    const byId = new Map(cd.items.map((i) => [i.id, i]));
+    const slots = (timer?.children ?? []).map((c) => byId.get(c)?.type);
+    check(
+      slots.join("|") === "CountdownNumber|CountdownLabel",
+      "the number and label slots are emitted, in that order",
+      slots.join("|") || "(none)",
+    );
+
+    /* A slot with no style entry is the FormLabel crash again: the editor
+       panel reads an object off `undefined`. Both carry type of their own for
+       the same reason the counter's number does — an unstyled child inherits
+       the wrapper, and inheritance is the bug. */
+    const numberId = (timer?.children ?? [])[0] ?? "";
+    const labelId = (timer?.children ?? [])[1] ?? "";
+    const numCss = cd.cssOf(numberId);
+    const labCss = cd.cssOf(labelId);
+    check(/font-size:\s*44px/.test(numCss), "the number is the mockup's 44px", numCss);
+    check(/font-weight:\s*700/.test(numCss), "and its weight", numCss);
+    check(
+      /font-variant-numeric:\s*tabular-nums/.test(numCss),
+      "and tabular figures, so the row does not jitter each second",
+      numCss,
+    );
+    check(/font-size:\s*12px/.test(labCss), "the label is 12px, not the number's size", labCss);
+    check(
+      !/font-size:\s*44px/.test(labCss),
+      "`days` does not arrive at 44px under a 44px `03`",
+      labCss,
+    );
   }
+
 
   console.log("\nfour spec bars stacked in a col");
 

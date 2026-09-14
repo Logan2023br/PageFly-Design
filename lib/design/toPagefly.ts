@@ -919,7 +919,28 @@ function emitNode(
          The caption is a sibling rather than a child: `CountDown` contains only
          its number and label slots, and a paragraph pushed inside them is a
          paragraph the element does not know it has. */
-      const timer = COUNTDOWN(node.endsAt, node.units, node.labels, sd);
+      /* THE TYPE GOES ON THE SLOTS, for the reason `counter` below spells out
+         at length: a figure and its unit name are two elements, and if only the
+         wrapper is styled the unstyled one inherits. PageFly's own defaults for
+         an untouched CountDown are a small figure with a small name beside it —
+         which is what the element looks like the moment you drag it in, and
+         nothing like the mockup's 44px column of digits.
+
+         The numbers are the mockup's: 44px/700, line-height 1, the same
+         negative tracking, and tabular figures so the row holds still while the
+         seconds run rather than shuffling sideways on every 1. The label takes
+         12px at .7 — a size of its own, never left to chance. Colour is the one
+         thing not written here: it inherits from the timer's own style, which
+         already carries the page's ink. */
+      const timer = COUNTDOWN(node.endsAt, node.units, node.labels, sd, {
+        all: {
+          "&":
+            "font-size: 44px; font-weight: 700; line-height: 1;" +
+            " letter-spacing: -0.02em; font-variant-numeric: tabular-nums;",
+        },
+      }, {
+        all: { "&": "font-size: 12px; line-height: 1.35; opacity: .7;" },
+      });
       if (!node.caption) return timer;
       return FB(
         { ...sd, all: { ...(sd?.all ?? {}), "&": `${sd?.all?.["&"] ?? ""} display: flex; flex-direction: column; gap: 10px;` } },
