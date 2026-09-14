@@ -6,6 +6,7 @@ import { PAGE_BY_ID } from "@/lib/pageCatalog";
 import { useStore } from "@/lib/store";
 import { Button, Icon, Panel } from "../ui";
 import { WireframeMorph, type MorphPhase } from "./WireframeMorph";
+import { CollectionsSection } from "../collections/CollectionsSection";
 
 /* Status copy stays factual. No "consulting the design oracle" theatrics —
    the line says what is happening, because that is what is happening.
@@ -358,11 +359,18 @@ export function GeneratingScreen() {
         })}
       </div>
 
-      <div className="mt-8 flex justify-center pb-6">
+      <div className="mt-8 flex justify-center">
         <Button variant="quiet" onClick={cancel} icon="ArrowLeft">
           Cancel and go back to the brief
         </Button>
       </div>
+
+      {/* UNDER THE BUILD, not beside it. The screen above is a fifteen-minute
+          wait with nothing in its lower two thirds, and a merchant who leaves
+          the tab comes back to a deck they never watched arrive. */}
+      <CollectionsSection />
+
+      <div className="pb-6" />
     </motion.div>
   );
 }

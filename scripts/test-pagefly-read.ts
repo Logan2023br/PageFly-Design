@@ -165,6 +165,24 @@ async function main(): Promise<void> {
     );
   }
 
+  console.log("\nlabels, shortened for a list already headed by the set name");
+
+  const { shortenLabels } = await import("@/lib/collections");
+  const short = shortenLabels(set.map((p) => p.label));
+  check(
+    short.includes("Home") && short.includes("Product Page"),
+    "the set's own name is dropped from every row",
+    short.join(", "),
+  );
+  check(
+    shortenLabels(["GLOWRY Home", "ACME Product"]).join("|") === "GLOWRY Home|ACME Product",
+    "a prefix only some rows share is a coincidence, not a label",
+  );
+  check(
+    shortenLabels(["GLOWRY", "GLOWRY Home"]).join("|") === "GLOWRY|GLOWRY Home",
+    "and a page whose whole name is the prefix does not come out blank",
+  );
+
   console.log(failures === 0 ? "\nall good\n" : `\n${failures} failure(s)\n`);
   process.exit(failures === 0 ? 0 : 1);
 }
