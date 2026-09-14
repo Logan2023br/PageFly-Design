@@ -143,6 +143,7 @@ export async function startBuild(
     status: "running",
     payload: encodeRunPayload(brief, variants),
     plan,
+    progress: {},
     pages: [],
     failures: [],
     tokens: 0,
@@ -496,6 +497,56 @@ async function run(
     console.log(`[build] structure · ${f.pageType} → arc — ${f.reason}`);
   for (const r of structure.repairs) console.log(`[build] structure · ${r}`);
 
+  /* ==========================================================================
+     HOW FAR EACH UNFINISHED PAGE IS, so the screen has something to show
+     between the two events a page used to produce.
+
+     A page takes about fifteen minutes and reported itself once, at the end.
+     The bar therefore sat at zero for fifteen minutes and then jumped to a
+     hundred, which is exactly what a hung build looks like. The model streams
+     its answer, so the characters it has written are a real measure of real
+     work — and it is the RATE that carries the information: fast while it
+     writes, slow while it thinks.
+
+     CAPPED BELOW ONE, and this is the rule that keeps it honest. The
+     denominator is a measurement, and this file already carries a long comment
+     about a measurement that went stale twice without anybody noticing. A
+     fraction allowed to reach 1 would claim a page had landed before it had;
+     stopping short means an estimate that is too small only makes the bar
+     creep, which is survivable, rather than lie, which is not.
+
+     EXPECTED_CHARS comes from the budget the design call is given: this model
+     is recorded as spending 14k-22k output tokens on a page including its
+     thinking, and roughly four characters to the token puts a page near 70,000
+     characters. Being wrong here costs pacing, never correctness.
+
+     ONE WRITE FOR FOUR WORKERS. Four pages stream at once and each emits a few
+     hundred callbacks; writing a row per callback would be thousands of
+     database writes for a screen that polls every 2.5 seconds. The map is kept
+     in memory and flushed on a timer. */
+  const EXPECTED_CHARS = 70_000;
+  const FLUSH_MS = 2000;
+
+  const progress: Record<string, number> = {};
+  let progressDirty = false;
+  let lastFlush = 0;
+
+  const flushProgress = async (force = false) => {
+    if (!progressDirty && !force) return;
+    if (!force && Date.now() - lastFlush < FLUSH_MS) return;
+    progressDirty = false;
+    lastFlush = Date.now();
+    /* Best effort, like every other progress write in this file: a storage
+       hiccup must not end a build that is going fine. */
+    if (!signal.aborted) await repo.updateJob(job.id, { progress }).catch(() => {});
+  };
+
+  const report = (pageId: string) => (chars: number) => {
+    progress[pageId] = Math.min(0.92, chars / EXPECTED_CHARS);
+    progressDirty = true;
+    void flushProgress();
+  };
+
   /* A simple index cursor rather than a queue library: every worker takes the
      next unclaimed entry, so a page that takes ninety seconds does not hold up
      three others behind it. */
@@ -566,6 +617,7 @@ async function run(
             },
           },
           signal,
+          report(entry.pageId),
         );
 
         tokens += outcome.usage.input + outcome.usage.output;
@@ -624,11 +676,16 @@ async function run(
         });
       }
 
+      /* Settled, so it stops being in flight. Left behind, its last fraction
+         would be added to the page it has already been counted as finishing —
+         the bar would read past a hundred on the final page. */
+      delete progress[entry.pageId];
+
       /* Written after every page, not at the end. The whole point is that a
          browser arriving mid-build sees what has landed. */
       if (!signal.aborted)
         await repo
-          .updateJob(job.id, { pages: inOrder(pages), failures, tokens })
+          .updateJob(job.id, { pages: inOrder(pages), failures, tokens, progress })
           .catch(() => {});
     }
   };

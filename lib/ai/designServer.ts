@@ -858,6 +858,17 @@ export const __motionPlanFromForTest = motionPlanFrom;
 export async function designPageTree(
   input: DesignInput,
   signal?: AbortSignal,
+  /**
+   * Called as the model writes, with characters produced so far.
+   *
+   * Only on the FIRST attempt. The retry and the repair below re-run the same
+   * page, and a bar that ran to sixty and then restarted at zero says
+   * "something went wrong" to a merchant who is not owed that — a retry is the
+   * pipeline working, not failing. Progress stalls at wherever the first
+   * attempt reached instead, which is the honest reading: nothing new has been
+   * finished.
+   */
+  onProgress?: (chars: number) => void,
 ): Promise<DesignOutcome> {
   if (!isAiEnabled()) return { used: false, reason: "no model configured", usage: NOTHING };
 
@@ -914,6 +925,7 @@ export async function designPageTree(
     completion = await provider.complete({
       system,
       user,
+      onProgress,
       /* Measured, per provider, and not interchangeable. A truncated tree is
          not parseable JSON, so running out of budget costs the whole page.
 

@@ -122,6 +122,9 @@ create table if not exists jobs (
   error      text
 );
 create index if not exists jobs_domain_created on jobs (domain, created_at desc);
+/* Added after the table shipped, so it is an alter rather than a column above,
+   the same way stores.blocked and training_items.enabled arrived. */
+alter table jobs add column if not exists progress jsonb not null default '{}'::jsonb;
 
 /* Reference screenshots, filed by industry. The image is a data URL, so rows
    are large by the standards of this schema — a few hundred KB — which is why
@@ -299,6 +302,10 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
   plan: r.plan ?? [],
   pages: r.pages ?? [],
   failures: r.failures ?? [],
+  /* `{}` rather than null for a row written before the column existed, so the
+     screen reads "nothing in flight" instead of guarding against a null it
+     would otherwise have to guard against everywhere. */
+  progress: r.progress ?? {},
   tokens: Number(r.tokens ?? 0),
   error: r.error === null || r.error === undefined ? null : String(r.error),
 });
@@ -773,8 +780,8 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
     async createJob(job) {
       await ready();
       await db.query(
-        `insert into jobs (id,domain,created_at,updated_at,status,payload,plan,pages,failures,tokens,error)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        `insert into jobs (id,domain,created_at,updated_at,status,payload,plan,pages,failures,progress,tokens,error)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
         [
           job.id,
           job.domain,
@@ -785,6 +792,7 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
           JSON.stringify(job.plan ?? []),
           JSON.stringify(job.pages ?? []),
           JSON.stringify(job.failures ?? []),
+          JSON.stringify(job.progress ?? {}),
           job.tokens,
           job.error,
         ],
@@ -821,6 +829,8 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       if (patch.pages !== undefined) put("pages", JSON.stringify(patch.pages));
       if (patch.failures !== undefined)
         put("failures", JSON.stringify(patch.failures));
+      if (patch.progress !== undefined)
+        put("progress", JSON.stringify(patch.progress));
       if (patch.tokens !== undefined) put("tokens", patch.tokens);
       if (patch.error !== undefined) put("error", patch.error);
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { PAGE_BY_ID } from "@/lib/pageCatalog";
 import { useStore } from "@/lib/store";
@@ -75,10 +75,98 @@ function useElapsed(startedAt: number | null): number {
   return Math.max(0, Math.floor((now - startedAt) / 1000));
 }
 
+/* ==========================================================================
+   PAGES THAT LANDED, PLUS HOW FAR THE REST HAVE GOT.
+
+   `settled / total` is what this used to be, and on a one-page build that is
+   0% for fifteen minutes and then 100% — indistinguishable from a build that
+   has hung. The runner streams a fraction per page in flight: characters the
+   model has actually written over an expected total, so the middle of a page
+   is no longer a blank and the bar moves at the rate the model is working.
+
+   THE INVARIANT, and the reason this is a function with a test rather than an
+   expression in the middle of a component: the bar must not reach 100 before
+   every page has really landed. Two things hold it. The runner caps each
+   fraction below 1, and it DELETES a page from the map the moment that page
+   settles — so a page can never be counted twice, once as finished and once as
+   nearly finished. The clamp here is the third line of defence and should
+   never be the one doing the work; if it ever is, one of the other two broke.
+
+   Exported for `scripts/test-progress.ts`.
+   ========================================================================== */
+export function buildFraction(
+  settled: number,
+  total: number,
+  progress: Record<string, number>,
+): number {
+  if (total <= 0) return 0;
+
+  const inFlight = Object.values(progress).reduce(
+    /* A row from an older deploy, or a jsonb that came back as something
+       unexpected, must not turn the whole bar into NaN — which renders as a
+       bar with no width at all and no error anywhere. */
+    (sum, n) => sum + (Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0),
+    0,
+  );
+
+  return Math.max(0, Math.min(1, (settled + inFlight) / total));
+}
+
+/**
+ * Follow a target without ever going backwards, and never faster than it.
+ *
+ * TWO PROBLEMS, ONE ANSWER. The browser samples the job every 2.5 seconds, so
+ * the real number arrives in steps; animating between them is what makes the
+ * bar read as motion rather than as a clock hand. And the real number CAN fall
+ * — a page that fails is removed from the in-flight map, and the same is true
+ * of a retry — while a progress bar that goes backwards reads as the build
+ * losing work it had already done.
+ *
+ * So the shown value chases the target and only ever climbs. It settles in
+ * about a second, which is short enough to feel like a response to something
+ * and long enough to smooth a 2.5-second sampling gap.
+ */
+function useSmoothed(target: number, enabled: boolean): number {
+  const [shown, setShown] = useState(target);
+  /* Read by the animation frame, which outlives the render that set it — so the
+     loop always chases the newest poll rather than the one it started on.
+     Written in an effect rather than during render: a ref assigned while
+     rendering is a render with a side effect, and React says so. */
+  const latest = useRef(target);
+  useEffect(() => {
+    latest.current = target;
+  }, [target]);
+
+  useEffect(() => {
+    if (!enabled) {
+      setShown(latest.current);
+      return;
+    }
+    let frame = 0;
+    const tick = () => {
+      setShown((was) => {
+        const to = latest.current;
+        if (to <= was) return was;
+        /* Exponential approach rather than a fixed step: a big jump — four
+           pages landing at once — sweeps, and a small one creeps. One
+           behaviour, and it is the right one at both ends. */
+        const next = was + (to - was) * 0.08;
+        return to - next < 0.0005 ? to : next;
+      });
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [enabled]);
+
+  return enabled ? shown : target;
+}
+
 export function GeneratingScreen() {
   const plan = useStore((s) => s.plan);
   const pages = useStore((s) => s.pages);
   const failures = useStore((s) => s.failures);
+  const progress = useStore((s) => s.progress);
   const cancel = useStore((s) => s.cancel);
   const startedAt = useStore((s) => s.startedAt);
   const reduced = useReducedMotion();
@@ -86,7 +174,10 @@ export function GeneratingScreen() {
 
   const total = plan.length;
   const settled = pages.length + failures.length;
-  const pct = total === 0 ? 0 : Math.round((settled / total) * 100);
+
+  const raw = buildFraction(settled, total, progress);
+  const shown = useSmoothed(raw, !reduced);
+  const pct = Math.round(shown * 100);
 
 
   const byId = new Map(pages.map((p) => [p.id, p]));
@@ -105,16 +196,10 @@ export function GeneratingScreen() {
           Building your pages
         </h1>
 
-        <div className="mt-7 grid gap-3">
-          <div className="h-[3px] w-full overflow-hidden rounded-full bg-pf-border">
-            <motion.div
-              className="h-full rounded-full bg-pf-primary"
-              initial={{ width: 0 }}
-              animate={{ width: `${pct}%` }}
-              transition={{ duration: reduced ? 0 : 0.5, ease: [0.22, 1, 0.36, 1] }}
-            />
-          </div>
-          <div className="flex items-center justify-between gap-3 text-[13px]">
+        <div className="mt-7 grid gap-2.5">
+          {/* The number sits ABOVE the bar, where the eye already is when it
+              checks whether anything is happening. */}
+          <div className="flex items-end justify-between gap-3 text-[13px]">
             <span
               aria-live="polite"
               className="flex items-center gap-2 text-pf-body"
@@ -128,9 +213,51 @@ export function GeneratingScreen() {
               </motion.span>
               {statusLine(settled, total)}
             </span>
-            <span className="tabular-nums text-pf-muted">
-              {settled} of {total}
+            <span className="flex items-baseline gap-2">
+              <span className="font-display text-[19px] font-semibold tabular-nums leading-none tracking-[-0.02em] text-pf-text">
+                {pct}%
+              </span>
+              <span className="tabular-nums text-[12px] text-pf-faint">
+                {settled}/{total}
+              </span>
             </span>
+          </div>
+
+          {/* 8px rather than 3. At three pixels the fill and the track are the
+              same grey line to anyone not looking for the difference, and this
+              is the one control on the screen a merchant is watching. */}
+          <div
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={pct}
+            className="h-2 w-full overflow-hidden rounded-full bg-pf-border"
+          >
+            <motion.div
+              className="relative h-full overflow-hidden rounded-full bg-pf-primary"
+              initial={{ width: 0 }}
+              /* No spring or easing here. The value arriving is ALREADY
+                 smoothed, per frame, by `useSmoothed` — easing a value that is
+                 already easing is two animations fighting, and the bar lags a
+                 page landing by most of a second for no reason. */
+              animate={{ width: `${Math.max(pct, 1.5)}%` }}
+              transition={{ duration: 0 }}
+            >
+              {/* THE PART THAT NEVER STOPS. The fill can legitimately hold
+                  still — a model thinking for ninety seconds is working and
+                  producing nothing — and a bar that is completely static is
+                  how a healthy build gets mistaken for a hung one. This moves
+                  whether or not the number does, and it makes no claim about
+                  progress, which is exactly why it is allowed to. */}
+              {!reduced && (
+                <motion.div
+                  aria-hidden
+                  className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/45 to-transparent"
+                  animate={{ x: ["-120%", "420%"] }}
+                  transition={{ duration: 1.9, repeat: Infinity, ease: "easeInOut" }}
+                />
+              )}
+            </motion.div>
           </div>
 
           {/* The reassurance, not a countdown. A merchant watching a bar that

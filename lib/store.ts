@@ -75,6 +75,8 @@ type State = {
   plan: PlanEntry[];
   pages: PageMockup[];
   failures: GenerateFailure[];
+  /** how far each in-flight page has got, 0..1, keyed by pageId */
+  progress: Record<string, number>;
   variants: Record<string, number>;
   /** true when the deck on screen was reopened from the Library, so the recorder
       knows there is nothing new to save */
@@ -196,6 +198,7 @@ export const useStore = create<State & Actions>((set, get) => ({
   jobId: null,
   buildError: null,
   startedAt: null,
+  progress: {},
 
   filter: "all",
 
@@ -362,6 +365,7 @@ export const useStore = create<State & Actions>((set, get) => ({
       plan,
       pages: [],
       failures: [],
+      progress: {},
       variants: {},
       reopened: false,
       tokens: 0,
@@ -410,6 +414,11 @@ export const useStore = create<State & Actions>((set, get) => ({
         plan: job.plan.length ? (job.plan as PlanEntry[]) : prev.plan,
         pages: job.pages as PageMockup[],
         failures: job.failures,
+        /* Cleared as pages settle, because the runner deletes a page from the
+           map when it lands — so this replaces rather than merges. Merging
+           would leave a finished page's last fraction in the total and push
+           the bar past a hundred. */
+        progress: job.progress ?? {},
         tokens: job.tokens,
       }));
     };
@@ -484,6 +493,7 @@ export const useStore = create<State & Actions>((set, get) => ({
       screen: "brief",
       pages: [],
       failures: [],
+      progress: {},
       plan: [],
       jobId: null,
       startedAt: null,
@@ -622,6 +632,7 @@ export const useStore = create<State & Actions>((set, get) => ({
       plan: [],
       pages: [],
       failures: [],
+      progress: {},
       variants: {},
       reopened: true,
       filter: "all",

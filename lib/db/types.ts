@@ -210,6 +210,21 @@ export type JobRecord = {
   plan: unknown;
   /** pages finished so far, in plan order */
   pages: unknown;
+  /**
+   * How far along each page that has NOT landed yet is: `pageId` → 0..1.
+   *
+   * `pages` answers "what is finished"; this answers "what is happening", and
+   * the build screen needed both. A page takes about fifteen minutes and used
+   * to produce exactly one event — itself — so the bar sat at zero for the
+   * whole of it and then jumped, which looks the same as a build that hung.
+   *
+   * The fraction is characters of model output over an expected total, so it
+   * moves at the rate the model is actually working. It is deliberately capped
+   * below 1 by the runner: the expected total is a measurement with a shelf
+   * life, and a fraction allowed to reach 1 would claim a page had landed
+   * before it had. Only `pages` may say that.
+   */
+  progress: unknown;
   failures: unknown;
   tokens: number;
   /** why it failed, for the merchant and for the log */
@@ -425,7 +440,9 @@ export type Repo = {
   latestJob(domain: string): Promise<JobRecord | null>;
   updateJob(
     id: string,
-    patch: Partial<Pick<JobRecord, "status" | "pages" | "failures" | "tokens" | "error">>,
+    patch: Partial<
+      Pick<JobRecord, "status" | "pages" | "failures" | "tokens" | "error" | "progress">
+    >,
   ): Promise<void>;
   /** Marks every job still claiming to run as failed. Called once at startup:
       a job lives in this process, so anything left running is from a process

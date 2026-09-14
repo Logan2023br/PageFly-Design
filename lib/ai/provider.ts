@@ -1,6 +1,7 @@
 import "server-only";
 
 import Anthropic from "@anthropic-ai/sdk";
+import { deepseekAccumulator, sseDecoder } from "./sse";
 
 /* ==========================================================================
    The model, behind one interface.
@@ -66,6 +67,21 @@ export type Provider = {
     user: string;
     maxTokens: number;
     signal?: AbortSignal;
+    /**
+     * Called as output arrives, with the characters seen so far.
+     *
+     * OPT-IN, AND THAT IS DELIBERATE. Passing it switches the call to a
+     * streaming request; leaving it off keeps the exact request this codebase
+     * has always made. Every page of every build goes through here, so the new
+     * path is reachable only from the one caller that wants it, and backing the
+     * feature out is deleting one argument at that caller rather than reverting
+     * a provider.
+     *
+     * CHARACTERS, NOT TOKENS. Tokens are only known when the stream ends —
+     * usage arrives in the final chunk — and a number that is exact but only at
+     * the end cannot move a progress bar. See lib/ai/sse.ts.
+     */
+    onProgress?: (chars: number) => void;
   }): Promise<Completion>;
 };
 
@@ -197,7 +213,7 @@ function anthropicProvider(role: Role): Provider {
   return {
     name: "anthropic",
     model,
-    async complete({ system, user, maxTokens, signal }) {
+    async complete({ system, user, maxTokens, signal, onProgress }) {
       const params = {
         model,
         max_tokens: maxTokens,
@@ -231,10 +247,23 @@ function anthropicProvider(role: Role): Provider {
          sentence. See `sayWhy`. */
       let res: Anthropic.Message;
       try {
-        res =
-          maxTokens > 16_000
-            ? await client.messages.stream(params, { signal }).finalMessage()
-            : await client.messages.create(params, { signal });
+        if (onProgress || maxTokens > 16_000) {
+          /* Streaming already happened above the budget threshold; a caller
+             that wants progress simply also wants it. The `text` event carries
+             the answer only — the SDK reports thinking separately — so both are
+             counted, for the reason lib/ai/sse.ts spells out at length: this
+             model thinks for most of the call, and a bar that ignores thinking
+             sits at zero for the part that takes longest. */
+          let chars = 0;
+          const stream = client.messages.stream(params, { signal });
+          if (onProgress) {
+            stream.on("text", (delta) => onProgress((chars += delta.length)));
+            stream.on("thinking", (delta) => onProgress((chars += delta.length)));
+          }
+          res = await stream.finalMessage();
+        } else {
+          res = await client.messages.create(params, { signal });
+        }
       } catch (err) {
         const status = (err as { status?: number }).status;
         if (typeof status === "number")
@@ -332,6 +361,51 @@ async function sayWhy(res: Response, vendor: string): Promise<string> {
 
 /* ---- DeepSeek ------------------------------------------------------------ */
 
+/**
+ * Drain a streaming DeepSeek response into the same `Completion` the
+ * non-streaming call returns.
+ *
+ * The parsing is in `lib/ai/sse.ts` and tested without a network; what is here
+ * is only the plumbing, because the plumbing is the part that cannot be tested
+ * without one.
+ *
+ * `onProgress` is called per network chunk rather than per event. A page emits
+ * a few hundred chunks over fifteen minutes, the browser polls the job row
+ * every 2.5 seconds, and the runner throttles its writes anyway — calling this
+ * more often would cost work nobody can observe.
+ */
+async function readDeepseekStream(
+  res: Response,
+  onProgress: (chars: number) => void,
+): Promise<Completion> {
+  const body = res.body;
+  /* A 200 with no body is not something the caller can be handed as an empty
+     page — that would reach the merchant as "the designer answered in the
+     wrong shape", which is a different problem with a different fix. */
+  if (!body) throw vendorError("DeepSeek returned no response body.");
+
+  const decode = sseDecoder();
+  const acc = deepseekAccumulator();
+  const reader = body.pipeThrough(new TextDecoderStream()).getReader();
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      for (const payload of decode(value)) acc.push(payload);
+      onProgress(acc.chars());
+    }
+  } finally {
+    /* An aborted build leaves a half-read stream, and a socket nobody released
+       is a socket held until the process exits. `cancel` on an already-finished
+       reader is a no-op, so this is safe on the happy path too. */
+    await reader.cancel().catch(() => {});
+  }
+
+  return acc.result();
+}
+
+
 function deepseekProvider(role: Role): Provider {
   const model = modelName(role) ?? DEFAULT_DEEPSEEK_MODEL;
   const key = keyFor("deepseek", role)!;
@@ -339,7 +413,7 @@ function deepseekProvider(role: Role): Provider {
   return {
     name: "deepseek",
     model,
-    async complete({ system, user, maxTokens, signal }) {
+    async complete({ system, user, maxTokens, signal, onProgress }) {
       const res = await fetch("https://api.deepseek.com/chat/completions", {
         method: "POST",
         headers: {
@@ -354,11 +428,20 @@ function deepseekProvider(role: Role): Provider {
             { role: "user", content: user },
           ],
           response_format: { type: "json_object" },
+          /* Only when somebody is listening. A streaming response is parsed by
+             a different code path, and this one builds every page — so the
+             request stays byte-for-byte what it has always been unless a caller
+             actually wants the progress. */
+          ...(onProgress
+            ? { stream: true, stream_options: { include_usage: true } }
+            : {}),
         }),
         signal,
       });
 
       if (!res.ok) throw vendorError(await sayWhy(res, "DeepSeek"));
+
+      if (onProgress) return readDeepseekStream(res, onProgress);
 
       const body = (await res.json()) as {
         choices: { message: { content: string }; finish_reason?: string }[];

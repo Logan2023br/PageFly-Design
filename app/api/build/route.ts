@@ -29,6 +29,8 @@ export type JobView = {
   plan: { pageId: string; pageType: string; label: string; copyIndex: number; copyTotal: number }[];
   pages: unknown[];
   failures: { pageId: string; label: string; reason: string }[];
+  /** how far each page still in flight has got, 0..1 — see JobRecord.progress */
+  progress: Record<string, number>;
   tokens: number;
   error: string | null;
   /** the brief this was built from, so a returning browser can restore it */
@@ -47,6 +49,7 @@ function view(job: {
   plan: unknown;
   pages: unknown;
   failures: unknown;
+  progress: unknown;
   tokens: number;
   error: string | null;
   payload: string;
@@ -59,6 +62,13 @@ function view(job: {
     plan: Array.isArray(job.plan) ? (job.plan as JobView["plan"]) : [],
     pages: Array.isArray(job.pages) ? job.pages : [],
     failures: Array.isArray(job.failures) ? (job.failures as JobView["failures"]) : [],
+    /* Shaped on the way out rather than trusted. This column is jsonb and a row
+       written by an older deploy has no `progress` at all, which would reach the
+       bar as `undefined` and be added to a number. */
+    progress:
+      job.progress && typeof job.progress === "object" && !Array.isArray(job.progress)
+        ? (job.progress as Record<string, number>)
+        : {},
     tokens: job.tokens,
     error: job.error,
     payload: job.payload,

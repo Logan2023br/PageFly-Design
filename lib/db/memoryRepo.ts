@@ -418,7 +418,10 @@ export function createMemoryRepo(file: string): Repo {
     async getJob(id) {
       sync();
       const job = data.jobs.find((j) => j.id === id);
-      return job ? { ...job } : null;
+      /* `progress` defaulted on the way out, not on the way in: this store is
+         a file, and a job written before the field existed is still in it. The
+         Postgres driver does the same in `toJob` for the same reason. */
+      return job ? { ...job, progress: job.progress ?? {} } : null;
     },
 
     async latestJob(domain) {
@@ -426,7 +429,7 @@ export function createMemoryRepo(file: string): Repo {
       const found = data.jobs
         .filter((j) => j.domain === domain)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-      return found ? { ...found } : null;
+      return found ? { ...found, progress: found.progress ?? {} } : null;
     },
 
     async updateJob(id, patch) {
