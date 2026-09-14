@@ -677,6 +677,35 @@ async function main(): Promise<void> {
       "`days` does not arrive at 44px under a 44px `03`",
       labCss,
     );
+
+    /* ---- AND THE UNITS ARE HELD APART ----------------------------------
+
+       Type alone got the figures drawn and drew them touching: `77154920`
+       where the mockup has `77 15 48 50`. PageFly sizes each unit column by
+       its content and puts no gap between them, so four 44px numbers arrive
+       as one eight-digit number and the timer reads as a part code.
+
+       Nothing in the root can be relied on to fix it — the root carries no gap
+       and whether PageFly's own wrapper is a flex container is not written
+       down anywhere in `MD Json PageFly/`. The margin goes on the slots
+       instead, on BOTH of them and equally: whichever of the figure and its
+       unit name is the wider one sets the column, so matching margins hold the
+       columns apart whether the element stacks them or rows them. */
+    check(
+      /margin[^;]*\b9px/.test(numCss) && /margin[^;]*\b9px/.test(labCss),
+      "both slots carry the half-gap, so 18px lands between units either way",
+      `${numCss} || ${labCss}`,
+    );
+    check(
+      /margin-top:\s*8px|margin:\s*8px/.test(labCss),
+      "and the unit name sits 8px under its figure, as the mockup draws it",
+      labCss,
+    );
+    check(
+      /text-align:\s*center/.test(numCss) && /text-align:\s*center/.test(labCss),
+      "a one-digit `5` stays centred under a five-letter `hours`",
+      `${numCss} || ${labCss}`,
+    );
   }
 
 

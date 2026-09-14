@@ -931,15 +931,40 @@ function emitNode(
          seconds run rather than shuffling sideways on every 1. The label takes
          12px at .7 — a size of its own, never left to chance. Colour is the one
          thing not written here: it inherits from the timer's own style, which
-         already carries the page's ink. */
+         already carries the page's ink.
+
+         AND THE SPACING, which type alone does not buy. Written with only the
+         fonts, the imported timer read `77154920` — four 44px numbers touching,
+         a part code where the mockup has `77 15 48 50`. PageFly sizes each unit
+         column by its content and leaves no gap between them.
+
+         The gap is put on the SLOTS rather than on the timer's root, as half of
+         it each. The root would be the obvious place and cannot be relied on:
+         it carries no gap of PageFly's own, and whether the element's internal
+         wrapper is a flex container — the one thing that would make `gap` mean
+         anything there — is not written down in `MD Json PageFly/`, so setting
+         it is a guess that fails silently. A margin on a child is not a guess.
+         Both slots carry the same 9px because the column is sized by whichever
+         of the two is wider — `hours` under `15`, `5` under `secs` — so equal
+         margins hold the units 18px apart whichever one wins, and the mockup's
+         18px is what lands.
+
+         `text-align: center` for the same reason the mockup centres its column:
+         a one-digit figure under a five-letter name is otherwise left-aligned
+         against it. */
       const timer = COUNTDOWN(node.endsAt, node.units, node.labels, sd, {
         all: {
           "&":
             "font-size: 44px; font-weight: 700; line-height: 1;" +
-            " letter-spacing: -0.02em; font-variant-numeric: tabular-nums;",
+            " letter-spacing: -0.02em; font-variant-numeric: tabular-nums;" +
+            " margin: 0 9px; text-align: center;",
         },
       }, {
-        all: { "&": "font-size: 12px; line-height: 1.35; opacity: .7;" },
+        all: {
+          "&":
+            "font-size: 12px; line-height: 1.35; opacity: .7;" +
+            " margin: 8px 9px 0; text-align: center;",
+        },
       });
       if (!node.caption) return timer;
       return FB(
