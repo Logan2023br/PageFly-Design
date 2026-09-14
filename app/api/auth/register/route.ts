@@ -43,10 +43,18 @@ export const dynamic = "force-dynamic";
     merchant turns out to be real. */
 const REGISTER_PAGE_LIMIT = 3;
 
+/* LENGTHS ONLY, and no minimums. This schema's job is "three strings arrived,
+   none of them absurd"; deciding whether they are GOOD belongs to the field
+   checks below, which have a sentence for every way each one can be wrong.
+
+   The minimums used to be here, and they answered for the field checks without
+   meaning to: a domain of `dd` is two characters, so `min(3)` rejected it and
+   the merchant was told "Fill in every field" about a form they had filled in
+   completely. */
 const bodySchema = z.object({
-  domain: z.string().min(3).max(255),
-  name: z.string().min(1).max(255),
-  email: z.string().min(3).max(255),
+  domain: z.string().max(255),
+  name: z.string().max(255),
+  email: z.string().max(255),
 });
 
 export type RegisterResponse =

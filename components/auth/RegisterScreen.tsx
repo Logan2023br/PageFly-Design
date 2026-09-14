@@ -9,6 +9,7 @@ import {
   emailProblem,
   storeDomainProblem,
   storeNameProblem,
+  type FieldProblem,
 } from "@/lib/storeForm";
 import { Button, Eyebrow, GradientWord, Icon, Panel } from "../ui";
 
@@ -35,36 +36,50 @@ export function RegisterScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
 
-  /* Which field is wrong, rather than one message over the whole form. Three
-     inputs and a single red box leaves the merchant guessing which one it
-     meant, and the domain and the email fail for completely different
-     reasons. */
-  const [touched, setTouched] = useState(false);
+  /* ==========================================================================
+     TOUCHED PER FIELD, CHECKED ON THE WAY OUT OF IT.
+
+     A form that says nothing until Register is pressed makes the merchant fill
+     in all three, press, and only then learn the first one was wrong — and it
+     reports one problem at a time, so a form with two mistakes takes two more
+     attempts. Checking as they leave each field tells them while they are
+     still looking at it.
+
+     ON BLUR, never while typing. `mystore.myshopify.com` is invalid at every
+     keystroke until the last one, and a field that turns red on the first
+     letter is a field shouting at someone who is doing it right. Once a field
+     HAS been marked wrong the check does run live, so the red clears the
+     instant it is fixed rather than making them leave the field again to find
+     out.
+     ========================================================================== */
+  const [touched, setTouched] = useState({
+    domain: false,
+    name: false,
+    email: false,
+  });
 
   const problems = {
     domain: storeDomainProblem(domain),
     name: storeNameProblem(name),
     email: emailProblem(email),
   };
-  const filled = domain.trim() && name.trim() && email.trim();
+  type FieldName = keyof typeof problems;
+
+  /* An empty field the merchant has not reached yet is not a mistake; it only
+     becomes one when they try to submit. So a blur on an untouched EMPTY field
+     stays quiet, and `markAll` below is what turns those into errors. */
+  const shown = (field: FieldName) => (touched[field] ? problems[field] : null);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (state === "sending" || !filled) return;
+    if (state === "sending") return;
 
-    /* CHECKED HERE TOO, and with the same functions the route uses — see
-       lib/storeForm.ts. This is only so a merchant who typed their custom
-       domain is told immediately instead of after a round trip; the route
-       runs them again on what arrives, because a browser check is a courtesy
-       and never a gate. */
-    setTouched(true);
-    const first = problems.domain ?? problems.name ?? problems.email;
-    if (first) {
-      setState("failed");
-      setMessage(first.error);
-      setHint(first.hint ?? null);
-      return;
-    }
+    /* Every field is marked at once here, so a merchant who tabbed straight to
+       the button sees all of the problems rather than the first one. The route
+       runs the same checks again on what arrives — a browser check is a
+       courtesy to whoever is typing, never a gate. See lib/storeForm.ts. */
+    setTouched({ domain: true, name: true, email: true });
+    if (problems.domain || problems.name || problems.email) return;
 
     setState("sending");
     setMessage(null);
@@ -107,13 +122,24 @@ export function RegisterScreen() {
 
   /* Editing anything clears the refusal. A red border that survives the fix is
      a form arguing with someone who has already corrected it. */
+  /* The SERVER's refusal, cleared on the next edit. A "this store is already
+     registered" that outlives the domain it was about is a form arguing with
+     someone who has already changed it. The per-field messages are not cleared
+     here — they are derived from the value itself, so they go when it is
+     right. */
   const onEdit = () => {
-    setTouched(false);
     if (state === "failed") {
       setState("idle");
       setMessage(null);
       setHint(null);
     }
+  };
+
+  const onLeave = (field: FieldName) => () => {
+    /* Quiet about a field they have not filled in yet — see `shown`. */
+    const value = { domain, name, email }[field];
+    if (!value.trim() && !touched[field]) return;
+    setTouched((was) => ({ ...was, [field]: true }));
   };
 
   return (
@@ -173,7 +199,8 @@ export function RegisterScreen() {
                       onChange={setDomain}
                       onEdit={onEdit}
                       placeholder="mystore.myshopify.com"
-                      invalid={touched && Boolean(problems.domain)}
+                      problem={shown("domain")}
+                      onBlur={onLeave("domain")}
                       autoFocus
                       // No type="url": a merchant types the domain with no
                       // scheme and the browser would reject it as invalid
@@ -187,7 +214,8 @@ export function RegisterScreen() {
                       onChange={setName}
                       onEdit={onEdit}
                       placeholder="Cloudloft"
-                      invalid={touched && Boolean(problems.name)}
+                      problem={shown("name")}
+                      onBlur={onLeave("name")}
                       autoComplete="organization"
                     />
                     <Field
@@ -196,7 +224,8 @@ export function RegisterScreen() {
                       onChange={setEmail}
                       onEdit={onEdit}
                       placeholder="you@yourstore.com"
-                      invalid={touched && Boolean(problems.email)}
+                      problem={shown("email")}
+                      onBlur={onLeave("email")}
                       inputMode="email"
                       autoComplete="email"
                     />
@@ -222,10 +251,15 @@ export function RegisterScreen() {
                       </motion.div>
                     )}
 
+                    {/* NOT disabled on an incomplete form. A greyed-out button
+                        with nothing saying why is a dead end — the merchant
+                        cannot tell whether the form is broken or they are.
+                        Pressing it marks every field, which is what puts the
+                        reason under each one. */}
                     <Button
                       type="submit"
                       size="lg"
-                      disabled={state === "sending" || !filled}
+                      disabled={state === "sending"}
                       iconRight="ArrowRight"
                       className="w-full"
                     >
@@ -293,13 +327,21 @@ function Done({ domain }: { domain: string }) {
 
 /* ---- one labelled input -------------------------------------------------- */
 
+/**
+ * One labelled input that carries its own verdict.
+ *
+ * The message sits under the field it belongs to rather than in a box at the
+ * bottom of the form. Three inputs and one shared box makes the merchant work
+ * out which of them it meant, and it can only ever report one problem — so a
+ * form with two mistakes costs two round trips to discover.
+ */
 function Field({
   label,
   value,
   onChange,
   onEdit,
   placeholder,
-  invalid,
+  problem,
   ...rest
 }: {
   label: string;
@@ -307,8 +349,8 @@ function Field({
   onChange: (value: string) => void;
   onEdit: () => void;
   placeholder: string;
-  invalid: boolean;
-  /* The three this component owns are omitted from the passthrough, or they
+  problem: FieldProblem;
+  /* The ones this component owns are omitted from the passthrough, or they
      collide: `onChange` here takes the VALUE, and the DOM's takes the event. */
 } & Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "placeholder">) {
   return (
@@ -321,14 +363,35 @@ function Field({
           onEdit();
         }}
         placeholder={placeholder}
-        aria-invalid={invalid}
+        aria-invalid={Boolean(problem)}
+        /* Points at the message below, so a screen reader reads the reason with
+           the field rather than leaving "invalid" unexplained. */
+        aria-describedby={problem ? `${label}-problem` : undefined}
         autoCapitalize="off"
         spellCheck={false}
         className={`h-11 w-full rounded-pf-md border bg-pf-bg-deep px-3 text-[14px] text-pf-text outline-none transition-colors placeholder:text-pf-faint focus:border-pf-primary-hi ${
-          invalid ? "border-pf-danger/60" : "border-pf-border"
+          problem ? "border-pf-danger/60" : "border-pf-border"
         }`}
         {...rest}
       />
+      {problem && (
+        <motion.span
+          id={`${label}-problem`}
+          initial={{ opacity: 0, y: -3 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-start gap-1.5 text-[11.5px] text-pf-danger"
+        >
+          <span className="mt-px shrink-0">
+            <Icon name="CircleAlert" size={12} />
+          </span>
+          <span>
+            {problem.error}
+            {problem.hint && (
+              <span className="text-pf-muted"> {problem.hint}</span>
+            )}
+          </span>
+        </motion.span>
+      )}
     </label>
   );
 }
