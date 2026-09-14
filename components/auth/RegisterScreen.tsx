@@ -5,6 +5,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import type { RegisterResponse } from "@/app/api/auth/register/route";
+import {
+  emailProblem,
+  storeDomainProblem,
+  storeNameProblem,
+} from "@/lib/storeForm";
 import { Button, Eyebrow, GradientWord, Icon, Panel } from "../ui";
 
 /* ==========================================================================
@@ -30,11 +35,36 @@ export function RegisterScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
 
+  /* Which field is wrong, rather than one message over the whole form. Three
+     inputs and a single red box leaves the merchant guessing which one it
+     meant, and the domain and the email fail for completely different
+     reasons. */
+  const [touched, setTouched] = useState(false);
+
+  const problems = {
+    domain: storeDomainProblem(domain),
+    name: storeNameProblem(name),
+    email: emailProblem(email),
+  };
   const filled = domain.trim() && name.trim() && email.trim();
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (state === "sending" || !filled) return;
+
+    /* CHECKED HERE TOO, and with the same functions the route uses — see
+       lib/storeForm.ts. This is only so a merchant who typed their custom
+       domain is told immediately instead of after a round trip; the route
+       runs them again on what arrives, because a browser check is a courtesy
+       and never a gate. */
+    setTouched(true);
+    const first = problems.domain ?? problems.name ?? problems.email;
+    if (first) {
+      setState("failed");
+      setMessage(first.error);
+      setHint(first.hint ?? null);
+      return;
+    }
 
     setState("sending");
     setMessage(null);
@@ -72,6 +102,17 @@ export function RegisterScreen() {
     } catch {
       setState("failed");
       setMessage("Could not reach the server. Check your connection and try again.");
+    }
+  };
+
+  /* Editing anything clears the refusal. A red border that survives the fix is
+     a form arguing with someone who has already corrected it. */
+  const onEdit = () => {
+    setTouched(false);
+    if (state === "failed") {
+      setState("idle");
+      setMessage(null);
+      setHint(null);
     }
   };
 
@@ -130,9 +171,9 @@ export function RegisterScreen() {
                       label="Store domain"
                       value={domain}
                       onChange={setDomain}
-                      onEdit={() => state === "failed" && setState("idle")}
+                      onEdit={onEdit}
                       placeholder="mystore.myshopify.com"
-                      invalid={state === "failed"}
+                      invalid={touched && Boolean(problems.domain)}
                       autoFocus
                       // No type="url": a merchant types the domain with no
                       // scheme and the browser would reject it as invalid
@@ -144,18 +185,18 @@ export function RegisterScreen() {
                       label="Store name"
                       value={name}
                       onChange={setName}
-                      onEdit={() => state === "failed" && setState("idle")}
+                      onEdit={onEdit}
                       placeholder="Cloudloft"
-                      invalid={state === "failed"}
+                      invalid={touched && Boolean(problems.name)}
                       autoComplete="organization"
                     />
                     <Field
                       label="Email"
                       value={email}
                       onChange={setEmail}
-                      onEdit={() => state === "failed" && setState("idle")}
+                      onEdit={onEdit}
                       placeholder="you@yourstore.com"
-                      invalid={state === "failed"}
+                      invalid={touched && Boolean(problems.email)}
                       inputMode="email"
                       autoComplete="email"
                     />

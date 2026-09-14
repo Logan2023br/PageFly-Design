@@ -174,7 +174,17 @@ async function main(): Promise<void> {
   const bad = [
     [{ domain: "", name: "A", email: "a@b.test" }, "an empty domain"],
     [{ domain: "notadomain", name: "A", email: "a@b.test" }, "a domain with no dot"],
+    /* THE SHAPE, not just "has a dot". A store's own storefront address is the
+       commonest wrong answer here — a merchant reads "Store domain" and types
+       the address customers see. The two are different strings and only one of
+       them is the key every other table joins on, so a row created under the
+       custom domain is a row that can never sign in. */
+    [{ domain: "mystore.com", name: "A", email: "a@b.test" }, "a custom storefront domain"],
+    [{ domain: "shop.myshopify.io", name: "A", email: "a@b.test" }, "a near miss on the suffix"],
+    [{ domain: "myshopify.com", name: "A", email: "a@b.test" }, "the bare suffix with no store"],
+    [{ domain: "a.b.myshopify.com", name: "A", email: "a@b.test" }, "a subdomain of a store"],
     [{ domain: "x.myshopify.com", name: "A", email: "not-an-email" }, "an email with no @"],
+    [{ domain: "x.myshopify.com", name: "A", email: "a@b" }, "an email with no dot after the @"],
     [{ domain: "x.myshopify.com", name: "A", email: "" }, "no email at all"],
     [{ domain: "x.myshopify.com", name: "", email: "a@b.test" }, "no name"],
   ] as const;
@@ -182,6 +192,28 @@ async function main(): Promise<void> {
   for (const [body, label] of bad) {
     const res = await send(body as Body);
     check(res.status === 400, label, `${res.status}`);
+  }
+
+  /* And the spellings that ARE the same store, all of which must survive
+     normalisation and land on one row. The check is that the form does not
+     reject them — a validator strict enough to argue with a pasted address bar
+     is a validator that turns a real merchant away. */
+  console.log("\nthe same domain, typed the ways people type it");
+
+  const spellings = [
+    "  HTTPS://Good-Store.myshopify.com/  ",
+    "www.good-store.myshopify.com",
+    "good-store.myshopify.com/admin",
+  ];
+  for (const [i, spelling] of spellings.entries()) {
+    const res = await send({ domain: spelling, name: "Good", email: "g@ood.test" });
+    /* The first creates the row; the rest are duplicates of it, which is the
+       proof they normalised to the same string. */
+    check(
+      res.status === (i === 0 ? 200 : 409),
+      `\`${spelling.trim()}\``,
+      `${res.status}`,
+    );
   }
 
   console.log("\nthe admin count");
@@ -193,8 +225,10 @@ async function main(): Promise<void> {
   /* Counts the ones that came through THIS door, not every store. `gone` was
      refused and the two hand-made rows above carry no type. */
   check(
-    stats.registeredStores === 3,
+    stats.registeredStores === 4,
     "counts only stores that registered themselves",
+    /* new-shop, two, three, good-store. `gone` was refused, every malformed
+       domain above was refused, and the two rows made by hand carry no type. */
     String(stats.registeredStores),
   );
 

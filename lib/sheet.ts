@@ -3,6 +3,7 @@ import "server-only";
 import { createSign } from "node:crypto";
 import type { StoreRecord } from "./db/types";
 import { DEFAULT_PAGE_LIMIT as FALLBACK_PAGE_LIMIT } from "./pageCatalog";
+import { normalizeDomain } from "./storeForm";
 
 /* ==========================================================================
    The allowlist sheet.
@@ -49,13 +50,12 @@ export function sheetSource(): SheetSource {
  * "https://mystore.myshopify.com" are three different stores and the allowlist
  * misses two of them.
  */
-export function normalizeDomain(input: string): string {
-  let value = input.trim().toLowerCase();
-  value = value.replace(/^[a-z]+:\/\//, "");
-  value = value.replace(/^www\./, "");
-  value = value.split(/[/?#]/)[0];
-  return value.replace(/\.+$/, "");
-}
+/* MOVED, not copied. The register form runs in the browser and needs the same
+   normalisation, and this file is `server-only` — importing it from a client
+   component fails the build. It lives in `lib/storeForm.ts` now and is
+   re-exported here so every caller of `@/lib/sheet` is untouched. There is
+   still exactly one implementation, which is the point. */
+export { normalizeDomain };
 
 /* ---- CSV ----------------------------------------------------------------- */
 

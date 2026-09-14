@@ -2,7 +2,12 @@ import { z } from "zod";
 import { findAllowedStore } from "@/lib/account";
 import { MissingDatabaseError, getRepo } from "@/lib/db";
 import { REGISTER_USER_TYPE } from "@/lib/db/types";
-import { normalizeDomain } from "@/lib/sheet";
+import {
+  emailProblem,
+  normalizeDomain,
+  storeDomainProblem,
+  storeNameProblem,
+} from "@/lib/storeForm";
 
 /* ==========================================================================
    POST /api/auth/register   a merchant asks for an account
@@ -63,23 +68,27 @@ export async function POST(request: Request) {
     return bad("Fill in every field.");
   }
 
-  /* Normalised the same way the sign-in route normalises it, and for the same
-     reason: a merchant who pastes `https://Shop.myshopify.com/` and one who
-     types `shop.myshopify.com` are the same store, and registering under two
-     spellings would make two rows where the second can never sign in. */
+  /* THE SAME THREE CHECKS THE FORM RAN, run again on what actually arrived.
+     The browser's pass is a courtesy to whoever is typing; this one is the
+     gate. They cannot word a refusal differently because they are the same
+     functions — see lib/storeForm.ts.
+
+     Stricter about the domain than the sign-in route, on purpose. Sign-in has
+     to admit whatever is on the beta sheet and that list was typed by people;
+     this form CREATES the key every other table joins on, so it is the last
+     place the shape can be insisted on. A row under a merchant's custom
+     storefront domain is a row that can never sign in. */
   const domain = normalizeDomain(parsed.domain);
-  if (!domain.includes("."))
-    return bad("That does not look like a store domain.", "It usually ends in .myshopify.com");
+  for (const problem of [
+    storeDomainProblem(parsed.domain),
+    storeNameProblem(parsed.name),
+    emailProblem(parsed.email),
+  ]) {
+    if (problem) return bad(problem.error, problem.hint);
+  }
 
   const name = parsed.name.trim();
-  if (!name) return bad("Enter the store name.");
-
   const email = parsed.email.trim();
-  /* Deliberately loose. The point is to catch a merchant who typed their
-     domain into the email box, not to adjudicate RFC 5322 — a regex strict
-     enough to argue with is a regex that rejects somebody's real address. */
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-    return bad("That does not look like an email address.");
 
   const repo = getRepo();
 
