@@ -1944,6 +1944,94 @@ async function main(): Promise<void> {
     dataless.length ? [...new Set(dataless.map((i) => i.type))].join(", ") : "",
   );
 
+  /* ---- a row that stacks tells its children it stacked ------------------
+
+     THE PARENT'S DIRECTION WAS READ ONCE, AT DESKTOP, AND WRITTEN AT EVERY
+     BREAKPOINT. `floorFor` turns a two-column row into a stack on the phone —
+     that part has worked for a while — but every child of that row still
+     carried `--pf-flex-layout-parent-direction: horizontal` in its `mobile`
+     entry, because `parentDir` was computed once from the row's desktop css
+     and handed to all four.
+
+     Three things go wrong at once on the phone, and all three are visible in a
+     real export: the engine lays the child out as a row child of a column; a
+     paragraph takes `hug` from `widthMode`'s "text in a row hugs" rule and
+     wraps at its own longest line instead of the screen's; and a container
+     with a `maxWidth` is denied the `width: 100%` that the same rule gives it
+     everywhere else, so it collapses to its longest line. A paragraph four
+     words wide sitting over the photograph above it is what that looks like.
+
+     The mockup has none of this because the mockup is real CSS: a flex column
+     stretches its children without being told. Only the export has to say so,
+     and it was saying the opposite. */
+
+  console.log("\na row that stacks on the phone");
+
+  {
+    const stacked = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "row",
+              css: { gap: "72px" },
+              children: [
+                { type: "image", query: "bench", css: { flexBasis: "44%" } },
+                {
+                  type: "col",
+                  css: { flexBasis: "56%", maxWidth: "560px" },
+                  children: [
+                    { type: "heading", level: 2, text: "Lasting and welting", css: {} },
+                  ],
+                },
+                /* Straight in the row, which is the shape `widthMode`'s "text
+                   in a row hugs" rule is written for — and the shape that rule
+                   was still applying to on a phone, where the row is a stack. */
+                { type: "text", text: "The upper is pulled over the last and the welt is sewn by hand.", css: {} },
+              ],
+            },
+          ],
+          "split",
+        ),
+      ],
+    }, "stack", { images: { bench: "https://example.test/bench.jpg" } });
+
+    const mobileOf = (id: string) => stacked.cssOf(id, "mobile");
+    const blocks = stacked.items.filter((i) => i.type === "FlexBlock");
+    const withParent = blocks
+      .map((i) => ({ i, css: mobileOf(i.id) }))
+      .filter((x) => x.css.includes("--pf-flex-layout-parent-direction"));
+
+    check(
+      withParent.length > 0,
+      "the children of the stacked row carry a mobile entry at all",
+      String(withParent.length),
+    );
+    check(
+      withParent.every((x) => !/parent-direction:\s*horizontal/.test(x.css)),
+      "and none of them still claims a horizontal parent on the phone",
+      withParent.map((x) => x.css.match(/parent-direction:\s*\w+/)?.[0]).join(" | "),
+    );
+
+    /* The column carries a maxWidth and no width — the case the long comment in
+       `cssAt` is written about. On a phone its parent is a stack, so the rule
+       applies and the box fills rather than hugging its longest line. */
+    const col = withParent.find((x) => /max-width/.test(x.css));
+    check(Boolean(col), "the capped column is found", col ? "yes" : "no");
+    check(
+      /width:\s*100%/.test(col?.css ?? ""),
+      "a capped column fills the phone instead of collapsing to its longest line",
+      col?.css ?? "(missing)",
+    );
+
+    const para = stacked.items.find((i) => i.type === "Paragraph4");
+    check(
+      /--pf-flex-layout-width:\s*fill/.test(mobileOf(para?.id ?? "")),
+      "and the paragraph fills rather than hugging — `text in a row hugs` is not about a stack",
+      mobileOf(para?.id ?? "") || "(no mobile entry)",
+    );
+  }
+
   console.log();
   console.log(failures === 0 ? "PASS" : `FAIL — ${failures} problem${failures === 1 ? "" : "s"}`);
   if (failures) process.exitCode = 1;

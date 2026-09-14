@@ -249,14 +249,55 @@ function directionOf(node: DesignNode | DesignSection, css: Css): Dir {
   return "vertical";
 }
 
+/* ==========================================================================
+   A PARENT'S DIRECTION IS NOT ONE VALUE. It was written as one, and that is
+   how a stacked phone layout kept describing itself as a row.
+
+   `floorFor` turns a two-column row into a column on the phone, and has for a
+   while. But the direction handed down to its children was computed ONCE, off
+   the row's desktop css, and then written into all four breakpoints — so every
+   child of a row that had just stacked still carried
+   `--pf-flex-layout-parent-direction: horizontal` in its `mobile` entry, and
+   `widthMode` still read "my parent is a row" and gave a paragraph `hug`.
+
+   A paragraph told to hug inside a stack wraps at its own longest line rather
+   than the screen's, which is the four-words-wide column of text sitting over
+   the photograph above it. The mockup never had the bug because the mockup is
+   real CSS and a flex column stretches its children without being told; only
+   the export has to say it out loud, and it was saying the opposite.
+
+   So: one value where the direction genuinely cannot change with the
+   breakpoint — the composites this file builds itself, which are a row or a
+   column at every size — and one value PER breakpoint for anything read off a
+   node's own css, which `styleAt` may answer differently at each.
+   ========================================================================== */
+type ParentDir = Dir | Record<Device, Dir>;
+
+function dirAt(parent: ParentDir | null, device: Device): Dir | null {
+  if (parent === null) return null;
+  return typeof parent === "string" ? parent : parent[device];
+}
+
+/** What this container's children should be told, at each breakpoint. */
+function dirsOf(node: DesignNode | DesignSection): Record<Device, Dir> {
+  return {
+    all: directionOf(node, styleAt(node, "all")),
+    laptop: directionOf(node, styleAt(node, "laptop")),
+    tablet: directionOf(node, styleAt(node, "tablet")),
+    mobile: directionOf(node, styleAt(node, "mobile")),
+  };
+}
+
 const HAS_KIDS = new Set(["section", "row", "col"]);
 
 /** The full CSS for one node at one breakpoint, engine properties included. */
 function cssAt(
   node: DesignNode | DesignSection,
   device: Device,
-  parentDir: Dir | null,
+  parent: ParentDir | null,
 ): string {
+  /* Asked per breakpoint, not once — see `ParentDir` above. */
+  const parentDir = dirAt(parent, device);
   const css = styleAt(node, device);
   const own: string[] = [declarations(css)];
 
@@ -330,14 +371,14 @@ function cssAt(
  */
 function styleDataFor(
   node: DesignNode | DesignSection,
-  parentDir: Dir | null,
+  parent: ParentDir | null,
 ): StyleData {
-  const base = cssAt(node, "all", parentDir);
+  const base = cssAt(node, "all", parent);
   const out: Record<string, Record<string, string>> = { all: { "&": base } };
 
   for (const device of DEVICES) {
     if (device === "all") continue;
-    const here = cssAt(node, device, parentDir);
+    const here = cssAt(node, device, parent);
     if (here !== base) out[device] = { "&": here };
   }
 
@@ -638,8 +679,8 @@ export type EmitOptions = {
   customCount?: { value: number };
 };
 
-function emit(node: DesignNode, parentDir: Dir, opts: EmitOptions): PFNode | null {
-  const built = emitNode(node, parentDir, opts);
+function emit(node: DesignNode, parent: ParentDir, opts: EmitOptions): PFNode | null {
+  const built = emitNode(node, parent, opts);
   return built && hasMotion(node.anim) ? withMotion(built, node.anim) : built;
 }
 
@@ -676,10 +717,10 @@ function withMotion(n: PFNode, anim: Anim): PFNode {
 
 function emitNode(
   node: DesignNode,
-  parentDir: Dir,
+  parent: ParentDir,
   opts: EmitOptions,
 ): PFNode | null {
-  const sd = styleDataFor(node, parentDir);
+  const sd = styleDataFor(node, parent);
 
   switch (node.type) {
     case "heading":
@@ -1022,7 +1063,7 @@ function emitNode(
           TYPE_PROPS,
         ),
         [
-          withTag(H2(shown, styleDataFor({ ...node, type: "heading" } as never, parentDir)), "div"),
+          withTag(H2(shown, styleDataFor({ ...node, type: "heading" } as never, parent)), "div"),
           ...(node.label
             ? [
                 P4(node.label, {
@@ -1038,7 +1079,7 @@ function emitNode(
     }
 
     case "slideshow": {
-      const dir = directionOf(node as never, styleAt(node, "all"));
+      const dir = dirsOf(node as never);
       const slides = node.slides
         .map((c) => emit(c, dir, opts))
         .filter((n): n is PFNode => n !== null);
@@ -1065,7 +1106,7 @@ function emitNode(
 
     case "row":
     case "col": {
-      const dir = directionOf(node, styleAt(node, "all"));
+      const dir = dirsOf(node);
       const kids = node.children
         .map((c) => emit(c, dir, opts))
         .filter((n): n is PFNode => n !== null);
@@ -2092,7 +2133,7 @@ export function pageflyFromTree(
     const fills = needsFill(section);
     const kids = section.children
       .map((c) => {
-        const emitted = emit(c, directionOf(section, styleAt(section, "all")), opts);
+        const emitted = emit(c, dirsOf(section), opts);
         /* A row or col sitting straight under the content block is the band's
            own layout, and in a band built around a composite it has to claim the
            full width or the block collapses to its content. Leaves are left
