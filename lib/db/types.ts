@@ -13,6 +13,16 @@
    column exists now so that change needs no migration.
    ========================================================================== */
 
+/**
+ * `userType` for a store that came through the public registration form.
+ *
+ * Lives here rather than beside the route that writes it because the stats
+ * query counts on it too, and a database driver importing an API route is the
+ * dependency pointing the wrong way. Its neighbours in this column are `Beta`
+ * (off the sheet), `Invite` (a signed link) and `Test User`.
+ */
+export const REGISTER_USER_TYPE = "Marketing/Register";
+
 export type StoreRecord = {
   domain: string;
   email: string | null;
@@ -126,6 +136,15 @@ export type AdminStats = {
   activeStores: number;
   /** stores present in the allowlist, whether they signed in or not */
   allowedStores: number;
+  /**
+   * Stores that came through the public registration form.
+   *
+   * Counted off `userType` rather than a column of its own, because that field
+   * already carries where every other row came from — `Beta` off the sheet,
+   * `Invite` from a signed link. A boolean beside it would be a second answer
+   * to a question already answered, and the two would eventually disagree.
+   */
+  registeredStores: number;
   totalRuns: number;
   totalPages: number;
   totalTokens: number;

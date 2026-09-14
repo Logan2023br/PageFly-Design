@@ -19,12 +19,26 @@ export function StatsView({ stats }: { stats: AdminStats }) {
 
   return (
     <div className="grid gap-4">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
           icon="Users"
           label="Stores using it"
           value={stats.activeStores}
           footnote={`${stats.allowedStores} on the beta list`}
+        />
+        {/* Counted off `userType`, so it answers "came through the public
+            form" rather than "has an account" — a store an operator added by
+            hand is on the list but did not register itself, and the two
+            numbers move for different reasons. */}
+        <StatCard
+          icon="UserPlus"
+          label="Self-registered"
+          value={stats.registeredStores}
+          footnote={
+            stats.registeredStores === 0
+              ? "none yet"
+              : `of ${stats.allowedStores} on the list`
+          }
         />
         <StatCard
           icon="Files"

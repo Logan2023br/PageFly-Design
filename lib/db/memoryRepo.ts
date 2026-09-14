@@ -1,6 +1,6 @@
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { buildStats } from "./postgresRepo";
-import { reviewOnlyStore } from "./types";
+import { REGISTER_USER_TYPE, reviewOnlyStore } from "./types";
 import type {
   JobRecord,
   TrainingItem,
@@ -527,6 +527,9 @@ export function createMemoryRepo(file: string): Repo {
         {
           allowed_stores: data.stores.length,
           active_stores: data.stores.filter((s) => s.lastSeenAt).length,
+          registered_stores: data.stores.filter(
+            (s) => s.userType === REGISTER_USER_TYPE,
+          ).length,
           total_runs: data.runs.length,
           total_pages: data.runPages.length,
           total_tokens: data.runs.reduce((sum, r) => sum + r.tokens, 0),

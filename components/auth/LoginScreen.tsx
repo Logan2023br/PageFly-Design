@@ -187,8 +187,19 @@ export function LoginScreen({ next }: { next: string }) {
               </form>
             </Panel>
 
+            {/* The way OUT of this screen for someone who has no account yet.
+                It used to read "Contact support to request beta access", which
+                names no action a visitor can take on their own — they close the
+                tab. A link to a form is the same sentence with somewhere to go. */}
             <p className="mt-4 text-center text-[11.5px] text-pf-faint">
-              Not on the list? Contact support to request beta access.
+              If you don&rsquo;t have an account yet, please{" "}
+              <Link
+                href="/design/register"
+                className="rounded-pf-sm font-semibold text-pf-primary-hi underline underline-offset-2 hover:text-pf-text focus:outline-none focus-visible:ring-2 focus-visible:ring-pf-primary-hi"
+              >
+                register
+              </Link>
+              .
             </p>
           </motion.div>
         </main>

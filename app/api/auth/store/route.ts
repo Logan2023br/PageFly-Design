@@ -97,12 +97,13 @@ export async function POST(request: Request) {
       {
         ok: false,
         /* English, like every other message this route returns, and worded to
-           pair with the line already under the form: "Not on the list? Contact
-           support to request beta access." */
-        error: "This store is not on the list.",
+           pair with the line under the form — which now offers a way in rather
+           than a support address, so this one names it too. "Not on the list"
+           described our records; this describes what the merchant should do. */
+        error: "This store has not been registered yet.",
         hint: empty
           ? "No store list has been loaded yet — see README (SHEET_SERVICE_ACCOUNT_JSON or /api/admin/sync)."
-          : undefined,
+          : "Use the register link below to create an account.",
       } satisfies StoreAuthResponse,
       { status: 403 },
     );

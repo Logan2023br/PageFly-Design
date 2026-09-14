@@ -13,6 +13,7 @@ import type {
   StoreRecord,
   StoreSummary,
 } from "./types";
+import { REGISTER_USER_TYPE } from "./types";
 
 /* ==========================================================================
    Postgres. Works unchanged against Vercel Postgres, Neon and Supabase — they
@@ -943,9 +944,11 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
           `select
              (select count(*)::int from stores)                                as allowed_stores,
              (select count(*)::int from stores where last_seen_at is not null) as active_stores,
+             (select count(*)::int from stores where user_type = $1)           as registered_stores,
              (select count(*)::int from runs)                                  as total_runs,
              (select count(*)::int from run_pages)                             as total_pages,
              (select coalesce(sum(tokens),0)::int from runs)                    as total_tokens`,
+          [REGISTER_USER_TYPE],
         ),
         db.query(
           `select stars, count(*)::int as n from reviews group by stars order by stars`,
@@ -982,6 +985,7 @@ export function buildStats(
   const weighted = histogram.reduce((sum, n, i) => sum + n * (i + 1), 0);
   return {
     allowedStores: Number(totals.allowed_stores ?? 0),
+    registeredStores: Number(totals.registered_stores ?? 0),
     activeStores: Number(totals.active_stores ?? 0),
     totalRuns: Number(totals.total_runs ?? 0),
     totalPages: Number(totals.total_pages ?? 0),
