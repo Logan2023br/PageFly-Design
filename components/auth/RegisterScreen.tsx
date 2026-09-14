@@ -207,6 +207,28 @@ export function RegisterScreen() {
                       // before this code ever saw it.
                       inputMode="url"
                       autoComplete="url"
+                      /* THE WAY OUT for someone who has no store to name yet.
+                         This field is the one that can stop a visitor dead —
+                         they cannot invent a .myshopify.com address, so
+                         without this the only honest thing they can do is
+                         close the tab.
+
+                         A NEW TAB, deliberately. They are three fields into a
+                         form; navigating away in place loses what they have
+                         typed and they come back to an empty one, if they come
+                         back. `rel` is not optional with `target="_blank"` —
+                         without `noopener` the opened page gets a handle on
+                         this one through `window.opener`. */
+                      footer={
+                        <a
+                          href="https://shopify.pxf.io/DWmaZb"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-pf-sm font-semibold text-pf-primary-hi underline underline-offset-2 hover:text-pf-text focus:outline-none focus-visible:ring-2 focus-visible:ring-pf-primary-hi"
+                        >
+                          Create a Shopify account
+                        </a>
+                      }
                     />
                     <Field
                       label="Store name"
@@ -342,6 +364,7 @@ function Field({
   onEdit,
   placeholder,
   problem,
+  footer,
   ...rest
 }: {
   label: string;
@@ -350,6 +373,10 @@ function Field({
   onEdit: () => void;
   placeholder: string;
   problem: FieldProblem;
+  /** An optional line under the input — a way out for someone this field
+      cannot be answered by. Sits below the problem, so a refusal is still the
+      first thing read. */
+  footer?: React.ReactNode;
   /* The ones this component owns are omitted from the passthrough, or they
      collide: `onChange` here takes the VALUE, and the DOM's takes the event. */
 } & Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "placeholder">) {
@@ -391,6 +418,9 @@ function Field({
             )}
           </span>
         </motion.span>
+      )}
+      {footer && (
+        <span className="text-[11.5px] text-pf-faint">{footer}</span>
       )}
     </label>
   );
