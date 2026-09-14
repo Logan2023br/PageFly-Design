@@ -7,9 +7,13 @@ import { briefForPage } from "@/lib/briefForPage";
 import { useStore } from "@/lib/store";
 import { MockupPage } from "../mockup/MockupPage";
 import { Button, Icon, Tag } from "../ui";
+import type { ReactNode } from "react";
 import { useExportOptional } from "../results/ExportProvider";
 import { BriefPanel } from "./BriefPanel";
 import { DeviceFrame } from "./DeviceFrame";
+
+/** Draws one page at a width. See `renderPage` on PreviewOverlay. */
+export type RenderPage = (page: PageMockup, width: number) => ReactNode;
 
 /* ==========================================================================
    The preview overlay.
@@ -52,11 +56,13 @@ function Viewport({
   spec,
   device,
   scrub,
+  renderPage,
 }: {
   page: PageMockup;
   spec: Spec;
   device: DeviceId;
   scrub: boolean;
+  renderPage?: RenderPage;
 }) {
   const nudgeZoom = useStore((s) => s.nudgeZoom);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -118,7 +124,7 @@ function Viewport({
           scrub ? "cursor-ns-resize" : ""
         }`}
       >
-        <MockupPage page={page} width={spec.width} />
+        {renderPage ? renderPage(page, spec.width) : <MockupPage page={page} width={spec.width} />}
       </div>
 
       {/* Scroll rail, on the frame's right edge. */}
@@ -139,6 +145,7 @@ export function PreviewOverlay({
   index,
   readOnly = false,
   onStep,
+  renderPage,
 }: {
   pages: PageMockup[];
   index: number;
@@ -160,6 +167,20 @@ export function PreviewOverlay({
    * able to say what next means in that list.
    */
   onStep?: (delta: number) => void;
+  /**
+   * Draw the page some other way.
+   *
+   * ADDED FOR THE FREE COLLECTIONS, which are hand-made .pagefly files with no
+   * design tree behind them — they are drawn into an iframe by
+   * `lib/collections/pagefly.ts` rather than by `MockupPage`. Everything else
+   * on this screen is chrome that does not care: the device sizes, the zoom,
+   * Fit, Scrub, the arrows and the keyboard are all about a box of a given
+   * width, and what goes in the box is the only part that differs.
+   *
+   * A second overlay would have been the other option, and it would have been
+   * a second set of breakpoints to keep in step with these.
+   */
+  renderPage?: RenderPage;
 }) {
   const page = pages[index];
   const device = useStore((s) => s.device);
@@ -612,6 +633,7 @@ export function PreviewOverlay({
                   spec={spec}
                   device={device}
                   scrub={scrub}
+                  renderPage={renderPage}
                 />
               </motion.div>
             </div>

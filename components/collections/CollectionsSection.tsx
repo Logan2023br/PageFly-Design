@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { COLLECTIONS, shortenLabels, type CollectionMeta } from "@/lib/collections";
 import { pageToHtml, readPageflySet, type PageflyPage } from "@/lib/collections/pagefly";
+import type { PageMockup } from "@/lib/generate/types";
+import { PreviewOverlay } from "../preview/PreviewOverlay";
 import { Button, Icon, Panel } from "../ui";
 
 /* ==========================================================================
@@ -222,16 +224,54 @@ function CollectionCard({
  * So it is 1280 wide and transformed, which is also why the height is large:
  * the whole page has to exist before there is anything to scroll through.
  */
-function PagePreview({ page, scrolling }: { page: PageflyPage; scrolling: boolean }) {
+function PagePreview({
+  page,
+  scrolling,
+  width = 1280,
+}: {
+  page: PageflyPage;
+  scrolling: boolean;
+  /** the layout width to render at — a real breakpoint, not a thumbnail size */
+  width?: number;
+}) {
   const html = useHtml(page);
+  const box = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+
+  /* THE SCALE IS MEASURED, NOT CHOSEN. It was a hardcoded 0.34, which renders a
+     1280px page at 435 — into cards about 360 wide. So every preview was
+     cropped down its right edge: `Authentic K-bea`, `Up t`, `Seoul-born s`. A
+     number that has to agree with a CSS grid is a number that will eventually
+     disagree with it, so it is taken from the box itself. */
+  useEffect(() => {
+    const node = box.current;
+    if (!node) return;
+    const observer = new ResizeObserver(([entry]) =>
+      setSize({ w: entry.contentRect.width, h: entry.contentRect.height }),
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  const scale = size.w > 0 ? size.w / width : 0;
+  /* Tall enough to hold a long landing page. The document does not scroll —
+     the frame is this tall and gets moved — so a shorter page simply has white
+     beneath it, which `travel` accounts for. */
+  const tall = 4200;
+  /* How far it can move before the bottom is on screen, in the document's own
+     pixels, because that is the unit `y` is in. */
+  const travel = scale > 0 ? Math.max(0, tall - size.h / scale) : 0;
 
   return (
-    <div className="absolute inset-0 overflow-hidden">
+    <div ref={box} className="absolute inset-0 overflow-hidden">
+      {scale > 0 && (
       <motion.div
         className="absolute left-0 top-0 origin-top-left"
-        style={{ width: 1280, height: 3600, transform: "scale(0.34)" }}
-        animate={{ y: scrolling ? -1800 : 0 }}
-        transition={{ duration: scrolling ? 7 : 0.5, ease: "linear" }}
+        style={{ width, height: tall, scale }}
+        animate={{ y: scrolling ? -travel : 0 }}
+        /* Paced by distance rather than fixed, so a short page does not crawl
+           and a long one does not race. */
+        transition={{ duration: scrolling ? Math.max(4, travel / 260) : 0.5, ease: "linear" }}
       >
         <iframe
           title={page.label}
@@ -244,6 +284,7 @@ function PagePreview({ page, scrolling }: { page: PageflyPage; scrolling: boolea
           className="pointer-events-none size-full border-0"
         />
       </motion.div>
+      )}
     </div>
   );
 }
@@ -272,6 +313,35 @@ function CollectionDetail({
   const state = useCollection(collection.file, true);
   const pages = state.status === "ready" ? state.pages : [];
   const labels = shortenLabels(pages.map((p) => p.label));
+  const [viewing, setViewing] = useState<number | null>(null);
+  /* Hover scrolls the page here too. It was on the set card and not on these,
+     which made the seven read as pictures of pages rather than pages. */
+  const [hovering, setHovering] = useState<number | null>(null);
+
+  /* ==========================================================================
+     THE APP'S OWN PREVIEW, NOT A SECOND ONE.
+
+     `PreviewOverlay` is where every other page in this product is looked at —
+     1440/1280/834/390, zoom, Fit, Scrub, arrow keys, Esc. A viewer built here
+     would have been a second set of breakpoints to keep in step with those,
+     and a merchant learning two ways to look at a page.
+
+     It takes `PageMockup[]`, and these are .pagefly files with no design tree
+     behind them. But the overlay reads only six fields off a page — id, label,
+     categoryLabel, copyIndex, copyTotal, variant — and takes the DRAWING from
+     `renderPage`. So the shim carries those six honestly and the iframe does
+     the rest. */
+  const shims = pages.map(
+    (page, i) =>
+      ({
+        id: `${collection.slug}-${i}`,
+        label: labels[i] ?? page.label,
+        categoryLabel: collection.name,
+        copyIndex: i + 1,
+        copyTotal: pages.length,
+        variant: 0,
+      }) as unknown as PageMockup,
+  );
 
   /* Escape closes it, and the listener is on the document because the panel is
      not what has focus after a card click. */
@@ -329,10 +399,24 @@ function CollectionDetail({
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {pages.map((page, i) => (
-            <Panel key={page.label} className="overflow-hidden">
-              <div className="relative aspect-[3/4] bg-pf-bg-deep">
-                <PagePreview page={page} scrolling={false} />
-              </div>
+            <Panel
+              key={page.label}
+              className="group overflow-hidden transition-shadow duration-200 hover:border-pf-primary-hi/50 hover:shadow-pf-glow"
+            >
+              <button
+                type="button"
+                onClick={() => setViewing(i)}
+                onMouseEnter={() => setHovering(i)}
+                onMouseLeave={() => setHovering(null)}
+                className="relative block aspect-[3/4] w-full bg-pf-bg-deep"
+                aria-label={`Open ${labels[i]}`}
+              >
+                <PagePreview page={page} scrolling={hovering === i} />
+                <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center gap-1.5 bg-gradient-to-t from-pf-bg/85 to-transparent pb-2.5 pt-7 text-[11.5px] font-semibold text-pf-text opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                  <Icon name="Maximize" size={12} />
+                  Open
+                </span>
+              </button>
               <div className="flex items-center justify-between gap-2 border-t border-pf-border px-3 py-2.5">
                 <span className="min-w-0 truncate text-[12.5px] font-semibold text-pf-text">
                   {labels[i]}
@@ -345,6 +429,41 @@ function CollectionDetail({
           ))}
         </div>
       </div>
+
+      {/* The app's own preview, over the set. Rendered here rather than beside
+          the grid so the grid keeps its scroll position underneath. */}
+      <AnimatePresence>
+        {viewing !== null && pages[viewing] && (
+          <PreviewOverlay
+            pages={shims}
+            index={viewing}
+            readOnly
+            onStep={(delta) =>
+              setViewing((was) =>
+                was === null ? was : (was + delta + pages.length) % pages.length,
+              )
+            }
+            renderPage={(_, width) => (
+              <iframe
+                title={labels[viewing]}
+                srcDoc={pageToHtml(pages[viewing])}
+                sandbox=""
+                /* Width comes from the device the overlay is set to, and the
+                   page's own media queries do the rest — `pageToHtml` writes
+                   the file's laptop/tablet/mobile keys out as real media
+                   queries, and `customCSS` arrives with whatever the designer
+                   wrote. So narrowing the frame runs the page's actual
+                   responsive rules rather than shrinking a picture of it.
+
+                   Tall and fixed because the overlay's own container is what
+                   scrolls; an iframe cannot size itself to its content across
+                   a document boundary. */
+                style={{ width, height: 5200, border: 0, display: "block" }}
+              />
+            )}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
