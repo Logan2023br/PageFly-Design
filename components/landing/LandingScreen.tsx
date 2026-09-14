@@ -10,6 +10,7 @@ import type { ProvisionResponse } from "@/app/api/auth/provision/route";
 import { GradientWord, Icon } from "../ui";
 import { Aura } from "./Aura";
 import { Counts } from "./Counts";
+import { CollectionsSection } from "../collections/CollectionsSection";
 import { HowItWorks } from "./HowItWorks";
 import { Showcase } from "./Showcase";
 
@@ -394,6 +395,18 @@ export function LandingScreen() {
 
       <Showcase pages={pages} />
       <HowItWorks />
+
+      {/* TEMPORARY, AND HERE TO BE LOOKED AT. This section's real home is under
+          the build screen, where a merchant has fifteen minutes and nothing to
+          read — but reaching it there costs a fifteen-minute build every time
+          somebody wants to check a change to it. On the landing page it is one
+          page load.
+
+          Nothing about it is landing-specific, so moving it back is deleting
+          these four lines. */}
+      <div className="mx-auto max-w-6xl px-5">
+        <CollectionsSection />
+      </div>
 
       {/* The counts and the closing ask are ONE band now. Apart, they were two
           quiet sections doing the same job — persuade — separated by a rule
