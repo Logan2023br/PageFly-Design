@@ -2032,6 +2032,62 @@ async function main(): Promise<void> {
     );
   }
 
+  /* ---- the before/after slider, which had no shape of its own ----------
+
+     It carried no ratio and no `object-fit`, so the element took the natural
+     height of whatever photograph the filler resolved — a portrait shot made a
+     band three screens tall — and the two images kept their own heights, so the
+     before ended where the after did not and the handle compared a picture
+     against white.
+
+     The selectors asserted here are the ones `MD Json PageFly/fields.md`
+     documents for this element, not guesses at its markup: a rule written
+     against the wrong class applies to nothing, renders as the bug it was
+     meant to fix, and reports no error anywhere. */
+
+  console.log("\na before/after slider");
+
+  {
+    const ba = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "beforeAfter",
+              beforeQuery: "room empty",
+              afterQuery: "room furnished",
+              beforeLabel: "Before",
+              afterLabel: "After",
+            },
+          ],
+          "split",
+        ),
+      ],
+    }, "ba", { images: { "room empty": "https://x/a.jpg", "room furnished": "https://x/b.jpg" } });
+
+    const el = ba.items.find((i) => i.type === "ImageComparison");
+    check(Boolean(el), "PageFly's own element");
+
+    const root = ba.cssOf(el?.id ?? "");
+    check(/aspect-ratio:\s*1\s*\/\s*1/.test(root), "square, so a portrait photo cannot make it three screens tall", root);
+
+    /* Both halves, because one of them covering is worse than neither: the
+       slider would then compare a filled frame against a letterboxed one. */
+    for (const half of ["before", "after"]) {
+      const css = ba.cssOf(el?.id ?? "", "all", `& .pf-ba-${half} img`);
+      check(
+        /object-fit:\s*cover/.test(css) && /height:\s*100%/.test(css),
+        `the ${half} image fills its half`,
+        css || "(no rule)",
+      );
+    }
+
+    check(
+      /height:\s*100%/.test(ba.cssOf(el?.id ?? "", "all", "& .pf-ba-content")),
+      "and the content box is the full square",
+    );
+  }
+
   console.log();
   console.log(failures === 0 ? "PASS" : `FAIL — ${failures} problem${failures === 1 ? "" : "s"}`);
   if (failures) process.exitCode = 1;

@@ -984,6 +984,34 @@ export function COUNTDOWN(
   );
 }
 
+/* ==========================================================================
+   THE SHAPE OF THE BOX, AND OF THE TWO PICTURES IN IT.
+
+   Neither was being stated, and both have to be. With no ratio on the root the
+   element takes the natural height of whatever photograph the filler resolved,
+   so a portrait shot made a band three screens tall; and with no `object-fit`
+   on the two images they keep their own heights, so the before and the after
+   ended at different points and the slider compared one picture against a
+   white gap.
+
+   The selectors are the ones `MD Json PageFly/fields.md` documents for this
+   element — `& .pf-ba-content`, `& .pf-ba-before img`, `& .pf-ba-after img` —
+   not guesses at its markup. `cover` rather than `contain`: a comparison
+   slider whose halves are letterboxed is comparing two frames, not two
+   photographs.
+
+   ONE-TO-ONE, AND THE MOCKUP SAYS THE SAME. `lib/design/render.tsx` draws this
+   node at the same ratio; the two are meant to be checkable against each other
+   and a square here with 4:3 there is exactly the drift the one-tree design
+   exists to prevent. Changing the ratio means changing both.
+   ========================================================================== */
+const BEFORE_AFTER_PARTS: Record<string, string> = {
+  "&": "aspect-ratio: 1 / 1;",
+  "& .pf-ba-content": "height: 100%; overflow: hidden;",
+  "& .pf-ba-before img": "width: 100%; height: 100%; object-fit: cover;",
+  "& .pf-ba-after img": "width: 100%; height: 100%; object-fit: cover;",
+};
+
 export function BEFORE_AFTER(
   before: string,
   after: string,
@@ -1006,7 +1034,18 @@ export function BEFORE_AFTER(
       imgQuality: "auto",
       loading: "lazy",
     },
-    styleData,
+    /* The parts go in AFTER the caller's own rules so the ratio wins over a
+       height the design may have written — and the `&` entry is appended to
+       whatever the caller put there rather than replacing it, or a background
+       or a border set on the node would vanish. */
+    {
+      ...(styleData ?? {}),
+      all: {
+        ...(styleData?.all ?? {}),
+        ...BEFORE_AFTER_PARTS,
+        "&": `${styleData?.all?.["&"] ?? ""} ${BEFORE_AFTER_PARTS["&"]}`.trim(),
+      },
+    },
     [],
   );
 }

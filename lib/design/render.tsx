@@ -1076,7 +1076,11 @@ function BeforeAfter({ node, cls }: { node: Extract<DesignNode, { type: "beforeA
         [after, node.afterLabel],
       ].map(([src, label], i) => (
         <div key={i} style={{ flex: 1, minWidth: 0, position: "relative" }}>
-          <div style={{ width: "100%", aspectRatio: "1 / 0.75", background: "#E8E8EC", overflow: "hidden" }}>
+          {/* 1:1. The exported element carries the same ratio — see
+              BEFORE_AFTER_PARTS in lib/pagefly/builder.ts — and the two are
+              meant to be checkable against each other, so changing one without
+              the other is the drift this design exists to prevent. */}
+          <div style={{ width: "100%", aspectRatio: "1 / 1", background: "#E8E8EC", overflow: "hidden" }}>
             {src && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
