@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { COLLECTIONS, shortenLabels, shotFor, type CollectionMeta } from "@/lib/collections";
 import { pageToHtml, readPageflySet, type PageflyPage } from "@/lib/collections/pagefly";
@@ -473,10 +474,31 @@ function CollectionDetail({
         </div>
       </div>
 
-      {/* The app's own preview, over the set. Rendered here rather than beside
-          the grid so the grid keeps its scroll position underneath. */}
-      <AnimatePresence>
-        {viewing !== null && pages[viewing] && (
+      {/* ==========================================================================
+          PORTALLED TO THE BODY, and it has to be — twice over.
+
+          `position: fixed` is relative to the viewport UNLESS an ancestor
+          establishes a containing block, and `backdrop-filter` does. The panel
+          around this grid has `backdrop-blur-sm` and scrolls, so the overlay's
+          `fixed inset-0` was anchored to a scrolled box rather than to the
+          screen: read to the bottom of a page and the overlay went with it,
+          showing the grid through and around a frame floating mid-air.
+
+          And the panel closes on click. The overlay was inside it, so every
+          press inside the overlay bubbled up and closed the set — which is
+          what made the device buttons read as a Close button. A portal does
+          not fix that on its own, because React events propagate through the
+          React tree rather than the DOM one, so the wrapper stops them.
+          ========================================================================== */}
+      {viewing !== null &&
+        pages[viewing] &&
+        /* `document` does not exist during the server render. No mounted flag
+           is needed for it: `viewing` starts null and only becomes a number
+           from a click, so the server never reaches this branch and there is
+           nothing for the client to disagree with. */
+        typeof document !== "undefined" &&
+        createPortal(
+          <div onClick={(e) => e.stopPropagation()}>
           <PreviewOverlay
             pages={shims}
             index={viewing}
@@ -524,8 +546,9 @@ function CollectionDetail({
               );
             }}
           />
+          </div>,
+          document.body,
         )}
-      </AnimatePresence>
     </motion.div>
   );
 }
