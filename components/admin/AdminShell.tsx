@@ -14,11 +14,20 @@ import { Icon } from "../ui";
    between the two should not feel like they changed products.
    ========================================================================== */
 
-export type AdminSection = "stats" | "users" | "training";
+export type AdminSection = "stats" | "users" | "analytics" | "training";
 
 const NAV: { id: AdminSection; label: string; href: string; icon: IconName }[] = [
   { id: "stats", label: "Thống kê", href: "/design/admin", icon: "ChartColumn" },
   { id: "users", label: "Users", href: "/design/admin/users", icon: "Users" },
+  /* Under Users, as asked. "Thống kê" above it counts what the product has
+     produced — stores, pages, tokens; this counts what people DID on the way
+     to producing it, which is a different question and a different screen. */
+  {
+    id: "analytics",
+    label: "Analytics",
+    href: "/design/admin/analytics",
+    icon: "TrendingUp",
+  },
   {
     id: "training",
     label: "Training Design",
