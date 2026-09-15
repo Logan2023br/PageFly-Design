@@ -4,7 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { EV, track, type Surface } from "@/lib/analytics";
-import { COLLECTIONS, shortenLabels, shotFor, type CollectionMeta } from "@/lib/collections";
+import {
+  COLLECTIONS,
+  COLLECTIONS_VISIBLE,
+  shortenLabels,
+  shotFor,
+  type CollectionMeta,
+} from "@/lib/collections";
 import {
   combinePagefly,
   pageToHtml,
@@ -39,7 +45,9 @@ import { Button, Icon, Panel } from "../ui";
 export function CollectionsSection({ surface }: { surface: Surface }) {
   const [open, setOpen] = useState<CollectionMeta | null>(null);
 
-  if (COLLECTIONS.length === 0) return null;
+  /* Off for now — see `COLLECTIONS_VISIBLE`. Everything behind it is intact
+     and still tested; only the rendering stops. */
+  if (!COLLECTIONS_VISIBLE || COLLECTIONS.length === 0) return null;
 
   return (
     <section className="mt-14 border-t border-pf-border pt-9">

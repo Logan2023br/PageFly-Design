@@ -240,4 +240,15 @@ export type Surface =
   | "landing_collections"
   | "building_collections"
   | "results"
-  | "export_popup";
+  | "export_popup"
+  /* THE TOP BAR, ONE VALUE PER SCREEN. It is the same button in the same place
+     on six screens, and lumping them into one `topbar` would be the mistake
+     the collection exports already made: a number that adds up correctly and
+     cannot say whether it works on the landing page or only for people already
+     signed in. */
+  | "topbar_landing"
+  | "topbar_login"
+  | "topbar_register"
+  | "topbar_design"
+  | "topbar_library"
+  | "topbar_feedback";

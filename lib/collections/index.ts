@@ -18,6 +18,21 @@
    and what they get cannot drift apart.
    ========================================================================== */
 
+/* ==========================================================================
+   TEMPORARILY OFF, AND NOTHING IS DELETED.
+
+   The sets, the reader, the renderer, the screenshots and the export are all
+   still here and still tested — the section simply does not render, on the
+   landing page or on the build screen. Turning it back on is this one line.
+
+   A flag rather than commenting out the two mount sites: a commented-out
+   component is a thing somebody has to reconstruct, and the two call sites
+   would drift apart while it waited. This way the only difference between off
+   and on is a boolean, and everything below it goes on being compiled and
+   type-checked.
+   ========================================================================== */
+export const COLLECTIONS_VISIBLE = false;
+
 export type CollectionMeta = {
   /** url-safe, and the key everything else is looked up by */
   slug: string;

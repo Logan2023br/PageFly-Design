@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { InstallPageFlyButton } from "../pagefly/InstallPageFly";
 import { EV, track } from "@/lib/analytics";
 import type { PageMockup } from "@/lib/generate/types";
 import { cleanedUrl, inviteParams, loginParam, type Invite } from "@/lib/autoSignIn";
@@ -314,6 +315,10 @@ export function LandingScreen() {
           Only the header moves. The sections below keep their narrower measures,
           which is what they are for. */}
       <header className="mx-auto flex w-full max-w-[1600px] items-center justify-between px-4 py-5 sm:px-6">
+        {/* The logo and the install button are ONE GROUP, or `justify-between`
+            spreads three children evenly and puts the button in the middle of
+            the header rather than beside the wordmark. */}
+        <div className="flex items-center gap-3">
         <Link href="/" className="flex items-center gap-2.5">
           <Image
             src="/pagefly-icon.png"
@@ -327,6 +332,9 @@ export function LandingScreen() {
             PageFly <span className="text-pf-muted">Design</span>
           </span>
         </Link>
+
+        <InstallPageFlyButton size="sm" surface="topbar_landing" />
+        </div>
 
         {/* Nothing until the session is known — see `domain` above. */}
         {domain === undefined ? null : domain ? (

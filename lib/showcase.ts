@@ -62,7 +62,7 @@ export type ShowcasePage = Pick<
  * gives: this has now been empty on production twice because a value lived only
  * in a `.env.local`. A default in the repo is a default that deploys.
  */
-const BUILTIN_SHOWCASE_STORE = "ts.myshopify.com";
+const BUILTIN_SHOWCASE_STORE = "collectionpages.myshopify.com";
 
 /**
  * How many pages the marquee may carry.

@@ -517,6 +517,12 @@ export async function GET(request: Request) {
     building_collections: "While building · Collections",
     results: "Finished deck",
     export_popup: "Popup after an export",
+    topbar_landing: "Top bar · Landing",
+    topbar_login: "Top bar · Sign in",
+    topbar_register: "Top bar · Register",
+    topbar_design: "Top bar · Design",
+    topbar_library: "Top bar · Library",
+    topbar_feedback: "Top bar · Feedback",
   };
 
   const shared: SharedBlock[] = [

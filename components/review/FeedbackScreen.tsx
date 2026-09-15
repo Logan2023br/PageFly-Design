@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
+import { InstallPageFlyButton } from "../pagefly/InstallPageFly";
 import type { FeedbackResponse } from "@/app/api/customer-feedback/route";
 import { Button, Eyebrow, GradientWord, Icon, Panel } from "../ui";
 import { StarRating } from "./StarRating";
@@ -96,6 +97,8 @@ export function FeedbackScreen({ domain }: { domain: string | null }) {
               PageFly <span className="text-pf-muted">Design</span>
             </span>
           </Link>
+        {/* Right of the logo, which is all these headers carry. */}
+        <InstallPageFlyButton size="sm" surface="topbar_feedback" />
         </header>
 
         <main className="grid place-items-center px-2 pt-[8vh] sm:pt-[11vh]">

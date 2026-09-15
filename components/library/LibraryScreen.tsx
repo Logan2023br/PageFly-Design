@@ -4,6 +4,7 @@ import { AnimatePresence, MotionConfig } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { InstallPageFlyButton } from "../pagefly/InstallPageFly";
 import type { Account } from "@/lib/account";
 import type { Brief } from "@/lib/validation";
 import type { PageMockup } from "@/lib/generate/types";
@@ -221,6 +222,11 @@ export function LibraryScreen({
                   </span>
                 </Link>
                 <PageQuota />
+                {/* AFTER THE QUOTA, NOT BEFORE. The two things left of the logo
+                    are about this merchant — who they are and how much they have
+                    left — and an advertisement inserted between them would read
+                    as one of them. */}
+                <InstallPageFlyButton size="sm" surface="topbar_library" />
               </div>
               <WorkspaceNav current="library" />
               <StoreMenu />

@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { InstallPageFlyButton } from "../pagefly/InstallPageFly";
 import { EV, track } from "@/lib/analytics";
 import type { RegisterResponse } from "@/app/api/auth/register/route";
 import {
@@ -200,6 +201,8 @@ export function RegisterScreen() {
               PageFly <span className="text-pf-muted">Design</span>
             </span>
           </Link>
+        {/* Right of the logo, which is all these headers carry. */}
+        <InstallPageFlyButton size="sm" surface="topbar_register" />
         </header>
 
         <main className="grid place-items-center px-2 pt-[9vh] sm:pt-[12vh]">

@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
+import { InstallPageFlyButton } from "./pagefly/InstallPageFly";
 import { useStore, type Screen } from "@/lib/store";
 import { useAccount } from "./AccountProvider";
 import { StoreMenu } from "./StoreMenu";
@@ -130,6 +131,11 @@ export function ProgressSteps() {
           </span>
         </Link>
         <PageQuota />
+        {/* AFTER THE QUOTA, NOT BEFORE. The two things left of the logo
+            are about this merchant — who they are and how much they have
+            left — and an advertisement inserted between them would read
+            as one of them. */}
+        <InstallPageFlyButton size="sm" surface="topbar_design" />
       </div>
 
       <WorkspaceNav current="design" />

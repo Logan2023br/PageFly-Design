@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { InstallPageFlyButton } from "../pagefly/InstallPageFly";
 import { EV, track } from "@/lib/analytics";
 import type { StoreAuthResponse } from "@/app/api/auth/store/route";
 import { Button, Eyebrow, GradientWord, Icon, Panel } from "../ui";
@@ -127,6 +128,8 @@ export function LoginScreen({ next }: { next: string }) {
               PageFly <span className="text-pf-muted">Design</span>
             </span>
           </Link>
+        {/* Right of the logo, which is all these headers carry. */}
+        <InstallPageFlyButton size="sm" surface="topbar_login" />
         </header>
 
         <main className="grid place-items-center px-2 pt-[9vh] sm:pt-[12vh]">
