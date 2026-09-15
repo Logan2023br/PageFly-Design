@@ -1011,6 +1011,25 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       }));
     },
 
+    async countEventTotals(from, to) {
+      await ready();
+      const { rows } = await db.query(
+        `select name, count(*)::int as n,
+                count(distinct visitor_id)::int as v,
+                count(distinct domain)::int     as d
+           from events
+          where created_at >= $1 and created_at < $2
+          group by name`,
+        [from, to],
+      );
+      return rows.map((r) => ({
+        name: String(r.name),
+        count: Number(r.n),
+        visitors: Number(r.v),
+        stores: Number(r.d),
+      }));
+    },
+
     async stats() {
       await ready();
       const [totals, reviews, daily] = await Promise.all([

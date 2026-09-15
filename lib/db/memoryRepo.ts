@@ -576,6 +576,27 @@ export function createMemoryRepo(file: string): Repo {
         .sort((a, b) => b.count - a.count);
     },
 
+    async countEventTotals(from, to) {
+      sync();
+      const by = new Map<string, { count: number; visitors: Set<string>; stores: Set<string> }>();
+
+      for (const e of data.events) {
+        if (e.createdAt < from || e.createdAt >= to) continue;
+        const hit = by.get(e.name) ?? { count: 0, visitors: new Set<string>(), stores: new Set<string>() };
+        hit.count++;
+        hit.visitors.add(e.visitorId);
+        if (e.domain) hit.stores.add(e.domain);
+        by.set(e.name, hit);
+      }
+
+      return [...by.entries()].map(([name, b]) => ({
+        name,
+        count: b.count,
+        visitors: b.visitors.size,
+        stores: b.stores.size,
+      }));
+    },
+
     async stats() {
       sync();
       const histogram = [0, 0, 0, 0, 0];

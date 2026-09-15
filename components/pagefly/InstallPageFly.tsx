@@ -1,5 +1,6 @@
 "use client";
 
+import { EV, track, type Surface } from "@/lib/analytics";
 import { PAGEFLY_INSTALL_URL } from "@/lib/pagefly/install";
 import { Icon } from "../ui";
 
@@ -21,9 +22,14 @@ import { Icon } from "../ui";
 export function InstallPageFlyButton({
   size = "md",
   className = "",
+  surface,
 }: {
   size?: "sm" | "md" | "lg";
   className?: string;
+  /** Which screen this one is on. Required, not defaulted: a default would be
+      a wrong answer that never looks wrong — the count would land under some
+      other placement and the comparison it exists for would be quietly off. */
+  surface: Surface;
 }) {
   const sizes = {
     sm: "h-8 px-3 text-[12.5px] gap-1.5",
@@ -36,6 +42,7 @@ export function InstallPageFlyButton({
       href={PAGEFLY_INSTALL_URL}
       target="_blank"
       rel="noopener noreferrer"
+      onClick={() => track(EV.pageflyInstallClicked, { surface })}
       className={`inline-flex shrink-0 items-center justify-center rounded-pf-md bg-pf-primary font-semibold text-white shadow-pf-button transition-colors duration-150 hover:bg-pf-primary-hi ${sizes} ${className}`}
     >
       Install PageFly
@@ -51,7 +58,13 @@ export function InstallPageFlyButton({
  * reading it has usually already installed PageFly, because that is how they
  * came to be here. A line of text is enough for the ones who have not.
  */
-export function InstallPageFlyLink({ className = "" }: { className?: string }) {
+export function InstallPageFlyLink({
+  className = "",
+  surface,
+}: {
+  className?: string;
+  surface: Surface;
+}) {
   return (
     <span className={`text-[11.5px] text-pf-faint ${className}`}>
       Need the app to open these?{" "}
@@ -59,6 +72,7 @@ export function InstallPageFlyLink({ className = "" }: { className?: string }) {
         href={PAGEFLY_INSTALL_URL}
         target="_blank"
         rel="noopener noreferrer"
+        onClick={() => track(EV.pageflyInstallClicked, { surface })}
         className="rounded-pf-sm font-semibold text-pf-primary-hi underline underline-offset-2 hover:text-pf-text focus:outline-none focus-visible:ring-2 focus-visible:ring-pf-primary-hi"
       >
         Install PageFly

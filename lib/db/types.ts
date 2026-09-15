@@ -476,6 +476,16 @@ export type Repo = {
   /* ---- analytics ---- */
   recordEvents(events: EventRecord[]): Promise<void>;
   countEvents(from: string, to: string): Promise<EventCount[]>;
+  /**
+   * The same window, grouped by NAME ALONE.
+   *
+   * `countEvents` groups by name AND parameters, which is what a breakdown
+   * needs and what a distinct-people count cannot be built from: somebody who
+   * pressed the install button on two screens appears in two groups, so the
+   * largest group is a FLOOR and the sum is a ceiling, and neither is the
+   * answer. Only the database can intersect them.
+   */
+  countEventTotals(from: string, to: string): Promise<EventTotal[]>;
 
   /* ---- admin ---- */
   listStoreSummaries(): Promise<StoreSummary[]>;
@@ -515,6 +525,14 @@ export type EventRecord = {
   /** the signed-in store, when there is one */
   domain: string | null;
   createdAt: string;
+};
+
+/** One event name, counted across every combination of its parameters. */
+export type EventTotal = {
+  name: string;
+  count: number;
+  visitors: number;
+  stores: number;
 };
 
 /** One event name and one combination of its parameters, counted. */

@@ -2,7 +2,13 @@
 
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import type { AnalyticsResponse, AnalyticsView as View, Slice } from "@/app/api/admin/analytics/route";
+import type {
+  AnalyticsResponse,
+  AnalyticsView as View,
+  PageBlock,
+  SharedBlock,
+  Slice,
+} from "@/app/api/admin/analytics/route";
 import type { IconName } from "@/lib/icons";
 import { CountUp, Icon, Panel } from "../ui";
 import { StatTile, TileGroup, TileRow } from "./StatTile";
@@ -195,12 +201,41 @@ export function AnalyticsView() {
 
       {view && !view.empty && (
         <>
+          {/* The funnel first, because it is the only thing here that crosses
+              screens — which is what a funnel is. Everything below answers a
+              different question: given one screen, what happens on it. */}
           <Funnel view={view} />
           <SigninTiles view={view} />
-          <CtaTiles view={view} />
           <RegisterTiles view={view} />
           <BuildTiles view={view} />
-          <FieldTiles view={view} />
+
+          <div className="mt-2 border-t border-pf-border pt-6">
+            <h2 className="font-display text-[16px] font-semibold tracking-[-0.02em] text-pf-text">
+              Screen by screen
+            </h2>
+            <p className="mt-0.5 text-[11.5px] text-pf-muted">
+              Every event, filed under the screen it fires from. Nothing is
+              counted in two blocks.
+            </p>
+          </div>
+
+          {view.pages.map((page) => (
+            <PageSection key={page.key} page={page} />
+          ))}
+
+          <div className="mt-2 border-t border-pf-border pt-6">
+            <h2 className="font-display text-[16px] font-semibold tracking-[-0.02em] text-pf-text">
+              Across the product
+            </h2>
+            <p className="mt-0.5 text-[11.5px] text-pf-muted">
+              Elements that exist on more than one screen, counted per screen
+              and in total.
+            </p>
+          </div>
+
+          {view.shared.map((block) => (
+            <SharedSection key={block.key} block={block} />
+          ))}
 
           <RawTable view={view} />
 
@@ -405,36 +440,7 @@ function SigninTile({
 
 /* ---- CTA ----------------------------------------------------------------- */
 
-const CTA_ICON: Record<string, IconName> = {
-  hero: "Sparkles",
-  closing: "ChevronDown",
-  header_signin: "LogIn",
-  header_store: "Building2",
-};
 
-function CtaTiles({ view }: { view: View }) {
-  if (view.cta.length === 0) return null;
-  const peak = Math.max(...view.cta.map((c) => c.count), 1);
-
-  return (
-    <TileGroup
-      title="Which CTA gets pressed"
-      note="Hero and closing are Design now; the header pair belong to people who already have an account"
-    >
-      {view.cta.map((c, i) => (
-        <StatTile
-          key={c.key}
-          icon={CTA_ICON[c.key] ?? "ArrowUpRight"}
-          label={c.label}
-          value={c.count}
-          footnote={`${c.visitors.toLocaleString()} ${c.visitors === 1 ? "person" : "people"}`}
-          ratio={c.count / peak}
-          delay={Math.min(i * 0.04, 0.2)}
-        />
-      ))}
-    </TileGroup>
-  );
-}
 
 /* ---- the cost of a second screen ----------------------------------------- */
 
@@ -555,55 +561,159 @@ function BuildTiles({ view }: { view: View }) {
 
 /* ---- registration and the gallery ---------------------------------------- */
 
-function FieldTiles({ view }: { view: View }) {
-  const fields = view.registerFields;
-  const gallery = view.gallery;
-  if (fields.length === 0 && gallery.length === 0) return null;
 
-  const fieldPeak = Math.max(...fields.map((f) => f.count), 1);
-  const galleryPeak = Math.max(...gallery.map((g) => g.count), 1);
+/* ---- one screen ---------------------------------------------------------- */
+
+/**
+ * Every metric on one screen, four tiles to a row, with its splits under it.
+ *
+ * The path is printed beside the title because "Brief", "While it builds" and
+ * "The finished deck" are all `/design` — three moments on one address, and a
+ * heading alone would leave somebody wondering which page is meant.
+ */
+function PageSection({ page }: { page: PageBlock }) {
+  const top = Math.max(...page.metrics.map((m) => m.count), 1);
 
   return (
-    <>
-      {fields.length > 0 && (
-        <TileGroup
-          title="What stops people registering"
-          note="Every field a refused submission named, so a form failing on three boxes counts three"
-        >
-          {fields.map((f, i) => (
-            <StatTile
-              key={f.key}
-              icon="CircleAlert"
-              label={f.label}
-              value={f.count}
-              footnote="refusals named this box"
-              ratio={f.count / fieldPeak}
-              tone="danger"
-              delay={Math.min(i * 0.04, 0.2)}
-            />
-          ))}
-        </TileGroup>
-      )}
+    <section className="grid gap-3">
+      <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+        <h3 className="text-[13.5px] font-semibold text-pf-text">{page.title}</h3>
+        <code className="rounded-pf-sm bg-pf-bg-deep px-1.5 py-0.5 font-mono text-[11px] text-pf-muted">
+          {page.path}
+        </code>
+        <p className="w-full text-[11.5px] leading-snug text-pf-muted">{page.note}</p>
+      </div>
 
-      {gallery.length > 0 && (
-        <TileGroup
-          title="Gallery, by page type"
-          note="Which templates a visitor opens before deciding"
-        >
-          {gallery.slice(0, 8).map((g, i) => (
-            <StatTile
-              key={g.key}
-              icon="Images"
-              label={g.label}
-              value={g.count}
-              footnote={`${g.visitors.toLocaleString()} ${g.visitors === 1 ? "person" : "people"}`}
-              ratio={g.count / galleryPeak}
-              delay={Math.min(i * 0.04, 0.3)}
-            />
-          ))}
-        </TileGroup>
-      )}
-    </>
+      <TileRow>
+        {page.metrics.map((m, i) => (
+          <StatTile
+            key={m.key}
+            icon={METRIC_ICON[m.key] ?? "ChartColumn"}
+            label={m.label}
+            value={m.count}
+            footnote={[
+              m.note,
+              /* The people count, whenever it differs from the presses. Read
+                 alone by somebody who has just pressed a button five times, a
+                 `5` and a `1` are the same shape of surprise in opposite
+                 directions. */
+              /* The distinct count, whenever it differs from the presses. A
+                 tile showing 5 presses by 1 person and a tile showing 5 by 5
+                 are different findings and the same number. */
+              m.people > 0 && m.people !== m.count
+                ? `${m.people.toLocaleString()} distinct`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+            ratio={m.count / top}
+            delay={Math.min(i * 0.03, 0.2)}
+          />
+        ))}
+      </TileRow>
+
+      {page.metrics
+        .filter((m) => m.split && m.split.length > 0)
+        .map((m) => (
+          <Split key={`${m.key}-split`} label={m.label} rows={m.split!} />
+        ))}
+    </section>
+  );
+}
+
+/** One metric's breakdown, as a row of bars under the tiles it belongs to. */
+function Split({ label, rows }: { label: string; rows: Slice[] }) {
+  const peak = Math.max(...rows.map((r) => r.count), 1);
+
+  return (
+    <div className="rounded-pf-md border border-pf-border bg-pf-card/40 p-3.5">
+      <p className="text-[11.5px] font-semibold text-pf-body">{label}, split</p>
+      <div className="mt-2.5 grid gap-2">
+        {rows.map((r) => (
+          <div key={r.key} className="flex items-center gap-2.5">
+            <span className="w-40 shrink-0 truncate text-[11.5px] text-pf-muted">{r.label}</span>
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-pf-bg-deep">
+              <motion.div
+                className="h-full rounded-full bg-pf-primary"
+                initial={{ width: 0 }}
+                animate={{ width: `${Math.max((r.count / peak) * 100, 1.5)}%` }}
+                transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+              />
+            </div>
+            <span className="w-10 shrink-0 text-right text-[11.5px] font-semibold tabular-nums text-pf-text">
+              {r.count.toLocaleString()}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const METRIC_ICON: Record<string, IconName> = {
+  viewed: "Eye",
+  cta: "Sparkles",
+  gallery: "Images",
+  submitted: "Keyboard",
+  register_link: "ArrowRight",
+  fields: "CircleAlert",
+  shopify: "ArrowUpRight",
+  done: "CircleCheck",
+  return: "LogIn",
+  mode: "ListChecks",
+  example: "FileText",
+  started: "Rocket",
+  completed: "CircleCheck",
+  failed: "CircleAlert",
+  cancelled: "ArrowLeft",
+  exported: "Download",
+  png: "Images",
+  preview: "Eye",
+  regenerate: "RefreshCw",
+  edit: "Pencil",
+};
+
+/* ---- one element, across screens ----------------------------------------- */
+
+/**
+ * THE TOTAL IS NOT THE SUM OF THE COLUMNS, and the note says so on the screen.
+ *
+ * The same person can press the install button on the landing page and again
+ * after an export. Per-screen counts answer "which placement works"; the total
+ * answers "how many did it at all". Adding the columns would produce a third
+ * number that is neither.
+ */
+function SharedSection({ block }: { block: SharedBlock }) {
+  if (block.total === 0) return null;
+  const peak = Math.max(...block.bySurface.map((s) => s.count), 1);
+
+  return (
+    <section className="grid gap-3">
+      <div>
+        <h3 className="text-[13.5px] font-semibold text-pf-text">{block.title}</h3>
+        <p className="mt-0.5 text-[11.5px] leading-snug text-pf-muted">{block.note}</p>
+      </div>
+
+      <TileRow>
+        <StatTile
+          icon="Layers"
+          label="All screens"
+          value={block.total}
+          footnote={`${block.totalPeople.toLocaleString()} distinct`}
+        />
+        {block.bySurface.map((s, i) => (
+          <StatTile
+            key={s.key}
+            icon="ArrowUpRight"
+            label={s.label}
+            value={s.count}
+            footnote={`${Math.round((s.count / block.total) * 100)}% of all presses`}
+            ratio={s.count / peak}
+            delay={Math.min((i + 1) * 0.04, 0.24)}
+          />
+        ))}
+      </TileRow>
+    </section>
   );
 }
 

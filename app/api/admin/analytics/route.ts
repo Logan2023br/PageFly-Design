@@ -1,7 +1,7 @@
 import { getRepo } from "@/lib/db";
 import { EV } from "@/lib/analytics";
 import { readAdminSession } from "@/lib/session";
-import type { EventCount } from "@/lib/db/types";
+import type { EventCount, EventTotal } from "@/lib/db/types";
 
 /* ==========================================================================
    GET /api/admin/analytics?days=30
@@ -48,8 +48,53 @@ export type AnalyticsView = {
   builds: { completed: number; failed: number; cancelled: number; started: number };
   /** completed builds, bucketed by how long they took */
   durations: { label: string; count: number }[];
+  /** one block per screen, in the order somebody meets them */
+  pages: PageBlock[];
+  /** elements that exist on more than one screen — see `SHARED` below */
+  shared: SharedBlock[];
   /** the raw grouped rows, for the table view under the charts */
   rows: EventCount[];
+};
+
+/** Everything measured on one screen. */
+export type PageBlock = {
+  key: string;
+  title: string;
+  /** the address, so nobody has to guess which screen is meant */
+  path: string;
+  note: string;
+  metrics: Metric[];
+};
+
+export type Metric = {
+  key: string;
+  label: string;
+  note: string;
+  count: number;
+  /** distinct browsers, or stores for the screens behind sign-in */
+  people: number;
+  /** a breakdown, when the event carries a parameter worth splitting on */
+  split?: Slice[];
+};
+
+/**
+ * One element, counted on every screen it appears on, and in total.
+ *
+ * THE REASON THIS SECTION EXISTS. The install button is on the landing page,
+ * inside the collections section on two different screens, under the export
+ * controls and in the popup after a download. Per-screen counts answer "which
+ * placement works"; the total answers "how many people did the thing at all",
+ * and neither can be derived from the other — the same person can press it on
+ * two screens, so the total is not a sum of the parts and a reader adding the
+ * columns up would get a number that means nothing.
+ */
+export type SharedBlock = {
+  key: string;
+  title: string;
+  note: string;
+  total: number;
+  totalPeople: number;
+  bySurface: Slice[];
 };
 
 export type AnalyticsResponse =
@@ -63,19 +108,21 @@ function sum(rows: EventCount[], name: string, where?: (p: Record<string, unknow
 }
 
 /**
- * Distinct visitors for one event name.
+ * Distinct browsers for one event name.
  *
- * AN UPPER BOUND, NOT A SUM, and the difference matters. Rows are grouped by
- * name AND parameters, so one person who pressed the hero CTA and the closing
- * one appears in two rows — adding the visitor counts would count them twice
- * and let a step outrun the step above it. The largest single group is the
- * honest floor the data supports; the true figure needs the raw ids, which
- * this deliberately does not ship to a browser.
+ * FROM THE DATABASE, GROUPED BY NAME ALONE, and it has to be. The first
+ * version took the largest of the per-parameter groups, which is a FLOOR and
+ * not an answer: somebody who pressed the install button on the landing page
+ * and again after an export is one person in two groups, so the largest group
+ * said one when two people had pressed it. Summing would have been the ceiling
+ * and equally wrong. Only the store can intersect the id sets, so only the
+ * store is asked.
+ *
+ * It was also documented as an upper bound, which was the opposite of what it
+ * computed — worth recording, because the number looked plausible either way.
  */
-function people(rows: EventCount[], name: string, where?: (p: Record<string, unknown>) => boolean) {
-  const matching = rows.filter((r) => r.name === name && (!where || where(r.props)));
-  if (matching.length === 0) return 0;
-  return Math.max(...matching.map((r) => r.visitors));
+function people(totals: EventTotal[], name: string) {
+  return totals.find((t) => t.name === name)?.visitors ?? 0;
 }
 
 /**
@@ -85,16 +132,10 @@ function people(rows: EventCount[], name: string, where?: (p: Record<string, unk
  * accounts signed into one browser are one visitor. Correct for the landing
  * page, where a store does not exist yet — and wrong for everything after
  * sign-in, where "how many stores exported a page" is plainly a question about
- * stores. It reported 1 for somebody testing with two accounts, which is the
- * right answer to a question nobody was asking.
- *
- * Same upper-bound reasoning as `people`: rows are grouped by parameters, so
- * the largest single group is what the data supports without the raw ids.
+ * stores. It reported 1 for somebody testing with two accounts.
  */
-function stores(rows: EventCount[], name: string, where?: (p: Record<string, unknown>) => boolean) {
-  const matching = rows.filter((r) => r.name === name && (!where || where(r.props)));
-  if (matching.length === 0) return 0;
-  return Math.max(...matching.map((r) => r.stores));
+function stores(totals: EventTotal[], name: string) {
+  return totals.find((t) => t.name === name)?.stores ?? 0;
 }
 
 function slices(
@@ -154,8 +195,15 @@ export async function GET(request: Request) {
   const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
 
   let rows: EventCount[];
+  let totals: EventTotal[];
   try {
-    rows = await getRepo().countEvents(from.toISOString(), to.toISOString());
+    /* Two shapes of the same window: grouped by name and parameters for the
+       breakdowns, and by name alone for the distinct counts, which cannot be
+       derived from the first. */
+    [rows, totals] = await Promise.all([
+      getRepo().countEvents(from.toISOString(), to.toISOString()),
+      getRepo().countEventTotals(from.toISOString(), to.toISOString()),
+    ]);
   } catch (err) {
     return Response.json(
       { ok: false, error: (err as Error).message } satisfies AnalyticsResponse,
@@ -189,23 +237,32 @@ export async function GET(request: Request) {
       key: "landing",
       label: "Landing",
       note: "Everyone who saw the front page",
-      visitors: people(rows, EV.landingViewed),
+      visitors: people(totals, EV.landingViewed),
       events: sum(rows, EV.landingViewed),
       unit: "browser" as const,
     },
     {
       key: "cta",
       label: "Pressed a CTA",
-      note: "Design now, hero or closing",
-      visitors: people(rows, EV.ctaClicked, (p) => p.location === "hero" || p.location === "closing"),
-      events: sum(rows, EV.ctaClicked, (p) => p.location === "hero" || p.location === "closing"),
+      note: "Every link to /design — split four ways on the landing block below",
+      /* EVERY LINK TO /design, HEADER ONES INCLUDED, now that the count comes
+         from the database grouped by name. The filtered version was the last
+         caller that needed a per-parameter count, and keeping it would have
+         meant keeping the max-of-groups floor for exactly the step with the
+         most parameter values — the one it was most wrong about.
+
+         The note says so, and the landing block below splits it four ways: the
+         two `Design now` buttons are the decision, the header pair belong to
+         people who already have an account. */
+      visitors: people(totals, EV.ctaClicked),
+      events: sum(rows, EV.ctaClicked),
       unit: "browser" as const,
     },
     {
       key: "signin",
       label: "Sign-in seen",
       note: "Reached the form",
-      visitors: people(rows, EV.signinViewed),
+      visitors: people(totals, EV.signinViewed),
       events: sum(rows, EV.signinViewed),
       unit: "browser" as const,
     },
@@ -213,7 +270,7 @@ export async function GET(request: Request) {
       key: "submitted",
       label: "Sign-in tried",
       note: "Typed a domain and pressed Continue",
-      visitors: people(rows, EV.signinSubmitted),
+      visitors: people(totals, EV.signinSubmitted),
       events: sum(rows, EV.signinSubmitted),
       unit: "browser" as const,
     },
@@ -221,7 +278,7 @@ export async function GET(request: Request) {
       key: "brief",
       label: "Brief seen",
       note: "Through the gate, looking at the questions",
-      visitors: stores(rows, EV.briefViewed),
+      visitors: stores(totals, EV.briefViewed),
       events: sum(rows, EV.briefViewed),
       unit: "store" as const,
     },
@@ -229,7 +286,7 @@ export async function GET(request: Request) {
       key: "started",
       label: "Build started",
       note: "Pressed the button",
-      visitors: stores(rows, EV.generateStarted),
+      visitors: stores(totals, EV.generateStarted),
       events: sum(rows, EV.generateStarted),
       unit: "store" as const,
     },
@@ -237,7 +294,7 @@ export async function GET(request: Request) {
       key: "completed",
       label: "Build finished",
       note: "Reported by the server, so a closed tab still counts",
-      visitors: stores(rows, EV.generateCompleted),
+      visitors: stores(totals, EV.generateCompleted),
       events: sum(rows, EV.generateCompleted),
       unit: "store" as const,
     },
@@ -245,7 +302,7 @@ export async function GET(request: Request) {
       key: "exported",
       label: "Exported a page",
       note: "Took the file away",
-      visitors: stores(rows, EV.pageExported),
+      visitors: stores(totals, EV.pageExported),
       events: sum(rows, EV.pageExported),
       unit: "store" as const,
     },
@@ -258,6 +315,172 @@ export async function GET(request: Request) {
     const at = DURATION_BUCKETS.findIndex((b) => seconds < b.max);
     durations[at === -1 ? durations.length - 1 : at].count += row.count;
   }
+
+  /* ==========================================================================
+     ONE BLOCK PER SCREEN.
+
+     The funnel above crosses screens by nature — that is what a funnel is —
+     and answers "where do people stop". These answer a different question:
+     given this screen, what happens on it. An event belongs to exactly one
+     block, the screen it fires from, so no number is double-counted between
+     them.
+
+     `people` is browsers on the public screens and stores behind the gate, for
+     the reason `stores()` gives at length.
+     ========================================================================== */
+  const metric = (
+    key: string,
+    label: string,
+    note: string,
+    name: string,
+    opts: { unit?: "browser" | "store"; split?: Slice[] } = {},
+  ): Metric => ({
+    key,
+    label,
+    note,
+    count: sum(rows, name),
+    people: opts.unit === "store" ? stores(totals, name) : people(totals, name),
+    ...(opts.split && opts.split.length > 0 ? { split: opts.split } : {}),
+  });
+
+  const pages: PageBlock[] = [
+    {
+      key: "landing",
+      title: "Landing",
+      path: "/",
+      note: "The front door. Everything here is a visitor with no account yet.",
+      metrics: [
+        metric("viewed", "Page viewed", "the denominator of every rate below", EV.landingViewed),
+        metric("cta", "CTA pressed", "all four links to /design", EV.ctaClicked, {
+          split: slices(rows, EV.ctaClicked, "location", {
+            hero: "Hero · Design now",
+            closing: "Closing · Design now",
+            header_signin: "Header · Sign in",
+            header_store: "Header · store name",
+          }),
+        }),
+        metric("gallery", "Gallery opened", "a template in the moving strip", EV.galleryOpened, {
+          split: slices(rows, EV.galleryOpened, "page_type", {}),
+        }),
+      ],
+    },
+    {
+      key: "login",
+      title: "Sign in",
+      path: "/design/login",
+      note: "The gate. The split below is what the ads are actually bringing.",
+      metrics: [
+        metric("viewed", "Page viewed", "reached the form", EV.signinViewed),
+        metric("submitted", "Continue pressed", "counted when the server answers, not on the press", EV.signinSubmitted, {
+          split: slices(rows, EV.signinSubmitted, "result", {
+            success: "Signed in",
+            not_registered: "Not registered",
+            invalid_format: "Not a store domain",
+            server_error: "Our error",
+          }),
+        }),
+        metric("register_link", "Register link", "went on rather than leaving", EV.registerLinkClicked),
+      ],
+    },
+    {
+      key: "register",
+      title: "Register",
+      path: "/design/register",
+      note: "Including the success screen, which has no address of its own.",
+      metrics: [
+        metric("viewed", "Page viewed", "reached the form", EV.registerViewed),
+        metric("submitted", "Register pressed", "both the form's own refusals and the server's", EV.registerSubmitted, {
+          split: slices(rows, EV.registerSubmitted, "result", {
+            success: "Registered",
+            validation_error: "Form refused it",
+            server_error: "Our error",
+          }),
+        }),
+        metric("fields", "Fields that blocked it", "every box a refusal named, so one submission can count three", EV.registerSubmitted, {
+          split: slices(rows, EV.registerSubmitted, "error_field", {
+            domain: "Store domain",
+            store_name: "Store name",
+            email: "Email",
+          }),
+        }),
+        metric("shopify", "Shopify sign-up", "arrivals who are not merchants yet", EV.shopifySignupClicked),
+        metric("done", "Success screen seen", "compare with Registered above", EV.registeredViewed),
+        metric("return", "Go to sign in", "carried on from the success screen", EV.signinReturnClicked),
+      ],
+    },
+    {
+      key: "brief",
+      title: "Brief",
+      path: "/design",
+      note: "Behind the gate, so these are counted in stores rather than browsers.",
+      metrics: [
+        metric("viewed", "Page viewed", "through the gate", EV.briefViewed, { unit: "store" }),
+        metric("mode", "Mode chosen", "quick or build detail", EV.briefModeSelected, {
+          unit: "store",
+          split: slices(rows, EV.briefModeSelected, "mode", { quick: "Quick", detail: "Build detail" }),
+        }),
+        metric("example", "Example opened", "read the sample brief first", EV.briefExampleClicked, { unit: "store" }),
+        metric("started", "Build started", "pressed the button", EV.generateStarted, { unit: "store" }),
+      ],
+    },
+    {
+      key: "building",
+      title: "While it builds",
+      path: "/design",
+      note: "The outcomes are the server's, so a merchant who closes the tab still counts.",
+      metrics: [
+        metric("completed", "Finished", "the deck was delivered", EV.generateCompleted, { unit: "store" }),
+        metric("failed", "Failed", "the build itself did not finish", EV.generateFailed, { unit: "store" }),
+        metric("cancelled", "Cancelled", "went back to the brief", EV.generateCancel, { unit: "store" }),
+      ],
+    },
+    {
+      key: "results",
+      title: "The finished deck",
+      path: "/design",
+      note: "What a merchant does with what they got.",
+      metrics: [
+        metric("exported", "Exported a page", "took the .pagefly file", EV.pageExported, {
+          unit: "store",
+          split: slices(rows, EV.pageExported, "scope", { one: "One page", all: "Every page" }),
+        }),
+        metric("png", "PNG downloaded", "took pictures instead", EV.pagePngDownload, { unit: "store" }),
+        metric("preview", "Preview opened", "read a page full size", EV.pagePreview, {
+          unit: "store",
+          split: slices(rows, EV.pagePreview, "page_type", {}),
+        }),
+        metric("regenerate", "Regenerated a page", "asked for that one again", EV.pageRegenerate, { unit: "store" }),
+        metric("edit", "Edited the brief", "went back to change the answers", EV.briefEdit, { unit: "store" }),
+      ],
+    },
+  ];
+
+  const SURFACES: Record<string, string> = {
+    landing: "Landing · How it works",
+    landing_collections: "Landing · Collections",
+    building_collections: "While building · Collections",
+    results: "Finished deck",
+    export_popup: "Popup after an export",
+  };
+
+  const shared: SharedBlock[] = [
+    {
+      key: "install",
+      title: "Install PageFly",
+      note: "One button, five placements. The total is not the sum of the columns — the same person can press it on two screens.",
+      total: sum(rows, EV.pageflyInstallClicked),
+      totalPeople: people(totals, EV.pageflyInstallClicked),
+      bySurface: slices(rows, EV.pageflyInstallClicked, "surface", SURFACES),
+    },
+    {
+      key: "collections",
+      title: "Free collections exported",
+      note: "The section is on two screens: a visitor browsing the landing page, and a merchant waiting for a build.",
+      total: sum(rows, EV.collectionExported),
+      totalPeople: people(totals, EV.collectionExported),
+      bySurface: slices(rows, EV.collectionExported, "surface", SURFACES),
+    },
+  ];
 
   const view: AnalyticsView = {
     from: from.toISOString(),
@@ -295,6 +518,8 @@ export async function GET(request: Request) {
       cancelled: sum(rows, EV.generateCancel),
     },
     durations,
+    pages,
+    shared,
     rows: [...rows].sort((a, b) => b.count - a.count).slice(0, 200),
   };
 

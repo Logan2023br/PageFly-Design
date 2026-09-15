@@ -269,6 +269,68 @@ async function main(): Promise<void> {
   check(landing.stores === 0, "nulls are not a store", String(landing.stores));
   check(landing.visitors >= 1, "but the browser still counts", String(landing.visitors));
 
+  /* ==========================================================================
+     ONE PERSON IN TWO GROUPS IS STILL ONE PERSON, AND TWO ARE TWO.
+
+     `countEvents` groups by name AND parameters, so somebody who pressed the
+     install button on the landing page and again after an export lands in two
+     rows. The first version of the distinct count took the largest of those
+     rows, which is a FLOOR: it reported one person when two had pressed it.
+     Summing the rows would have been the ceiling and equally wrong — the same
+     person counted twice.
+
+     Neither can be computed from the grouped rows at all. Only the store can
+     intersect the id sets, which is what `countEventTotals` is for, and this
+     is the case that proves it.
+     ========================================================================== */
+  console.log("\ndistinct people across parameter groups");
+
+  {
+    const { randomUUID: uuid2 } = await import("node:crypto");
+    const row = (surface: string, visitorId: string) => ({
+      id: uuid2(),
+      name: "design_pagefly_install_clicked",
+      props: { surface },
+      visitorId,
+      domain: null,
+      createdAt: new Date().toISOString(),
+    });
+
+    /* Two people, six presses, three parameter groups — every number
+       different, so none of them can be mistaken for another. */
+    await repo.recordEvents([
+      row("landing", "person-a"),
+      row("landing", "person-a"),
+      row("export_popup", "person-a"),
+      row("landing_collections", "person-b"),
+      row("landing_collections", "person-b"),
+      row("landing_collections", "person-b"),
+    ]);
+
+    const grouped = (await counts()).filter(
+      (c) => c.name === "design_pagefly_install_clicked",
+    );
+    check(grouped.length === 3, "three parameter groups", String(grouped.length));
+
+    const totals = await repo.countEventTotals(WINDOW[0], WINDOW[1]);
+    const install = totals.find((t) => t.name === "design_pagefly_install_clicked")!;
+
+    check(install.count === 6, "six presses", String(install.count));
+    check(install.visitors === 2, "by two people", String(install.visitors));
+    /* The two wrong answers, named so a future change that reintroduces either
+       fails here rather than on somebody's screen. */
+    check(
+      install.visitors !== Math.max(...grouped.map((g) => g.visitors)),
+      "not the largest group, which is a floor",
+      `largest group = ${Math.max(...grouped.map((g) => g.visitors))}`,
+    );
+    check(
+      install.visitors !== grouped.reduce((a, g) => a + g.visitors, 0),
+      "and not the sum, which counts one person twice",
+      `sum = ${grouped.reduce((a, g) => a + g.visitors, 0)}`,
+    );
+  }
+
   console.log("\nevery event has a call site");
 
   const { EV } = await import("@/lib/analytics");

@@ -368,7 +368,7 @@ export function GeneratingScreen() {
       {/* UNDER THE BUILD, not beside it. The screen above is a fifteen-minute
           wait with nothing in its lower two thirds, and a merchant who leaves
           the tab comes back to a deck they never watched arrive. */}
-      <CollectionsSection />
+      <CollectionsSection surface="building_collections" />
 
       <div className="pb-6" />
     </motion.div>

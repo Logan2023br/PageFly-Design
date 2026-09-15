@@ -215,4 +215,29 @@ export const EV = {
   briefEdit: "design_brief_edit",
   pagePreview: "design_page_preview",
   pagePngDownload: "design_page_png_download",
+
+  /* ---- things that exist on more than one page ------------------------
+
+     THESE CARRY A `surface`, AND THAT IS THE WHOLE POINT OF THEM. The install
+     button is on the landing page, inside the collections section, under the
+     export controls and in the popup after a download — four places, one
+     action. Counted under one name with no parameter, the total would be the
+     only number available and "which placement works" would be unanswerable.
+
+     `surface` names the SCREEN, not the component, because the collections
+     section itself appears on two of them: on the landing page a visitor is
+     browsing, on the build screen a merchant is waiting fifteen minutes. The
+     same click means different things there and the component cannot know
+     which it is, so whoever mounts it says. */
+  pageflyInstallClicked: "design_pagefly_install_clicked",
+  collectionExported: "design_collection_exported",
 } as const;
+
+/** Where a shared element was mounted. One list, so a typo at a call site is a
+    type error rather than a value that quietly never groups with its siblings. */
+export type Surface =
+  | "landing"
+  | "landing_collections"
+  | "building_collections"
+  | "results"
+  | "export_popup";

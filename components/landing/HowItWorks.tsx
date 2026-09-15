@@ -181,7 +181,7 @@ export function HowItWorks() {
         <p className="text-[12.5px] text-pf-muted">
           Step four needs the PageFly app on your store.
         </p>
-        <InstallPageFlyButton size="sm" />
+        <InstallPageFlyButton size="sm" surface="landing" />
       </div>
 
       {zoom && (

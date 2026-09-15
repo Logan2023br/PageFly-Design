@@ -184,7 +184,7 @@ function Toolbar({ readOnly }: { readOnly: boolean }) {
           have PageFly — it is how they came to be here — so it is a line of
           text for the ones who do not, not a button competing with Export. */}
       <div className="flex justify-end">
-        <InstallPageFlyLink />
+        <InstallPageFlyLink surface="results" />
       </div>
 
       {categories.length > 1 && (

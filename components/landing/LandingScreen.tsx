@@ -428,7 +428,7 @@ export function LandingScreen() {
           Nothing about it is landing-specific, so moving it back is deleting
           these four lines. */}
       <div className="mx-auto max-w-6xl px-5">
-        <CollectionsSection />
+        <CollectionsSection surface="landing_collections" />
       </div>
 
       {/* The counts and the closing ask are ONE band now. Apart, they were two

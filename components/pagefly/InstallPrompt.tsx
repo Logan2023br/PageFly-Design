@@ -91,7 +91,7 @@ export function InstallPrompt() {
             file you&rsquo;ll need the PageFly app on your store.
           </p>
 
-          <InstallPageFlyButton size="sm" className="mt-3 w-full" />
+          <InstallPageFlyButton size="sm" surface="export_popup" className="mt-3 w-full" />
         </motion.div>
       )}
     </AnimatePresence>

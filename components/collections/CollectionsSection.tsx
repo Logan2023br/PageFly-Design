@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { EV, track, type Surface } from "@/lib/analytics";
 import { COLLECTIONS, shortenLabels, shotFor, type CollectionMeta } from "@/lib/collections";
 import {
   combinePagefly,
@@ -35,7 +36,7 @@ import { Button, Icon, Panel } from "../ui";
    otherwise reach into each other.
    ========================================================================== */
 
-export function CollectionsSection() {
+export function CollectionsSection({ surface }: { surface: Surface }) {
   const [open, setOpen] = useState<CollectionMeta | null>(null);
 
   if (COLLECTIONS.length === 0) return null;
@@ -58,6 +59,7 @@ export function CollectionsSection() {
             key={collection.slug}
             collection={collection}
             onOpen={() => setOpen(collection)}
+            surface={surface}
           />
         ))}
       </div>
@@ -66,11 +68,17 @@ export function CollectionsSection() {
           same app — and here it is more likely they do not have it, because a
           visitor can reach this section without ever having built anything. */}
       <div className="mt-4 text-center">
-        <InstallPageFlyLink />
+        <InstallPageFlyLink surface={surface} />
       </div>
 
       <AnimatePresence>
-        {open && <CollectionDetail collection={open} onClose={() => setOpen(null)} />}
+        {open && (
+          <CollectionDetail
+            collection={open}
+            surface={surface}
+            onClose={() => setOpen(null)}
+          />
+        )}
       </AnimatePresence>
     </section>
   );
@@ -149,9 +157,11 @@ function download(bytes: Uint8Array, filename: string) {
 function CollectionCard({
   collection,
   onOpen,
+  surface,
 }: {
   collection: CollectionMeta;
   onOpen: () => void;
+  surface: Surface;
 }) {
   const reduced = useReducedMotion();
   const [seen, setSeen] = useState(false);
@@ -229,7 +239,13 @@ function CollectionCard({
           disabled={state.status !== "ready"}
           onClick={() =>
             state.status === "ready" &&
-            download(combinePagefly(state.raw), `${collection.slug}.pagefly`)
+            (track(EV.collectionExported, {
+              surface,
+              collection: collection.slug,
+              scope: "set",
+              count: state.pages.length,
+            }),
+            download(combinePagefly(state.raw), `${collection.slug}.pagefly`))
           }
           className="bg-pf-bg/80 backdrop-blur"
         >
@@ -369,9 +385,11 @@ function useHtml(page: PageflyPage): string {
 function CollectionDetail({
   collection,
   onClose,
+  surface,
 }: {
   collection: CollectionMeta;
   onClose: () => void;
+  surface: Surface;
 }) {
   const state = useCollection(collection, true);
   const pages = state.status === "ready" ? state.pages : [];
@@ -447,7 +465,13 @@ function CollectionDetail({
               disabled={state.status !== "ready"}
               onClick={() =>
                 state.status === "ready" &&
-                download(combinePagefly(state.raw), `${collection.slug}.pagefly`)
+                (track(EV.collectionExported, {
+                  surface,
+                  collection: collection.slug,
+                  scope: "set",
+                  count: state.pages.length,
+                }),
+                download(combinePagefly(state.raw), `${collection.slug}.pagefly`))
               }
             >
               Export all {pages.length > 0 ? `${pages.length} pages` : ""}
@@ -506,10 +530,16 @@ function CollectionDetail({
                   icon="Download"
                   onClick={() =>
                     state.status === "ready" &&
+                    (track(EV.collectionExported, {
+                      surface,
+                      collection: collection.slug,
+                      scope: "page",
+                      page: labels[i],
+                    }),
                     download(
                       state.raw[i],
                       `${collection.slug}-${labels[i].toLowerCase().replace(/[^a-z0-9]+/g, "-")}.pagefly`,
-                    )
+                    ))
                   }
                 >
                   Export
