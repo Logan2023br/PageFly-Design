@@ -525,4 +525,16 @@ export type EventCount = {
   /** distinct visitors, which is the number a funnel wants — one person
       pressing a CTA four times is one person who pressed it */
   visitors: number;
+  /**
+   * Distinct stores, for the steps where a store is the unit.
+   *
+   * A visitor is a BROWSER — `visitorId` lives in its localStorage. Two
+   * accounts signed into one browser are one visitor, which is right for the
+   * landing page and wrong for everything after sign-in: "how many stores
+   * exported a page" is a question about stores, and answering it in browsers
+   * reported 1 for somebody testing with two accounts.
+   *
+   * Zero before anybody signs in, because `domain` is null until then.
+   */
+  stores: number;
 };

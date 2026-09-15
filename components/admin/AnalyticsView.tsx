@@ -59,6 +59,10 @@ const RANGES = [7, 30, 90] as const;
 
 export function AnalyticsView() {
   const [days, setDays] = useState<number>(30);
+  /* Bumped to ask again. A counter rather than a boolean: two refreshes in a
+     row have to be two different values or the effect does not re-run. */
+  const [tick, setTick] = useState(0);
+  const [at, setAt] = useState<Date | null>(null);
   const [view, setView] = useState<View | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -82,8 +86,10 @@ export function AnalyticsView() {
         });
         const body = (await res.json()) as AnalyticsResponse;
         if (!live) return;
-        if (body.ok) setView(body.view);
-        else setError(body.error);
+        if (body.ok) {
+          setView(body.view);
+          setAt(new Date());
+        } else setError(body.error);
       } catch {
         if (live) setError("Could not load the numbers.");
       } finally {
@@ -94,7 +100,34 @@ export function AnalyticsView() {
     return () => {
       live = false;
     };
-  }, [days]);
+  }, [days, tick]);
+
+  /* ==========================================================================
+     ASKED AGAIN EVERY THIRTY SECONDS, AND ONLY WHILE THE TAB IS VISIBLE.
+
+     An event reaches the database about a second after somebody presses the
+     button; this screen was fetching once and then never again, so the only
+     way to see a number move was to reload — which is what somebody testing
+     their own funnel does twenty times in a row.
+
+     Thirty seconds rather than five: this is somebody watching, not a live
+     dashboard on a wall, and the query groups every event in a thirty-day
+     window. Paused when the tab is hidden, because a background tab polling a
+     grouped count all afternoon is work nobody is looking at.
+     ========================================================================== */
+  useEffect(() => {
+    const again = () => {
+      if (document.visibilityState === "visible") setTick((t) => t + 1);
+    };
+    const timer = setInterval(again, 30_000);
+    /* And immediately on coming back, so returning to the tab does not mean
+       waiting out the rest of an interval that started while it was hidden. */
+    document.addEventListener("visibilitychange", again);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", again);
+    };
+  }, []);
 
   return (
     <div className="grid gap-4">
@@ -117,7 +150,27 @@ export function AnalyticsView() {
             </button>
           ))}
         </div>
-        {loading && <span className="text-[12px] text-pf-faint">Loading…</span>}
+        <div className="flex items-center gap-3">
+          {at && (
+            <span className="text-[11.5px] tabular-nums text-pf-faint">
+              Updated {at.toLocaleTimeString()}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setTick((t) => t + 1)}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-pf-md border border-pf-border px-2.5 py-1.5 text-[12px] font-semibold text-pf-muted transition-colors hover:text-pf-text disabled:opacity-50"
+          >
+            <motion.span
+              animate={loading ? { rotate: 360 } : { rotate: 0 }}
+              transition={loading ? { duration: 1, repeat: Infinity, ease: "linear" } : { duration: 0.2 }}
+            >
+              <Icon name="RefreshCw" size={13} />
+            </motion.span>
+            {loading ? "Checking…" : "Refresh"}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -199,7 +252,7 @@ function Funnel({ view }: { view: View }) {
   return (
     <TileGroup
       title="The funnel"
-      note={`Distinct people at each step over ${view.days} days — somebody who presses a button five times counts once`}
+      note={`Over ${view.days} days. Counted once per browser until sign-in and once per store after it — pressing a button five times counts once either way`}
     >
       {view.funnel.map((step, i) => {
         const prev = i === 0 ? null : view.funnel[i - 1].visitors;
@@ -228,6 +281,12 @@ function Funnel({ view }: { view: View }) {
               step.events > step.visitors
                 ? `${step.events.toLocaleString()} times in total`
                 : null,
+              /* WHICH UNIT THIS STEP IS IN, because it changes halfway down and
+                 a reader who does not know that reads the drop at `Brief seen`
+                 as people leaving. Before sign-in a store does not exist, so
+                 the only unit available is the browser; after it, the question
+                 is about stores. */
+              step.unit === "store" ? "stores" : "browsers",
             ]
               .filter(Boolean)
               .join(" · ")}

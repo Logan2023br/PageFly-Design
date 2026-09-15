@@ -532,21 +532,47 @@ export function createMemoryRepo(file: string): Repo {
 
     async countEvents(from, to) {
       sync();
-      const buckets = new Map<string, { name: string; props: Record<string, unknown>; count: number; visitors: Set<string> }>();
+      const buckets = new Map<
+        string,
+        {
+          name: string;
+          props: Record<string, unknown>;
+          count: number;
+          visitors: Set<string>;
+          stores: Set<string>;
+        }
+      >();
 
       for (const e of data.events) {
         if (e.createdAt < from || e.createdAt >= to) continue;
         /* The same grouping the SQL does: name plus the whole props bag, so a
            parameter this code has never heard of still splits the counts. */
         const key = `${e.name}\u0000${JSON.stringify(e.props ?? {})}`;
-        const hit = buckets.get(key) ?? { name: e.name, props: e.props ?? {}, count: 0, visitors: new Set<string>() };
+        const hit =
+          buckets.get(key) ??
+          {
+            name: e.name,
+            props: e.props ?? {},
+            count: 0,
+            visitors: new Set<string>(),
+            stores: new Set<string>(),
+          };
         hit.count++;
         hit.visitors.add(e.visitorId);
+        /* Nulls are not a store. Matching `count(distinct domain)` in Postgres,
+           which skips them. */
+        if (e.domain) hit.stores.add(e.domain);
         buckets.set(key, hit);
       }
 
       return [...buckets.values()]
-        .map((b) => ({ name: b.name, props: b.props, count: b.count, visitors: b.visitors.size }))
+        .map((b) => ({
+          name: b.name,
+          props: b.props,
+          count: b.count,
+          visitors: b.visitors.size,
+          stores: b.stores.size,
+        }))
         .sort((a, b) => b.count - a.count);
     },
 

@@ -27,6 +27,8 @@ export type FunnelStep = {
   note: string;
   visitors: number;
   events: number;
+  /** `browser` before anybody signs in, `store` after — see `unit` below */
+  unit: "browser" | "store";
 };
 
 export type Slice = { key: string; label: string; count: number; visitors: number };
@@ -74,6 +76,25 @@ function people(rows: EventCount[], name: string, where?: (p: Record<string, unk
   const matching = rows.filter((r) => r.name === name && (!where || where(r.props)));
   if (matching.length === 0) return 0;
   return Math.max(...matching.map((r) => r.visitors));
+}
+
+/**
+ * Distinct STORES, for the half of the funnel where a store is the unit.
+ *
+ * A visitor is a browser: `visitorId` lives in its localStorage, so two
+ * accounts signed into one browser are one visitor. Correct for the landing
+ * page, where a store does not exist yet — and wrong for everything after
+ * sign-in, where "how many stores exported a page" is plainly a question about
+ * stores. It reported 1 for somebody testing with two accounts, which is the
+ * right answer to a question nobody was asking.
+ *
+ * Same upper-bound reasoning as `people`: rows are grouped by parameters, so
+ * the largest single group is what the data supports without the raw ids.
+ */
+function stores(rows: EventCount[], name: string, where?: (p: Record<string, unknown>) => boolean) {
+  const matching = rows.filter((r) => r.name === name && (!where || where(r.props)));
+  if (matching.length === 0) return 0;
+  return Math.max(...matching.map((r) => r.stores));
 }
 
 function slices(
@@ -145,6 +166,12 @@ export async function GET(request: Request) {
   /* ==========================================================================
      THE FUNNEL, and why these steps.
 
+     AND THE UNIT CHANGES HALFWAY DOWN, on purpose. The first four steps count
+     BROWSERS, because a store does not exist yet — a visitor id is all there
+     is. The last four count STORES, because after sign-in that is what the
+     question is about: two accounts used from one browser are two stores that
+     exported, and were one visitor who did. Each step says which it is.
+
      Each one is where somebody could stop. The gap between two adjacent steps
      is the only number on this screen that names a decision to make, so the
      steps are chosen to make each gap mean one thing:
@@ -164,6 +191,7 @@ export async function GET(request: Request) {
       note: "Everyone who saw the front page",
       visitors: people(rows, EV.landingViewed),
       events: sum(rows, EV.landingViewed),
+      unit: "browser" as const,
     },
     {
       key: "cta",
@@ -171,6 +199,7 @@ export async function GET(request: Request) {
       note: "Design now, hero or closing",
       visitors: people(rows, EV.ctaClicked, (p) => p.location === "hero" || p.location === "closing"),
       events: sum(rows, EV.ctaClicked, (p) => p.location === "hero" || p.location === "closing"),
+      unit: "browser" as const,
     },
     {
       key: "signin",
@@ -178,6 +207,7 @@ export async function GET(request: Request) {
       note: "Reached the form",
       visitors: people(rows, EV.signinViewed),
       events: sum(rows, EV.signinViewed),
+      unit: "browser" as const,
     },
     {
       key: "submitted",
@@ -185,34 +215,39 @@ export async function GET(request: Request) {
       note: "Typed a domain and pressed Continue",
       visitors: people(rows, EV.signinSubmitted),
       events: sum(rows, EV.signinSubmitted),
+      unit: "browser" as const,
     },
     {
       key: "brief",
       label: "Brief seen",
       note: "Through the gate, looking at the questions",
-      visitors: people(rows, EV.briefViewed),
+      visitors: stores(rows, EV.briefViewed),
       events: sum(rows, EV.briefViewed),
+      unit: "store" as const,
     },
     {
       key: "started",
       label: "Build started",
       note: "Pressed the button",
-      visitors: people(rows, EV.generateStarted),
+      visitors: stores(rows, EV.generateStarted),
       events: sum(rows, EV.generateStarted),
+      unit: "store" as const,
     },
     {
       key: "completed",
       label: "Build finished",
       note: "Reported by the server, so a closed tab still counts",
-      visitors: people(rows, EV.generateCompleted),
+      visitors: stores(rows, EV.generateCompleted),
       events: sum(rows, EV.generateCompleted),
+      unit: "store" as const,
     },
     {
       key: "exported",
       label: "Exported a page",
       note: "Took the file away",
-      visitors: people(rows, EV.pageExported),
+      visitors: stores(rows, EV.pageExported),
       events: sum(rows, EV.pageExported),
+      unit: "store" as const,
     },
   ];
 

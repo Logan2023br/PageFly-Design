@@ -991,7 +991,9 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
          many PEOPLE got to a step — somebody pressing a CTA four times is one
          person who pressed it. */
       const { rows } = await db.query(
-        `select name, props, count(*)::int as n, count(distinct visitor_id)::int as v
+        `select name, props, count(*)::int as n,
+                count(distinct visitor_id)::int as v,
+                count(distinct domain)::int     as d
            from events
           where created_at >= $1 and created_at < $2
           group by name, props
@@ -1003,6 +1005,9 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
         props: (r.props ?? {}) as Record<string, unknown>,
         count: Number(r.n),
         visitors: Number(r.v),
+        /* `count(distinct …)` skips nulls, so a row from before anybody signed
+           in counts zero stores rather than one null one. */
+        stores: Number(r.d),
       }));
     },
 

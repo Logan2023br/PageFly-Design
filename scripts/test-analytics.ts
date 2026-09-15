@@ -216,6 +216,59 @@ async function main(): Promise<void> {
      from a script without a DOM, but whether the call site EXISTS is a
      question the source can answer.
      ========================================================================== */
+  /* ==========================================================================
+     TWO ACCOUNTS IN ONE BROWSER ARE TWO STORES AND ONE VISITOR.
+
+     `visitorId` lives in a browser's localStorage, so it does not change when
+     somebody signs out and signs in as somebody else. Counting the steps after
+     sign-in in visitors reported 1 for exactly that — which is a true answer
+     to a question nobody asked, and looked like events being dropped.
+
+     The domain comes off the session cookie, which the test cannot set, so the
+     rows are written through the repo directly. That is also the honest test:
+     what is under examination is the counting, not the cookie.
+     ========================================================================== */
+  console.log("\ntwo accounts, one browser");
+
+  const { randomUUID } = await import("node:crypto");
+  await repo.recordEvents(
+    ["shop-a.myshopify.com", "shop-b.myshopify.com"].flatMap((domain) =>
+      /* Three presses each, so clicks, browsers and stores are all different
+         numbers and none of them can be mistaken for another. */
+      [0, 1, 2].map(() => ({
+        id: randomUUID(),
+        name: "design_page_exported",
+        props: { scope: "one" },
+        visitorId: "one-and-the-same-browser",
+        domain,
+        createdAt: new Date().toISOString(),
+      })),
+    ),
+  );
+
+  const exported = (await counts()).find(
+    (c) => c.name === "design_page_exported" && c.props.scope === "one",
+  )!;
+  check(exported.count === 6, "six presses", String(exported.count));
+  check(exported.visitors === 1, "from one browser", String(exported.visitors));
+  check(exported.stores === 2, "belonging to two stores", String(exported.stores));
+
+  console.log("\nand a step before sign-in has no store to count");
+
+  await repo.recordEvents([
+    {
+      id: randomUUID(),
+      name: "design_landing_viewed",
+      props: {},
+      visitorId: "a-stranger",
+      domain: null,
+      createdAt: new Date().toISOString(),
+    },
+  ]);
+  const landing = (await counts()).find((c) => c.name === "design_landing_viewed")!;
+  check(landing.stores === 0, "nulls are not a store", String(landing.stores));
+  check(landing.visitors >= 1, "but the browser still counts", String(landing.visitors));
+
   console.log("\nevery event has a call site");
 
   const { EV } = await import("@/lib/analytics");
