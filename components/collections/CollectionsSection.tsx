@@ -407,12 +407,19 @@ function CollectionDetail({
   );
 
   /* Escape closes it, and the listener is on the document because the panel is
-     not what has focus after a card click. */
+     not what has focus after a card click.
+
+     NOT WHILE A PAGE IS OPEN OVER IT. The overlay listens on the document too,
+     so one press reached both and closed the page AND the set behind it — a
+     merchant who wanted to go back to the seven found themselves back on the
+     landing page. Escape should close the top thing, and only that. */
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && viewing === null) onClose();
+    };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, viewing]);
 
   return (
     <motion.div
@@ -556,6 +563,11 @@ function CollectionDetail({
             pages={shims}
             index={viewing}
             readOnly
+            /* This screen owns whether the overlay is open, so it has to own
+               closing it too — the store's own `closePreview` clears an index
+               this component never reads, which made the X and Esc do nothing
+               at all. */
+            onClose={() => setViewing(null)}
             onStep={(delta) =>
               setViewing((was) =>
                 was === null ? was : (was + delta + pages.length) % pages.length,

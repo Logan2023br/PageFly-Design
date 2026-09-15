@@ -146,6 +146,7 @@ export function PreviewOverlay({
   readOnly = false,
   onStep,
   renderPage,
+  onClose,
 }: {
   pages: PageMockup[];
   index: number;
@@ -181,6 +182,14 @@ export function PreviewOverlay({
    * a second set of breakpoints to keep in step with these.
    */
   renderPage?: RenderPage;
+  /**
+   * Close it, when the caller owns whether it is open.
+   *
+   * Same escape hatch as `onStep` and the same reason — see `close` below.
+   * Without it the X is a button that does nothing for any caller not driving
+   * this from the store.
+   */
+  onClose?: () => void;
 }) {
   const page = pages[index];
   const device = useStore((s) => s.device);
@@ -189,7 +198,13 @@ export function PreviewOverlay({
   const setDevice = useStore((s) => s.setDevice);
   const setZoom = useStore((s) => s.setZoom);
   const nudgeZoom = useStore((s) => s.nudgeZoom);
-  const close = useStore((s) => s.closePreview);
+  const closeStore = useStore((s) => s.closePreview);
+  /* THE CALLER'S CLOSE WHEN IT HAS ONE, for the same reason `onStep` exists:
+     the store's `closePreview` clears the store's OWN `previewIndex`, and a
+     caller that keeps its own index — the free collections do — never hears
+     about it. The X and Esc fired, the store changed, and the overlay stayed
+     exactly where it was because nothing it was reading had moved. */
+  const close = onClose ?? closeStore;
   const brief = useStore((s) => s.brief);
   const briefs = useStore((s) => s.briefs);
   const stepInStore = useStore((s) => s.stepPreview);
