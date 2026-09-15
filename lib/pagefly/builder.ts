@@ -1012,6 +1012,29 @@ const BEFORE_AFTER_PARTS: Record<string, string> = {
   "& .pf-ba-after img": "width: 100%; height: 100%; object-fit: cover;",
 };
 
+/**
+ * `styleData` with the comparison's own rules folded into every device block.
+ *
+ * Returns a block even when the caller had none: without one the element gets
+ * no `aspect-ratio` at all and hugs its content, which is the same failure by
+ * a shorter route.
+ */
+function beforeAfterStyles(styleData: StyleData): StyleData {
+  const devices = new Set<string>(["all", ...Object.keys(styleData ?? {})]);
+  const out: Record<string, Record<string, string>> = {};
+  for (const d of devices) {
+    const had = styleData?.[d] ?? {};
+    out[d] = {
+      ...had,
+      "&": `${had["&"] ?? ""} ${BEFORE_AFTER_PARTS["&"]}`.trim(),
+    };
+  }
+  /* The children are the same at every width, so they ride on `all` alone —
+     repeating them four times would be four copies of one fact. */
+  out.all = { ...out.all, ...BEFORE_AFTER_PARTS, "&": out.all["&"] };
+  return out;
+}
+
 export function BEFORE_AFTER(
   before: string,
   after: string,
@@ -1034,18 +1057,21 @@ export function BEFORE_AFTER(
       imgQuality: "auto",
       loading: "lazy",
     },
-    /* The parts go in AFTER the caller's own rules so the ratio wins over a
-       height the design may have written — and the `&` entry is appended to
-       whatever the caller put there rather than replacing it, or a background
-       or a border set on the node would vanish. */
-    {
-      ...(styleData ?? {}),
-      all: {
-        ...(styleData?.all ?? {}),
-        ...BEFORE_AFTER_PARTS,
-        "&": `${styleData?.all?.["&"] ?? ""} ${BEFORE_AFTER_PARTS["&"]}`.trim(),
-      },
-    },
+    /* EVERY BREAKPOINT, not just `all`, and that was the bug.
+
+       These four device blocks are not a cascade of deltas — each one carries a
+       COMPLETE `&` rule, written out in full by `derive.ts`, and the narrower
+       one replaces the wider one outright. Patching only `all` therefore put
+       the ratio on exactly one width and left `--pf-flex-layout-height: hug` in
+       charge of the other three, so the element sized to its content and came
+       back taller than it is wide — which is what a merchant saw in the editor
+       at 1440px, where `laptop` is the block that applies.
+
+       The `&` entry is appended to whatever the caller wrote rather than
+       replacing it, or a background, a radius or a border set on the node would
+       vanish with it. The child selectors are width-independent and only need
+       saying once. */
+    beforeAfterStyles(styleData),
     [],
   );
 }

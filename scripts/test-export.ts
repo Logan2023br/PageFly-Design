@@ -2068,8 +2068,18 @@ async function main(): Promise<void> {
     const el = ba.items.find((i) => i.type === "ImageComparison");
     check(Boolean(el), "PageFly's own element");
 
-    const root = ba.cssOf(el?.id ?? "");
-    check(/aspect-ratio:\s*1\s*\/\s*1/.test(root), "square, so a portrait photo cannot make it three screens tall", root);
+    /* EVERY DEVICE, and checking only `all` is how this last escaped. The four
+       blocks are not deltas: `derive.ts` writes each one as a COMPLETE rule and
+       the narrower replaces the wider outright, so a ratio present only in
+       `all` is a ratio absent everywhere a merchant actually looks — including
+       the editor's own 1440px, which resolves to `laptop`. What shipped was an
+       element left to `--pf-flex-layout-height: hug`, sizing to its content and
+       standing taller than it is wide. */
+    check(
+      /aspect-ratio:\s*1\s*\/\s*1/.test(ba.cssOf(el?.id ?? "")),
+      "square, so a portrait photo cannot make it three screens tall",
+      ba.cssOf(el?.id ?? "").slice(0, 80),
+    );
 
     /* Both halves, because one of them covering is worse than neither: the
        slider would then compare a filled frame against a letterboxed one. */
@@ -2086,6 +2096,59 @@ async function main(): Promise<void> {
       /height:\s*100%/.test(ba.cssOf(el?.id ?? "", "all", "& .pf-ba-content")),
       "and the content box is the full square",
     );
+
+    /* ======================================================================
+       AND AT EVERY WIDTH THE NODE HAS A BLOCK FOR.
+
+       The four device blocks are not deltas. `derive.ts` writes each one as a
+       COMPLETE `&` rule and the narrower replaces the wider outright, so a
+       ratio folded into `all` alone is a ratio absent from every width that
+       got its own block — which is every width, the moment the design puts any
+       css on the node. The fixture above carries none and so has only `all`;
+       this one carries a radius, which is enough to make `derive` emit all
+       four.
+
+       What that shipped: an element left to `--pf-flex-layout-height: hug`,
+       sizing to its content and standing taller than it is wide in the editor
+       at 1440px, where `laptop` is the block that applies. Checking `all` was
+       what let it through.
+       ====================================================================== */
+    const styled = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "beforeAfter",
+              beforeQuery: "room empty",
+              afterQuery: "room furnished",
+              beforeLabel: "Before",
+              afterLabel: "After",
+              css: { borderRadius: "22px", maxWidth: "1100px" },
+              /* The mobile block is what makes `derive` write all four devices
+                 out — with nothing to interpolate toward it leaves `all` to
+                 cover every width, which is the fixture above. A design that
+                 says anything about phones gets the four, and the four are
+                 where the ratio went missing. */
+              mobile: { borderRadius: "14px" },
+            },
+          ],
+          "split",
+        ),
+      ],
+    }, "ba2", { images: { "room empty": "https://x/a.jpg", "room furnished": "https://x/b.jpg" } });
+
+    const el2 = styled.items.find((i: { type: string }) => i.type === "ImageComparison");
+    for (const device of ["all", "laptop", "tablet", "mobile"]) {
+      const rule = styled.cssOf(el2?.id ?? "", device);
+      check(
+        rule !== "" && /aspect-ratio:\s*1\s*\/\s*1/.test(rule),
+        `square at ${device} too`,
+        rule ? rule.slice(0, 74) : "(no rule — derive wrote no block for this width)",
+      );
+      /* The radius the design asked for has to survive alongside it, or the
+         fix would be trading one lost declaration for another. */
+      check(/border-radius/.test(rule), `and keeps its own radius at ${device}`);
+    }
   }
 
   console.log();
