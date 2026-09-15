@@ -1,7 +1,7 @@
 import "server-only";
 
 import { pageHasOneProduct } from "./plan";
-import type { Css, PageStyle, Scale, SectionSpec, SpecNode } from "./plan";
+import type { BandStyle, Css, PageStyle, Scale, SectionSpec, SpecNode } from "./plan";
 import { childrenOf, type DesignNode, type DesignSection } from "./schema";
 
 /* ==========================================================================
@@ -78,6 +78,9 @@ const HOVERS = new Set(["float", "shadow", "grow", "glow", "float-shadow", "grow
 const REVEALS = new Set(["fade", "fade-up", "slide-left", "slide-right", "zoom"]);
 
 const SCALES = new Set<string>(["oversized", "large", "body", "caption", "eyebrow"]);
+
+/** Mirrors the `scrim` choice on `section.bg` in schema.ts. */
+const SCRIMS = new Set<string>(["none", "soft", "strong"]);
 
 /**
  * Declarations a spec may not ask for — the same list `schema.ts` enforces on
@@ -296,6 +299,9 @@ function vetNode(raw: unknown, buyBoxAllowed = true): SpecNode | null {
      truncated one. */
   const note = str(o.note).slice(0, 320) || undefined;
   const css = vetCss(o.css, drops);
+  /* Same vetting as `css`, and deliberately the same ban list: a property the
+     page cannot carry at 1440px cannot carry at 390px either. */
+  const mobile = vetCss(o.mobile, drops);
   const use = str(o.use).slice(0, 40) || undefined;
 
   const kids = kidsOf(o)
@@ -313,6 +319,7 @@ function vetNode(raw: unknown, buyBoxAllowed = true): SpecNode | null {
     ...(anim ? { anim } : {}),
     ...(use ? { use } : {}),
     ...(css ? { css } : {}),
+    ...(mobile ? { mobile } : {}),
     ...(o.optional === true ? { optional: true } : {}),
     ...(kids.length ? { children: kids } : {}),
   };
@@ -326,6 +333,40 @@ function vetNode(raw: unknown, buyBoxAllowed = true): SpecNode | null {
  * "this band contains nothing". Null is the value every other path already uses
  * for "nothing upstream knew", and the prompt omits it entirely.
  */
+/**
+ * The band's own surface, cleaned.
+ *
+ * Returns undefined rather than an empty object when nothing survives, so the
+ * band simply keeps the four-word shorthand it always had and no downstream
+ * line has to test for a style block that says nothing.
+ */
+export function vetBand(raw: unknown, drops?: Map<string, number>): BandStyle | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+
+  const css = vetCss(o.css, drops);
+  const mobile = vetCss(o.mobile, drops);
+
+  let bg: BandStyle["bg"];
+  const rawBg = o.bg;
+  if (rawBg && typeof rawBg === "object" && !Array.isArray(rawBg)) {
+    const b = rawBg as Record<string, unknown>;
+    const query = str(b.query).slice(0, 120);
+    /* A background with nothing to look for is a scrim over a flat colour,
+       which is the exact failure `bg:WRITE ONE` was added to stop. */
+    if (query) {
+      bg = {
+        kind: str(b.kind) === "video" ? "video" : "photo",
+        query,
+        scrim: SCRIMS.has(str(b.scrim)) ? (str(b.scrim) as "none" | "soft" | "strong") : "soft",
+      };
+    }
+  }
+
+  if (!css && !mobile && !bg) return undefined;
+  return { ...(css ? { css } : {}), ...(mobile ? { mobile } : {}), ...(bg ? { bg } : {}) };
+}
+
 export function vetSpec(raw: unknown, pageType?: string): SectionSpec | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const list = (raw as Record<string, unknown>).nodes;
@@ -464,18 +505,27 @@ const BUILDER_OWNS = new Set([
 
 function valueProblems(section: DesignSection, spec: SectionSpec): string[] {
   const want = new Map<string, string>();
-  for (const node of spec.nodes.flatMap((n) => flatten(n)))
+  for (const node of spec.nodes.flatMap((n) => flatten(n))) {
     for (const [k, v] of Object.entries(node.css ?? {}))
       if (!BUILDER_OWNS.has(k)) want.set(`${k}:${String(v).trim()}`, k);
+    /* THE PHONE IS CHECKED LIKE THE DESKTOP. A `mobile` block that is written
+       and then ignored is the responsive design going missing in exactly the
+       way the animation did — specified, dropped, and nothing said. Namespaced
+       so a value that is legitimately the same at both widths is not counted
+       as satisfying the other one. */
+    for (const [k, v] of Object.entries(node.mobile ?? {}))
+      if (!BUILDER_OWNS.has(k)) want.set(`mobile ${k}:${String(v).trim()}`, k);
+  }
 
   if (want.size === 0) return [];
 
   const have = new Set<string>();
-  for (const node of walk(section))
-    for (const [k, v] of Object.entries(
-      (node as { css?: Record<string, unknown> }).css ?? {},
-    ))
-      have.add(`${k}:${String(v).trim()}`);
+  for (const node of walk(section)) {
+    const n = node as { css?: Record<string, unknown>; mobile?: Record<string, unknown> };
+    for (const [k, v] of Object.entries(n.css ?? {})) have.add(`${k}:${String(v).trim()}`);
+    for (const [k, v] of Object.entries(n.mobile ?? {}))
+      have.add(`mobile ${k}:${String(v).trim()}`);
+  }
 
   const missing = [...want.keys()].filter((d) => !have.has(d));
   if (missing.length === 0) return [];
@@ -491,6 +541,55 @@ function valueProblems(section: DesignSection, spec: SectionSpec): string[] {
       shown.map((d) => `{${d}}`).join(" · ") +
       (missing.length > shown.length ? ` … and ${missing.length - shown.length} more` : "") +
       `. These are measured, not suggestions — do not substitute your own.`,
+  ];
+}
+
+/**
+ * Motion the design asked for and the build did not write.
+ *
+ * WHY THIS IS SEPARATE FROM `valueProblems`. Animation is not a declaration —
+ * it is three named fields on a node, and it lands in `anim` rather than in
+ * `css`. Nothing compared it, and nothing noticing is how a page shipped
+ * carrying four of the forty-six motion instructions its design specified:
+ * every one of twenty-five reveals and all fourteen stagger delays gone, and
+ * three of seven hovers flattened to the plainest one in the set. The audit
+ * reported "0 elements missing" on that page, truthfully, because elements were
+ * all it had ever counted.
+ *
+ * COUNTED BY KIND, not matched node to node. The spec and the tree do not share
+ * ids, so there is no honest way to say WHICH fade-up went missing — but "the
+ * design asked for 25 fade-ups and the page has 0" is both true and actionable,
+ * and it is the shape the repair call can actually fix.
+ */
+function animProblems(section: DesignSection, spec: SectionSpec): string[] {
+  const want = new Map<string, number>();
+  for (const node of spec.nodes.flatMap((n) => flatten(n))) {
+    const a = node.anim;
+    if (a?.hover) want.set(`hover:${a.hover}`, (want.get(`hover:${a.hover}`) ?? 0) + 1);
+    if (a?.reveal) want.set(`reveal:${a.reveal}`, (want.get(`reveal:${a.reveal}`) ?? 0) + 1);
+  }
+  if (want.size === 0) return [];
+
+  const have = new Map<string, number>();
+  for (const node of walk(section)) {
+    const a = (node as { anim?: { hover?: string; reveal?: string } }).anim;
+    if (a?.hover) have.set(`hover:${a.hover}`, (have.get(`hover:${a.hover}`) ?? 0) + 1);
+    if (a?.reveal) have.set(`reveal:${a.reveal}`, (have.get(`reveal:${a.reveal}`) ?? 0) + 1);
+  }
+
+  const short = [...want.entries()]
+    .map(([k, n]) => [k, n - (have.get(k) ?? 0)] as const)
+    .filter(([, n]) => n > 0);
+  if (short.length === 0) return [];
+
+  const total = short.reduce((n, [, m]) => n + m, 0);
+  return [
+    `Section "${section.pattern}" drops ${total} motion instruction${total === 1 ? "" : "s"} ` +
+      `the design specified: ` +
+      short.map(([k, n]) => `${k} ×${n}`).join(" · ") +
+      `. Put ${total === 1 ? "it" : "them"} back in each element's "anim" — ` +
+      `{"anim":{"reveal":"fade-up","delay":1}} — on the elements the design put ` +
+      `${total === 1 ? "it" : "them"} on.`,
   ];
 }
 
@@ -518,6 +617,7 @@ export function specProblems(
     );
 
   problems.push(...valueProblems(section, spec));
+  problems.push(...animProblems(section, spec));
 
   if (binding && added.length)
     problems.push(

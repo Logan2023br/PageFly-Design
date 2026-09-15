@@ -15,7 +15,7 @@ import type {
 } from "./plan";
 import { marketById } from "../briefOptions";
 import { marketLines } from "./marketLines";
-import { beginDropTally, dropTally, vetPageStyle, vetSpec } from "./specCheck";
+import { beginDropTally, dropTally, vetPageStyle, vetBand, vetSpec } from "./specCheck";
 import { THE_STANDARD } from "./standard";
 
 /* ==========================================================================
@@ -302,6 +302,54 @@ function systemPrompt(ask: SpecAsk): string {
     `margin, width, maxWidth, minHeight, aspectRatio, objectFit, opacity,`,
     `backdropFilter, display, flexDirection, alignItems, justifyContent.`,
     ``,
+    /* ======================================================================
+       THE PHONE IS HALF THE PAGE AND NOBODY WAS DESIGNING IT.
+
+       Measured on a shipped build: this stage wrote nothing about phones, and
+       the build model invented forty-one mobile overrides on its own. The
+       apparatus was never missing — every node in the tree has carried a
+       `mobile` block since it had two breakpoints, and `derive.ts` computes
+       laptop and tablet out of desktop and mobile. There was simply no way to
+       say it from here, so the half of the page most visitors see was the half
+       nobody designed.
+
+       A DELTA, said once. Repeating the whole declaration block at a second
+       width is how the bill doubles and how an override ends up on the wrong
+       node — and there is no need, because desktop is what mobile inherits.
+       ====================================================================== */
+    `MOBILE — a second block, beside "css", holding ONLY what changes at 390px.`,
+    `  {"el":"heading","css":{"fontSize":"64px","lineHeight":"1.08"},`,
+    `   "mobile":{"fontSize":"38px"}}`,
+    `  {"el":"row","gap":72,"mobile":{"flexDirection":"column","gap":32}}`,
+    ``,
+    `Write it wherever the desktop value would be wrong on a phone — a display`,
+    `size, a row that has to stack, a padding that has to close up, a width that`,
+    `has to go full. Laptop and tablet are computed from the two you write, so`,
+    `those two are the whole responsive design and there is nobody after you.`,
+    `A page whose phone was never specified is a page designed at one width.`,
+    ``,
+    /* ======================================================================
+       THE BAND'S OWN SURFACE.
+
+       A section was describable as `dark` (a boolean), `padding` (one of four
+       words) and `bg` (a boolean) — four knobs for the largest painted area on
+       the page. The tree has accepted far more the whole time: `section`
+       carries the same style fields as any other node, and its background has
+       always had a kind, a subject and a scrim.
+       ====================================================================== */
+    `THE BAND ITSELF takes a "band" block — the section is an element too.`,
+    `  "band":{"css":{"backgroundImage":"linear-gradient(180deg,#FFF 0%,#FBF3F5 100%)",`,
+    `          "padding":"72px 24px 96px","overflow":"hidden"},`,
+    `          "mobile":{"padding":"48px 20px 56px"},`,
+    `          "bg":{"kind":"video","query":"slow linen curtain morning light",`,
+    `          "scrim":"strong"}}`,
+    ``,
+    `"bg" here replaces the bare "bg": true — it says what the photograph is OF,`,
+    `and "kind":"video" is how a band gets a moving background at all. "scrim"`,
+    `is how hard to darken it so type stays readable: none, soft, strong.`,
+    `Keep "dark" and "padding" for the bands that want nothing more; reach for`,
+    `"band" when the surface itself is part of the design.`,
+    ``,
     `SEVEN ARE REFUSED and asking for them wastes the instruction: position,`,
     `inset, top, right, bottom, left, zIndex, float, transform. The page cannot`,
     `carry them — a mockup that lies about where a thing sits is worse than a`,
@@ -473,7 +521,11 @@ function systemPrompt(ask: SpecAsk): string {
           `{"pageStyle":{"type":{...},"treatments":{...},"motion":"..."},`,
           ` "sections":[{"name":"the-workshop-at-scale",`,
           `   "role":"media","signature":true,"dark":false,"padding":"statement",`,
-          `   "bg":true,"brief":"one sentence: what this section is and why it`,
+          `   "band":{"css":{"backgroundImage":"linear-gradient(180deg,#FFF,#FBF3F5)",`,
+          `   "padding":"96px 56px"},"mobile":{"padding":"56px 20px"},`,
+          `   "bg":{"kind":"photo","query":"workshop bench morning light",`,
+          `   "scrim":"soft"}},`,
+          `   "brief":"one sentence: what this section is and why it`,
           `   is here","nodes":[`,
         ]
       : [
@@ -483,9 +535,11 @@ function systemPrompt(ask: SpecAsk): string {
           ` "bands":{"1":{"nodes":[`,
         ]),
     `{"el":"row","gap":48,"css":{"maxWidth":"1240px","padding":"0 56px",`,
-    ` "alignItems":"center"},"children":[`,
+    ` "alignItems":"center"},"mobile":{"flexDirection":"column","gap":32},`,
+    ` "children":[`,
     `{"el":"col","basis":"46%","gap":34,"children":[`,
     `{"el":"heading","scale":"oversized","note":"the promise, two lines",`,
+    ` "css":{"fontSize":"64px"},"mobile":{"fontSize":"38px"},`,
     ` "anim":{"reveal":"fade-up"}},`,
     `{"el":"button","use":"pill","css":{"background":"#E39A5F","color":"#22150E",`,
     ` "boxShadow":"0 0 48px rgba(227,154,95,.28)"},`,
@@ -631,6 +685,15 @@ function vetFreeSection(
   /* The nodes arrive on the section itself rather than under a "spec" key, so
      hand `vetSpec` the shape it already understands. */
   const spec = vetSpec({ nodes: o.nodes }, pageType);
+  /* The band's own surface, when the answer wrote one. `bg` is read from here
+     first and falls back to the old boolean, so an answer using either spelling
+     is understood and neither has to be migrated. */
+  const rawBand = vetBand(o.band);
+  /* A background belongs behind a hero, not behind a table, a form or a row of
+     cards — the same rule `mayHaveBg` has always applied, applied to the richer
+     field as well. The band keeps its own css and mobile either way; only the
+     photograph is refused. */
+  const bandStyle = rawBand && NO_BG_ROLES.has(role) ? { ...rawBand, bg: undefined } : rawBand;
 
   return {
     band: {
@@ -640,9 +703,10 @@ function vetFreeSection(
       dark: o.dark === true,
       padding,
       motion: null,
-      mayHaveBg: o.bg === true && !NO_BG_ROLES.has(role),
+      mayHaveBg: Boolean(bandStyle?.bg) || (o.bg === true && !NO_BG_ROLES.has(role)),
       brief,
       spec,
+      band: bandStyle ?? null,
     },
     spec,
   };

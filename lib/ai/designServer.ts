@@ -396,6 +396,27 @@ function sharedStyleLines(style: PageStyle | null | undefined): string[] {
   return out;
 }
 
+/**
+ * Every node in the tree, counted.
+ *
+ * `walk` from schema.ts already exists and returns the same set, but it is not
+ * imported here and pulling it in for one number would put a second reason to
+ * import the schema's walker into a file that has never needed it. This counts
+ * what it needs and nothing else.
+ */
+function nodeCount(tree: DesignTree): number {
+  let n = 0;
+  const visit = (v: unknown): void => {
+    if (Array.isArray(v)) return v.forEach(visit);
+    if (!v || typeof v !== "object") return;
+    const o = v as Record<string, unknown>;
+    if (typeof o.type === "string") n++;
+    for (const x of Object.values(o)) visit(x);
+  };
+  visit(tree.sections);
+  return n;
+}
+
 function specLines(node: SpecNode, depth: number): string[] {
   const pad = "  ".repeat(depth + 1);
   const bits = [
@@ -412,6 +433,11 @@ function specLines(node: SpecNode, depth: number): string[] {
        a reader resolves them the same way the builder is being asked to. */
     node.use ? `use:${node.use}` : "",
     node.css ? cssLine(node.css) : "",
+    /* Marked rather than merged. The two blocks land in different fields on the
+       built node — `css` and `mobile` — and a line that ran them together would
+       be a line the build model has to split back apart by guessing which
+       declaration belonged to which width. */
+    node.mobile ? `mobile ${cssLine(node.mobile)}` : "",
     node.optional ? "(optional)" : "",
   ].filter(Boolean);
 
@@ -484,9 +510,23 @@ function orderLines(order: Order, bg: string, ink: string): string[] {
           `  use:NAME  a treatment from the shared style; apply it whole.`,
           `  {k:v}     this element's own declarations. Put them in the node's`,
           `            "css" as written — they are measured, not suggestions.`,
+          `  mobile {k:v}  what CHANGES at 390px. Put them in the node's`,
+          `            "mobile", never merged into "css" — the two are separate`,
+          `            fields and laptop and tablet are computed from the pair.`,
+          ``,
+          `A SECTION LINE MAY CARRY ITS OWN SURFACE TOO:`,
+          `  band {k:v}         declarations for the section element itself —`,
+          `                     a gradient ground, its exact padding, an overflow.`,
+          `  band mobile {k:v}  the same at 390px.`,
+          `  bg:photo "…" scrim:soft   a photograph behind the whole band: write`,
+          `                     "bg" as {"kind","query","scrim"} with that query`,
+          `                     verbatim. bg:video is the same field with`,
+          `                     "kind":"video".`,
           ``,
           `Where a line gives a value, do not substitute your own. Where it gives`,
           `none, decide — the spec is silent about what it did not want fixed.`,
+          `A "mobile" the spec wrote is not optional: dropping it ships a page`,
+          `that was designed at one width and improvised at the other.`,
           ``,
 
         ]
@@ -518,7 +558,17 @@ function orderLines(order: Order, bg: string, ink: string): string[] {
            been granted one. The band that most needs a photograph is the hero,
            and heroes were coming back as a scrim over a flat colour — the
            gradient built, the photograph it exists to darken absent. */
-        s.mayHaveBg ? "bg:WRITE ONE" : "",
+        /* The richer form when the design stage wrote one, and the old
+           permission slip when it did not. `bg:WRITE ONE` could only say that
+           a photograph belonged here; this says what of, how hard to darken it,
+           and whether it moves. */
+        s.band?.bg
+          ? `bg:${s.band.bg.kind} "${s.band.bg.query}" scrim:${s.band.bg.scrim}`
+          : s.mayHaveBg
+            ? "bg:WRITE ONE"
+            : "",
+        s.band?.css ? `band ${cssLine(s.band.css)}` : "",
+        s.band?.mobile ? `band mobile ${cssLine(s.band.mobile)}` : "",
         s.motion ? `motion:${s.motion}` : "",
       ]
         .filter(Boolean)
@@ -1170,9 +1220,24 @@ export async function designPageTree(
 
         /* A repair that comes back unparseable or thinner than what it replaced
            is a repair that made things worse. Keep the first tree — it had
-           named problems, which beats an unknown one. */
+           named problems, which beats an unknown one.
+
+           THINNER MEANS NODES, NOT SECTIONS, and counting sections was the hole.
+           Ten in and ten out passed as not-thinner while one band had been
+           hollowed from sixty-one nodes to four: thirty elements and thirty-one
+           measured values gone, and with them the only live product binding on
+           a product page. The section count is the one number a repair almost
+           never changes, which made it the one number that could not detect
+           this. A tenth is the allowance — a repair asked to remove a painted
+           empty container legitimately comes back a little smaller. */
         const repaired = designTreeSchema.safeParse(parseObject(repair.text));
-        if (repaired.success && repaired.data.sections.length >= tree.sections.length) {
+        const before = nodeCount(tree);
+        const after = repaired.success ? nodeCount(repaired.data) : 0;
+        if (
+          repaired.success &&
+          repaired.data.sections.length >= tree.sections.length &&
+          after >= Math.floor(before * 0.9)
+        ) {
           tree = repaired.data;
           /* SILENCE WAS THE BUG. The only test here is that the repair is not
              thinner than what it replaced, so a repair that changed nothing at
@@ -1186,6 +1251,11 @@ export async function designPageTree(
                 `problem${left.length === 1 ? "" : "s"}: ${left.map((p) => p.slice(0, 48)).join(" | ")}`,
             );
         }
+        else if (repaired.success)
+          console.warn(
+            `[design] ${input.pageType} · repair REFUSED — ${after} nodes against ` +
+              `${before}; keeping the first tree and its ${problems.length} named problem(s)`,
+          );
       } catch {
         /* A failed repair costs the page nothing: the first tree still stands. */
       }

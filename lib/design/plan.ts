@@ -105,6 +105,24 @@ export type SpecNode = {
    * them would be a spec the page cannot honour.
    */
   css?: Css;
+  /**
+   * Only the declarations that DIFFER on a phone.
+   *
+   * WHY THIS HAD TO EXIST. The tree has carried `mobile` on every node since
+   * the day it had two breakpoints, and `derive.ts` computes laptop and tablet
+   * out of desktop and mobile — so the whole responsive apparatus was already
+   * in place and the design model had no way to reach it. What that meant in
+   * practice, measured on a real build: the design stage wrote nothing about
+   * phones, and the build model invented forty-one mobile overrides of its own.
+   * A page whose desktop is designed and whose phone is improvised is a page
+   * that is half-designed, and nobody was in a position to notice which half.
+   *
+   * A DELTA, NOT A SECOND STYLESHEET. Writing every property again at every
+   * width is how the token bill doubles and how an override ends up attached to
+   * the wrong node. Only what changes belongs here — a type size that steps
+   * down, a row that becomes a column, a padding that closes up.
+   */
+  mobile?: Css;
   /** a name from `PageStyle.treatments`, applied before `css` */
   use?: string;
   /**
@@ -118,6 +136,37 @@ export type SpecNode = {
 };
 
 export type SectionSpec = { nodes: SpecNode[] };
+
+/**
+ * The band's own surface, written as values instead of chosen from four words.
+ *
+ * WHAT IT REPLACES, and why the four words were not enough. A section used to
+ * be describable only as `dark` (a boolean), `padding` (one of statement /
+ * standard / dense / utility) and `mayHaveBg` (a boolean). That is four knobs
+ * for the single largest painted area on the page. A gradient ground, a band
+ * that runs tighter on one side than the other, a hero that wants a video
+ * rather than a photograph behind it — none of them could be said at all, and
+ * the tree has accepted every one of them the whole time: `section` carries
+ * `...styled` like any other node, and its `bg` has had a `kind` since it was
+ * written.
+ *
+ * The four words stay. They are a good shorthand and most bands want nothing
+ * more; this is what a band reaches for when it does.
+ */
+export type BandStyle = {
+  /** the band's own declarations — `backgroundImage` for a gradient ground,
+      an exact `padding`, a `minHeight`, an `overflow` */
+  css?: Css;
+  /** only what differs on a phone, same rule as a node's */
+  mobile?: Css;
+  /**
+   * A photograph or a video behind the whole band.
+   *
+   * `mayHaveBg` could only say yes. This says which, what of, and how hard to
+   * darken it — the three things the tree's own `bg` field has always taken.
+   */
+  bg?: { kind: "photo" | "video"; query: string; scrim: "none" | "soft" | "strong" };
+};
 
 /**
  * The declarations every band on a page shares, written ONCE.
@@ -188,6 +237,14 @@ export type OrderSection = {
    * downstream has to know which decider ran.
    */
   spec?: SectionSpec | null;
+  /**
+   * The band's surface, when the design stage wrote one.
+   *
+   * Beside `dark` / `padding` / `mayHaveBg` rather than replacing them: those
+   * three are still what most bands use, and every older path sets them and
+   * knows nothing about this. Null everywhere but free design, like `spec`.
+   */
+  band?: BandStyle | null;
 };
 
 /**
