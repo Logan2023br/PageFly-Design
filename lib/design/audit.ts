@@ -1,7 +1,7 @@
 import "server-only";
 
 import { childrenOf, type DesignNode, type DesignSection, type DesignTree } from "./schema";
-import { pageHasOneProduct, type Order } from "./plan";
+import { isFreeOrder, pageHasOneProduct, type Order } from "./plan";
 import { countdownProblems } from "./countdown";
 import { rowLayoutProblems } from "./rowLayout";
 import { specBinding, specProblems } from "./specCheck";
@@ -184,16 +184,41 @@ export function audit(
      of image + heading + text they are dead pictures with invented names, and
      they look almost right in the mockup and are worthless on the storefront.
 
-     Checked against the ORDER rather than the page type, like every other check
-     here: the order is what was asked for.
+     IT ONLY SPEAKS WHEN THE PATTERN IS FROM THE CATALOGUE, and that is the
+     whole correction. `product-detail…` was a real id back when stage 1 chose
+     ids out of a fixed list, and the prefix told this check which of the two
+     nodes the band wanted. Free design skips stage 1 and lets the design model
+     name its own bands — `supreme-buy-box`, `kussen-koopblok` — so the prefix
+     never matched, the ternary always fell through to the second branch, and
+     every single-product buy box on the platform was told it needed a GRID of
+     products.
+
+     That is not a check that fails to fire. It fires the opposite instruction,
+     and the build model obeys it: on a traced product page it deleted the
+     fifty-seven-node buy box it had just built correctly — gallery, stat tiles,
+     rating row, the product node with all seven of its binding markers — and
+     left a four-node product grid behind. Both of that store's real runs show
+     the same wreck.
+
+     So a free-form name now buys silence here. What a product page must contain
+     is answered above, from the page type, where the question can actually be
+     answered; a band-by-band guess from a name the design model invented cannot
+     answer it and must not try. A page-type check also cannot replace this one
+     per band: a product page may legitimately carry a second commerce band that
+     IS a grid — "you may also like" — and demanding a buy box in every one of
+     them would be the same mistake pointing the other way.
      ========================================================================== */
   order.sections.forEach((want, i) => {
     if (want.role !== "commerce" || !want.pattern) return;
     const got = sections[i];
     if (!got) return;
+    const wantsBuyBox = want.pattern.startsWith("product-detail");
+    /* The catalogue has exactly one prefix this check understands. Anything
+       else is either a free-form name or an id whose shape it cannot read, and
+       in both cases it knows nothing about which node belongs here. */
+    if (!wantsBuyBox && isFreeOrder(order)) return;
 
     const inside = walk(got).map((n) => n.type);
-    const wantsBuyBox = want.pattern.startsWith("product-detail");
     const needed = wantsBuyBox ? "product" : "productList";
 
     if (!inside.includes(needed))
