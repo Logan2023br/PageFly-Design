@@ -187,6 +187,26 @@ async function fromNamedRuns(ids: string[]): Promise<ShowcasePage[]> {
  * recent build is the one worth showing, and an unsorted list would freeze the
  * front door on whatever the first run happened to be.
  */
+/**
+ * How many of the NEWEST pages to pass over before filling the marquee.
+ *
+ * The showcase store is a working store: the most recent things built on it
+ * are usually half-finished — a brief being tuned, a page rebuilt four times
+ * to compare two wordings. Those are the pages the front door would reach for
+ * first, because "newest" is otherwise the whole rule, and they are the worst
+ * possible advertisement for what this makes.
+ *
+ * So the first nineteen are skipped and the marquee fills from the twentieth
+ * newest onward. A count rather than a date, because "settled" is about how
+ * much has happened since, not about the calendar.
+ *
+ * IT APPLIES TO WHATEVER STORE IS CONFIGURED, which is the thing to remember
+ * when pointing `SHOWCASE_STORE` somewhere else: a store with fewer than
+ * twenty pages will show an empty marquee and nothing will look broken.
+ * `/api/health` reports `showcasePages`, and zero there is this.
+ */
+const SKIP_NEWEST_PAGES = 19;
+
 async function fromStore(domain: string): Promise<ShowcasePage[]> {
   const runs = await getRepo().listRuns(domain).catch(() => []);
 
@@ -194,12 +214,18 @@ async function fromStore(domain: string): Promise<ShowcasePage[]> {
     String(b.createdAt).localeCompare(String(a.createdAt)),
   );
 
-  const out: ShowcasePage[] = [];
+  /* Collected past the skip before slicing, and only just past it. Reading
+     every run of a busy store to show twelve cards would be megabytes of
+     design tree loaded to throw away — the loop stops as soon as it holds
+     enough to fill the marquee after the skip. */
+  const wanted = SKIP_NEWEST_PAGES + MAX_SHOWCASE_PAGES;
+  const collected: ShowcasePage[] = [];
   for (const run of newestFirst) {
-    if (out.length >= MAX_SHOWCASE_PAGES) break;
-    out.push(...pagesOf(run.snapshot, MAX_SHOWCASE_PAGES - out.length));
+    if (collected.length >= wanted) break;
+    collected.push(...pagesOf(run.snapshot, wanted - collected.length));
   }
-  return out;
+
+  return collected.slice(SKIP_NEWEST_PAGES);
 }
 
 /** The drawable pages in one run's snapshot, at most `room` of them. */

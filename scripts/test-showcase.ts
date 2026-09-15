@@ -69,6 +69,7 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
+  const { getRepo } = await import("@/lib/db");
   const { showcasePages, showcaseIds, showcaseSource, showcaseStore } = await import(
     "@/lib/showcase"
   );
@@ -80,8 +81,145 @@ async function main(): Promise<void> {
   const byDomain = new Map<string, number>();
   for (const r of runs)
     if (r.domain) byDomain.set(r.domain, (byDomain.get(r.domain) ?? 0) + 1);
-  const storeWithRuns =
-    [...byDomain.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  /* ==========================================================================
+     A SEEDED STORE, NOT WHICHEVER ONE THIS LAPTOP HAPPENS TO HAVE.
+
+     These assertions used to pick the store with the most runs in the local
+     database, which made them pass or fail on what somebody had been building
+     that week. Skipping the nineteen newest pages ended that for good: every
+     store in a dev database has fewer than twenty pages, so all of them
+     publish nothing and three unrelated tests failed at once for a reason none
+     of them was about.
+
+     Thirty-one pages, seeded here, so what is under test is the code.
+     ========================================================================== */
+  const storeWithRuns = "fixture-store.myshopify.com";
+  {
+    const store = await import("@/lib/db").then((m) => m.getRepo());
+    for (let i = 0; i < 31; i++) {
+      await store.saveRun(
+        {
+          id: `fixture-${String(i).padStart(2, "0")}`,
+          domain: storeWithRuns,
+          createdAt: new Date(2025, 5, 1 + i).toISOString(),
+          payload: "",
+          pageCount: 1,
+          tokens: 0,
+          snapshot: [
+            {
+              id: `fx-${i}`,
+              pageType: "home",
+              label: `Fixture ${i}`,
+              category: "core",
+              categoryLabel: "Core",
+              index: i,
+              tokens: {},
+              design: { tree: { sections: [] } },
+            },
+          ],
+          sell: "things",
+          styleLabel: "Warm",
+        } as never,
+        [],
+      );
+    }
+  }
+  void byDomain;
+
+  /* ==========================================================================
+     THE NEWEST PAGES ARE SKIPPED, and the failure this guards has no symptom.
+
+     The showcase store is a working store: its most recent builds are briefs
+     being tuned and pages rebuilt to compare wordings, and "newest first" is
+     otherwise the whole rule — so the front door reached for exactly those.
+
+     Skipping nineteen has one consequence worth a test of its own: a store
+     with fewer than twenty pages now publishes NOTHING, and an empty marquee
+     looks like a store with no runs, or a database that is down, or a deploy
+     that did not take. It looks like anything except a rule working.
+     ========================================================================== */
+  console.log("\nthe newest nineteen are passed over");
+
+  {
+    const { getRepo: repoFor } = await import("@/lib/db");
+    const store = repoFor();
+    const page = (i: number) => ({
+      id: `p-${i}`,
+      pageType: "home",
+      label: `Page ${i}`,
+      category: "core",
+      categoryLabel: "Core",
+      index: i,
+      tokens: {},
+      /* Only pages with a tree are drawable — `pagesOf` skips the rest, so a
+         stand-in without one would be counted here and not there. */
+      design: { tree: { sections: [] } },
+    });
+
+    /* Thirty-one pages over thirty-one runs, newest last in the loop and
+       therefore newest by `createdAt`. Nineteen skipped leaves twelve, which
+       is exactly the cap — so this also proves the two rules compose rather
+       than one eating the other. */
+    const domain = "skip-test.myshopify.com";
+    for (let i = 0; i < 31; i++) {
+      await store.saveRun(
+        {
+          id: `run-${String(i).padStart(2, "0")}`,
+          domain,
+          createdAt: new Date(2026, 0, 1 + i).toISOString(),
+          payload: "",
+          pageCount: 1,
+          tokens: 0,
+          snapshot: [page(i)],
+          sell: "things",
+          styleLabel: "Warm",
+        } as never,
+        [],
+      );
+    }
+
+    process.env.SHOWCASE_RUNS = "";
+    process.env.SHOWCASE_STORE = domain;
+    const shown = await showcasePages();
+
+    check(shown.length === 12, "twelve cards, the cap", String(shown.length));
+    /* Run 30 is the newest. Skipping nineteen means the first card is run 11. */
+    check(
+      shown[0]?.label === "Page 11",
+      "and the first is the twentieth newest, not the newest",
+      shown[0]?.label ?? "(none)",
+    );
+    check(
+      !shown.some((p) => ["Page 30", "Page 29", "Page 12"].includes(p.label)),
+      "none of the nineteen newest appear",
+      shown.map((p) => p.label).join(", "),
+    );
+
+    /* The consequence, asserted rather than discovered on a deploy. */
+    const small = "only-five.myshopify.com";
+    for (let i = 0; i < 5; i++) {
+      await store.saveRun(
+        {
+          id: `small-${i}`,
+          domain: small,
+          createdAt: new Date(2026, 1, 1 + i).toISOString(),
+          payload: "",
+          pageCount: 1,
+          tokens: 0,
+          snapshot: [page(i)],
+          sell: "things",
+          styleLabel: "Warm",
+        } as never,
+        [],
+      );
+    }
+    process.env.SHOWCASE_STORE = small;
+    check(
+      (await showcasePages()).length === 0,
+      "a store with fewer than twenty pages publishes nothing at all",
+      "which is why /api/health reports showcasePages",
+    );
+  }
 
   console.log("\nnothing is published unless something is NAMED");
 
@@ -106,7 +244,7 @@ async function main(): Promise<void> {
   console.log("\none store's Library, which is the default source");
 
   process.env.SHOWCASE_RUNS = "";
-  if (storeWithRuns) {
+  {
     process.env.SHOWCASE_STORE = storeWithRuns;
     check(showcaseSource() === "store", "naming a store selects the store source");
     const fromStore = await showcasePages();
@@ -135,16 +273,44 @@ async function main(): Promise<void> {
   const builtin = showcaseStore();
   check(builtin !== null, "with no env set at all, a store is still named", builtin);
   check(showcaseSource() === "store", "and the source is that store");
+  /* ==========================================================================
+     TWO CLAIMS WERE BEING MADE BY ONE ASSERTION, and only one of them is about
+     this code.
+
+     "The compiled-in default names a store" is a property of the source and is
+     checked above — it is the one that deployed as nothing, twice. "That store
+     has pages IN THIS DATABASE" is a fact about whichever machine is running
+     the test, and it held until now only because the default happened to be
+     the laptop's own dev store. Pointing it at a real one made the same
+     assertion fail on every developer's machine, which is how a test starts
+     being ignored.
+
+     So the data half reports rather than fails — and loudly, because it is
+     still the thing that goes wrong. On a machine that HAS runs for the store
+     it stays a real assertion, including the twenty-page floor the skip
+     introduced.
+     ========================================================================== */
   const byDefault = await showcasePages();
-  check(
-    byDefault.length > 0,
-    `the built-in store publishes pages here`,
-    `${builtin} → ${byDefault.length} pages, ${Math.round(JSON.stringify(byDefault).length / 1024)}KB`,
-  );
+  const runsHere = (await getRepo().listRuns(builtin ?? "").catch(() => [])).length;
+
+  if (runsHere === 0) {
+    console.log(
+      `  · ${builtin} has no runs on this machine, so the marquee is empty here.` +
+        ` That is local. Check /api/health on the deployment for the number` +
+        ` that matters.`,
+    );
+  } else {
+    check(
+      byDefault.length > 0,
+      `the built-in store publishes pages here`,
+      `${builtin} → ${byDefault.length} pages from ${runsHere} runs` +
+        ` (nineteen newest skipped — a store under twenty pages shows nothing)`,
+    );
+  }
 
   /* Named runs are more specific than a named store, so they win. Without this
      ordering, setting SHOWCASE_RUNS to fix a bad marquee would do nothing. */
-  process.env.SHOWCASE_STORE = storeWithRuns ?? "ts.myshopify.com";
+  process.env.SHOWCASE_STORE = storeWithRuns;
   process.env.SHOWCASE_RUNS = ids[0];
   check(showcaseSource() === "runs", "a named run wins over a named store");
 
@@ -173,7 +339,7 @@ async function main(): Promise<void> {
 
   console.log("\nthe stale-list case, which is how this broke on production twice");
 
-  if (storeWithRuns) {
+  {
     process.env.SHOWCASE_STORE = storeWithRuns;
     process.env.SHOWCASE_RUNS = "from-another-database,and-another";
     const rescued = await showcasePages();
