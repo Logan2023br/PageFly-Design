@@ -73,7 +73,13 @@ export function AnalyticsView() {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/admin/analytics?days=${days}`);
+        /* Asked for afresh every time. The response says `no-store` too; this
+           is the half that also defeats a fetch served from the browser's own
+           memory cache on a back-navigation, where no request is made at all
+           and no response header can be consulted. */
+        const res = await fetch(`/api/admin/analytics?days=${days}`, {
+          cache: "no-store",
+        });
         const body = (await res.json()) as AnalyticsResponse;
         if (!live) return;
         if (body.ok) setView(body.view);

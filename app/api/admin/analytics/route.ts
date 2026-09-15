@@ -263,5 +263,13 @@ export async function GET(request: Request) {
     rows: [...rows].sort((a, b) => b.count - a.count).slice(0, 200),
   };
 
-  return Response.json({ ok: true, view } satisfies AnalyticsResponse);
+  /* NO-STORE, AND IT IS NOT BELT AND BRACES. `force-dynamic` above tells Next
+     not to cache the render; it says nothing to the BROWSER, and this response
+     went out with no cache headers at all — which leaves the browser free to
+     reuse it by heuristic. The symptom would be the worst kind on this screen:
+     somebody reloads to see whether a number moved, sees the same figure, and
+     concludes nothing happened. */
+  return Response.json({ ok: true, view } satisfies AnalyticsResponse, {
+    headers: { "cache-control": "no-store, max-age=0" },
+  });
 }
