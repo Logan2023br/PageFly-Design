@@ -1,6 +1,8 @@
 import "server-only";
 
 import { designPageTree } from "../ai/designServer";
+import { trackServer } from "../analyticsServer";
+import { EV } from "../analytics";
 import { readReferences } from "../ai/refVision";
 import { decideStructure } from "../design/structure";
 import { deckPlanEnabled, planDeck } from "../design/deckPlan";
@@ -50,6 +52,14 @@ import type { Brief } from "../validation";
     Four keeps a five-page deck about as fast as it was while bounding the
     worst case. */
 const CONCURRENCY = 4;
+
+/** Whole seconds since the job row was created, which is when the merchant
+    pressed the button — not when this worker happened to start. */
+function elapsedSeconds(createdAt: string): number {
+  const started = Date.parse(createdAt);
+  if (!Number.isFinite(started)) return 0;
+  return Math.max(0, Math.round((Date.now() - started) / 1000));
+}
 
 /** The card the merchant actually clicked, by id. */
 const styleDef = (id: string) => VISUAL_STYLES.find((s) => s.id === id);
@@ -721,6 +731,11 @@ async function run(
        nothing. Marked failed, so the screen can say so and support has
        something to look for. */
     if (ordered.length === 0) {
+      await trackServer(
+        EV.generateFailed,
+        { duration_seconds: elapsedSeconds(job.createdAt), reason: "no pages designed" },
+        job.domain,
+      );
       await repo.updateJob(job.id, {
         status: "failed",
         pages: [],
@@ -747,11 +762,30 @@ async function run(
       failures,
       tokens,
     });
+
+    /* Recorded HERE and not in the browser. The screen tells a merchant they
+       can close the tab, so a completion counted client-side would miss
+       everybody who took that advice — and report a product that fails far
+       more often than it does. */
+    await trackServer(
+      EV.generateCompleted,
+      {
+        duration_seconds: elapsedSeconds(job.createdAt),
+        pages: ordered.length,
+        failed_pages: failures.length,
+      },
+      job.domain,
+    );
   } catch (err) {
     /* Logged here and nowhere else. The screen no longer carries the message,
        so without this line an exception that killed a build would leave no
        trace at all. */
     console.error("[build] failed", err);
+    await trackServer(
+      EV.generateFailed,
+      { duration_seconds: elapsedSeconds(job.createdAt), reason: "exception" },
+      job.domain,
+    );
     await repo
       .updateJob(job.id, {
         status: "failed",

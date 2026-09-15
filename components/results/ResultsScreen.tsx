@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useMemo, useState } from "react";
+import { EV, track } from "@/lib/analytics";
 import { CATEGORY_BY_ID, PAGE_BY_ID, type CategoryId } from "@/lib/pageCatalog";
 import { useStore, useVisiblePages } from "@/lib/store";
 import { InstallPageFlyLink } from "../pagefly/InstallPageFly";
@@ -119,7 +120,10 @@ function Toolbar({ readOnly }: { readOnly: boolean }) {
             size="sm"
             icon="Download"
             disabled={exporting || visible.length === 0}
-            onClick={() => void exportAll(visible)}
+            onClick={() => {
+              track(EV.pagePngDownload, { count: visible.length });
+              void exportAll(visible);
+            }}
             title={`Download ${visible.length} PNG${visible.length === 1 ? "" : "s"}`}
           >
             {exporting ? `Exporting ${progress ?? ""}` : "PNG"}
@@ -130,7 +134,10 @@ function Toolbar({ readOnly }: { readOnly: boolean }) {
             size="sm"
             icon="Download"
             disabled={exporting || visible.length === 0}
-            onClick={() => void exportPageflyAll(visible)}
+            onClick={() => {
+              track(EV.pageExported, { scope: "all", count: visible.length });
+              void exportPageflyAll(visible);
+            }}
             title={`Download ${visible.length} .pagefly file${visible.length === 1 ? "" : "s"} to import into PageFly`}
           >
             {exporting ? `Exporting ${progress ?? ""}` : "Export all"}
@@ -259,7 +266,15 @@ export function ResultsScreen({
                   page={page}
                   index={i}
                   rebuilding={rebuilding.includes(page.id)}
-                  onOpen={() => onOpen(i)}
+                  onOpen={() => {
+                    /* On the results grid only. The landing gallery's opens
+                       are `design_gallery_opened`, which is a different
+                       question — one is a merchant reading their own page, the
+                       other is a visitor deciding whether to try this at
+                       all. */
+                    track(EV.pagePreview, { page_type: page.pageType });
+                    onOpen(i);
+                  }}
                 />
               </motion.div>
             ))}

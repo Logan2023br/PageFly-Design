@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { EV, track } from "@/lib/analytics";
 import type { PageMockup } from "@/lib/generate/types";
 import { cleanedUrl, inviteParams, loginParam, type Invite } from "@/lib/autoSignIn";
 import type { StoreAuthResponse } from "@/app/api/auth/store/route";
@@ -210,6 +211,14 @@ export function LandingScreen() {
    * signed in as one store then got that store from every link they were sent,
    * and nothing on the screen said why.
    */
+  /* THE DENOMINATOR OF EVERY RATIO on the analytics screen, so it fires once
+     per mount and nowhere else. `[]` rather than a dependency: this page does
+     not remount on navigation within itself, and a view counted twice makes
+     every conversion rate below it read low. */
+  useEffect(() => {
+    track(EV.landingViewed);
+  }, []);
+
   const designNow = async (event: React.MouseEvent) => {
     if (!linkDomain.current || linkSignIn === "trying") return;
 
@@ -328,6 +337,7 @@ export function LandingScreen() {
             <Link
               href="/design"
               title={domain}
+              onClick={() => track(EV.ctaClicked, { location: "header_store" })}
               className="max-w-[200px] truncate rounded-pf-md px-2 py-1.5 text-[13px] text-pf-muted transition-colors hover:text-pf-text sm:max-w-[280px]"
             >
               {domain}
@@ -345,6 +355,7 @@ export function LandingScreen() {
         ) : (
           <Link
             href="/design"
+            onClick={() => track(EV.ctaClicked, { location: "header_signin" })}
             className="rounded-pf-md border border-pf-border px-3.5 py-2 text-[13.5px] font-semibold text-pf-text transition-colors hover:border-pf-border-hi"
           >
             Sign in
@@ -368,7 +379,19 @@ export function LandingScreen() {
               here and presses it again three screens later; two different
               treatments of one action is two actions as far as anyone can
               tell. */}
-          <Link href="/design" onClick={(e) => void designNow(e)} className="inline-flex items-center gap-2 rounded-pf-md bg-pf-primary px-6 py-3.5 text-[15px] font-semibold text-white shadow-pf-button transition-colors duration-150 hover:bg-pf-primary-hi">
+          {/* FOUR LINKS REACH /design, not two, and they are not the same
+              action: these two are `Design now`, and the pair in the header
+              are `Open` and `Sign in` for somebody who already has an account.
+              Counted under one name without `location`, the CTA number would
+              be inflated by people who were never deciding anything. */}
+          <Link
+            href="/design"
+            onClick={(e) => {
+              track(EV.ctaClicked, { location: "hero" });
+              void designNow(e);
+            }}
+            className="inline-flex items-center gap-2 rounded-pf-md bg-pf-primary px-6 py-3.5 text-[15px] font-semibold text-white shadow-pf-button transition-colors duration-150 hover:bg-pf-primary-hi"
+          >
             Design now
             <Icon name="Sparkles" size={17} />
           </Link>
@@ -423,7 +446,14 @@ export function LandingScreen() {
         <p className="mx-auto mt-3 max-w-lg text-pf-body text-pf-muted">
           Four answers is all it needs. The first build takes about two minutes.
         </p>
-        <Link href="/design" onClick={(e) => void designNow(e)} className="mt-7 inline-flex items-center gap-2 rounded-pf-md bg-pf-primary px-6 py-3.5 text-[15px] font-semibold text-white shadow-pf-button transition-colors duration-150 hover:bg-pf-primary-hi">
+        <Link
+          href="/design"
+          onClick={(e) => {
+            track(EV.ctaClicked, { location: "closing" });
+            void designNow(e);
+          }}
+          className="mt-7 inline-flex items-center gap-2 rounded-pf-md bg-pf-primary px-6 py-3.5 text-[15px] font-semibold text-white shadow-pf-button transition-colors duration-150 hover:bg-pf-primary-hi"
+        >
           Design now
           <Icon name="Sparkles" size={17} />
         </Link>

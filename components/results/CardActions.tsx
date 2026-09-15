@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
+import { EV, track } from "@/lib/analytics";
 import type { PageMockup } from "@/lib/generate/types";
 import { useExport } from "./ExportProvider";
 import { Icon } from "../ui";
@@ -69,7 +70,12 @@ export function CardActions({ page }: { page: PageMockup }) {
       {/* ---- export .pagefly ---- */}
       <button
         type="button"
-        onClick={() => void onExport()}
+        onClick={() => {
+          /* `scope` because one page and all seven are different intentions,
+             and one number covering both cannot tell them apart. */
+          track(EV.pageExported, { scope: "one", count: 1 });
+          void onExport();
+        }}
         disabled={exporting}
         title="Download this page as a .pagefly file you can import into PageFly"
         className={`pointer-events-auto inline-flex items-center gap-1.5 rounded-pf-md px-2.5 py-1.5 text-[11.5px] font-semibold shadow-pf-float backdrop-blur transition-colors duration-150 disabled:cursor-not-allowed ${

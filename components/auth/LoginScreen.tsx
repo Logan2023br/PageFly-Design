@@ -3,7 +3,8 @@
 import { motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { EV, track } from "@/lib/analytics";
 import type { StoreAuthResponse } from "@/app/api/auth/store/route";
 import { Button, Eyebrow, GradientWord, Icon, Panel } from "../ui";
 
@@ -22,6 +23,13 @@ export function LoginScreen({ next }: { next: string }) {
   const [state, setState] = useState<State>("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
+
+  /* The second denominator, and the one that says where traffic went. Compared
+     against `design_landing_viewed` it is the whole of "people pressed the CTA
+     and then what". */
+  useEffect(() => {
+    track(EV.signinViewed);
+  }, []);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -51,6 +59,25 @@ export function LoginScreen({ next }: { next: string }) {
         setHint("Check /api/health for what is missing.");
         return;
       }
+
+      /* ==========================================================================
+         ONE EVENT, THREE — NOT TWO — OUTCOMES.
+
+         The brief named `success`, `not_registered` and `invalid_format`. The
+         route also answers 503: the store list could not be reached, or this
+         deployment is not finished being set up. Filing that under
+         `invalid_format` would read as "the user typed rubbish" about an
+         outage of ours, and the number it lands in is the one meant to show
+         whether the ads are bringing people who know what Shopify is.
+         ========================================================================== */
+      const result = body.ok
+        ? "success"
+        : res.status === 503
+          ? "server_error"
+          : res.status === 403
+            ? "not_registered"
+            : "invalid_format";
+      track(EV.signinSubmitted, { result });
 
       if (body.ok) {
         setState("granted");
@@ -195,6 +222,10 @@ export function LoginScreen({ next }: { next: string }) {
               If you don&rsquo;t have an account yet, please{" "}
               <Link
                 href="/design/register"
+                /* The gap between this and `not_registered` is the cost of
+                   asking people to register on a second screen — how many were
+                   turned away and did not come back. */
+                onClick={() => track(EV.registerLinkClicked)}
                 className="rounded-pf-sm font-semibold text-pf-primary-hi underline underline-offset-2 hover:text-pf-text focus:outline-none focus-visible:ring-2 focus-visible:ring-pf-primary-hi"
               >
                 register

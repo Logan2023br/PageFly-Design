@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { EV, track } from "@/lib/analytics";
 import { useStore } from "@/lib/store";
 import type { BuildMode } from "@/lib/validation";
 import { Icon } from "../ui";
@@ -52,7 +53,10 @@ export function ModeToggle() {
               type="button"
               role="radio"
               aria-checked={active}
-              onClick={() => setMode(m.id)}
+              onClick={() => {
+                track(EV.briefModeSelected, { mode: m.id });
+                setMode(m.id);
+              }}
               className={`relative flex items-center gap-1.5 rounded-pf-pill px-3.5 py-2 text-[12.5px] font-semibold transition-colors sm:px-4 ${
                 active ? "text-pf-text" : "text-pf-muted hover:text-pf-text"
               }`}

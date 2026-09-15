@@ -1,6 +1,8 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
+import { useEffect } from "react";
+import { EV, track } from "@/lib/analytics";
 import { useStore } from "@/lib/store";
 import { GradientWord } from "../ui";
 import { ImageUpload } from "./ImageUpload";
@@ -15,6 +17,10 @@ import { StylePicker } from "./StylePicker";
 
 export function BriefScreen() {
   const quick = useStore((s) => s.mode) === "quick";
+
+  useEffect(() => {
+    track(EV.briefViewed);
+  }, []);
 
   return (
     <motion.div

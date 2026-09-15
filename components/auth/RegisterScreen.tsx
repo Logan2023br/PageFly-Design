@@ -3,7 +3,8 @@
 import { motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { EV, track } from "@/lib/analytics";
 import type { RegisterResponse } from "@/app/api/auth/register/route";
 import {
   emailProblem,
@@ -70,6 +71,18 @@ export function RegisterScreen() {
      stays quiet, and `markAll` below is what turns those into errors. */
   const shown = (field: FieldName) => (touched[field] ? problems[field] : null);
 
+  useEffect(() => {
+    track(EV.registerViewed);
+  }, []);
+
+  /* The success screen has no address of its own, so it is announced when the
+     state reaches it rather than on a route change. Compared with the count of
+     `design_register_submitted result=success` it says whether anybody is
+     falling over between the answer arriving and the screen drawing. */
+  useEffect(() => {
+    if (state === "done") track(EV.registeredViewed);
+  }, [state]);
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (state === "sending") return;
@@ -79,7 +92,21 @@ export function RegisterScreen() {
        runs the same checks again on what arrives — a browser check is a
        courtesy to whoever is typing, never a gate. See lib/storeForm.ts. */
     setTouched({ domain: true, name: true, email: true });
-    if (problems.domain || problems.name || problems.email) return;
+    if (problems.domain || problems.name || problems.email) {
+      /* EVERY FIELD THAT IS WRONG, not the first one. People fail more than
+         one box at a time, and reporting only the first would make `domain`
+         win every time simply because it is the box at the top — which is the
+         opposite of the question, "which box stops people". */
+      track(EV.registerSubmitted, {
+        result: "validation_error",
+        error_field: [
+          problems.domain ? "domain" : null,
+          problems.name ? "store_name" : null,
+          problems.email ? "email" : null,
+        ].filter((f): f is string => f !== null),
+      });
+      return;
+    }
 
     setState("sending");
     setMessage(null);
@@ -105,6 +132,11 @@ export function RegisterScreen() {
         setHint("Check /api/health for what is missing.");
         return;
       }
+
+      track(EV.registerSubmitted, {
+        result: body.ok ? "success" : res.status >= 500 || res.status === 503 ? "server_error" : "validation_error",
+        ...(body.ok ? {} : { status: res.status }),
+      });
 
       if (body.ok) {
         setState("done");
@@ -224,6 +256,10 @@ export function RegisterScreen() {
                           href="https://shopify.pxf.io/DWmaZb"
                           target="_blank"
                           rel="noopener noreferrer"
+                          /* How many arrivals are not Shopify merchants at
+                             all — which is a reading of the keywords, not of
+                             the form. */
+                          onClick={() => track(EV.shopifySignupClicked)}
                           className="rounded-pf-sm font-semibold text-pf-primary-hi underline underline-offset-2 hover:text-pf-text focus:outline-none focus-visible:ring-2 focus-visible:ring-pf-primary-hi"
                         >
                           Create a Shopify account
@@ -338,7 +374,10 @@ function Done({ domain }: { domain: string }) {
           size="lg"
           iconRight="ArrowRight"
           className="w-full"
-          onClick={() => window.location.assign("/design/login")}
+          onClick={() => {
+            track(EV.signinReturnClicked);
+            window.location.assign("/design/login");
+          }}
         >
           Go to sign in
         </Button>

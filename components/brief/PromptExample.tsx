@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
+import { EV, track } from "@/lib/analytics";
 import { MAX_PROMPT_CHARS, PROMPT_EXAMPLE } from "@/lib/briefOptions";
 import { Icon } from "../ui";
 
@@ -59,7 +60,10 @@ export function PromptExampleButton() {
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          track(EV.briefExampleClicked);
+          setOpen(true);
+        }}
         className="inline-flex items-center gap-1.5 rounded-pf-pill border border-pf-primary-hi/45 bg-pf-primary/16 px-2.5 py-1 text-[11.5px] font-semibold text-pf-text transition-colors hover:bg-pf-primary/28"
       >
         <Icon name="FileText" size={12} />

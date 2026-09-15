@@ -15,6 +15,7 @@ import {
   isRepeatable,
   totalSelected,
 } from "./pageCatalog";
+import { EV, track } from "./analytics";
 import { normalizeHex, type VisualStyleId } from "./styleTokens";
 import {
   EMPTY_DRAFT,
@@ -321,6 +322,10 @@ export const useStore = create<State & Actions>((set, get) => ({
   /* ---- generation ----------------------------------------------------- */
 
   start: async () => {
+    /* The person's action, so the browser reports it — unlike the build's
+       outcome, which the runner reports because the screen tells a merchant
+       they may close the tab. See lib/analyticsServer.ts. */
+    track(EV.generateStarted);
     const { draft } = get();
     const parsed = validateBrief(draft);
     if (!parsed.success) {
@@ -482,6 +487,7 @@ export const useStore = create<State & Actions>((set, get) => ({
   },
 
   cancel: () => {
+    track(EV.generateCancel);
     controller?.abort();
     controller = null;
     /* The build lives on the server, so stopping the poller is not stopping
@@ -500,13 +506,17 @@ export const useStore = create<State & Actions>((set, get) => ({
     });
   },
 
-  editBrief: () => set({ screen: "brief", previewIndex: null }),
+  editBrief: () => {
+    track(EV.briefEdit);
+    set({ screen: "brief", previewIndex: null });
+  },
 
   regenerateAll: async () => {
     await get().start();
   },
 
   regenerateOne: (pageId) => {
+    track(EV.pageRegenerate);
     const { brief, pages } = get();
     if (!brief) return;
     const existing = pages.find((p) => p.id === pageId);

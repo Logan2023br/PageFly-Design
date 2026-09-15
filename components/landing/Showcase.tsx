@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import type { PageMockup } from "@/lib/generate/types";
+import { EV, track } from "@/lib/analytics";
 import { useStore } from "@/lib/store";
 import { ResultCard } from "../results/ResultCard";
 import { PreviewOverlay } from "../preview/PreviewOverlay";
@@ -80,7 +81,13 @@ export function Showcase({ pages }: { pages: PageMockup[] }) {
         page={page}
         index={at}
         rebuilding={false}
-        onOpen={() => openPreview(at)}
+        onOpen={() => {
+          /* The page type rides along because the question is not only "did
+             they look" but "at what" — which page types get opened is what
+             later decides which ones are worth making more of. */
+          track(EV.galleryOpened, { page_type: pages[at]?.pageType ?? "unknown" });
+          openPreview(at);
+        }}
         readOnly
       />
     </div>

@@ -204,6 +204,48 @@ async function main(): Promise<void> {
   );
   check(none.length === 0, "a range with nothing in it counts nothing", String(none.length));
 
+  /* ==========================================================================
+     EVERY NAME IS ACTUALLY FIRED SOMEWHERE.
+
+     The failure this catches has no symptom. An event declared in `EV` and
+     never wired to anything produces a count of zero, and zero renders exactly
+     like "nobody did that" — so the screen reads as a finding rather than as a
+     missing line of code, and somebody makes a decision on it.
+
+     A grep, deliberately: a React component's click handler cannot be invoked
+     from a script without a DOM, but whether the call site EXISTS is a
+     question the source can answer.
+     ========================================================================== */
+  console.log("\nevery event has a call site");
+
+  const { EV } = await import("@/lib/analytics");
+  const { execSync } = await import("node:child_process");
+
+  /* `lib/analytics.ts` itself is excluded — it is where the names are
+     declared, so it would match every one of them. */
+  /* `EV\.` rather than `track(EV\.`, because the runner writes its calls over
+     several lines — `trackServer(` on one and the name on the next — and a
+     line-based grep for the whole call misses them. The question here is only
+     whether the constant is referenced at all outside its declaration. */
+  const source = execSync(
+    "grep -rn --include=*.ts --include=*.tsx 'EV\\.' components lib app || true",
+    { encoding: "utf8" },
+  )
+    .split("\n")
+    .filter((l) => !l.startsWith("lib/analytics.ts:"))
+    .join("\n");
+
+  for (const [key, name] of Object.entries(EV)) {
+    check(source.includes(`EV.${key}`), `${name}`, source.includes(`EV.${key}`) ? null : "declared but never fired");
+  }
+
+  /* And the other direction: a name the endpoint would refuse. Its regex is
+     `^design_[a-z0-9_]+$`, and a name that fails it is dropped at the door — a
+     404 nobody sees, for an event somebody thinks is being recorded. */
+  console.log("\nand every name is one the endpoint accepts");
+  const bad = Object.values(EV).filter((n) => !/^design_[a-z0-9_]+$/.test(n));
+  check(bad.length === 0, "all names match the endpoint's rule", bad.join(", ") || "none");
+
   console.log(failures === 0 ? "\nall good\n" : `\n${failures} failure(s)\n`);
   process.exit(failures === 0 ? 0 : 1);
 }
