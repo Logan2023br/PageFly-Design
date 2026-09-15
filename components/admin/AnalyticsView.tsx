@@ -199,7 +199,7 @@ function Funnel({ view }: { view: View }) {
   return (
     <TileGroup
       title="The funnel"
-      note={`Distinct people at each step, over ${view.days} days`}
+      note={`Distinct people at each step over ${view.days} days — somebody who presses a button five times counts once`}
     >
       {view.funnel.map((step, i) => {
         const prev = i === 0 ? null : view.funnel[i - 1].visitors;
@@ -215,11 +215,22 @@ function Funnel({ view }: { view: View }) {
             icon={STEP_ICON[step.key] ?? "ChartColumn"}
             label={step.label}
             value={step.visitors}
-            footnote={
-              ofPrev === null
-                ? step.note
-                : `${Math.round(ofPrev * 100)}% of the step above`
-            }
+            footnote={[
+              ofPrev === null ? step.note : `${Math.round(ofPrev * 100)}% of the step above`,
+              /* THE EVENT COUNT, whenever it differs from the people count.
+                 The figure is distinct people — one person pressing Export
+                 five times is one person who exported — and that is the only
+                 way a step cannot outrun the step above it. But read alone, by
+                 somebody who has just pressed a button five times, `1` looks
+                 like a bug rather than a convention. The group heading says
+                 "distinct people" and that was not enough: the tile has to say
+                 it where the number is. */
+              step.events > step.visitors
+                ? `${step.events.toLocaleString()} times in total`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
             ratio={step.visitors / top}
             tone={steep ? "danger" : "default"}
             delay={Math.min(i * 0.04, 0.3)}
