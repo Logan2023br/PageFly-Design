@@ -12,6 +12,7 @@ import {
 } from "@/lib/collections/pagefly";
 import { DEVICES, type PageMockup } from "@/lib/generate/types";
 import { PreviewOverlay } from "../preview/PreviewOverlay";
+import { InstallPageFlyLink } from "../pagefly/InstallPageFly";
 import { Button, Icon, Panel } from "../ui";
 
 /* ==========================================================================
@@ -59,6 +60,13 @@ export function CollectionsSection() {
             onOpen={() => setOpen(collection)}
           />
         ))}
+      </div>
+
+      {/* These are .pagefly files too, so somebody downloading one needs the
+          same app — and here it is more likely they do not have it, because a
+          visitor can reach this section without ever having built anything. */}
+      <div className="mt-4 text-center">
+        <InstallPageFlyLink />
       </div>
 
       <AnimatePresence>

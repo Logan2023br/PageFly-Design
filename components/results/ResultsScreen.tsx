@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useMemo, useState } from "react";
 import { CATEGORY_BY_ID, PAGE_BY_ID, type CategoryId } from "@/lib/pageCatalog";
 import { useStore, useVisiblePages } from "@/lib/store";
+import { InstallPageFlyLink } from "../pagefly/InstallPageFly";
 import { Button, Chip, Icon, InlineError, Panel } from "../ui";
 import { useExport } from "./ExportProvider";
 import { LOCKED_TOOLTIP } from "./CardActions";
@@ -170,6 +171,13 @@ function Toolbar({ readOnly }: { readOnly: boolean }) {
             </AnimatePresence>
           </div>
         </div>
+      </div>
+
+      {/* Under the export controls, quiet. Most people reading this already
+          have PageFly — it is how they came to be here — so it is a line of
+          text for the ones who do not, not a button competing with Export. */}
+      <div className="flex justify-end">
+        <InstallPageFlyLink />
       </div>
 
       {categories.length > 1 && (

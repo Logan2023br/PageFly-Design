@@ -16,7 +16,8 @@ import { PreviewOverlay } from "../preview/PreviewOverlay";
 import { ExportProvider } from "../results/ExportProvider";
 import { ResultsScreen } from "../results/ResultsScreen";
 import { PageQuota, WorkspaceNav } from "../ProgressSteps";
-import { ReviewPrompt, openReviewPrompt } from "../review/ReviewPrompt";
+import { openReviewPrompt } from "../review/ReviewPrompt";
+import { NoticeStack } from "../notices/NoticeStack";
 import { StoreMenu } from "../StoreMenu";
 import { Button, Icon, Panel } from "../ui";
 
@@ -246,7 +247,7 @@ export function LibraryScreen({
               <LibraryContent runs={runs} />
             </div>
           </div>
-          <ReviewPrompt />
+          <NoticeStack />
         </div>
       </AccountProvider>
     </MotionConfig>

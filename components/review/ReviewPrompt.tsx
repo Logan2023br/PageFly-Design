@@ -167,7 +167,11 @@ export function ReviewPrompt() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 16, scale: 0.98 }}
           transition={{ type: "spring", stiffness: 320, damping: 30 }}
-          className="pfd-glass fixed bottom-4 right-4 z-50 w-[min(360px,calc(100vw-2rem))] rounded-pf-card border border-pf-border p-4 shadow-pf-float"
+          /* No corner of its own any more — `NoticeStack` owns where these
+             sit and what order they stack in. Two panels that both claimed
+             `fixed bottom-4 right-4` landed on top of each other, and the one
+             underneath could not be read or closed. */
+          className="pfd-glass w-[min(360px,calc(100vw-2rem))] rounded-pf-card border border-pf-border p-4 shadow-pf-float"
         >
           {phase === "already" ? (
             /* Two ways in, and never the timer — the timer's `eligible` already

@@ -6,7 +6,7 @@ import { usePreviewDefaults, useStore, useVisiblePages } from "@/lib/store";
 import type { Account } from "@/lib/account";
 import { AccountProvider } from "./AccountProvider";
 import { RunRecorder } from "./RunRecorder";
-import { ReviewPrompt } from "./review/ReviewPrompt";
+import { NoticeStack } from "./notices/NoticeStack";
 import { BriefScreen } from "./brief/BriefScreen";
 import { GeneratingScreen } from "./generating/GeneratingScreen";
 import { PreviewOverlay } from "./preview/PreviewOverlay";
@@ -115,7 +115,7 @@ export function DesignApp({ account }: { account: Account | null }) {
             </ExportProvider>
           </div>
           <RunRecorder />
-          <ReviewPrompt />
+          <NoticeStack />
         </div>
       </div>
      </AccountProvider>

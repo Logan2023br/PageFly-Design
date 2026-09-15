@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { InstallPageFlyButton } from "../pagefly/InstallPageFly";
 import { Icon } from "../ui";
 
 /* ==========================================================================
@@ -171,6 +172,17 @@ export function HowItWorks() {
           </li>
         ))}
       </ol>
+
+      {/* AFTER the four steps, because step four is where PageFly first
+          appears — the panel above it is literally its import dialog. Offered
+          before that, the button would be asking a visitor to install
+          something for a reason they have not been given yet. */}
+      <div className="mt-8 flex flex-col items-center gap-2">
+        <p className="text-[12.5px] text-pf-muted">
+          Step four needs the PageFly app on your store.
+        </p>
+        <InstallPageFlyButton size="sm" />
+      </div>
 
       {zoom && (
         <div

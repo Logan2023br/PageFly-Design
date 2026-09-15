@@ -12,6 +12,7 @@ import {
 import type { PageMockup } from "@/lib/generate/types";
 import { captureNode, downloadDataUrl, nextPaint, slugify } from "@/lib/png";
 import { downloadBlob } from "@/lib/pagefly/builder";
+import { announceExport } from "@/lib/pagefly/install";
 import { fileStem, pageFromBreakpoints, type Rendered } from "@/lib/pagefly/fromDom";
 import { designTreeSchema, type DesignTree } from "@/lib/design/schema";
 import { pageflyFromTree } from "@/lib/design/toPagefly";
@@ -156,6 +157,10 @@ export function ExportProvider({ children }: { children: ReactNode }) {
         },
       );
       downloadBlob(blob, filename);
+      /* AFTER the file is handed over, never before. The install notice says
+         "your file is downloading"; firing it on the attempt would say that
+         about a build that then threw. */
+      announceExport();
       return;
     }
 
@@ -168,6 +173,7 @@ export function ExportProvider({ children }: { children: ReactNode }) {
 
     const { blob, filename } = pageFromBreakpoints(renders, page, EXPORT_WIDTH);
     downloadBlob(blob, filename);
+    announceExport();
   }, []);
 
   const exportPagefly = useCallback(
