@@ -2,6 +2,10 @@ import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, Inter } from "next/font/google";
 import "./globals.css";
 import { WEBFONT_CSS_URL } from "@/lib/styleTokens";
+import {
+  GoogleTagManagerHead,
+  GoogleTagManagerNoScript,
+} from "@/components/GoogleTagManager";
 
 /* Display + body pairing. pagefly.io's exact typeface could not be confirmed
    (the site rate-limited every fetch), so these are the fallbacks the brief
@@ -77,8 +81,21 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
         <link rel="stylesheet" href={WEBFONT_CSS_URL} />
+
+        {/* LAST IN THE HEAD, not first, and that is deliberate. Google's
+            snippet says "as high as possible" — written for a hand-made page,
+            where the only cost of being early is nothing. Here the three lines
+            above it are `preconnect` hints and the font stylesheet, and those
+            have to be first or the browser opens the font connections late and
+            every page renders in a fallback face for a moment.
+
+            GTM loses nothing by being fourth: it is `afterInteractive`, so it
+            starts after hydration either way. See components/GoogleTagManager. */}
+        <GoogleTagManagerHead />
       </head>
       <body suppressHydrationWarning style={{ margin: 0 }}>
+        {/* Immediately after the opening tag, as the snippet requires. */}
+        <GoogleTagManagerNoScript />
         {children}
       </body>
     </html>
