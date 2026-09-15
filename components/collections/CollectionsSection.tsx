@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { COLLECTIONS, shortenLabels, type CollectionMeta } from "@/lib/collections";
+import { COLLECTIONS, shortenLabels, shotFor, type CollectionMeta } from "@/lib/collections";
 import { pageToHtml, readPageflySet, type PageflyPage } from "@/lib/collections/pagefly";
-import type { PageMockup } from "@/lib/generate/types";
+import { DEVICES, type PageMockup } from "@/lib/generate/types";
 import { PreviewOverlay } from "../preview/PreviewOverlay";
 import { Button, Icon, Panel } from "../ui";
 
@@ -169,7 +169,11 @@ function CollectionCard({
       >
         <div className="relative aspect-[4/3] overflow-hidden bg-pf-bg-deep">
           {cover ? (
-            <PagePreview page={cover} scrolling={hovered && !reduced} />
+            <PagePreview
+              page={cover}
+              scrolling={hovered && !reduced}
+              shot={shotFor(collection, cover.label, "card")}
+            />
           ) : (
             <div className="grid size-full place-items-center">
               <span className="text-[12px] text-pf-faint">
@@ -228,11 +232,22 @@ function PagePreview({
   page,
   scrolling,
   width = 1280,
+  shot,
 }: {
   page: PageflyPage;
   scrolling: boolean;
   /** the layout width to render at — a real breakpoint, not a thumbnail size */
   width?: number;
+  /**
+   * A screenshot to show instead of drawing the file.
+   *
+   * WHEN THERE IS ONE, IT WINS. The renderer in `lib/collections/pagefly.ts` is
+   * a good reconstruction; a screenshot is PageFly's own render, with its base
+   * stylesheet and a real store behind the product elements — neither of which
+   * this app has. The renderer stays as the fallback, so a set added without
+   * pictures still works the day it arrives.
+   */
+  shot?: string | null;
 }) {
   const html = useHtml(page);
   const box = useRef<HTMLDivElement>(null);
@@ -254,10 +269,16 @@ function PagePreview({
   }, []);
 
   const scale = size.w > 0 ? size.w / width : 0;
-  /* Tall enough to hold a long landing page. The document does not scroll —
-     the frame is this tall and gets moved — so a shorter page simply has white
-     beneath it, which `travel` accounts for. */
-  const tall = 4200;
+
+  /* THE REAL HEIGHT, once a screenshot has loaded.
+ 
+     A fixed 4200 was fine for the iframe, which is a box this app decides the
+     size of. A screenshot is not: these run from about 4,000 pixels to 8,200
+     depending on the page and the breakpoint — the About page at 390 wide is
+     7,131. Scrolling a fixed distance would stop two thirds of the way down a
+     tall one and run off the bottom of a short one into blank space. */
+  const [shotHeight, setShotHeight] = useState(0);
+  const tall = shot && shotHeight > 0 ? shotHeight : 4200;
   /* How far it can move before the bottom is on screen, in the document's own
      pixels, because that is the unit `y` is in. */
   const travel = scale > 0 ? Math.max(0, tall - size.h / scale) : 0;
@@ -273,16 +294,34 @@ function PagePreview({
            and a long one does not race. */
         transition={{ duration: scrolling ? Math.max(4, travel / 260) : 0.5, ease: "linear" }}
       >
-        <iframe
-          title={page.label}
-          srcDoc={html}
-          /* Nothing in these files needs script, and the documents are built
-             from a merchant's own export — so the sandbox is empty, which
-             denies script, forms, popups and navigation in one attribute. */
-          sandbox=""
-          scrolling="no"
-          className="pointer-events-none size-full border-0"
-        />
+        {shot ? (
+          /* eslint-disable-next-line @next/next/no-img-element -- a full-page
+             screenshot, thousands of pixels tall and a different shape per
+             page; next/image wants dimensions this does not have, and there is
+             nothing to optimise in an already-sized webp. */
+          <img
+            src={shot}
+            alt={page.label}
+            loading="lazy"
+            /* Measured from the rendered element rather than from
+               `naturalHeight`: the image is laid out at `width`, so what the
+               scroll has to travel is the height AT THAT WIDTH. */
+            onLoad={(e) => setShotHeight(e.currentTarget.offsetHeight)}
+            className="block"
+            style={{ width }}
+          />
+        ) : (
+          <iframe
+            title={page.label}
+            srcDoc={html}
+            /* Nothing in these files needs script, and the documents are built
+               from a merchant's own export — so the sandbox is empty, which
+               denies script, forms, popups and navigation in one attribute. */
+            sandbox=""
+            scrolling="no"
+            className="pointer-events-none size-full border-0"
+          />
+        )}
       </motion.div>
       )}
     </div>
@@ -411,7 +450,11 @@ function CollectionDetail({
                 className="relative block aspect-[3/4] w-full bg-pf-bg-deep"
                 aria-label={`Open ${labels[i]}`}
               >
-                <PagePreview page={page} scrolling={hovering === i} />
+                <PagePreview
+                  page={page}
+                  scrolling={hovering === i}
+                  shot={shotFor(collection, page.label, "card")}
+                />
                 <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center gap-1.5 bg-gradient-to-t from-pf-bg/85 to-transparent pb-2.5 pt-7 text-[11.5px] font-semibold text-pf-text opacity-0 transition-opacity duration-200 group-hover:opacity-100">
                   <Icon name="Maximize" size={12} />
                   Open
@@ -443,24 +486,43 @@ function CollectionDetail({
                 was === null ? was : (was + delta + pages.length) % pages.length,
               )
             }
-            renderPage={(_, width) => (
-              <iframe
-                title={labels[viewing]}
-                srcDoc={pageToHtml(pages[viewing])}
-                sandbox=""
-                /* Width comes from the device the overlay is set to, and the
-                   page's own media queries do the rest — `pageToHtml` writes
-                   the file's laptop/tablet/mobile keys out as real media
-                   queries, and `customCSS` arrives with whatever the designer
-                   wrote. So narrowing the frame runs the page's actual
-                   responsive rules rather than shrinking a picture of it.
+            renderPage={(_, width) => {
+              /* WHICH DEVICE, from the width the overlay handed over. The four
+                 screenshots are named for the ids in `lib/generate/types` and
+                 the overlay's device list is the same four, so this is a
+                 lookup rather than a guess — and if a width ever arrives that
+                 is not one of them, the file's own render draws it instead of
+                 a broken image. */
+              const device = DEVICES.find((d) => d.width === width)?.id;
+              const shot = device ? shotFor(collection, pages[viewing].label, device) : null;
 
-                   Tall and fixed because the overlay's own container is what
-                   scrolls; an iframe cannot size itself to its content across
-                   a document boundary. */
-                style={{ width, height: 5200, border: 0, display: "block" }}
-              />
-            )}
+              return shot ? (
+                /* eslint-disable-next-line @next/next/no-img-element -- a
+                   full-page screenshot whose height is different per page and
+                   per breakpoint; there is nothing for next/image to optimise
+                   in an already-sized webp. */
+                <img
+                  src={shot}
+                  alt={labels[viewing]}
+                  style={{ width, display: "block" }}
+                />
+              ) : (
+                <iframe
+                  title={labels[viewing]}
+                  srcDoc={pageToHtml(pages[viewing])}
+                  sandbox=""
+                  /* The fallback, for a set with no screenshots. The page's own
+                     media queries do the work — `pageToHtml` writes the file's
+                     laptop/tablet/mobile keys out as real ones — so narrowing
+                     the frame runs its actual responsive rules.
+
+                     Tall and fixed because the overlay's container is what
+                     scrolls, and an iframe cannot size itself to its content
+                     across a document boundary. */
+                  style={{ width, height: 5200, border: 0, display: "block" }}
+                />
+              );
+            }}
           />
         )}
       </AnimatePresence>
