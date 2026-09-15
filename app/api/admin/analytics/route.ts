@@ -88,6 +88,14 @@ function slices(
     if (row.name !== name) continue;
     const raw = row.props[key];
 
+    /* A ROW WITHOUT THIS KEY IS NOT A MEMBER OF THIS BREAKDOWN, and skipping
+       it is not tidiness. `error_field` only exists on a refused submission —
+       so filing the rows without one under `unknown` put every SUCCESSFUL
+       registration into "what stops people registering", where it read as a
+       fourth thing blocking them. Found the first time this ran on data that
+       had successes in it. */
+    if (raw === undefined || raw === null) continue;
+
     /* A list, for `error_field` — one submission can name three boxes and each
        of them counts as one thing that stopped somebody. */
     const values = Array.isArray(raw) ? raw : [raw];

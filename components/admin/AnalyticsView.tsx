@@ -3,7 +3,9 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import type { AnalyticsResponse, AnalyticsView as View, Slice } from "@/app/api/admin/analytics/route";
-import { Icon, Panel } from "../ui";
+import type { IconName } from "@/lib/icons";
+import { CountUp, Icon, Panel } from "../ui";
+import { StatTile, TileGroup, TileRow } from "./StatTile";
 
 /* ==========================================================================
    Analytics.
@@ -30,6 +32,19 @@ import { Icon, Panel } from "../ui";
    AND EVERY SEGMENT IS LABELLED as well as coloured, so identity never rests
    on hue alone — and the table at the bottom is the same numbers for anyone
    the charts do not serve.
+
+   ==========================================================================
+   TILES, FOUR TO A ROW, and it turned out to be the better shape rather than
+   only the requested one. A statistic here has exactly the three tiers a tile
+   has: what is counted, the count, and what to read it against — "Sign-in
+   tried · 6 · 43% of the step above". A panel of stacked rows was showing the
+   same three things with more furniture around them.
+
+   What a grid of boxes loses to a chart is length: which step is long and
+   which is short, seen rather than divided. So a tile in a row that shares a
+   scale carries a hairline along its bottom edge at the same ratio its
+   footnote states. Not a second measure, and never on a tile that shares a
+   scale with nothing.
    ========================================================================== */
 
 /** Validated against #0a0616. See the note above before changing any of these. */
@@ -122,31 +137,11 @@ export function AnalyticsView() {
       {view && !view.empty && (
         <>
           <Funnel view={view} />
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <SigninResults view={view} />
-            <CtaSplit view={view} />
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <RegisterCost view={view} />
-            <BuildOutcomes view={view} />
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Bars
-              title="What stops people registering"
-              note="Every field a refused submission named, so a form failing on three boxes counts three"
-              rows={view.registerFields}
-              empty="No refused registrations"
-            />
-            <Bars
-              title="Gallery, by page type"
-              note="Which templates a visitor opens before deciding"
-              rows={view.gallery}
-              empty="Nobody opened the gallery"
-            />
-          </div>
+          <SigninTiles view={view} />
+          <CtaTiles view={view} />
+          <RegisterTiles view={view} />
+          <BuildTiles view={view} />
+          <FieldTiles view={view} />
 
           <RawTable view={view} />
 
@@ -171,342 +166,368 @@ export function AnalyticsView() {
 
 /* ---- the funnel ---------------------------------------------------------- */
 
+/** One icon per step, so a tile is recognisable before it is read. */
+const STEP_ICON: Record<string, IconName> = {
+  landing: "Eye",
+  cta: "Sparkles",
+  signin: "LogIn",
+  submitted: "Keyboard",
+  brief: "ClipboardList",
+  started: "Rocket",
+  completed: "CircleCheck",
+  exported: "Download",
+};
+
 /**
- * Ordered steps, as bars against the first.
+ * The eight steps, as tiles against the first.
  *
  * NOT A TAPERED FUNNEL SHAPE. Those encode the number in a trapezoid's area,
  * which nobody can compare by eye, and the slope between two steps reads as a
- * rate when it is just two numbers. A bar per step against one baseline is the
- * same data where the lengths can actually be compared — and the only number
- * worth acting on, the drop from the step above, is printed rather than left
- * to be estimated.
+ * rate when it is two numbers. Each step is a tile whose footnote states the
+ * drop from the step above, and whose hairline is that step against the top of
+ * the funnel — so the number is read and the shape is seen.
  */
 function Funnel({ view }: { view: View }) {
   const top = view.funnel[0]?.visitors || 1;
 
   return (
-    <Panel className="p-4 sm:p-5">
-      <h2 className="text-[13.5px] font-semibold text-pf-text">The funnel</h2>
-      <p className="mt-0.5 text-[11.5px] text-pf-muted">
-        Distinct people at each step, over {view.days} days
-      </p>
+    <TileGroup
+      title="The funnel"
+      note={`Distinct people at each step, over ${view.days} days`}
+    >
+      {view.funnel.map((step, i) => {
+        const prev = i === 0 ? null : view.funnel[i - 1].visitors;
+        const ofPrev = prev && prev > 0 ? step.visitors / prev : null;
+        /* Below half of the step above is where a gap stops being ordinary
+           attrition and becomes a question — coloured rather than left for
+           somebody to spot by reading eight footnotes. */
+        const steep = ofPrev !== null && ofPrev < 0.5;
 
-      <div className="mt-4 grid gap-2.5">
-        {view.funnel.map((step, i) => {
-          const prev = i === 0 ? null : view.funnel[i - 1].visitors;
-          const ofTop = top > 0 ? step.visitors / top : 0;
-          const ofPrev = prev && prev > 0 ? step.visitors / prev : null;
-          /* Below half of the previous step is where a gap stops being normal
-             attrition and starts being a question — flagged rather than left
-             for somebody to notice. */
-          const steep = ofPrev !== null && ofPrev < 0.5;
-
-          return (
-            <div key={step.key} className="group grid gap-1" title={`${step.events} events`}>
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="text-[12.5px] font-semibold text-pf-body">{step.label}</span>
-                <span className="flex items-baseline gap-2 tabular-nums">
-                  <span className="text-[13px] font-semibold text-pf-text">
-                    {step.visitors.toLocaleString()}
-                  </span>
-                  {ofPrev !== null && (
-                    <span
-                      className={`text-[11.5px] ${steep ? "text-pf-danger" : "text-pf-muted"}`}
-                    >
-                      {Math.round(ofPrev * 100)}% of previous
-                    </span>
-                  )}
-                </span>
-              </div>
-
-              <div className="h-2 w-full overflow-hidden rounded-full bg-pf-bg-deep">
-                <motion.div
-                  className="h-full rounded-full bg-pf-primary"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${Math.max(ofTop * 100, step.visitors > 0 ? 1.5 : 0)}%` }}
-                  transition={{ duration: 0.5, delay: Math.min(i * 0.04, 0.3), ease: [0.22, 1, 0.36, 1] }}
-                />
-              </div>
-
-              <p className="text-[11px] text-pf-faint">
-                {step.note}
-                {i > 0 && ` · ${Math.round(ofTop * 100)}% of everyone who landed`}
-              </p>
-            </div>
-          );
-        })}
-      </div>
-    </Panel>
+        return (
+          <StatTile
+            key={step.key}
+            icon={STEP_ICON[step.key] ?? "ChartColumn"}
+            label={step.label}
+            value={step.visitors}
+            footnote={
+              ofPrev === null
+                ? step.note
+                : `${Math.round(ofPrev * 100)}% of the step above`
+            }
+            ratio={step.visitors / top}
+            tone={steep ? "danger" : "default"}
+            delay={Math.min(i * 0.04, 0.3)}
+          />
+        );
+      })}
+    </TileGroup>
   );
 }
 
-/* ---- sign-in results ----------------------------------------------------- */
+/* ---- sign-in ------------------------------------------------------------- */
 
-function SigninResults({ view }: { view: View }) {
+const RESULT_ICON: Record<string, IconName> = {
+  success: "CircleCheck",
+  not_registered: "UserPlus",
+  invalid_format: "CircleAlert",
+  server_error: "TriangleAlert",
+};
+
+/**
+ * The four outcomes of a sign-in attempt.
+ *
+ * THE ONE PLACE FOUR HUES EARN THEIR KEEP on this screen, which is why the
+ * proportion bar survives the move to tiles: these are four states of one
+ * thing, and the question is how they divide — a shape no row of separate
+ * boxes can show. The tiles carry the numbers, the bar carries the split, and
+ * every segment is labelled underneath so identity never rests on colour.
+ */
+function SigninTiles({ view }: { view: View }) {
   const total = view.signin.reduce((a, b) => a + b.count, 0);
+  if (total === 0) return null;
 
   return (
-    <Panel className="p-4 sm:p-5">
-      <h2 className="text-[13.5px] font-semibold text-pf-text">What happened at sign-in</h2>
-      <p className="mt-0.5 text-[11.5px] text-pf-muted">
-        Every attempt, by outcome — {total.toLocaleString()} in total
+    <section className="grid gap-3">
+      <div>
+        <h2 className="text-[13.5px] font-semibold text-pf-text">
+          What happened at sign-in
+        </h2>
+        <p className="mt-0.5 text-[11.5px] text-pf-muted">
+          {total.toLocaleString()} attempts, by outcome
+        </p>
+      </div>
+
+      {/* A 2px gap between segments, so two adjacent fills never read as one
+          longer one. */}
+      <div className="flex h-2.5 w-full gap-[2px] overflow-hidden rounded-full">
+        {view.signin.map((r) => (
+          <motion.div
+            key={r.key}
+            initial={{ width: 0 }}
+            animate={{ width: `${(r.count / total) * 100}%` }}
+            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            style={{ backgroundColor: RESULT_COLOR[r.key] ?? "var(--color-pf-border-hi)" }}
+            title={`${r.label}: ${r.count}`}
+            className="first:rounded-l-full last:rounded-r-full"
+          />
+        ))}
+      </div>
+
+      <TileRow>
+        {view.signin.map((r, i) => (
+          <SigninTile key={r.key} slice={r} total={total} delay={Math.min(i * 0.04, 0.2)} />
+        ))}
+      </TileRow>
+    </section>
+  );
+}
+
+/**
+ * A sign-in tile, which is the one tile that paints its own hairline.
+ *
+ * `StatTile`'s bar is the app's primary purple, and here the bar has to be the
+ * segment's own colour or the tiles and the split above them would disagree
+ * about which is which.
+ */
+function SigninTile({
+  slice,
+  total,
+  delay,
+}: {
+  slice: Slice;
+  total: number;
+  delay: number;
+}) {
+  const color = RESULT_COLOR[slice.key] ?? "var(--color-pf-border-hi)";
+
+  return (
+    <Panel className="relative overflow-hidden p-4">
+      <div className="flex items-center gap-2 text-pf-muted">
+        <span style={{ color }}>
+          <Icon name={RESULT_ICON[slice.key] ?? "ChartColumn"} size={14} />
+        </span>
+        <span className="text-[12px] font-semibold">{slice.label}</span>
+      </div>
+      <p className="mt-2 font-display text-[30px] font-bold tabular-nums leading-none tracking-[-0.03em] text-pf-text">
+        <CountUp to={slice.count} />
       </p>
-
-      {total === 0 ? (
-        <Empty>Nobody has tried to sign in</Empty>
-      ) : (
-        <>
-          {/* A 2px gap between segments, so two adjacent fills never read as
-              one longer one. */}
-          <div className="mt-4 flex h-3 w-full gap-[2px] overflow-hidden rounded-full">
-            {view.signin.map((s) => (
-              <motion.div
-                key={s.key}
-                initial={{ width: 0 }}
-                animate={{ width: `${(s.count / total) * 100}%` }}
-                transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-                style={{ backgroundColor: RESULT_COLOR[s.key] ?? "var(--color-pf-border-hi)" }}
-                title={`${s.label}: ${s.count}`}
-                className="first:rounded-l-full last:rounded-r-full"
-              />
-            ))}
-          </div>
-
-          {/* The legend is also the numbers, so identity never rests on the
-              colour alone — and a reader who cannot separate two hues still
-              gets the answer from the row. */}
-          <div className="mt-3.5 grid gap-2">
-            {view.signin.map((s) => (
-              <div key={s.key} className="flex items-center gap-2.5">
-                <span
-                  aria-hidden
-                  className="size-2.5 shrink-0 rounded-[3px]"
-                  style={{ backgroundColor: RESULT_COLOR[s.key] ?? "var(--color-pf-border-hi)" }}
-                />
-                <span className="min-w-0 flex-1 truncate text-[12px] text-pf-body">{s.label}</span>
-                <span className="shrink-0 text-[12px] font-semibold tabular-nums text-pf-text">
-                  {s.count.toLocaleString()}
-                </span>
-                <span className="w-10 shrink-0 text-right text-[11.5px] tabular-nums text-pf-faint">
-                  {Math.round((s.count / total) * 100)}%
-                </span>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+      <p className="mt-1.5 text-[11.5px] text-pf-muted">
+        {Math.round((slice.count / total) * 100)}% of attempts
+      </p>
+      <div className="absolute inset-x-0 bottom-0 h-[3px] bg-pf-bg-deep">
+        <motion.div
+          className="h-full"
+          style={{ backgroundColor: color }}
+          initial={{ width: 0 }}
+          animate={{ width: `${(slice.count / total) * 100}%` }}
+          transition={{ duration: 0.5, delay, ease: [0.22, 1, 0.36, 1] }}
+        />
+      </div>
     </Panel>
   );
 }
 
 /* ---- CTA ----------------------------------------------------------------- */
 
-function CtaSplit({ view }: { view: View }) {
+const CTA_ICON: Record<string, IconName> = {
+  hero: "Sparkles",
+  closing: "ChevronDown",
+  header_signin: "LogIn",
+  header_store: "Building2",
+};
+
+function CtaTiles({ view }: { view: View }) {
+  if (view.cta.length === 0) return null;
+  const peak = Math.max(...view.cta.map((c) => c.count), 1);
+
   return (
-    <Bars
+    <TileGroup
       title="Which CTA gets pressed"
       note="Hero and closing are Design now; the header pair belong to people who already have an account"
-      rows={view.cta}
-      empty="No CTA presses yet"
-    />
+    >
+      {view.cta.map((c, i) => (
+        <StatTile
+          key={c.key}
+          icon={CTA_ICON[c.key] ?? "ArrowUpRight"}
+          label={c.label}
+          value={c.count}
+          footnote={`${c.visitors.toLocaleString()} ${c.visitors === 1 ? "person" : "people"}`}
+          ratio={c.count / peak}
+          delay={Math.min(i * 0.04, 0.2)}
+        />
+      ))}
+    </TileGroup>
   );
 }
 
 /* ---- the cost of a second screen ----------------------------------------- */
 
 /**
- * The number this screen exists for, stated rather than left to arithmetic.
+ * The four numbers that answer one question, so they belong in one row.
  *
  * Somebody told "this store is not registered" either goes and registers or
- * leaves. The gap between those two counts is what asking people to register
- * on a separate screen costs — and it is the evidence for or against merging
- * the two forms, which is why it gets its own panel instead of being two rows
- * in a table.
+ * leaves. The gap between those counts is what asking people to register on a
+ * separate screen costs — the evidence for or against merging the two forms,
+ * which is why the fourth tile is the loss rather than another total.
  */
-function RegisterCost({ view }: { view: View }) {
-  const refused = view.signin.find((s) => s.key === "not_registered")?.count ?? 0;
+function RegisterTiles({ view }: { view: View }) {
+  const refused = view.signin.find((r) => r.key === "not_registered")?.count ?? 0;
+  if (refused === 0) return null;
+
   const wentOn = view.rows
     .filter((r) => r.name === "design_register_link_clicked")
     .reduce((a, b) => a + b.count, 0);
-  const registered = view.registerResults.find((s) => s.key === "success")?.count ?? 0;
-
-  const carried = refused > 0 ? wentOn / refused : null;
+  const registered = view.registerResults.find((r) => r.key === "success")?.count ?? 0;
+  const lost = Math.max(0, refused - wentOn);
 
   return (
-    <Panel className="p-4 sm:p-5">
-      <h2 className="text-[13.5px] font-semibold text-pf-text">
-        The cost of a second screen
-      </h2>
-      <p className="mt-0.5 text-[11.5px] text-pf-muted">
-        Of everyone told they are not registered, how many went and did it
-      </p>
-
-      {refused === 0 ? (
-        <Empty>Nobody has been turned away yet</Empty>
-      ) : (
-        <>
-          <p className="mt-4 font-display text-[34px] font-bold tabular-nums leading-none tracking-[-0.03em] text-pf-text">
-            {Math.round((carried ?? 0) * 100)}
-            <span className="text-[20px] text-pf-muted">%</span>
-          </p>
-          <p className="mt-1.5 text-[11.5px] text-pf-muted">
-            carried on to the register form
-          </p>
-
-          <div className="mt-4 grid gap-2 border-t border-pf-border pt-3.5 text-[12px]">
-            <Row label="Told they are not registered" value={refused} />
-            <Row label="Pressed the register link" value={wentOn} />
-            <Row label="Finished registering" value={registered} />
-            <Row
-              label="Lost between the two screens"
-              value={Math.max(0, refused - wentOn)}
-              tone="danger"
-            />
-          </div>
-        </>
-      )}
-    </Panel>
-  );
-}
-
-function Row({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone?: "danger";
-}) {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <span className="min-w-0 truncate text-pf-muted">{label}</span>
-      <span
-        className={`shrink-0 font-semibold tabular-nums ${
-          tone === "danger" ? "text-pf-danger" : "text-pf-text"
-        }`}
-      >
-        {value.toLocaleString()}
-      </span>
-    </div>
+    <TileGroup
+      title="The cost of a second screen"
+      note="Of everyone told they are not registered, how many went and did it"
+    >
+      <StatTile
+        icon="CircleAlert"
+        label="Turned away"
+        value={refused}
+        footnote="told they are not registered"
+        ratio={1}
+      />
+      <StatTile
+        icon="ArrowRight"
+        label="Followed the link"
+        value={wentOn}
+        footnote={`${Math.round((wentOn / refused) * 100)}% carried on`}
+        ratio={wentOn / refused}
+        delay={0.04}
+      />
+      <StatTile
+        icon="CircleCheck"
+        label="Finished registering"
+        value={registered}
+        footnote={`${Math.round((registered / refused) * 100)}% of those turned away`}
+        ratio={registered / refused}
+        delay={0.08}
+      />
+      <StatTile
+        icon="LogOut"
+        label="Lost between screens"
+        value={lost}
+        footnote="never reached the register form"
+        ratio={lost / refused}
+        tone="danger"
+        delay={0.12}
+      />
+    </TileGroup>
   );
 }
 
 /* ---- builds -------------------------------------------------------------- */
 
-function BuildOutcomes({ view }: { view: View }) {
+function BuildTiles({ view }: { view: View }) {
   const { started, completed, failed, cancelled } = view.builds;
-  const peak = Math.max(...view.durations.map((d) => d.count), 1);
+  if (started + completed + failed + cancelled === 0) return null;
+  const base = Math.max(started, completed, 1);
 
   return (
-    <Panel className="p-4 sm:p-5">
-      <h2 className="text-[13.5px] font-semibold text-pf-text">Builds</h2>
-      <p className="mt-0.5 text-[11.5px] text-pf-muted">
-        Outcomes are the server&rsquo;s, so a closed tab still counts
-      </p>
+    <TileGroup
+      title="Builds"
+      note="Outcomes are the server's, so a merchant who closes the tab still counts"
+    >
+      <StatTile icon="Rocket" label="Started" value={started} footnote="pressed the button" ratio={started / base} />
+      <StatTile
+        icon="CircleCheck"
+        label="Finished"
+        value={completed}
+        footnote={started > 0 ? `${Math.round((completed / started) * 100)}% of those started` : "none started"}
+        ratio={completed / base}
+        delay={0.04}
+      />
+      <StatTile
+        icon="CircleAlert"
+        label="Failed"
+        value={failed}
+        footnote="the build itself did not finish"
+        ratio={failed / base}
+        tone={failed > 0 ? "danger" : "default"}
+        delay={0.08}
+      />
+      <StatTile
+        icon="ArrowLeft"
+        label="Cancelled"
+        value={cancelled}
+        footnote="the merchant went back to the brief"
+        ratio={cancelled / base}
+        delay={0.12}
+      />
 
-      <div className="mt-4 grid grid-cols-4 gap-2 text-center">
-        {[
-          { label: "Started", value: started },
-          { label: "Finished", value: completed },
-          { label: "Failed", value: failed },
-          { label: "Cancelled", value: cancelled },
-        ].map((s) => (
-          <div key={s.label} className="rounded-pf-md bg-pf-bg-deep px-2 py-2.5">
-            <p className="font-display text-[19px] font-semibold tabular-nums leading-none text-pf-text">
-              {s.value.toLocaleString()}
-            </p>
-            <p className="mt-1 text-[10.5px] text-pf-faint">{s.label}</p>
-          </div>
+      {view.durations
+        .filter((d) => d.count > 0)
+        .map((d, i) => (
+          <StatTile
+            key={d.label}
+            icon="Clock"
+            label={`Took ${d.label}`}
+            value={d.count}
+            footnote={completed > 0 ? `${Math.round((d.count / completed) * 100)}% of finished builds` : ""}
+            ratio={completed > 0 ? d.count / completed : 0}
+            delay={Math.min(0.16 + i * 0.04, 0.35)}
+          />
         ))}
-      </div>
-
-      {completed > 0 && (
-        <>
-          <p className="mt-4 text-[11.5px] font-semibold text-pf-body">How long they took</p>
-          <div className="mt-2.5 grid gap-1.5">
-            {view.durations.map((d) => (
-              <div key={d.label} className="flex items-center gap-2.5">
-                <span className="w-14 shrink-0 text-right text-[11px] tabular-nums text-pf-muted">
-                  {d.label}
-                </span>
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-pf-bg-deep">
-                  <motion.div
-                    className="h-full rounded-full bg-pf-primary"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${(d.count / peak) * 100}%` }}
-                    transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-                  />
-                </div>
-                <span className="w-8 shrink-0 text-right text-[11px] tabular-nums text-pf-faint">
-                  {d.count}
-                </span>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-    </Panel>
+    </TileGroup>
   );
 }
 
-/* ---- a plain bar list ---------------------------------------------------- */
+/* ---- registration and the gallery ---------------------------------------- */
 
-/**
- * One measure across categories: one hue, bars against the largest.
- *
- * Every row carries its own number, so nobody has to read a length against a
- * missing axis — which is also why there is no axis.
- */
-function Bars({
-  title,
-  note,
-  rows,
-  empty,
-}: {
-  title: string;
-  note: string;
-  rows: Slice[];
-  empty: string;
-}) {
-  const peak = Math.max(...rows.map((r) => r.count), 1);
+function FieldTiles({ view }: { view: View }) {
+  const fields = view.registerFields;
+  const gallery = view.gallery;
+  if (fields.length === 0 && gallery.length === 0) return null;
+
+  const fieldPeak = Math.max(...fields.map((f) => f.count), 1);
+  const galleryPeak = Math.max(...gallery.map((g) => g.count), 1);
 
   return (
-    <Panel className="p-4 sm:p-5">
-      <h2 className="text-[13.5px] font-semibold text-pf-text">{title}</h2>
-      <p className="mt-0.5 text-[11.5px] leading-snug text-pf-muted">{note}</p>
-
-      {rows.length === 0 ? (
-        <Empty>{empty}</Empty>
-      ) : (
-        <div className="mt-4 grid gap-2">
-          {rows.map((r, i) => (
-            <div key={r.key} className="grid gap-1">
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="min-w-0 truncate text-[12px] text-pf-body">{r.label}</span>
-                <span className="shrink-0 text-[12px] font-semibold tabular-nums text-pf-text">
-                  {r.count.toLocaleString()}
-                </span>
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-pf-bg-deep">
-                <motion.div
-                  className="h-full rounded-full bg-pf-primary"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${Math.max((r.count / peak) * 100, 1.5)}%` }}
-                  transition={{ duration: 0.45, delay: Math.min(i * 0.03, 0.2), ease: [0.22, 1, 0.36, 1] }}
-                />
-              </div>
-            </div>
+    <>
+      {fields.length > 0 && (
+        <TileGroup
+          title="What stops people registering"
+          note="Every field a refused submission named, so a form failing on three boxes counts three"
+        >
+          {fields.map((f, i) => (
+            <StatTile
+              key={f.key}
+              icon="CircleAlert"
+              label={f.label}
+              value={f.count}
+              footnote="refusals named this box"
+              ratio={f.count / fieldPeak}
+              tone="danger"
+              delay={Math.min(i * 0.04, 0.2)}
+            />
           ))}
-        </div>
+        </TileGroup>
       )}
-    </Panel>
-  );
-}
 
-function Empty({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="mt-6 pb-2 text-center text-[12px] text-pf-faint">{children}</p>
+      {gallery.length > 0 && (
+        <TileGroup
+          title="Gallery, by page type"
+          note="Which templates a visitor opens before deciding"
+        >
+          {gallery.slice(0, 8).map((g, i) => (
+            <StatTile
+              key={g.key}
+              icon="Images"
+              label={g.label}
+              value={g.count}
+              footnote={`${g.visitors.toLocaleString()} ${g.visitors === 1 ? "person" : "people"}`}
+              ratio={g.count / galleryPeak}
+              delay={Math.min(i * 0.04, 0.3)}
+            />
+          ))}
+        </TileGroup>
+      )}
+    </>
   );
 }
 

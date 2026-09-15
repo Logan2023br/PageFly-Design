@@ -2,8 +2,8 @@
 
 import { motion } from "framer-motion";
 import type { AdminStats } from "@/lib/db";
-import type { IconName } from "@/lib/icons";
-import { CountUp, Icon, Panel } from "../ui";
+import { Panel } from "../ui";
+import { StatTile } from "./StatTile";
 
 /* ==========================================================================
    Thống kê.
@@ -20,7 +20,7 @@ export function StatsView({ stats }: { stats: AdminStats }) {
   return (
     <div className="grid gap-4">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <StatCard
+        <StatTile
           icon="Users"
           label="Stores using it"
           value={stats.activeStores}
@@ -30,7 +30,7 @@ export function StatsView({ stats }: { stats: AdminStats }) {
             form" rather than "has an account" — a store an operator added by
             hand is on the list but did not register itself, and the two
             numbers move for different reasons. */}
-        <StatCard
+        <StatTile
           icon="UserPlus"
           label="Self-registered"
           value={stats.registeredStores}
@@ -40,13 +40,13 @@ export function StatsView({ stats }: { stats: AdminStats }) {
               : `of ${stats.allowedStores} on the list`
           }
         />
-        <StatCard
+        <StatTile
           icon="Files"
           label="Pages created"
           value={stats.totalPages}
           footnote={`across ${stats.totalRuns} ${stats.totalRuns === 1 ? "build" : "builds"}`}
         />
-        <StatCard
+        <StatTile
           icon="Coins"
           label="Tokens spent"
           value={stats.totalTokens}
@@ -58,7 +58,7 @@ export function StatsView({ stats }: { stats: AdminStats }) {
               : "model spend, all stores"
           }
         />
-        <StatCard
+        <StatTile
           icon="MessageSquare"
           label="Reviews"
           value={reviews.total}
@@ -91,32 +91,6 @@ export function StatsView({ stats }: { stats: AdminStats }) {
   );
 }
 
-/* ---- number that counts up ---------------------------------------------- */
-
-function StatCard({
-  icon,
-  label,
-  value,
-  footnote,
-}: {
-  icon: IconName;
-  label: string;
-  value: number;
-  footnote: string;
-}) {
-  return (
-    <Panel className="p-4">
-      <div className="flex items-center gap-2 text-pf-muted">
-        <Icon name={icon} size={14} />
-        <span className="text-[12px] font-semibold">{label}</span>
-      </div>
-      <p className="mt-2 font-display text-[30px] font-bold tabular-nums leading-none tracking-[-0.03em] text-pf-text">
-        <CountUp to={value} />
-      </p>
-      <p className="mt-1.5 text-[11.5px] text-pf-muted">{footnote}</p>
-    </Panel>
-  );
-}
 
 /* ---- day bars ------------------------------------------------------------ */
 
