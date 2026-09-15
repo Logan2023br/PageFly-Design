@@ -331,6 +331,68 @@ async function main(): Promise<void> {
     );
   }
 
+  /* ==========================================================================
+     TWO OF THE SAME BUTTON ON ONE SCREEN ARE TWO NUMBERS.
+
+     The landing page has two `Design now` buttons, the finished deck has two
+     ways to export, and a collection can be taken by three different controls.
+     Summed under one name, "which one do people press" has no answer — and
+     that is the question the placements exist to settle.
+
+     What makes it work is that each control sends a DIFFERENT parameter value.
+     Two controls sharing one value is the failure this guards: it looks
+     correct, adds up correctly, and silently answers a question nobody asked.
+     Exactly what `scope: "set"` did for the two collection exports.
+     ========================================================================== */
+  console.log("\ntwo of the same button are two numbers");
+
+  {
+    const { randomUUID: uuid3 } = await import("node:crypto");
+    const press = (name: string, props: Record<string, unknown>, n: number) =>
+      Array.from({ length: n }, () => ({
+        id: uuid3(),
+        name,
+        props,
+        visitorId: "someone-pressing",
+        domain: null,
+        createdAt: new Date().toISOString(),
+      }));
+
+    /* Measured as a DELTA. An earlier block in this file records CTA presses
+       of its own, and an absolute assertion here would have been a test that
+       passes only while nothing above it changes. */
+    const at = async (loc: string) =>
+      (await counts()).find((c) => c.name === "design_cta_clicked" && c.props.location === loc)
+        ?.count ?? 0;
+    const heroBefore = await at("hero");
+    const closingBefore = await at("closing");
+
+    await repo.recordEvents([
+      ...press("design_cta_clicked", { location: "hero" }, 9),
+      ...press("design_cta_clicked", { location: "closing" }, 2),
+      ...press("design_collection_exported", { scope: "set_card" }, 4),
+      ...press("design_collection_exported", { scope: "set_detail" }, 1),
+    ]);
+
+    const heroAfter = await at("hero");
+    const closingAfter = await at("closing");
+    check(
+      heroAfter - heroBefore === 9 && closingAfter - closingBefore === 2,
+      "the two Design now buttons take 9 and 2, not one 11",
+      `hero +${heroAfter - heroBefore}, closing +${closingAfter - closingBefore}`,
+    );
+
+    const coll = (await counts()).filter((c) => c.name === "design_collection_exported");
+    const values = new Set(coll.map((c) => String(c.props.scope)));
+    check(
+      values.has("set_card") && values.has("set_detail"),
+      "and the two ways to take a whole collection are told apart",
+      [...values].join(", "),
+    );
+    /* The shape of the bug this replaced: one value covering two controls. */
+    check(!values.has("set"), "the value that meant both is gone");
+  }
+
   console.log("\nevery event has a call site");
 
   const { EV } = await import("@/lib/analytics");

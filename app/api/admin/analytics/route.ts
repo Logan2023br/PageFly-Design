@@ -90,6 +90,22 @@ export type Metric = {
   people: number;
   /** a breakdown, when the event carries a parameter worth splitting on */
   split?: Slice[];
+  /**
+   * WHAT THE SPLIT IS A SPLIT OF, because the two kinds want different shapes.
+   *
+   * `control` means the values are different BUTTONS — the two `Design now`
+   * on the landing page, the two ways to take a whole collection, the ⬇ on a
+   * card versus `Export all`. Those each get their own tile, because "which of
+   * these did people press" is the question and a single summed figure cannot
+   * answer it. The summed tile stays alongside them, labelled, for the times
+   * the total is what is wanted.
+   *
+   * `outcome` means the values are results or kinds of thing — success versus
+   * not_registered, which page type, which field was wrong. One control fired
+   * all of them, so a tile each would claim five buttons where there is one.
+   * Those stay a list of bars under the tile.
+   */
+  splitKind?: "control" | "outcome";
 };
 
 /**
@@ -112,6 +128,8 @@ export type SharedBlock = {
   total: number;
   totalPeople: number;
   bySurface: Slice[];
+  /** when more than one control fires it on the same screen */
+  byControl?: Slice[];
 };
 
 export type AnalyticsResponse =
@@ -359,7 +377,11 @@ export async function GET(request: Request) {
     note: string,
     name: string,
     where: string,
-    opts: { unit?: "browser" | "store"; split?: Slice[] } = {},
+    opts: {
+      unit?: "browser" | "store";
+      split?: Slice[];
+      splitKind?: "control" | "outcome";
+    } = {},
   ): Metric => ({
     key,
     label,
@@ -367,7 +389,9 @@ export async function GET(request: Request) {
     where: `${where}\n${name}`,
     count: sum(rows, name),
     people: opts.unit === "store" ? stores(totals, name) : people(totals, name),
-    ...(opts.split && opts.split.length > 0 ? { split: opts.split } : {}),
+    ...(opts.split && opts.split.length > 0
+      ? { split: opts.split, splitKind: opts.splitKind ?? "outcome" }
+      : {}),
   });
 
   const pages: PageBlock[] = [
@@ -385,6 +409,7 @@ export async function GET(request: Request) {
             header_signin: "Header · Sign in",
             header_store: "Header · store name",
           }),
+          splitKind: "control",
         }),
         metric("gallery", "Gallery opened", "a template in the moving strip", EV.galleryOpened, "A card in the moving strip of templates, near the bottom of the landing page", {
           split: slices(rows, EV.galleryOpened, "page_type", {}),
@@ -469,7 +494,11 @@ export async function GET(request: Request) {
       metrics: [
         metric("exported", "Exported a page", "took the .pagefly file", EV.pageExported, "Either Export control — the ⬇ on one card, or “Export all” on the toolbar", {
           unit: "store",
-          split: slices(rows, EV.pageExported, "scope", { one: "One page", all: "Every page" }),
+          split: slices(rows, EV.pageExported, "scope", {
+            one: "⬇ on a card",
+            all: "“Export all” on the toolbar",
+          }),
+          splitKind: "control",
         }),
         metric("png", "PNG downloaded", "took pictures instead", EV.pagePngDownload, "The “PNG” button on the toolbar above the deck", { unit: "store" }),
         metric("preview", "Preview opened", "read a page full size", EV.pagePreview, "The mockup image on a card, opening the full preview", {
@@ -510,6 +539,14 @@ export async function GET(request: Request) {
       total: sum(rows, EV.collectionExported),
       totalPeople: people(totals, EV.collectionExported),
       bySurface: slices(rows, EV.collectionExported, "surface", SURFACES),
+      /* Three different buttons hand over a collection and two of them hand
+         over the same bytes, so without this the question "does anybody open a
+         set before taking it" has no number behind it. */
+      byControl: slices(rows, EV.collectionExported, "scope", {
+        set_card: "Export on the set card",
+        set_detail: "“Export all” inside the set",
+        page: "Export on one page",
+      }),
     },
   ];
 

@@ -584,8 +584,15 @@ function PageSection({ page }: { page: PageBlock }) {
         <p className="w-full text-[11.5px] leading-snug text-pf-muted">{page.note}</p>
       </div>
 
+      {/* A CONTROL SPLIT BECOMES TILES, an outcome split stays a list.
+ 
+          Two `Design now` buttons on one page are two buttons, and "which one
+          gets pressed" is the question — one summed figure cannot answer it,
+          and a bar list under a tile reads as detail rather than as the point.
+          A result split is the opposite: one button fired all of it, so a tile
+          each would claim four buttons where there is one. */}
       <TileRow>
-        {page.metrics.map((m, i) => (
+        {page.metrics.flatMap((m, i) => [
           <StatTile
             key={m.key}
             icon={METRIC_ICON[m.key] ?? "ChartColumn"}
@@ -609,12 +616,26 @@ function PageSection({ page }: { page: PageBlock }) {
             ratio={m.count / top}
             hint={m.where}
             delay={Math.min(i * 0.03, 0.2)}
-          />
-        ))}
+          />,
+          ...(m.splitKind === "control" && m.split
+            ? m.split.map((sl, j) => (
+                <StatTile
+                  key={`${m.key}-${sl.key}`}
+                  icon={METRIC_ICON[m.key] ?? "ChartColumn"}
+                  label={sl.label}
+                  value={sl.count}
+                  footnote={`${Math.round((sl.count / Math.max(m.count, 1)) * 100)}% of ${m.label.toLowerCase()}`}
+                  ratio={sl.count / top}
+                  hint={`${sl.label} — one of the controls counted by ${m.label.toLowerCase()}\n${m.where.split("\n")[1] ?? ""}`}
+                  delay={Math.min(i * 0.03 + (j + 1) * 0.03, 0.3)}
+                />
+              ))
+            : []),
+        ])}
       </TileRow>
 
       {page.metrics
-        .filter((m) => m.split && m.split.length > 0)
+        .filter((m) => m.split && m.split.length > 0 && m.splitKind !== "control")
         .map((m) => (
           <Split key={`${m.key}-split`} label={m.label} rows={m.split!} />
         ))}
@@ -711,10 +732,19 @@ function SharedSection({ block }: { block: SharedBlock }) {
             value={s.count}
             footnote={`${Math.round((s.count / block.total) * 100)}% of all presses`}
             ratio={s.count / peak}
+            hint={`${s.label}\n${block.where.split("\n")[1] ?? ""}`}
             delay={Math.min((i + 1) * 0.04, 0.24)}
           />
         ))}
       </TileRow>
+
+      {/* And by CONTROL as well as by screen, where more than one button does
+          the same thing. Two of the three collection exports hand over the
+          same bytes from different places, and which one people reach for is a
+          different question from which screen they were on. */}
+      {block.byControl && block.byControl.length > 1 && (
+        <Split label={`${block.title}, by control`} rows={block.byControl} />
+      )}
     </section>
   );
 }

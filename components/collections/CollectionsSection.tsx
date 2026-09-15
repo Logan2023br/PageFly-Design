@@ -242,7 +242,11 @@ function CollectionCard({
             (track(EV.collectionExported, {
               surface,
               collection: collection.slug,
-              scope: "set",
+              /* TWO BUTTONS, TWO VALUES. This one and the "Export all" inside the
+                 opened set hand over the same file, and reporting both as
+                 `set` made them one number — so "does anybody open a set
+                 before taking it" could not be asked. */
+              scope: "set_card",
               count: state.pages.length,
             }),
             download(combinePagefly(state.raw), `${collection.slug}.pagefly`))
@@ -468,7 +472,7 @@ function CollectionDetail({
                 (track(EV.collectionExported, {
                   surface,
                   collection: collection.slug,
-                  scope: "set",
+                  scope: "set_detail",
                   count: state.pages.length,
                 }),
                 download(combinePagefly(state.raw), `${collection.slug}.pagefly`))
