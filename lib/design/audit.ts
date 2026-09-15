@@ -257,7 +257,14 @@ export function audit(
   const detailsOrdered = order.sections.filter((s) =>
     s.pattern?.startsWith("product-detail"),
   ).length;
-  if (detailsOrdered === 0) {
+  /* THE PAGE TYPE OVERRULES THE ORDER HERE. "this page type has none" is read
+     off the order, and the order is the weaker witness of the two: a caller
+     that supplies its own `order`, or a `structure` that `orderFromSlots` turns
+     into one, can hand a product page a plan with no product-detail band. Left
+     ungated, this rule then tells the model to delete the buy box in the same
+     breath as the rule above tells it to add one, and the repair pass swings
+     between two pages neither of which it can settle on. */
+  if (detailsOrdered === 0 && !(pageType && pageHasOneProduct(pageType))) {
     const boxes = all.filter((n) => n.type === "product").length;
     if (boxes > 0)
       problems.push(
@@ -587,6 +594,48 @@ export function audit(
      "Contact" and finding an Add to bag button is reading a broken page, and it
      is the kind of broken that survives review because every part of it looks
      correct on its own. */
+  /* ==========================================================================
+     A PRODUCT PAGE WITH NO BUY BOX IS A PICTURE OF A PRODUCT PAGE.
+
+     There was already a rule for this and it cannot fire where it matters. It
+     walks `order.sections[i]` against `sections[i]` — POSITIONALLY — and under
+     free design the model decides its own section count and order, having
+     never been shown the local plan. Index three of the tree is not index
+     three of the order, so the check reads a band that was never the buy box
+     and finds what it finds.
+
+     This one asks the only question that survives that: does a page type whose
+     arc pins `product-detail` contain a `product` node ANYWHERE. `pageType` is
+     already here for the mirror rule below — the buy box on a page that has no
+     product — and this is the same fact read the other way round.
+
+     WHAT IT COSTS TO GET WRONG, seen on a real build: the buy box drawn by
+     hand out of a Slideshow, four Image nodes and a column of headings. It
+     looks right in the mockup and arrives in the store as a picture — a price
+     that never updates, swatches that select nothing, a cart button that adds
+     nothing. The gallery is the same mistake twice, which is why the message
+     names the flag rather than only the node.
+     ========================================================================== */
+  if (pageType && pageHasOneProduct(pageType)) {
+    const boxes = all.filter((n) => n.type === "product").length;
+    if (boxes === 0) {
+      const drawn = all.filter((n) => n.type === "slideshow" || n.type === "image").length;
+      problems.push(
+        `This is a "${pageType}" page and it has no "product" node. The buy box ` +
+          `is ONE product node — it renders the live add-to-cart form AND the ` +
+          `product's own gallery, main shot plus thumbnails, from the merchant's ` +
+          `real product. ` +
+          (drawn > 0
+            ? `You built it out of ${drawn} image/slideshow node${drawn === 1 ? "" : "s"} instead: ` +
+              `that has no product binding and arrives in the store as a picture — a ` +
+              `price that never changes and a button that adds nothing to a cart. `
+            : "") +
+          `Use one "product" node with "gallery": true, and put the copy around it in ` +
+          `its children. Do not model the gallery as a main image plus a row of small ones.`,
+      );
+    }
+  }
+
   if (pageType && !pageHasOneProduct(pageType)) {
     const shop = all.filter((n) => n.type === "product" || n.type === "bound");
     if (shop.length)
