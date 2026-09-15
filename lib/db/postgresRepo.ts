@@ -126,6 +126,23 @@ create index if not exists jobs_domain_created on jobs (domain, created_at desc)
    the same way stores.blocked and training_items.enabled arrived. */
 alter table jobs add column if not exists progress jsonb not null default '{}'::jsonb;
 
+/* Product analytics. Append-only: nothing here is ever updated, and the only
+   read is a grouped count over a date range.
+
+   The index is on created_at because every question starts with a window. A
+   composite on (name, created_at) was the other option and is not worth it
+   until one name dwarfs the rest — there are twenty-odd of them and they
+   arrive at roughly the rate people click. */
+create table if not exists events (
+  id         text primary key,
+  name       text not null,
+  props      jsonb not null default '{}'::jsonb,
+  visitor_id text not null,
+  domain     text,
+  created_at timestamptz not null default now()
+);
+create index if not exists events_created on events (created_at desc);
+
 /* Reference screenshots, filed by industry. The image is a data URL, so rows
    are large by the standards of this schema — a few hundred KB — which is why
    the listing query never selects it. */
@@ -945,6 +962,48 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
                 },
         };
       });
+    },
+
+    async recordEvents(events) {
+      if (events.length === 0) return;
+      await ready();
+      /* One statement for the batch. A browser sends these in tens, and a
+         round trip each would make analytics the slowest thing on the page. */
+      const values: unknown[] = [];
+      const rows = events.map((e, i) => {
+        const at = i * 6;
+        values.push(e.id, e.name, JSON.stringify(e.props ?? {}), e.visitorId, e.domain, e.createdAt);
+        return `($${at + 1},$${at + 2},$${at + 3},$${at + 4},$${at + 5},$${at + 6})`;
+      });
+      await db.query(
+        `insert into events (id,name,props,visitor_id,domain,created_at)
+         values ${rows.join(",")}
+         on conflict (id) do nothing`,
+        values,
+      );
+    },
+
+    async countEvents(from, to) {
+      await ready();
+      /* Grouped by name AND the whole props bag, so `design_cta_clicked` comes
+         back split by location without this query knowing what a location is.
+         Counting distinct visitors as well as rows, because a funnel asks how
+         many PEOPLE got to a step — somebody pressing a CTA four times is one
+         person who pressed it. */
+      const { rows } = await db.query(
+        `select name, props, count(*)::int as n, count(distinct visitor_id)::int as v
+           from events
+          where created_at >= $1 and created_at < $2
+          group by name, props
+          order by n desc`,
+        [from, to],
+      );
+      return rows.map((r) => ({
+        name: String(r.name),
+        props: (r.props ?? {}) as Record<string, unknown>,
+        count: Number(r.n),
+        visitors: Number(r.v),
+      }));
     },
 
     async stats() {

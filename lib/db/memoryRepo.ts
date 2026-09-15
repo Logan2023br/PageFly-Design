@@ -2,6 +2,7 @@ import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { buildStats } from "./postgresRepo";
 import { REGISTER_USER_TYPE, reviewOnlyStore } from "./types";
 import type {
+  EventRecord,
   JobRecord,
   TrainingItem,
   TrainingSection,
@@ -42,9 +43,10 @@ type Shape = {
   jobs: JobRecord[];
   training: TrainingItem[];
   trainingSections: TrainingSection[];
+  events: EventRecord[];
 };
 
-const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], photos: [], jobs: [], training: [], trainingSections: [] };
+const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], photos: [], jobs: [], training: [], trainingSections: [], events: [] };
 
 export function createMemoryRepo(file: string): Repo {
   /* Writes are best-effort: a read-only filesystem downgrades this to a plain
@@ -63,6 +65,7 @@ export function createMemoryRepo(file: string): Repo {
         reviews: parsed.reviews ?? [],
         photos: parsed.photos ?? [],
         jobs: parsed.jobs ?? [],
+        events: parsed.events ?? [],
         training: parsed.training ?? [],
         /* Absent in a file written before section references existed. Rows
            written before `vertical` existed read as the shared filing, which is
@@ -508,6 +511,43 @@ export function createMemoryRepo(file: string): Repo {
             a.lastRunAt ?? a.lastSeenAt ?? "",
           ),
         );
+    },
+
+    async recordEvents(events) {
+      if (events.length === 0) return;
+      sync();
+      /* Ids are the browser's, so a retried batch must not double-count. */
+      const seen = new Set(data.events.map((e) => e.id));
+      for (const e of events) if (!seen.has(e.id)) data.events.push(e);
+
+      /* A CEILING, which the Postgres driver does not need. This store is a
+         JSON file rewritten whole on every write, and events are the highest
+         volume thing in it by an order of magnitude — left unbounded the file
+         grows until writing it is the slowest part of a page view. Twenty
+         thousand is enough for a dev machine to answer every question this
+         app asks; production is Postgres. */
+      if (data.events.length > 20_000) data.events.splice(0, data.events.length - 20_000);
+      flush();
+    },
+
+    async countEvents(from, to) {
+      sync();
+      const buckets = new Map<string, { name: string; props: Record<string, unknown>; count: number; visitors: Set<string> }>();
+
+      for (const e of data.events) {
+        if (e.createdAt < from || e.createdAt >= to) continue;
+        /* The same grouping the SQL does: name plus the whole props bag, so a
+           parameter this code has never heard of still splits the counts. */
+        const key = `${e.name}\u0000${JSON.stringify(e.props ?? {})}`;
+        const hit = buckets.get(key) ?? { name: e.name, props: e.props ?? {}, count: 0, visitors: new Set<string>() };
+        hit.count++;
+        hit.visitors.add(e.visitorId);
+        buckets.set(key, hit);
+      }
+
+      return [...buckets.values()]
+        .map((b) => ({ name: b.name, props: b.props, count: b.count, visitors: b.visitors.size }))
+        .sort((a, b) => b.count - a.count);
     },
 
     async stats() {

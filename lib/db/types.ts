@@ -473,7 +473,56 @@ export type Repo = {
   getPhotos(queries: string[]): Promise<PhotoRecord[]>;
   savePhotos(photos: PhotoRecord[]): Promise<void>;
 
+  /* ---- analytics ---- */
+  recordEvents(events: EventRecord[]): Promise<void>;
+  countEvents(from: string, to: string): Promise<EventCount[]>;
+
   /* ---- admin ---- */
   listStoreSummaries(): Promise<StoreSummary[]>;
   stats(): Promise<AdminStats>;
+};
+
+/* ==========================================================================
+   Product analytics.
+
+   ONE ROW PER EVENT, and nothing aggregated on the way in. A funnel is a
+   question somebody asks after the fact, and the questions change — "which CTA
+   converts" became "which CTA converts for people who looked at the gallery
+   first" the moment the first number came back. Counters written at capture
+   time can only answer the question they were written for; rows can be cut
+   again.
+
+   NO PERSONAL DATA. `visitorId` is a random id this browser made up for
+   itself; it joins a landing view to the sign-in that followed and says
+   nothing about who that is. `domain` is only ever present once a merchant has
+   signed in, and the admin already sees every domain on the Users screen.
+   ========================================================================== */
+
+export type EventRecord = {
+  id: string;
+  /** `design_landing_viewed`, `design_cta_clicked`, … */
+  name: string;
+  /**
+   * The event's own parameters — `result`, `location`, `page_type`.
+   *
+   * A bag rather than columns because the interesting ones differ per event
+   * and adding a column per parameter is a migration every time somebody wants
+   * to measure something new.
+   */
+  props: Record<string, unknown>;
+  /** anonymous, per browser, so a funnel can be followed across pages */
+  visitorId: string;
+  /** the signed-in store, when there is one */
+  domain: string | null;
+  createdAt: string;
+};
+
+/** One event name and one combination of its parameters, counted. */
+export type EventCount = {
+  name: string;
+  props: Record<string, unknown>;
+  count: number;
+  /** distinct visitors, which is the number a funnel wants — one person
+      pressing a CTA four times is one person who pressed it */
+  visitors: number;
 };
