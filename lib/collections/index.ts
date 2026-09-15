@@ -24,8 +24,19 @@ export type CollectionMeta = {
   name: string;
   /** one line under the name — what a merchant is choosing between */
   blurb: string;
-  /** served from public/, so the browser fetches it directly */
-  file: string;
+  /**
+   * One .pagefly per page, in the order they should be shown.
+   *
+   * WAS A SINGLE FILE, because PageFly's multi-page export is one zip holding
+   * every page. A set exported page by page arrives as seven zips of one entry
+   * each, which is the shape these are in now — so the list is the collection,
+   * and the order is this array's rather than whatever a zip's key order
+   * happened to be.
+   *
+   * `Export all` puts them back into one file with `combinePagefly`, so a
+   * merchant still imports once.
+   */
+  files: string[];
   /**
    * Real screenshots exist for this set, under `public/collections/<slug>/`.
    *
@@ -49,7 +60,17 @@ export const COLLECTIONS: CollectionMeta[] = [
     slug: "glowry",
     name: "Glowry",
     blurb: "Beauty and skincare — plum, gold and a serif, across seven pages.",
-    file: "/collections/glowry.pagefly",
+    /* Ordered as a merchant would meet them, not alphabetically — Home first
+       because it is the cover and the one they judge the set by. */
+    files: [
+      "/collections/glowry/home.pagefly",
+      "/collections/glowry/collection-page.pagefly",
+      "/collections/glowry/product-page.pagefly",
+      "/collections/glowry/black-friday.pagefly",
+      "/collections/glowry/about-us.pagefly",
+      "/collections/glowry/blog-article.pagefly",
+      "/collections/glowry/contact.pagefly",
+    ],
     shots: true,
   },
 ];

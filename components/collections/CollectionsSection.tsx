@@ -4,7 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { COLLECTIONS, shortenLabels, shotFor, type CollectionMeta } from "@/lib/collections";
-import { pageToHtml, readPageflySet, type PageflyPage } from "@/lib/collections/pagefly";
+import {
+  combinePagefly,
+  pageToHtml,
+  readPageflyPage,
+  type PageflyPage,
+} from "@/lib/collections/pagefly";
 import { DEVICES, type PageMockup } from "@/lib/generate/types";
 import { PreviewOverlay } from "../preview/PreviewOverlay";
 import { Button, Icon, Panel } from "../ui";
@@ -68,7 +73,8 @@ export function CollectionsSection() {
 type SetState =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "ready"; pages: PageflyPage[]; bytes: Uint8Array }
+  /** `raw` is one .pagefly per page, in step with `pages` */
+  | { status: "ready"; pages: PageflyPage[]; raw: Uint8Array[] }
   | { status: "failed" };
 
 /**
@@ -78,9 +84,10 @@ type SetState =
  * FILE — the same bytes that drew the preview, so what a merchant sees and
  * what they download cannot be different things.
  */
-function useCollection(file: string, wanted: boolean): SetState {
+function useCollection(collection: CollectionMeta, wanted: boolean): SetState {
   const [state, setState] = useState<SetState>({ status: "idle" });
   const started = useRef(false);
+  const files = collection.files;
 
   useEffect(() => {
     if (!wanted || started.current) return;
@@ -90,11 +97,18 @@ function useCollection(file: string, wanted: boolean): SetState {
     let live = true;
     void (async () => {
       try {
-        const res = await fetch(file);
-        if (!res.ok) throw new Error(String(res.status));
-        const bytes = new Uint8Array(await res.arrayBuffer());
-        const pages = readPageflySet(bytes);
-        if (live) setState({ status: "ready", pages, bytes });
+        /* In parallel, and in the manifest's order however they come back —
+           `Promise.all` preserves it, which is what keeps `raw[i]` the file for
+           `pages[i]` and therefore what keeps the Export button on a card
+           pointed at the page above it. */
+        const raw = await Promise.all(
+          files.map(async (file) => {
+            const res = await fetch(file);
+            if (!res.ok) throw new Error(`${file} ${res.status}`);
+            return new Uint8Array(await res.arrayBuffer());
+          }),
+        );
+        if (live) setState({ status: "ready", pages: raw.map(readPageflyPage), raw });
       } catch {
         /* A card that says nothing is better than one that says the set is
            broken: the merchant did not ask for this and cannot act on it. */
@@ -105,7 +119,7 @@ function useCollection(file: string, wanted: boolean): SetState {
     return () => {
       live = false;
     };
-  }, [file, wanted]);
+  }, [files, wanted]);
 
   return state;
 }
@@ -149,7 +163,7 @@ function CollectionCard({
     return () => observer.disconnect();
   }, []);
 
-  const state = useCollection(collection.file, seen);
+  const state = useCollection(collection, seen);
   const pages = state.status === "ready" ? state.pages : [];
   /* The home page is the cover, and it is found by name rather than by
      position: the export orders by whatever the merchant dragged where, and in
@@ -206,7 +220,8 @@ function CollectionCard({
           icon="Download"
           disabled={state.status !== "ready"}
           onClick={() =>
-            state.status === "ready" && download(state.bytes, `${collection.slug}.pagefly`)
+            state.status === "ready" &&
+            download(combinePagefly(state.raw), `${collection.slug}.pagefly`)
           }
           className="bg-pf-bg/80 backdrop-blur"
         >
@@ -350,7 +365,7 @@ function CollectionDetail({
   collection: CollectionMeta;
   onClose: () => void;
 }) {
-  const state = useCollection(collection.file, true);
+  const state = useCollection(collection, true);
   const pages = state.status === "ready" ? state.pages : [];
   const labels = shortenLabels(pages.map((p) => p.label));
   const [viewing, setViewing] = useState<number | null>(null);
@@ -417,7 +432,7 @@ function CollectionDetail({
               disabled={state.status !== "ready"}
               onClick={() =>
                 state.status === "ready" &&
-                download(state.bytes, `${collection.slug}.pagefly`)
+                download(combinePagefly(state.raw), `${collection.slug}.pagefly`)
               }
             >
               Export all {pages.length > 0 ? `${pages.length} pages` : ""}
@@ -465,9 +480,25 @@ function CollectionDetail({
                 <span className="min-w-0 truncate text-[12.5px] font-semibold text-pf-text">
                   {labels[i]}
                 </span>
-                <span className="shrink-0 text-[11px] tabular-nums text-pf-faint">
-                  {String(i + 1).padStart(2, "0")}
-                </span>
+                {/* ONE PAGE, ON ITS OWN. Worth having now that a set is seven
+                    files rather than one: a merchant who wants the product
+                    page and nothing else used to have to take all seven and
+                    import six they did not ask for. `raw[i]` is the file this
+                    card is drawing, which is what keeps the button honest. */}
+                <Button
+                  size="sm"
+                  variant="quiet"
+                  icon="Download"
+                  onClick={() =>
+                    state.status === "ready" &&
+                    download(
+                      state.raw[i],
+                      `${collection.slug}-${labels[i].toLowerCase().replace(/[^a-z0-9]+/g, "-")}.pagefly`,
+                    )
+                  }
+                >
+                  Export
+                </Button>
               </div>
             </Panel>
           ))}

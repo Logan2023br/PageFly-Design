@@ -1,4 +1,4 @@
-import { unzipSync, strFromU8 } from "fflate";
+import { unzipSync, zipSync, strFromU8 } from "fflate";
 
 /* ==========================================================================
    Reading a .pagefly back, and drawing it.
@@ -71,6 +71,46 @@ export function labelFromEntry(entry: string): string {
     .trim();
 }
 
+/**
+ * ONE page, from a .pagefly holding exactly that.
+ *
+ * PageFly exports either shape: several pages selected together arrive as one
+ * file with numbered entries, and a page exported on its own arrives as a file
+ * with one. Both are read here — the first by `readPageflySet` below, which is
+ * this function over every entry.
+ */
+export function readPageflyPage(bytes: Uint8Array): PageflyPage {
+  const files = unzipSync(bytes);
+  const entry = Object.keys(files)[0];
+  if (!entry) throw new Error("that .pagefly holds nothing");
+  return readEntry(entry, strFromU8(files[entry]));
+}
+
+function readEntry(entry: string, text: string): PageflyPage {
+  const page = JSON.parse(text) as {
+    items?: PageflyItem[];
+    styles?: { id: string; styles: string }[];
+    customCSS?: string;
+  };
+
+  const styles: PageflyPage["styles"] = {};
+  for (const row of page.styles ?? []) {
+    try {
+      styles[row.id] = JSON.parse(row.styles);
+    } catch {
+      /* One unparseable style entry is one element drawn plainly, not a page
+         that fails to draw. */
+    }
+  }
+
+  return {
+    label: labelFromEntry(entry),
+    items: page.items ?? [],
+    styles,
+    customCSS: page.customCSS ?? "",
+  };
+}
+
 /** Every page in one exported set, in the order the export put them. */
 export function readPageflySet(bytes: Uint8Array): PageflyPage[] {
   const files = unzipSync(bytes);
@@ -79,30 +119,36 @@ export function readPageflySet(bytes: Uint8Array): PageflyPage[] {
     /* The export numbers its entries and a zip's key order is not guaranteed,
        so the order is taken from the name rather than trusted. */
     .sort((a, b) => (Number(a.match(/^\d+/)?.[0] ?? 0) - Number(b.match(/^\d+/)?.[0] ?? 0)))
-    .map((entry) => {
-      const page = JSON.parse(strFromU8(files[entry])) as {
-        items?: PageflyItem[];
-        styles?: { id: string; styles: string }[];
-        customCSS?: string;
-      };
+    .map((entry) => readEntry(entry, strFromU8(files[entry])));
+}
 
-      const styles: PageflyPage["styles"] = {};
-      for (const row of page.styles ?? []) {
-        try {
-          styles[row.id] = JSON.parse(row.styles);
-        } catch {
-          /* One unparseable style entry is one element drawn plainly, not a
-             page that fails to draw. */
-        }
-      }
+/**
+ * Seven single-page files as one multi-page .pagefly.
+ *
+ * PageFly's own multi-page export is a zip whose entries are numbered —
+ * `1 - GLOWRY Black Friday.json`, `2 - …` — and a set exported page by page is
+ * seven zips of one entry each. This puts them back into the first shape so
+ * "Export all" hands over ONE file the merchant imports once, rather than seven
+ * downloads and seven imports.
+ *
+ * NOT AN INVENTED FORMAT. It is the shape the first GLOWRY export arrived in,
+ * read off a real file rather than guessed at, and the JSON inside each entry
+ * is passed through untouched — only the entry's number changes.
+ */
+export function combinePagefly(files: Uint8Array[]): Uint8Array {
+  const out: Record<string, Uint8Array> = {};
 
-      return {
-        label: labelFromEntry(entry),
-        items: page.items ?? [],
-        styles,
-        customCSS: page.customCSS ?? "",
-      };
-    });
+  files.forEach((bytes, i) => {
+    const entries = unzipSync(bytes);
+    for (const name of Object.keys(entries)) {
+      /* The name without whatever index it already carried, renumbered for its
+         place in this set. */
+      const bare = name.replace(/\.json$/i, "").replace(/^\s*\d+\s*-\s*/, "");
+      out[`${i + 1} - ${bare}.json`] = entries[name];
+    }
+  });
+
+  return zipSync(out, { level: 6 });
 }
 
 /* ---- drawing -------------------------------------------------------------

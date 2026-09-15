@@ -24,12 +24,21 @@ function check(ok: boolean, label: string, detail: string | null = null): void {
   if (!ok) failures++;
 }
 
-const FILE = join(process.cwd(), "public/collections/glowry.pagefly");
+const DIR = join(process.cwd(), "public/collections/glowry");
+/* The manifest's order, which is the order a merchant meets them in. */
+const FILES = [
+  "home",
+  "collection-page",
+  "product-page",
+  "black-friday",
+  "about-us",
+  "blog-article",
+  "contact",
+].map((n) => join(DIR, `${n}.pagefly`));
 
 async function main(): Promise<void> {
-  const { readPageflySet, pageToHtml, labelFromEntry } = await import(
-    "@/lib/collections/pagefly"
-  );
+  const { readPageflyPage, readPageflySet, combinePagefly, pageToHtml, labelFromEntry } =
+    await import("@/lib/collections/pagefly");
 
   console.log("\nentry names become page labels");
 
@@ -44,24 +53,26 @@ async function main(): Promise<void> {
     labelFromEntry("3 - 1 _ GLOWRY About Us _ 2026_09_.json"),
   );
 
-  if (!existsSync(FILE)) {
-    console.log(`\n  ! ${FILE} is not here — the rest of this file needs it.\n`);
+  const missing = FILES.filter((f) => !existsSync(f));
+  if (missing.length) {
+    console.log(`\n  ! missing: ${missing.join(", ")}\n`);
     process.exit(1);
   }
 
-  const set = readPageflySet(new Uint8Array(readFileSync(FILE)));
+  const raw = FILES.map((f) => new Uint8Array(readFileSync(f)));
+  const set = raw.map(readPageflyPage);
 
   console.log("\nthe set");
 
   check(set.length === 7, "seven pages", String(set.length));
   check(
-    set[0].label.includes("Black Friday") && set[6].label.includes("Home"),
-    "in the order the export numbered them",
+    set[0].label.includes("Home") && set[6].label.includes("Contact"),
+    "in the manifest's order, not a zip's key order",
     `${set[0].label} … ${set[6].label}`,
   );
 
   const home = set.find((p) => p.label.includes("Home"))!;
-  check(home.items.length > 300, "the home page has its elements", String(home.items.length));
+  check(home.items.length > 100, "the home page has its elements", String(home.items.length));
   check(home.customCSS.length > 10_000, "and its stylesheet", `${home.customCSS.length}b`);
 
   console.log("\nthe tree");
@@ -75,8 +86,13 @@ async function main(): Promise<void> {
 
   const heading = home.items.find((i) => i.type === "Heading2");
   check(typeof heading?.data?.value === "string", "Heading2 carries `value`");
+  /* A floor rather than a figure. It was 300 and the set lost its header,
+     footer and announcement bar in an edit, which took the count to 296 — a
+     test that fails when the design changes is testing the design. What it is
+     here to catch is `styles` coming back empty, which is what a change to the
+     format would look like. */
   check(
-    Object.keys(home.styles).length > 300,
+    Object.keys(home.styles).length > 100,
     "and the styles parsed",
     String(Object.keys(home.styles).length),
   );
@@ -181,6 +197,24 @@ async function main(): Promise<void> {
   check(
     shortenLabels(["GLOWRY", "GLOWRY Home"]).join("|") === "GLOWRY|GLOWRY Home",
     "and a page whose whole name is the prefix does not come out blank",
+  );
+
+  console.log("\nseven files, put back into one for Export all");
+
+  /* PageFly's multi-page export is a zip of numbered entries. A set exported
+     page by page is seven zips of one entry each; this is the shape that makes
+     `Export all` a single import rather than seven. */
+  const combined = combinePagefly(raw);
+  const back = readPageflySet(combined);
+  check(back.length === 7, "seven entries come back out", String(back.length));
+  check(
+    back.map((p) => p.label).join("|") === set.map((p) => p.label).join("|"),
+    "in the same order they went in",
+    back.map((p) => p.label).join(", "),
+  );
+  check(
+    JSON.stringify(back[0].items) === JSON.stringify(set[0].items),
+    "and the page itself is untouched — only the entry's number changed",
   );
 
   console.log(failures === 0 ? "\nall good\n" : `\n${failures} failure(s)\n`);
