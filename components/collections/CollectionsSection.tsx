@@ -498,7 +498,21 @@ function CollectionDetail({
            nothing for the client to disagree with. */
         typeof document !== "undefined" &&
         createPortal(
-          <div onClick={(e) => e.stopPropagation()}>
+          /* `pfd-root` TRAVELS WITH IT. `styles/reset.css` is this app's
+             stand-in for Tailwind Preflight and is scoped to that class on
+             purpose — the feature embeds into pagefly.io and must not reset
+             their stylesheet. So a portal to `document.body` lands outside it,
+             and the overlay came back with `border-style: none` on every
+             border Tailwind had given a width to, and browser-default padding
+             and background on every button: a toolbar of white pills with
+             invisible borders.
+
+             The class rather than portalling into the existing `.pfd-root`
+             node, because that one carries `overflow-x-clip` and clipping is
+             one of the things that can stop `position: fixed` meaning the
+             viewport. The variables themselves are global — `@theme` puts them
+             on `:root` — so only the reset had to follow. */
+          <div className="pfd-root" onClick={(e) => e.stopPropagation()}>
           <PreviewOverlay
             pages={shims}
             index={viewing}
