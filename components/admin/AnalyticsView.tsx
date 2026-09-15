@@ -239,18 +239,19 @@ export function AnalyticsView() {
 
           <RawTable view={view} />
 
-          {/* WRITTEN AFTER THE FIRST REAL READING, which showed sign-in at
-              117% of the CTA above it and briefly looked like a counting bug.
-              It is not: /design/login has its own address, and somebody with a
-              bookmark never passes the landing page. A funnel with more than
-              one entrance can exceed a step, and saying so is the difference
-              between a reader trusting the screen and debugging it. */}
+          {/* Two reasons a step can exceed the one above it, and both are
+              information rather than error — which is worth saying, because
+              the first real reading showed sign-in at 117% of the CTA and
+              looked for a minute like a counting bug. */}
           <p className="px-1 text-[11px] leading-relaxed text-pf-faint">
-            Counted in distinct people, not clicks. A step can exceed the one
-            above it — the sign-in page has its own address, so anyone arriving
-            by bookmark or a direct link never passes the landing page. Landing
-            views also include crawlers that do not announce themselves, so
-            treat the top of the funnel as an upper bound.
+            Every figure is a press: pressing something five times counts five,
+            and a number moves the moment somebody does it. A step can therefore
+            exceed the one above it — one person exports four pages, and the
+            sign-in page has its own address so anyone arriving by bookmark
+            never passed the landing page. Each tile also carries the number of
+            distinct people or stores underneath. Landing views include crawlers
+            that do not announce themselves, so treat the top of the funnel as
+            an upper bound.
           </p>
         </>
       )}
@@ -282,16 +283,24 @@ const STEP_ICON: Record<string, IconName> = {
  * the funnel — so the number is read and the shape is seen.
  */
 function Funnel({ view }: { view: View }) {
-  const top = view.funnel[0]?.visitors || 1;
+  /* EVENTS, NOT PEOPLE, and every figure on this screen now works this way.
+     A press adds one. The distinct count is still carried underneath, because
+     "forty presses by two people" and "forty by forty" are different findings
+     and the same number — but it is the note, not the headline.
+
+     The consequence is stated plainly in the group note: a step CAN now
+     exceed the one above it, because one person pressing Export five times is
+     five. That is what counting presses means. */
+  const top = view.funnel[0]?.events || 1;
 
   return (
     <TileGroup
       title="The funnel"
-      note={`Over ${view.days} days. Counted once per browser until sign-in and once per store after it — pressing a button five times counts once either way`}
+      note={`Every press over ${view.days} days — five presses count five. A step can exceed the one above it: somebody exporting four pages is four, and the sign-in page has its own address so arrivals there never passed the landing page.`}
     >
       {view.funnel.map((step, i) => {
-        const prev = i === 0 ? null : view.funnel[i - 1].visitors;
-        const ofPrev = prev && prev > 0 ? step.visitors / prev : null;
+        const prev = i === 0 ? null : view.funnel[i - 1].events;
+        const ofPrev = prev && prev > 0 ? step.events / prev : null;
         /* Below half of the step above is where a gap stops being ordinary
            attrition and becomes a question — coloured rather than left for
            somebody to spot by reading eight footnotes. */
@@ -302,30 +311,21 @@ function Funnel({ view }: { view: View }) {
             key={step.key}
             icon={STEP_ICON[step.key] ?? "ChartColumn"}
             label={step.label}
-            value={step.visitors}
+            value={step.events}
             footnote={[
               ofPrev === null ? step.note : `${Math.round(ofPrev * 100)}% of the step above`,
-              /* THE EVENT COUNT, whenever it differs from the people count.
-                 The figure is distinct people — one person pressing Export
-                 five times is one person who exported — and that is the only
-                 way a step cannot outrun the step above it. But read alone, by
-                 somebody who has just pressed a button five times, `1` looks
-                 like a bug rather than a convention. The group heading says
-                 "distinct people" and that was not enough: the tile has to say
-                 it where the number is. */
-              step.events > step.visitors
-                ? `${step.events.toLocaleString()} times in total`
+              /* The distinct count underneath, and named for what it counts:
+                 browsers before sign-in, where no store exists yet, and stores
+                 after it. `2 people` and `2 stores` answer different questions
+                 and the label is the only thing that says which. */
+              step.visitors > 0
+                ? `${step.visitors.toLocaleString()} ${step.unit === "store" ? "stores" : "people"}`
                 : null,
-              /* WHICH UNIT THIS STEP IS IN, because it changes halfway down and
-                 a reader who does not know that reads the drop at `Brief seen`
-                 as people leaving. Before sign-in a store does not exist, so
-                 the only unit available is the browser; after it, the question
-                 is about stores. */
-              step.unit === "store" ? "stores" : "browsers",
             ]
               .filter(Boolean)
               .join(" · ")}
-            ratio={step.visitors / top}
+            ratio={step.events / top}
+            hint={step.where}
             tone={steep ? "danger" : "default"}
             delay={Math.min(i * 0.04, 0.3)}
           />
@@ -601,12 +601,13 @@ function PageSection({ page }: { page: PageBlock }) {
                  tile showing 5 presses by 1 person and a tile showing 5 by 5
                  are different findings and the same number. */
               m.people > 0 && m.people !== m.count
-                ? `${m.people.toLocaleString()} distinct`
+                ? `${m.people.toLocaleString()} ${m.people === 1 ? "person" : "people"}`
                 : null,
             ]
               .filter(Boolean)
               .join(" · ")}
             ratio={m.count / top}
+            hint={m.where}
             delay={Math.min(i * 0.03, 0.2)}
           />
         ))}
@@ -699,7 +700,8 @@ function SharedSection({ block }: { block: SharedBlock }) {
           icon="Layers"
           label="All screens"
           value={block.total}
-          footnote={`${block.totalPeople.toLocaleString()} distinct`}
+          hint={block.where}
+          footnote={`${block.totalPeople.toLocaleString()} ${block.totalPeople === 1 ? "person" : "people"}`}
         />
         {block.bySurface.map((s, i) => (
           <StatTile

@@ -25,6 +25,8 @@ export type FunnelStep = {
   label: string;
   /** what this step measures, in one line, for the screen to show */
   note: string;
+  /** the element that fires it — see `Metric.where` */
+  where: string;
   visitors: number;
   events: number;
   /** `browser` before anybody signs in, `store` after — see `unit` below */
@@ -70,6 +72,19 @@ export type Metric = {
   key: string;
   label: string;
   note: string;
+  /**
+   * The element that fires it, and where that element is.
+   *
+   * SHOWN ON HOVER, and it is not documentation — it is the answer to the
+   * question somebody asks every time a number surprises them: what exactly
+   * did they press. A metric named "CTA pressed" could be four things on this
+   * product, and a reader who has to go and read the source to find out will
+   * instead guess.
+   *
+   * Written as a sentence naming the control and the screen, because "the
+   * button" is not an answer on a page with three of them.
+   */
+  where: string;
   count: number;
   /** distinct browsers, or stores for the screens behind sign-in */
   people: number;
@@ -92,6 +107,8 @@ export type SharedBlock = {
   key: string;
   title: string;
   note: string;
+  /** what fires it — see `Metric.where` */
+  where: string;
   total: number;
   totalPeople: number;
   bySurface: Slice[];
@@ -236,6 +253,7 @@ export async function GET(request: Request) {
     {
       key: "landing",
       label: "Landing",
+      where: "The landing page loading at /\ndesign_landing_viewed",
       note: "Everyone who saw the front page",
       visitors: people(totals, EV.landingViewed),
       events: sum(rows, EV.landingViewed),
@@ -244,6 +262,7 @@ export async function GET(request: Request) {
     {
       key: "cta",
       label: "Pressed a CTA",
+      where: "Any of the four links to /design: the two purple “Design now” buttons (hero and closing), plus “Sign in” and the store name in the header\ndesign_cta_clicked",
       note: "Every link to /design — split four ways on the landing block below",
       /* EVERY LINK TO /design, HEADER ONES INCLUDED, now that the count comes
          from the database grouped by name. The filtered version was the last
@@ -261,6 +280,7 @@ export async function GET(request: Request) {
     {
       key: "signin",
       label: "Sign-in seen",
+      where: "The sign-in form loading at /design/login\ndesign_signin_viewed",
       note: "Reached the form",
       visitors: people(totals, EV.signinViewed),
       events: sum(rows, EV.signinViewed),
@@ -269,6 +289,7 @@ export async function GET(request: Request) {
     {
       key: "submitted",
       label: "Sign-in tried",
+      where: "“Continue” on the sign-in form — recorded when the server answers, not on the press\ndesign_signin_submitted",
       note: "Typed a domain and pressed Continue",
       visitors: people(totals, EV.signinSubmitted),
       events: sum(rows, EV.signinSubmitted),
@@ -277,6 +298,7 @@ export async function GET(request: Request) {
     {
       key: "brief",
       label: "Brief seen",
+      where: "The brief screen loading at /design, after the gate\ndesign_brief_viewed",
       note: "Through the gate, looking at the questions",
       visitors: stores(totals, EV.briefViewed),
       events: sum(rows, EV.briefViewed),
@@ -285,6 +307,7 @@ export async function GET(request: Request) {
     {
       key: "started",
       label: "Build started",
+      where: "The build button on the brief screen\ndesign_generate_started",
       note: "Pressed the button",
       visitors: stores(totals, EV.generateStarted),
       events: sum(rows, EV.generateStarted),
@@ -293,6 +316,7 @@ export async function GET(request: Request) {
     {
       key: "completed",
       label: "Build finished",
+      where: "The server, when a build finishes — not the browser, so a closed tab still counts\ndesign_generate_completed",
       note: "Reported by the server, so a closed tab still counts",
       visitors: stores(totals, EV.generateCompleted),
       events: sum(rows, EV.generateCompleted),
@@ -301,6 +325,7 @@ export async function GET(request: Request) {
     {
       key: "exported",
       label: "Exported a page",
+      where: "Either Export control on the finished deck: the ⬇ on one card, or “Export all” on the toolbar\ndesign_page_exported",
       note: "Took the file away",
       visitors: stores(totals, EV.pageExported),
       events: sum(rows, EV.pageExported),
@@ -333,11 +358,13 @@ export async function GET(request: Request) {
     label: string,
     note: string,
     name: string,
+    where: string,
     opts: { unit?: "browser" | "store"; split?: Slice[] } = {},
   ): Metric => ({
     key,
     label,
     note,
+    where: `${where}\n${name}`,
     count: sum(rows, name),
     people: opts.unit === "store" ? stores(totals, name) : people(totals, name),
     ...(opts.split && opts.split.length > 0 ? { split: opts.split } : {}),
@@ -350,8 +377,8 @@ export async function GET(request: Request) {
       path: "/",
       note: "The front door. Everything here is a visitor with no account yet.",
       metrics: [
-        metric("viewed", "Page viewed", "the denominator of every rate below", EV.landingViewed),
-        metric("cta", "CTA pressed", "all four links to /design", EV.ctaClicked, {
+        metric("viewed", "Page viewed", "the denominator of every rate below", EV.landingViewed, "The page loading at /"),
+        metric("cta", "CTA pressed", "all four links to /design", EV.ctaClicked, "Any of the four links to /design — the two purple “Design now” buttons, and “Sign in” / the store name in the header", {
           split: slices(rows, EV.ctaClicked, "location", {
             hero: "Hero · Design now",
             closing: "Closing · Design now",
@@ -359,7 +386,7 @@ export async function GET(request: Request) {
             header_store: "Header · store name",
           }),
         }),
-        metric("gallery", "Gallery opened", "a template in the moving strip", EV.galleryOpened, {
+        metric("gallery", "Gallery opened", "a template in the moving strip", EV.galleryOpened, "A card in the moving strip of templates, near the bottom of the landing page", {
           split: slices(rows, EV.galleryOpened, "page_type", {}),
         }),
       ],
@@ -370,8 +397,8 @@ export async function GET(request: Request) {
       path: "/design/login",
       note: "The gate. The split below is what the ads are actually bringing.",
       metrics: [
-        metric("viewed", "Page viewed", "reached the form", EV.signinViewed),
-        metric("submitted", "Continue pressed", "counted when the server answers, not on the press", EV.signinSubmitted, {
+        metric("viewed", "Page viewed", "reached the form", EV.signinViewed, "The form loading at /design/login"),
+        metric("submitted", "Continue pressed", "counted when the server answers, not on the press", EV.signinSubmitted, "“Continue” — recorded when the server answers, so it carries the outcome", {
           split: slices(rows, EV.signinSubmitted, "result", {
             success: "Signed in",
             not_registered: "Not registered",
@@ -379,7 +406,7 @@ export async function GET(request: Request) {
             server_error: "Our error",
           }),
         }),
-        metric("register_link", "Register link", "went on rather than leaving", EV.registerLinkClicked),
+        metric("register_link", "Register link", "went on rather than leaving", EV.registerLinkClicked, "The underlined word “register” in the line under the form"),
       ],
     },
     {
@@ -388,24 +415,24 @@ export async function GET(request: Request) {
       path: "/design/register",
       note: "Including the success screen, which has no address of its own.",
       metrics: [
-        metric("viewed", "Page viewed", "reached the form", EV.registerViewed),
-        metric("submitted", "Register pressed", "both the form's own refusals and the server's", EV.registerSubmitted, {
+        metric("viewed", "Page viewed", "reached the form", EV.registerViewed, "The form loading at /design/register"),
+        metric("submitted", "Register pressed", "both the form's own refusals and the server's", EV.registerSubmitted, "“Register” — fired twice over: once when the form refuses it without calling the server, once when the server answers", {
           split: slices(rows, EV.registerSubmitted, "result", {
             success: "Registered",
             validation_error: "Form refused it",
             server_error: "Our error",
           }),
         }),
-        metric("fields", "Fields that blocked it", "every box a refusal named, so one submission can count three", EV.registerSubmitted, {
+        metric("fields", "Fields that blocked it", "every box a refusal named, so one submission can count three", EV.registerSubmitted, "The same “Register” press, listing every box that was wrong — one submission can name three", {
           split: slices(rows, EV.registerSubmitted, "error_field", {
             domain: "Store domain",
             store_name: "Store name",
             email: "Email",
           }),
         }),
-        metric("shopify", "Shopify sign-up", "arrivals who are not merchants yet", EV.shopifySignupClicked),
-        metric("done", "Success screen seen", "compare with Registered above", EV.registeredViewed),
-        metric("return", "Go to sign in", "carried on from the success screen", EV.signinReturnClicked),
+        metric("shopify", "Shopify sign-up", "arrivals who are not merchants yet", EV.shopifySignupClicked, "“Create a Shopify account”, the link under the Store domain box"),
+        metric("done", "Success screen seen", "compare with Registered above", EV.registeredViewed, "The success screen appearing — it has no address of its own, so this fires on the state change"),
+        metric("return", "Go to sign in", "carried on from the success screen", EV.signinReturnClicked, "“Go to sign in” on the success screen"),
       ],
     },
     {
@@ -414,13 +441,13 @@ export async function GET(request: Request) {
       path: "/design",
       note: "Behind the gate, so these are counted in stores rather than browsers.",
       metrics: [
-        metric("viewed", "Page viewed", "through the gate", EV.briefViewed, { unit: "store" }),
-        metric("mode", "Mode chosen", "quick or build detail", EV.briefModeSelected, {
+        metric("viewed", "Page viewed", "through the gate", EV.briefViewed, "The brief screen at /design, once past the gate", { unit: "store" }),
+        metric("mode", "Mode chosen", "quick or build detail", EV.briefModeSelected, "The Quick / Build detail pills at the top of the brief", {
           unit: "store",
           split: slices(rows, EV.briefModeSelected, "mode", { quick: "Quick", detail: "Build detail" }),
         }),
-        metric("example", "Example opened", "read the sample brief first", EV.briefExampleClicked, { unit: "store" }),
-        metric("started", "Build started", "pressed the button", EV.generateStarted, { unit: "store" }),
+        metric("example", "Example opened", "read the sample brief first", EV.briefExampleClicked, "The small “Example” pill beside the description box", { unit: "store" }),
+        metric("started", "Build started", "pressed the button", EV.generateStarted, "The build button at the bottom of the brief", { unit: "store" }),
       ],
     },
     {
@@ -429,9 +456,9 @@ export async function GET(request: Request) {
       path: "/design",
       note: "The outcomes are the server's, so a merchant who closes the tab still counts.",
       metrics: [
-        metric("completed", "Finished", "the deck was delivered", EV.generateCompleted, { unit: "store" }),
-        metric("failed", "Failed", "the build itself did not finish", EV.generateFailed, { unit: "store" }),
-        metric("cancelled", "Cancelled", "went back to the brief", EV.generateCancel, { unit: "store" }),
+        metric("completed", "Finished", "the deck was delivered", EV.generateCompleted, "The server, when the build finishes — a merchant who closes the tab still counts", { unit: "store" }),
+        metric("failed", "Failed", "the build itself did not finish", EV.generateFailed, "The server, when no page could be designed or the run threw", { unit: "store" }),
+        metric("cancelled", "Cancelled", "went back to the brief", EV.generateCancel, "“Cancel and go back to the brief” on the build screen", { unit: "store" }),
       ],
     },
     {
@@ -440,17 +467,17 @@ export async function GET(request: Request) {
       path: "/design",
       note: "What a merchant does with what they got.",
       metrics: [
-        metric("exported", "Exported a page", "took the .pagefly file", EV.pageExported, {
+        metric("exported", "Exported a page", "took the .pagefly file", EV.pageExported, "Either Export control — the ⬇ on one card, or “Export all” on the toolbar", {
           unit: "store",
           split: slices(rows, EV.pageExported, "scope", { one: "One page", all: "Every page" }),
         }),
-        metric("png", "PNG downloaded", "took pictures instead", EV.pagePngDownload, { unit: "store" }),
-        metric("preview", "Preview opened", "read a page full size", EV.pagePreview, {
+        metric("png", "PNG downloaded", "took pictures instead", EV.pagePngDownload, "The “PNG” button on the toolbar above the deck", { unit: "store" }),
+        metric("preview", "Preview opened", "read a page full size", EV.pagePreview, "The mockup image on a card, opening the full preview", {
           unit: "store",
           split: slices(rows, EV.pagePreview, "page_type", {}),
         }),
-        metric("regenerate", "Regenerated a page", "asked for that one again", EV.pageRegenerate, { unit: "store" }),
-        metric("edit", "Edited the brief", "went back to change the answers", EV.briefEdit, { unit: "store" }),
+        metric("regenerate", "Regenerated a page", "asked for that one again", EV.pageRegenerate, "The regenerate control on a card", { unit: "store" }),
+        metric("edit", "Edited the brief", "went back to change the answers", EV.briefEdit, "“Edit brief” on the toolbar above the deck", { unit: "store" }),
       ],
     },
   ];
@@ -467,6 +494,8 @@ export async function GET(request: Request) {
     {
       key: "install",
       title: "Install PageFly",
+      where:
+        "The purple “Install PageFly” button and the quieter “Need the app to open these?” link — five placements in all\ndesign_pagefly_install_clicked",
       note: "One button, five placements. The total is not the sum of the columns — the same person can press it on two screens.",
       total: sum(rows, EV.pageflyInstallClicked),
       totalPeople: people(totals, EV.pageflyInstallClicked),
@@ -475,6 +504,8 @@ export async function GET(request: Request) {
     {
       key: "collections",
       title: "Free collections exported",
+      where:
+        "Any of the three download controls in the Collections section: Export on a set card, “Export all” inside a set, or Export on one page\ndesign_collection_exported",
       note: "The section is on two screens: a visitor browsing the landing page, and a merchant waiting for a build.",
       total: sum(rows, EV.collectionExported),
       totalPeople: people(totals, EV.collectionExported),

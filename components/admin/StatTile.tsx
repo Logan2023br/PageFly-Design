@@ -1,6 +1,7 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
+import { useState } from "react";
 import type { IconName } from "@/lib/icons";
 import { CountUp, Icon, Panel } from "../ui";
 
@@ -34,6 +35,7 @@ export function StatTile({
   ratio,
   tone = "default",
   delay = 0,
+  hint,
 }: {
   icon: IconName;
   label: string;
@@ -48,8 +50,53 @@ export function StatTile({
       the figure: the number itself is not bad news, what it measures is. */
   tone?: "default" | "danger";
   delay?: number;
+  /**
+   * What fires this, shown on hover.
+   *
+   * The first line names the control and the screen; anything after a newline
+   * is rendered quieter underneath, which is where the event's own name goes.
+   * A reader surprised by a number asks "what exactly did they press", and a
+   * label like "CTA pressed" could be four things on this product.
+   */
+  hint?: string;
 }) {
+  const [over, setOver] = useState(false);
+  const [what, ...rest] = (hint ?? "").split("\n");
+
   return (
+    /* THE TOOLTIP LIVES OUTSIDE THE PANEL. The Panel is `overflow-hidden` so
+       the hairline can sit on its bottom edge, and anything escaping upward
+       would be cut off by the same rule. */
+    <div
+      className="relative"
+      onMouseEnter={() => setOver(true)}
+      onMouseLeave={() => setOver(false)}
+      onFocus={() => setOver(true)}
+      onBlur={() => setOver(false)}
+      tabIndex={hint ? 0 : undefined}
+    >
+      <AnimatePresence>
+        {hint && over && (
+          <motion.div
+            role="tooltip"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.14 }}
+            /* Above, because a grid of tiles has another tile directly below
+               every one of them and a tooltip underneath would cover the next
+               number rather than explain this one. */
+            className="absolute bottom-[calc(100%+8px)] left-0 z-40 w-[290px] max-w-[92vw] rounded-pf-md border border-pf-border bg-pf-bg-deep px-3 py-2.5 text-left shadow-pf-float"
+          >
+            <p className="text-[11.5px] leading-snug text-pf-body">{what}</p>
+            {rest.length > 0 && (
+              <p className="mt-1.5 font-mono text-[10.5px] text-pf-faint">{rest.join(" ")}</p>
+            )}
+            <span className="absolute -bottom-1 left-6 size-2 rotate-45 border-b border-r border-pf-border bg-pf-bg-deep" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     <Panel className="relative overflow-hidden p-4">
       <div className="flex items-center gap-2 text-pf-muted">
         <Icon name={icon} size={14} />
@@ -81,6 +128,7 @@ export function StatTile({
         </div>
       )}
     </Panel>
+    </div>
   );
 }
 
