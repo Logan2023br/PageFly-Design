@@ -368,6 +368,28 @@ export function PRODUCT_MEDIA(
       /* The arrows are styled below; without this they are not there to style. */
       imageNavigation: true,
       buttonSize: "36px",
+
+      /* ==================================================================
+         THE DOCUMENTED DEFAULTS, WRITTEN OUT.
+
+         `fields.md` gives each of these a default, and leaving them off was
+         reading that as "the renderer will supply it". This codebase has
+         already been bitten once by the opposite: an item with no `data` at
+         all handed the editor `undefined` where it expected an object, and a
+         panel doing `item.data.label` threw. An absent boolean is `undefined`,
+         and `undefined` is falsy — so a field documented as defaulting to
+         `true` can arrive switched OFF for anything that reads it directly.
+
+         `enableImageListSetting` is the one that matters here: it is what
+         allows the thumbnail-list behaviour, and a strip that renders but does
+         not respond to a click is exactly what a disabled list setting looks
+         like. The others cost four keys and remove the same class of doubt.
+         ================================================================== */
+      source: "auto",
+      enableImageListSetting: true,
+      enableImageMagnifier: true,
+      imageSource: "default-variant",
+      onHover: "NEXT_IMAGE",
       /* The badge is shown by the FLAG, not by being present. Emitted as a child
          with `showBadge` left false, it imports and never renders. */
       showBadge: Boolean(badge),

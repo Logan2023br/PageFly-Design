@@ -270,6 +270,30 @@ async function main(): Promise<void> {
       !/display:\s*flex/.test(JSON.stringify(listNode ?? {})),
       "and not forced visible with CSS",
     );
+
+    /* ====================================================================
+       THE DOCUMENTED DEFAULTS ARE WRITTEN, NOT ASSUMED.
+
+       `fields.md` gives each of these a default, and an absent boolean is
+       `undefined` — falsy to anything reading it directly. A strip that
+       renders and then ignores a click is what a disabled list setting looks
+       like from the outside, and it cannot be told apart from a working one
+       in the editor, which is where this kind of thing hides.
+       ==================================================================== */
+    for (const [field, want] of [
+      ["source", "auto"],
+      ["enableImageListSetting", true],
+      ["enableImageMagnifier", true],
+      ["imageSource", "default-variant"],
+      ["onHover", "NEXT_IMAGE"],
+    ] as const) {
+      check(
+        media.data?.[field] === want,
+        `${field} is stated, not left to a default that may not arrive`,
+        String(media.data?.[field]),
+      );
+    }
+
   }
 
   const box = pdp.find((i) => i.type === "ProductBox");
