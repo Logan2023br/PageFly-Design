@@ -25,6 +25,7 @@ import {
   PRODUCT_QUANTITY,
   PRODUCT_SWATCHES,
   PRODUCT_TITLE,
+  DIVIDER,
   SLIDESHOW,
   TABS,
   SLIDESHOW_PARTS,
@@ -774,9 +775,10 @@ function emitNode(
     }
 
     case "divider":
-      /* Childless and textless. As a FlexBlock the editor would paint a drop
-         zone over it; as Custom.HTML it is just the rule the mockup drew. */
-      return CUSTOM_HTML("<div></div>", sd);
+      /* PageFly's own, not `<div></div>` in a code box. `DIVIDER` converts the
+         design's `height` + `background` into the border Divider2 draws with —
+         passing both through would leave two lines half a pixel apart. */
+      return DIVIDER(sd);
 
     case "icon": {
       const svg = opts.iconSvg?.(node.name);
@@ -842,9 +844,30 @@ function emitNode(
         },
       };
 
+      /* ==================================================================
+         THE FIELD HAS TO BE TOLD TO FILL, AND IT WAS TOLD NOTHING.
+
+         `& input { width: 100% }` was already here and it is 100% of whatever
+         box the input sits in — which is `Form2.Field`, which was built with a
+         null styleData. Every other node in this file goes through `filling`
+         and comes out carrying `width: 100%` and `--pf-flex-layout-width:
+         fill`; a null one goes through it untouched, so the field arrived with
+         neither and PageFly's layout engine did what it does with a node that
+         has no width opinion: hugged the content.
+
+         What that shipped is a newsletter block with a label, a forty-pixel
+         input beside it, and a full-width button underneath — the button being
+         the one control that had a width of its own.
+         ================================================================== */
+      const fieldStyle: StyleData = {
+        all: {
+          "&": "width: 100% !important; --pf-flex-layout-width: fill;",
+        },
+      };
+
       return FORM(
         node.fields.map((f) =>
-          FORM_FIELD(f.label, f.kind, f.required, null, labelStyle),
+          FORM_FIELD(f.label, f.kind, f.required, fieldStyle, labelStyle),
         ),
         node.submitText,
         node.intent,

@@ -525,6 +525,43 @@ async function main(): Promise<void> {
     const btn = styled.cssOf(wrap?.id ?? "", "all", "& button");
     check(btn.includes("#B4552C"), "the button takes the accent", btn.slice(0, 60));
     check(btn.includes("border-radius: 14px"), "and the same radius as the field beside it");
+
+    /* ====================================================================
+       AND EVERY PART OF THE FORM HAS A WIDTH.
+
+       `& input { width: 100% }` was already here, and it is a hundred percent
+       of whatever box the input is in. That box — Form2.Field — was built with
+       a null styleData, which means no style entry and no
+       `--pf-flex-layout-width`, and a node with no width opinion is hugged by
+       the layout engine. What shipped was a newsletter block with a label, a
+       forty-pixel email field beside it, and a full-width button underneath:
+       the button was the one control that had been given a width of its own.
+
+       A null styleData is also the `undefined` an editor panel reads when it
+       opens the element — the failure FORM_FIELD's own comment records for
+       FormLabel, on two siblings that still had it.
+       ==================================================================== */
+    for (const ty of ["Form2.Field", "FormInput", "Form2.Button2"] as const) {
+      const n = styled.items.find((i) => i.type === ty);
+      const own = styled.cssOf(n?.id ?? "");
+      check(own !== "", `${ty} has a style entry at all`, own ? "yes" : "(none)");
+      check(
+        /--pf-flex-layout-width:/.test(own),
+        `and says whether it fills or hugs`,
+        (own.match(/--pf-flex-layout-width:[^;]*/) ?? ["(unsaid)"])[0],
+      );
+    }
+
+    /* The two that carry the typing fill; the button is content-sized, which is
+       what a submit button should be beside a full-width field. */
+    for (const ty of ["Form2.Field", "FormInput"] as const) {
+      const n = styled.items.find((i) => i.type === ty);
+      check(
+        /width:\s*100%/.test(styled.cssOf(n?.id ?? "")),
+        `${ty} fills the form's width`,
+        styled.cssOf(n?.id ?? "").slice(0, 60),
+      );
+    }
   }
 
   /* ---- a stack is one per row, not N across ----------------------------- */

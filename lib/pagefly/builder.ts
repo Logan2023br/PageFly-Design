@@ -679,6 +679,89 @@ export function ACCORDION(
 }
 
 /**
+ * A horizontal rule, as PageFly's own element.
+ *
+ * WHAT THIS REPLACES. `Custom.HTML` holding `<div></div>` with the line drawn
+ * by CSS on the outside. It rendered correctly and it was still a code box in
+ * the editor: ten of them on one page, each opening a panel of markup where a
+ * merchant expected a divider with a thickness and a colour.
+ *
+ * THE MECHANISM HAS TO CHANGE WITH THE ELEMENT, and this is the part that can
+ * go wrong quietly. The design writes a rule the way the mockup draws one —
+ * `height: 1px; background: <colour>` — and `fields.md` says Divider2 takes
+ * its "line thickness/colour via border". Passing the design's own
+ * declarations through untouched would leave PageFly's border drawing one line
+ * and the background drawing another, half a pixel apart: the exact shape of
+ * the double-rule the accordion had, which shipped looking like a heavy line
+ * with a faint one under it.
+ *
+ * So the two are converted into the one the element understands, and the pair
+ * that would have drawn the second line is removed rather than left to be
+ * harmless. `border: 0` goes in before `border-top`, because a design that
+ * wrote `border: none` and a design that wrote nothing have to end up in the
+ * same place.
+ */
+function asRule(styleData: StyleData): StyleData {
+  if (!styleData) return null;
+  const out: Record<string, Record<string, string>> = {};
+
+  for (const [device, block] of Object.entries(styleData)) {
+    const rule = block?.["&"];
+    if (typeof rule !== "string") {
+      out[device] = block;
+      continue;
+    }
+
+    /* Split on the first colon only: a value can hold one (a url, a gradient
+       stop) and a key cannot. */
+    const decls: [string, string][] = [];
+    for (const part of rule.split(";")) {
+      const at = part.indexOf(":");
+      if (at === -1) continue;
+      const k = part.slice(0, at).trim();
+      const v = part.slice(at + 1).trim();
+      if (k && v) decls.push([k, v]);
+    }
+
+    /* `!important` STRIPPED OFF THE PARTS AND PUT BACK ON THE WHOLE. The
+       exporter marks a fixed height important, and folding that token into the
+       middle of a shorthand produces `1px !important solid <colour>` — which is
+       not a declaration at all. A browser drops the whole line and the divider
+       disappears, silently, which is worse than the double rule this
+       conversion exists to prevent. */
+    const bang = (v: string) => v.replace(/\s*!important\s*$/, "").trim();
+    const height = decls.find(([k]) => k === "height")?.[1];
+    const colour = decls.find(([k]) => k === "background")?.[1];
+    const loud = [height, colour].some((v) => v && /!important\s*$/.test(v));
+
+    const kept = decls.filter(([k]) =>
+      /* The three the rule is made of, gone whichever way the design spelled
+         them. Everything else — margin, width, opacity, the layout variables —
+         is the design's and stays. */
+      !(k === "height" || k === "background" || k === "border" || k.startsWith("border-")),
+    );
+
+    const line =
+      height && colour
+        ? [
+            ["border", "0"],
+            ["border-top", `${bang(height)} solid ${bang(colour)}${loud ? " !important" : ""}`],
+          ]
+        : [];
+
+    out[device] = {
+      ...block,
+      "&": [...line, ...kept].map(([k, v]) => `${k}: ${v};`).join(" "),
+    };
+  }
+  return out;
+}
+
+export function DIVIDER(styleData: StyleData) {
+  return node("Divider2", { dividerType: "plain" }, asRule(styleData), []);
+}
+
+/**
  * Tabs, as PageFly's own element.
  *
  * WHAT THIS REPLACES. A hand-built bar of hidden radio inputs, a `:has()` rule
@@ -1228,7 +1311,20 @@ export function FORM_FIELD(
        * object — which is the other half of the crash.
        */
       node("FormLabel", { label }, labelStyle, []),
-      node("FormInput", { required, inputType: INPUT_TYPE[kind] ?? 0 }, null, []),
+      /* THE SAME REASON AS THE LABEL ABOVE, AND ONE MORE.
+
+         A null styleData means no style entry, which is the `undefined` the
+         panel above describes. It also means no `--pf-flex-layout-width`, and
+         a node with no width opinion is hugged by the layout engine: the
+         `& input { width: 100% }` written on the Form2 is a hundred percent of
+         a box that had already shrunk to nothing. A newsletter block shipped
+         with a forty-pixel email field beside a full-width button. */
+      node(
+        "FormInput",
+        { required, inputType: INPUT_TYPE[kind] ?? 0 },
+        { all: { "&": "width: 100% !important; --pf-flex-layout-width: fill;" } },
+        [],
+      ),
     ],
   );
 }
@@ -1252,7 +1348,16 @@ export function FORM(
       ...fields,
       /* Unstyled by default it renders as a bare native button — grey, system
          font, nothing like the page around it. fields.md says so outright. */
-      node("Form2.Button2", { value: submit, buttonType: "text" }, null, []),
+      /* Given one for the same reason the field and the input are: a node with
+         no style entry hands an editor panel `undefined`, and a node with no
+         width opinion is sized by whatever the engine assumes. The look is
+         still the Form2's `& button` rule — this is the box, not the paint. */
+      node(
+        "Form2.Button2",
+        { value: submit, buttonType: "text" },
+        { all: { "&": "--pf-flex-layout-width: hug;" } },
+        [],
+      ),
     ],
   );
 }
