@@ -646,6 +646,84 @@ async function main(): Promise<void> {
     );
   }
 
+  /* ======================================================================
+     A TABLE THAT CAN BE READ AT ANY WIDTH.
+
+     Reported from the editor at 1025px: a two-column spec table with
+     `SPECIFICATION` running down the page one letter per line. Two rules were
+     asking for opposite things — the wrapper carried `overflow-x: auto`,
+     expecting rows wider than the box, and every cell carried `min-width: 0`,
+     guaranteeing they never would be. So nothing scrolled and the words came
+     apart instead.
+
+     The mockup never had the bug: `render.tsx` gives its table 110px a column.
+     The export and the picture disagreeing about the same table is the class
+     of failure this whole file exists to prevent, so the floor is now the same
+     number in both.
+     ====================================================================== */
+  console.log("\na table at a narrow width");
+
+  {
+    const t = await open({
+      sections: [
+        section(
+          [{ type: "table", rows: [["Specification", "Detail"], ["Alloy", "Unlacquered solid brass"]] }],
+          "spec-rail-sticky",
+        ),
+      ],
+    });
+
+    const cells = t.items.filter((i) => i.type === "Paragraph4");
+    check(cells.length >= 4, "every cell is built", String(cells.length));
+
+    const cellCss = t.cssOf(cells[0]?.id ?? "");
+    check(
+      !/min-width:\s*0/.test(cellCss),
+      "no cell may shrink past its own longest word",
+      cellCss.slice(0, 80),
+    );
+
+    /* The row carries the floor, as the mockup's table does — 110px a column,
+       two columns, 220px. Below that the wrapper scrolls rather than the words
+       breaking. */
+    const rows = t.items.filter(
+      (i) => i.type === "FlexBlock" && /flex-direction:\s*row/.test(t.cssOf(i.id)),
+    );
+    const withFloor = rows.filter((r) => /min-width:\s*220px/.test(t.cssOf(r.id)));
+    check(withFloor.length >= 2, "each row has a floor of 110px a column", String(withFloor.length));
+
+    /* The wrapper is whichever block carries the scroll, not the first one in
+       the file — the section has blocks of its own above it. */
+    const scroller = t.items.filter(
+      (i) => i.type === "FlexBlock" && /overflow-x:\s*auto/.test(t.cssOf(i.id)),
+    );
+    check(scroller.length === 1, "and exactly one wrapper can scroll", String(scroller.length));
+  }
+
+  /* ======================================================================
+     AND THE PAGE RULE THAT CAUSED IT.
+
+     One blanket `min-width: 0` over every element. Right for a flex container,
+     which cannot let its children shrink without it; wrong for a paragraph,
+     where it removes the only thing keeping a word whole.
+     ====================================================================== */
+  console.log("\nthe page's own min-width rule");
+
+  {
+    const any = await open({
+      sections: [section([{ type: "text", text: "Specification" }], "story-band")],
+    });
+    check(
+      any.customCSS.includes("[data-pf-type] { min-width: 0; }"),
+      "containers may still shrink",
+    );
+    check(
+      /\[data-pf-type="Paragraph4"\][\s\S]{0,120}min-width:\s*min-content/.test(any.customCSS),
+      "and a paragraph may not shrink past a word",
+      (any.customCSS.match(/min-content[^;]*/) ?? ["(no rule)"])[0],
+    );
+  }
+
   /* ---- the countdown, which used to be markup that counted nothing ------ */
 
   console.log("\na countdown");

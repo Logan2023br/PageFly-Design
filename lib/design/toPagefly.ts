@@ -1810,7 +1810,12 @@ function tableAsFlex(
     P4(text, {
       all: {
         "&":
-          `flex: 1 1 0; min-width: 0; padding: 12px 14px; font-size: 14px;` +
+          /* NO `min-width: 0` HERE. It was the line that made a table of four
+             columns wrap one letter per line: with the floor removed a flex
+             cell shrinks past its own longest word, and the `overflow-x: auto`
+             on the wrapper below never fires because the row is never wider
+             than the box. The two rules were asking for opposite things. */
+          `flex: 1 1 0; padding: 12px 14px; font-size: 14px;` +
           ` line-height: 1.4; ${ink}` +
           (header
             ? ` font-weight: 600; letter-spacing: .04em; text-transform: uppercase; font-size: 12.5px;`
@@ -1826,7 +1831,13 @@ function tableAsFlex(
       {
         all: {
           "&":
-            `display: flex; flex-direction: row; align-items: stretch; width: 100%;` +
+            /* `min-width` rather than `width`, and 110px a column — the same
+               floor `render.tsx` gives the mockup's table. Capped at 100% the
+               row can only shrink; with a floor it grows past the container
+               and the wrapper scrolls, which is what the mockup does and what
+               the export promised and did not deliver. */
+            `display: flex; flex-direction: row; align-items: stretch;` +
+            ` width: 100%; min-width: ${columns * 110}px;` +
             (i < square.length - 1 ? ` border-bottom: 1px solid ${rule};` : ""),
         },
       },
@@ -1987,9 +1998,26 @@ function pageCss(width: number, motion: boolean): string {
     `.pf-design-export h6 { margin: 0; }`,
     `.pf-design-export a { color: inherit; text-decoration: none; }`,
     `.pf-design-export img, .pf-design-export svg { display: block; max-width: 100%; }`,
-    /* The engine gives text elements a min-width from its own sizing model;
-       landing on a flex child that breaks the line per character. */
+    /* CONTAINERS MAY SHRINK; WORDS MAY NOT.
+
+       This was one blanket rule over every element, and it is half right. A
+       flex or grid container needs `min-width: 0` or its children cannot shrink
+       at all — `render.tsx` gives the mockup's columns exactly that, and the
+       rule was written for them.
+
+       It also landed on every paragraph and heading, and there it removed the
+       one thing keeping a word whole: a flex item's default `min-width: auto`
+       is what stops it shrinking past its own longest word. Without it a column
+       squeezed to eight pixels and `SPECIFICATION` came down the page one
+       letter at a time — the exact symptom the rule was added to cure, caused
+       by the cure.
+
+       `min-content` is the narrowest width that breaks no word. It cannot
+       overflow by more than one long word, and it is what these elements would
+       have had if nothing had been said at all. */
     `.pf-design-export [data-pf-type] { min-width: 0; }`,
+    `.pf-design-export [data-pf-type="Paragraph4"],`,
+    `.pf-design-export [data-pf-type="Heading2"] { min-width: min-content; }`,
     /* width:100% as well as the cap. Without it the block is free to shrink to
        its content — a centred flex parent in the theme, or a section whose
        children all hug, and the page narrows to a column adrift in the
