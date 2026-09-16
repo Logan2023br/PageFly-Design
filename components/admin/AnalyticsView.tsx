@@ -9,6 +9,7 @@ import type {
   SharedBlock,
   Slice,
 } from "@/app/api/admin/analytics/route";
+import { compareViews, type Change, type Comparison } from "@/lib/analytics/compare";
 import type { IconName } from "@/lib/icons";
 import { CountUp, Icon, Panel } from "../ui";
 import { StatTile, TileGroup, TileRow } from "./StatTile";
@@ -70,6 +71,12 @@ export function AnalyticsView() {
   const [tick, setTick] = useState(0);
   const [at, setAt] = useState<Date | null>(null);
   const [view, setView] = useState<View | null>(null);
+  /* Off by default, and that is the point of a button. Comparing costs two more
+     grouped queries per load on a screen that polls every thirty seconds, and
+     most visits are somebody checking a number rather than asking whether it
+     moved. */
+  const [compare, setCompare] = useState(false);
+  const [previous, setPrevious] = useState<View | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -87,13 +94,15 @@ export function AnalyticsView() {
            is the half that also defeats a fetch served from the browser's own
            memory cache on a back-navigation, where no request is made at all
            and no response header can be consulted. */
-        const res = await fetch(`/api/admin/analytics?days=${days}`, {
-          cache: "no-store",
-        });
+        const res = await fetch(
+          `/api/admin/analytics?days=${days}${compare ? "&compare=1" : ""}`,
+          { cache: "no-store" },
+        );
         const body = (await res.json()) as AnalyticsResponse;
         if (!live) return;
         if (body.ok) {
           setView(body.view);
+          setPrevious(body.previous ?? null);
           setAt(new Date());
         } else setError(body.error);
       } catch {
@@ -106,7 +115,7 @@ export function AnalyticsView() {
     return () => {
       live = false;
     };
-  }, [days, tick]);
+  }, [days, tick, compare]);
 
   /* ==========================================================================
      ASKED AGAIN EVERY THIRTY SECONDS, AND ONLY WHILE THE TAB IS VISIBLE.
@@ -156,6 +165,25 @@ export function AnalyticsView() {
             </button>
           ))}
         </div>
+
+        {/* Beside the range and not inside it: the range picks WHICH window,
+            this picks whether there are two. Pressed, the label names what it
+            is being compared against, so nobody has to work out that 30 days
+            means the 30 before these. */}
+        <button
+          type="button"
+          onClick={() => setCompare((c) => !c)}
+          aria-pressed={compare}
+          className={`flex items-center gap-1.5 rounded-pf-md border px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
+            compare
+              ? "border-pf-primary bg-pf-primary/15 text-pf-primary-hi"
+              : "border-pf-border text-pf-muted hover:text-pf-text"
+          }`}
+        >
+          <Icon name="ArrowLeftRight" size={13} />
+          {compare ? `vs ${days} ngày trước đó` : "Compare"}
+        </button>
+
         <div className="flex items-center gap-3">
           {at && (
             <span className="text-[11.5px] tabular-nums text-pf-faint">
@@ -201,6 +229,12 @@ export function AnalyticsView() {
 
       {view && !view.empty && (
         <>
+          {/* ABOVE THE NUMBERS, not below them. A reader who has pressed
+              Compare is asking one question — what changed — and the answer
+              belongs where the question was asked. Scrolling past nine blocks
+              of tiles to reach a verdict is the same as not having one. */}
+          {compare && previous && <CompareBlock now={view} before={previous} />}
+
           {/* The funnel first, because it is the only thing here that crosses
               screens — which is what a funnel is. Everything below answers a
               different question: given one screen, what happens on it. */}
@@ -808,5 +842,141 @@ function RawTable({ view }: { view: View }) {
         </div>
       )}
     </Panel>
+  );
+}
+
+/* ==========================================================================
+   What changed against the window before.
+
+   THREE LISTS, AND THE THIRD IS THE HONEST ONE. Improving, declining, and
+   "moved but the numbers are too small to read anything into". Most products
+   would drop the third; this one cannot. A month here puts the narrow end of
+   the funnel in single figures, and a reader who sees only two lists will
+   assume everything absent from them held steady. It did not — it moved, over
+   numbers where movement means nothing, and saying so is the difference
+   between a summary and a horoscope.
+
+   COUNTS AND RATES ARE SHOWN DIFFERENTLY because they mean differently. A
+   count gets its two figures and a percentage; a rate gets its two figures and
+   a POINT difference, because "conversion rose 20%" is ambiguous — from 25% to
+   30%, or from 25% to 45%? Points are not.
+   ========================================================================== */
+
+function pct(n: number): string {
+  const s = Math.round(Math.abs(n) * 100);
+  return `${n >= 0 ? "+" : "−"}${s}%`;
+}
+
+function ChangeRow({ c }: { c: Change }) {
+  const good = c.verdict === "good";
+  const thin = c.verdict === "thin";
+  const tone = thin ? "text-pf-faint" : good ? "text-pf-success" : "text-pf-danger";
+
+  return (
+    <li className="flex items-baseline justify-between gap-3 border-b border-pf-border/60 py-2 last:border-0">
+      <span className="min-w-0">
+        <span className="block truncate text-[12.5px] text-pf-body">{c.label}</span>
+        <span className="block text-[10.5px] uppercase tracking-[0.08em] text-pf-faint">
+          {c.group}
+        </span>
+      </span>
+      <span className="flex shrink-0 items-baseline gap-2 tabular-nums">
+        <span className="text-[11.5px] text-pf-faint">
+          {c.before}
+          {c.unit === "rate" ? "%" : ""} →{" "}
+        </span>
+        <span className="text-[14px] font-semibold text-pf-text">
+          {c.now}
+          {c.unit === "rate" ? "%" : ""}
+        </span>
+        <span className={`w-[52px] text-right text-[11.5px] font-semibold ${tone}`}>
+          {c.unit === "rate"
+            ? `${c.delta >= 0 ? "+" : "−"}${Math.abs(c.delta)}đ`
+            : c.pct === null
+              ? `+${c.delta}`
+              : pct(c.pct)}
+        </span>
+      </span>
+    </li>
+  );
+}
+
+function ChangeList({
+  title,
+  note,
+  icon,
+  items,
+  tone,
+}: {
+  title: string;
+  note: string;
+  icon: IconName;
+  items: Change[];
+  tone: string;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <Panel className="p-4">
+      <div className={`flex items-center gap-2 ${tone}`}>
+        <Icon name={icon} size={14} />
+        <span className="text-[12px] font-semibold">{title}</span>
+        <span className="ml-auto text-[11.5px] tabular-nums text-pf-faint">{items.length}</span>
+      </div>
+      <p className="mt-1 text-[11px] leading-snug text-pf-faint">{note}</p>
+      {/* Eight is what fits before a list stops being a summary. The rest are
+          still on the screen below, in the block each came from. */}
+      <ul className="mt-2">
+        {items.slice(0, 8).map((c) => (
+          <ChangeRow key={`${c.group}:${c.key}`} c={c} />
+        ))}
+      </ul>
+      {items.length > 8 && (
+        <p className="mt-2 text-[11px] text-pf-faint">
+          và {items.length - 8} chỉ số nữa
+        </p>
+      )}
+    </Panel>
+  );
+}
+
+function CompareBlock({ now, before }: { now: View; before: View }) {
+  const c: Comparison = compareViews(now, before);
+
+  return (
+    <section className="grid gap-3">
+      <div>
+        <h2 className="text-[13.5px] font-semibold text-pf-text">
+          So với {c.days} ngày trước đó
+        </h2>
+        <p className="mt-0.5 text-[11.5px] leading-snug text-pf-muted">
+          {c.headline} Hai kỳ cùng độ dài, kỳ trước kết thúc đúng lúc kỳ này bắt đầu.
+          {c.flat.length > 0 && ` ${c.flat.length} chỉ số không đổi.`}
+        </p>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-3">
+        <ChangeList
+          title="Đang tốt"
+          note="Đi đúng hướng, trên số liệu đủ lớn để tin."
+          icon="TrendingUp"
+          tone="text-pf-success"
+          items={c.good}
+        />
+        <ChangeList
+          title="Cần cải thiện"
+          note="Đi sai hướng, trên số liệu đủ lớn để tin."
+          icon="TrendingDown"
+          tone="text-pf-danger"
+          items={c.bad}
+        />
+        <ChangeList
+          title="Chưa đủ dữ liệu"
+          note="Có dịch chuyển, nhưng số quá nhỏ để kết luận — giữ lại để không bị hiểu nhầm là đứng yên."
+          icon="Minus"
+          tone="text-pf-faint"
+          items={c.thin}
+        />
+      </div>
+    </section>
   );
 }

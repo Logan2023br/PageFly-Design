@@ -5,6 +5,7 @@
 
 import {
   ArrowLeft,
+  ArrowLeftRight,
   ArrowRight,
   ArrowUpRight,
   Boxes,
@@ -82,6 +83,7 @@ import {
   Tablet,
   Tag,
   Trash2,
+  TrendingDown,
   TrendingUp,
   TriangleAlert,
   Truck,
@@ -97,6 +99,7 @@ import {
 
 export const ICONS = {
   ArrowLeft,
+  ArrowLeftRight,
   ArrowRight,
   ArrowUpRight,
   Boxes,
@@ -174,6 +177,7 @@ export const ICONS = {
   Tablet,
   Tag,
   Trash2,
+  TrendingDown,
   TrendingUp,
   TriangleAlert,
   Truck,

@@ -133,7 +133,17 @@ export type SharedBlock = {
 };
 
 export type AnalyticsResponse =
-  | { ok: true; view: AnalyticsView }
+  | {
+      ok: true;
+      view: AnalyticsView;
+      /**
+       * The window of the same length ending where `view` begins.
+       *
+       * Absent unless `?compare=1` — the reader who never presses Compare
+       * should not pay for two more queries on a screen that polls.
+       */
+      previous?: AnalyticsView;
+    }
   | { ok: false; error: string };
 
 function sum(rows: EventCount[], name: string, where?: (p: Record<string, unknown>) => boolean) {
@@ -226,11 +236,21 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const days = Math.min(365, Math.max(1, Number(url.searchParams.get("days") ?? 30) || 30));
+  const compare = url.searchParams.get("compare") === "1";
   const to = new Date();
-  const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
+  const span = days * 24 * 60 * 60 * 1000;
+  const from = new Date(to.getTime() - span);
+  /* THE WINDOW BEFORE, THE SAME LENGTH, ENDING WHERE THIS ONE BEGINS. Seven
+     days compares against the seven before them, thirty against the thirty
+     before. Anything else — the same dates a month back, a fixed baseline —
+     answers a question nobody asked while looking at a 7/30/90 switch. */
+  const prevTo = from;
+  const prevFrom = new Date(from.getTime() - span);
 
   let rows: EventCount[];
   let totals: EventTotal[];
+  let prevRows: EventCount[] = [];
+  let prevTotals: EventTotal[] = [];
   try {
     /* Two shapes of the same window: grouped by name and parameters for the
        breakdowns, and by name alone for the distinct counts, which cannot be
@@ -239,6 +259,13 @@ export async function GET(request: Request) {
       getRepo().countEvents(from.toISOString(), to.toISOString()),
       getRepo().countEventTotals(from.toISOString(), to.toISOString()),
     ]);
+    /* Only when asked. Two more queries on every load would be paid by every
+       reader who never presses Compare, and this screen already polls. */
+    if (compare)
+      [prevRows, prevTotals] = await Promise.all([
+        getRepo().countEvents(prevFrom.toISOString(), prevTo.toISOString()),
+        getRepo().countEventTotals(prevFrom.toISOString(), prevTo.toISOString()),
+      ]);
   } catch (err) {
     return Response.json(
       { ok: false, error: (err as Error).message } satisfies AnalyticsResponse,
@@ -246,6 +273,39 @@ export async function GET(request: Request) {
     );
   }
 
+  const view = buildView(rows, totals, from, to, days);
+  const previous = compare ? buildView(prevRows, prevTotals, prevFrom, prevTo, days) : undefined;
+
+  /* NO-STORE, AND IT IS NOT BELT AND BRACES. `force-dynamic` above tells Next
+     not to cache the render; it says nothing to the BROWSER, and this response
+     went out with no cache headers at all — which leaves the browser free to
+     reuse it by heuristic. The symptom would be the worst kind on this screen:
+     somebody reloads to see whether a number moved, sees the same figure, and
+     concludes nothing happened. */
+  return Response.json({ ok: true, view, previous } satisfies AnalyticsResponse, {
+    headers: { "cache-control": "no-store, max-age=0" },
+  });
+}
+
+
+
+
+/**
+ * One window's figures, assembled.
+ *
+ * LIFTED OUT OF THE HANDLER so it can be called twice. Comparing a window
+ * against the one before it is the same work on a different pair of dates,
+ * and a second copy of three hundred lines is a second copy that drifts —
+ * the funnel would gain a step on one side and not the other, and the
+ * comparison would report a change nobody made.
+ */
+function buildView(
+  rows: EventCount[],
+  totals: EventTotal[],
+  from: Date,
+  to: Date,
+  days: number,
+): AnalyticsView {
   /* ==========================================================================
      THE FUNNEL, and why these steps.
 
@@ -597,13 +657,5 @@ export async function GET(request: Request) {
     rows: [...rows].sort((a, b) => b.count - a.count).slice(0, 200),
   };
 
-  /* NO-STORE, AND IT IS NOT BELT AND BRACES. `force-dynamic` above tells Next
-     not to cache the render; it says nothing to the BROWSER, and this response
-     went out with no cache headers at all — which leaves the browser free to
-     reuse it by heuristic. The symptom would be the worst kind on this screen:
-     somebody reloads to see whether a number moved, sees the same figure, and
-     concludes nothing happened. */
-  return Response.json({ ok: true, view } satisfies AnalyticsResponse, {
-    headers: { "cache-control": "no-store, max-age=0" },
-  });
+  return view;
 }
