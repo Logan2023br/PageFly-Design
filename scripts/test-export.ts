@@ -557,12 +557,50 @@ async function main(): Promise<void> {
       { border: "#3A3A38", accent: "#C9A24B" },
     );
 
-    /* EACH TAB GETS ITS OWN PANEL. Three labels over one shared block was the
-       bug: two thirds of the content had nowhere to live. */
-    const panels = tabs.items.filter((i) =>
-      /^pfd-p-\d+-\d+$/.test(String((i.data as Record<string, unknown>)?.className ?? "")),
+    /* ======================================================================
+       PAGEFLY'S OWN TABS, AND THE ROUTE MATTERS.
+
+       A note in `tabsOf` used to record that Tabs3 had been tried and
+       abandoned. It had — through the placement rule, which says to emit the
+       element alone and fill `content.items:[{label,content}]`. That key made
+       an export import successfully and never reach the editor's list, twice,
+       and the assertion here was `not Tabs3` to keep anybody from trying it
+       again.
+
+       The lesson is kept and the conclusion is not. `nesting.md` describes a
+       second shape for the same element — Tabs3 holding TabsMenu3 and
+       TabContentWrapper3, TabsContent3 taking 152 of the 241 types — which is
+       the ordinary composite this file already builds for Accordion3 and
+       ProductBox. So the assertions below check that shape AND check that the
+       route known to break is still not taken.
+
+       What the radio bar cost, and why it went: a merchant opening the tabs
+       in the editor found `HTML/Liquid` and a code box. No list of tabs, no
+       renaming, no reordering, no fifth tab. The page switched panels and
+       could not be edited, which is the failure this whole exporter exists to
+       avoid.
+       ====================================================================== */
+    const shell = tabs.items.find((i) => i.type === "Tabs3");
+    check(Boolean(shell), "PageFly's own Tabs3, not a bar of hidden radios");
+    check(
+      tabs.items.every((i) => i.type !== "Custom.HTML"),
+      "and no markup block standing in for the header row",
     );
-    check(panels.length === 3, "three tabs, three panels", `${panels.length}`);
+
+    const menu = tabs.items.find((i) => i.type === "TabsMenu3");
+    const wrapper = tabs.items.find((i) => i.type === "TabContentWrapper3");
+    check(Boolean(menu && wrapper), "the two slots the element requires");
+
+    const headers = tabs.items.filter((i) => i.type === "TabHeader3");
+    check(headers.length === 3, "one header per tab", String(headers.length));
+    /* The label is `value` ON the header. Nested as a Heading it imports and
+       the editor shows an empty tab — the same trap as ACCORDION_HEADER. */
+    const labels = headers.map((h) => String((h.data as Record<string, unknown>)?.value ?? ""));
+    for (const l of ["Regular", "Oversized", "Tall"])
+      check(labels.includes(l), `the label "${l}" rides on the header itself`);
+
+    const panels = tabs.items.filter((i) => i.type === "TabsContent3");
+    check(panels.length === 3, "and one panel per tab", String(panels.length));
 
     const texts = tabs.items
       .filter((i) => i.type === "Paragraph4")
@@ -570,36 +608,42 @@ async function main(): Promise<void> {
     for (const want of ["Regular fit", "Oversized fit", "Chest"])
       check(texts.includes(want), `panel content "${want}" arrives`);
 
-    /* A panel holds REAL nodes, so a table inside a tab is still a table. */
+    /* A panel holds REAL nodes, which is the whole reason for taking the
+       nesting route rather than the `content.items` one — that route carries a
+       label and a string, and this design puts a table in a tab. */
     check(
       texts.includes("Size") && texts.includes("96"),
       "a table inside a tab is built, not flattened to prose",
     );
 
-    /* The bar is one Custom.HTML carrying a radio and a label per tab. */
-    const bar = tabs.items.find((i) => i.type === "Custom.HTML");
-    const code = String((bar?.data as Record<string, unknown>)?.code ?? "");
-    check((code.match(/<input type="radio"/g) ?? []).length === 3, "one radio per tab");
-    for (const l of ["Regular", "Oversized", "Tall"])
-      check(code.includes(`>${l}</label>`), `the label "${l}" is in the bar`);
-    check(/id="pfd-t-\d+-1"\s+checked/.test(code), "open:1 is the tab that starts checked");
-
-    /* The class goes on the WRAPPER, which is what puts the radios and the
-       panels inside one scope — see `tabsOf`. */
-    const wrapCls = tabs.items.find(
-      (i) => /^pfd-c-\d+$/.test(String((i.data as Record<string, unknown>)?.className ?? "")) &&
-        i.type === "FlexBlock",
-    );
-    check(Boolean(wrapCls), "the block class sits on the wrapper, not the markup");
-
-    const css = tabs.customCSS;
-    check(css.includes(":has("), "switching is a :has() rule, reaching from radio to panel");
-    check(css.includes("#C9A24B"), "the open tab is underlined in the accent");
+    /* `activeFront` counts from zero and `activeTab` from one. Setting one
+       without the other opens a different tab in the editor than the shopper
+       sees. */
+    const d = (shell?.data ?? {}) as Record<string, unknown>;
+    check(d.activeFront === 1, "open:1 is the tab that starts open", String(d.activeFront));
     check(
-      css.includes("@supports not selector(:has(*))"),
-      "and without :has() every panel shows rather than none",
+      (menu?.data as Record<string, unknown>)?.activeTab === 2,
+      "stated for the canvas too, counting from one",
+      String((menu?.data as Record<string, unknown>)?.activeTab),
     );
-    check(!tabs.items.some((i) => i.type === "Tabs3"), "not Tabs3 — its fill route is the one that broke imports");
+
+    /* THE ROUTE THAT BROKE IMPORTS IS STILL NOT TAKEN. An item-level `content`
+       key is what made two exports import and vanish. */
+    check(
+      !("items" in d) && !("content" in d),
+      "and the content.items fill route is not used",
+      Object.keys(d).join(" "),
+    );
+
+    /* TabHeader3 says in `fields.md` that it cannot be styled on its own — its
+       look is set on the parent — so a rule written against the header would be
+       valid CSS reaching nothing. */
+    const shellCss = tabs.cssOf(shell?.id ?? "", "all", '& [data-pf-type="TabsMenu3"] > label');
+    check(/text-transform:\s*uppercase/.test(shellCss), "labels styled through the parent's documented part", shellCss.slice(0, 70) || "(no rule)");
+    check(
+      /border-bottom/.test(tabs.cssOf(shell?.id ?? "", "all", "& .tab3-headers-wrapper")),
+      "and the bar through its own",
+    );
   }
 
   /* ---- the countdown, which used to be markup that counted nothing ------ */

@@ -26,6 +26,7 @@ import {
   PRODUCT_SWATCHES,
   PRODUCT_TITLE,
   SLIDESHOW,
+  TABS,
   SLIDESHOW_PARTS,
   STOCK_INDICATOR,
   ACCORDION,
@@ -1838,56 +1839,6 @@ function tableAsFlex(
   );
 }
 
-
-/**
- * Tabs where clicking one shows its own panel.
- *
- * WHAT WAS THERE BEFORE. A design that wanted three tabs got three Paragraphs
- * and ONE panel: "REGULAR / OVERSIZED / TALL" read as a tab bar, nothing was
- * clickable, and two of the three contents had nowhere to live. There was no
- * node for tabs, so the design had no way to ask for them.
- *
- * WHY NOT PageFly's Tabs3. Its placement rule says "emit the type alone, no
- * child nodes. Fill via `content.items:[{label,content}]`" — and an item-level
- * `content` key is the thing that made two exports import successfully and
- * never reach the editor's list. Its safe variant, inside `data`, is what
- * Table2 ignored. Both documented routes are the ones already known to fail.
- *
- * SO THIS USES THE MECHANISM Tabs3 ITSELF USES. Its own description says "CSS
- * radio-state switching", and its own note says active-tab styling "is a
- * sibling-state rule: `& .pf-tab-radio:checked ~ ...`". A hidden radio per tab,
- * a label per radio, and `:has()` to reach the panels — which are REAL PageFly
- * nodes, not markup, so a table or a buy box inside a tab stays a table or a
- * buy box.
- *
- * The class goes on the WRAPPER rather than on the Custom.HTML, because that is
- * what puts the radios and the panels inside one scope: `scopeSelector` turns a
- * leading `&` into `.pfd-c-N`, so `&:has(#…:checked) .panel` reaches across
- * from one to the other. Nothing here escapes the block.
- *
- * WITHOUT `:has()` every panel shows, stacked. That is the honest degradation —
- * all the content, no switching — and it is written as an explicit @supports
- * rather than left to chance.
- *
- * WHAT IT COSTS: the tab LABELS live in the Custom.HTML, so a merchant edits
- * them in the code box rather than by clicking the word. Panel contents are
- * ordinary nodes and edit normally.
- */
-/**
- * A tab label, safe inside the markup this file writes.
- *
- * `cleanHtml` strips tags and event attributes AFTER this runs, so an ampersand
- * or a stray `<` in a label written by a model would otherwise arrive as broken
- * markup rather than as the characters it meant.
- */
-function escapeHtml(v: string): string {
-  return v
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
 function tabsOf(
   node: Extract<DesignNode, { type: "tabs" }>,
   sd: StyleData,
@@ -1895,62 +1846,65 @@ function tabsOf(
 ): PFNode | null {
   if (node.items.length < 2) return null;
 
-  const n = (opts.customCount!.value += 1);
   const rule = opts.border ?? "rgba(0,0,0,.16)";
   const accent = opts.accent ?? "currentColor";
-  const ink = inkRule(opts);
-  const open = Math.min(node.open, node.items.length - 1);
-  const rid = (k: number) => `pfd-t-${n}-${k}`;
-  const pcl = (k: number) => `pfd-p-${n}-${k}`;
 
-  const bar = [
-    `<div class="pfd-bar">`,
-    ...node.items.map(
-      (t, k) =>
-        `<input type="radio" name="pfd-tabs-${n}" id="${rid(k)}"${k === open ? " checked" : ""}>` +
-        `<label for="${rid(k)}">${escapeHtml(t.label)}</label>`,
-    ),
-    `</div>`,
-  ].join("");
+  /* ==========================================================================
+     PAGEFLY'S TABS, NOT A BAR OF HIDDEN RADIOS.
 
-  const css = [
-    `& .pfd-bar{display:flex;flex-wrap:wrap;gap:28px;border-bottom:1px solid ${rule};}`,
-    /* Off-screen rather than `display:none`: a hidden radio is still focusable
-       this way, so the bar can be driven from a keyboard. */
-    `& .pfd-bar input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;}`,
-    `& .pfd-bar label{cursor:pointer;padding:12px 0;margin-bottom:-1px;font-size:12.5px;` +
-      `letter-spacing:.12em;text-transform:uppercase;opacity:.5;` +
-      `border-bottom:2px solid transparent;transition:opacity .2s ease;${ink}}`,
-    `& .pfd-bar label:hover{opacity:.8;}`,
-    ...node.items.map((_, k) => `& .${pcl(k)}{display:none !important;}`),
-    ...node.items.map(
-      (_, k) =>
-        `&:has(#${rid(k)}:checked) .${pcl(k)}{display:flex !important;}` +
-        `&:has(#${rid(k)}:checked) .pfd-bar label[for="${rid(k)}"]` +
-        `{opacity:1;border-bottom-color:${accent};}`,
-    ),
-    /* No `:has()` — show everything rather than nothing. */
-    `@supports not selector(:has(*)){` +
-      node.items.map((_, k) => `& .${pcl(k)}{display:flex !important;}`).join("") +
-      `}`,
-  ].join("");
+     What this replaces worked: a `Custom.HTML` block holding one hidden radio
+     and one label per tab, a `:has()` rule per panel, and a `@supports`
+     fallback that showed everything at once where `:has()` is missing. The
+     live page switched panels correctly.
 
-  const clean = cleanBlock({ html: bar, stylesheet: css }, n);
-  opts.customBlocks!.push(clean);
+     It was still the wrong answer, and the editor is where that shows. A
+     merchant who opened the tabs found `HTML/Liquid` and a code panel — no
+     list of tabs, nothing to rename, nothing to reorder, no way to add a
+     fifth. The whole point of exporting to PageFly rather than to a
+     screenshot is that the page stays editable afterwards, and tabs are near
+     the top of the list of things somebody wants to change.
 
-  return FB(
-    filling(sd, "display: flex; flex-direction: column; gap: 28px; width: 100%;"),
-    [
-      CUSTOM_HTML(clean.html, null),
-      ...node.items.map((t, k) =>
-        FB(
-          { all: { "&": "display: flex; flex-direction: column; gap: 22px; width: 100%;" } },
-          t.children.map((c) => emit(c, "vertical", opts)).filter(Boolean) as PFNode[],
-          pcl(k),
-        ),
-      ),
-    ],
-    clean.className,
+     A PREVIOUS ATTEMPT AT Tabs3 FAILED, AND THIS IS NOT THAT ATTEMPT. The note
+     this replaces recorded it: the placement rule in `fields.md` says to "emit
+     the type alone, no child nodes" and fill `content.items:[{label,content}]`,
+     an item-level `content` key twice made an export import successfully and
+     never reach the editor's list. That route is still wrong and is not the one
+     taken here. `nesting.md` describes a different shape for the same element —
+     Tabs3 holding TabsMenu3 and TabContentWrapper3, and TabsContent3 accepting
+     152 of the 241 element types — which is the ordinary four-slot composite
+     this file already builds for Accordion3, ProductBox and Form2. Real nodes
+     in the panels, so a table or a buy box inside a tab stays one.
+
+     STYLED THROUGH THE DOCUMENTED PARTS. `TabHeader3` says in `fields.md` that
+     it "cannot be styled on its own — its look is set on the parent", so the
+     label rules go on the Tabs3 through `& [data-pf-type="TabsMenu3"] > label`
+     and the bar through `& .tab3-headers-wrapper`. A rule written against the
+     element itself would be valid CSS reaching nothing, which is this file's
+     most frequent way of shipping a bug that reports no error.
+
+     THE ACTIVE UNDERLINE IS LEFT TO PAGEFLY. `fields.md` says the active state
+     is a sibling rule against a radio id the renderer generates — `&
+     .pf-tab-radio:checked ~ …` — and the id is not knowable from here. Writing
+     a guess at it would be the same dead rule by a different route, so the
+     accent below marks the bar and the platform's own active styling does the
+     rest.
+     ========================================================================== */
+  const tabs = node.items.map((t) => ({
+    label: t.label,
+    body: t.children.map((c) => emit(c, "vertical", opts)).filter(Boolean) as PFNode[],
+  }));
+
+  return TABS(
+    tabs,
+    node.open,
+    withParts(filling(sd, "width: 100%;"), {
+      "& .tab3-headers-wrapper":
+        `display: flex; flex-wrap: wrap; gap: 28px; border-bottom: 1px solid ${rule};`,
+      '& [data-pf-type="TabsMenu3"] > label':
+        "cursor: pointer; padding: 12px 0; font-size: 12.5px; letter-spacing: .12em;" +
+        ` text-transform: uppercase; border-bottom: 2px solid transparent; color: ${accent};`,
+      "& .pf-tab3-content-container": "padding-top: 28px;",
+    }),
   );
 }
 

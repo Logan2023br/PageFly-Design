@@ -679,6 +679,70 @@ export function ACCORDION(
 }
 
 /**
+ * Tabs, as PageFly's own element.
+ *
+ * WHAT THIS REPLACES. A hand-built bar of hidden radio inputs, a `:has()` rule
+ * per panel and a `Custom.HTML` block to hold the labels. It worked — the live
+ * page switched panels — and it was wrong in the way that matters most here: a
+ * merchant opening the element in the editor found `HTML/Liquid` and a code
+ * panel, not a Tabs element with a list of tabs they could rename, reorder or
+ * add to. An export that a merchant cannot edit afterwards has handed them a
+ * picture of a page again, in the one place they are most likely to want a
+ * change.
+ *
+ * FOUR TYPES, AND THE NESTING IS NOT OPTIONAL. `Tabs3` holds exactly two slots
+ * — the header row and the panel wrapper — and each of those holds a
+ * collection. `fields.md` also carries a placement note saying to emit `Tabs3`
+ * alone and fill `content.items`, which is a different authoring path for
+ * label-and-text tabs; it cannot carry a table or an image, and the tabs this
+ * product designs do. The nesting table is explicit that `TabsContent3` takes
+ * 152 of the 241 element types, so the full tree is the one that keeps what
+ * the design asked for.
+ *
+ * THE LABEL IS `value` ON THE HEADER, not a Heading nested inside it — the same
+ * shape, and the same trap, as `ACCORDION_HEADER` above: nested, the editor
+ * shows an empty tab and the words are in the file with nothing displaying them.
+ *
+ * `activeFront` counts from ZERO and `activeTab` counts from ONE. Both are
+ * written, because they are read by different halves — the canvas and the
+ * published page — and setting one without the other opens a different tab in
+ * the editor than the shopper sees.
+ */
+export function TABS(
+  tabs: { label: string; body: PFNode[] }[],
+  open: number,
+  styleData: StyleData,
+) {
+  const active = Math.min(Math.max(0, open), Math.max(0, tabs.length - 1));
+  return node(
+    "Tabs3",
+    {
+      activeFront: active,
+      /* Written alongside `activeFront`, which `fields.md` says it shadows. */
+      active: active,
+      /* Per breakpoint, like every other responsive setting in this file. The
+         bar stays on top at every width: `left` and `right` put a column of
+         labels beside the panel, which is a two-column layout on a phone. */
+      headerPosition: { all: "top", laptop: "top", tablet: "top", mobile: "top" },
+      align: { all: "start", laptop: "start", tablet: "start", mobile: "start" },
+      /* Stretched labels fill the bar evenly, which is what keeps four tabs
+         from crowding into the left third on a wide page — and on a phone it
+         is what stops them from wrapping into a ragged block. */
+      fitted: { all: false, laptop: false, tablet: true, mobile: true },
+    },
+    styleData,
+    [
+      node("TabsMenu3", { activeTab: active + 1 }, null,
+        tabs.map((t) => node("TabHeader3", { value: t.label, activeTab: active + 1 }, null, [])),
+      ),
+      node("TabContentWrapper3", {}, null,
+        tabs.map((t) => node("TabsContent3", {}, null, t.body)),
+      ),
+    ],
+  );
+}
+
+/**
  * A data table.
  *
  * The cells go in DATA, not in children: `fields.md` is explicit that they are
@@ -1293,6 +1357,9 @@ const SLOT_RULES: Record<string, string[]> = {
      quietly: a CountDown with no children imports without complaint and draws
      nothing, which is the worst shape a bug can take in this file. */
   CountDown: ["CountdownNumber", "CountdownLabel"],
+  /* The header row and the panel wrapper, in that order and exactly once each.
+     A Tabs3 missing either imports as an element with no tabs in it. */
+  Tabs3: ["TabsMenu3", "TabContentWrapper3"],
 };
 
 /** Parents whose children must ALL be one type (count is free). */
@@ -1301,6 +1368,11 @@ const UNIFORM_CHILDREN: Record<string, string> = {
   Slideshow: "SlideshowSlide",
   MediaList2: "MediaListItem2",
   ContentList2: "ContentListItem",
+  /* One label per tab and one panel per tab; the two collections are read in
+     step, so a stray node in either shifts every panel out from under its
+     label without anything failing. */
+  TabsMenu3: "TabHeader3",
+  TabContentWrapper3: "TabsContent3",
 };
 
 export function validate(nodes: FlatNode[]): void {
