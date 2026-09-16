@@ -145,8 +145,7 @@ export function LoginScreen({ next }: { next: string }) {
                 See your store as <GradientWord>pages</GradientWord>
               </h1>
               <p className="mx-auto max-w-[380px] text-[13.5px] leading-relaxed text-pf-muted">
-                Enter your store domain to continue. Access is limited to stores
-                on the beta list.
+                Enter your store domain to continue.
               </p>
             </div>
 
