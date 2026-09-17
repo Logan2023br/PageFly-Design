@@ -2121,9 +2121,36 @@ function pageCss(width: number, motion: boolean): string {
        `min-content` is the narrowest width that breaks no word. It cannot
        overflow by more than one long word, and it is what these elements would
        have had if nothing had been said at all. */
-    `.pf-design-export [data-pf-type] { min-width: 0; }`,
-    `.pf-design-export [data-pf-type="Paragraph4"],`,
-    `.pf-design-export [data-pf-type="Heading2"] { min-width: min-content; }`,
+    `.pf-design-export [data-pf-type] { min-width: min-content; }`,
+    /* THE CONTAINERS, AND ONLY THEM.
+
+       The pair above started as one blanket `min-width: 0` over every element,
+       then as a `min-content` exception naming Paragraph4 and Heading2. Naming
+       the exceptions was the mistake: a collection page's filter rail came back
+       with CLEAR ALL and "Update the shelf" set one letter per line, because
+       those are Button2 and Form2.Button2 and nobody had thought of them.
+
+       So the default is the safe one and the list is of BOXES. A flex or grid
+       container genuinely needs to shrink — that is how a two-column layout
+       narrows — and a container has no words of its own to break. Anything that
+       carries words is covered without having to be remembered, including the
+       next element type this exporter learns to emit. */
+    ...[
+      /* The boxes this exporter builds its layouts out of. */
+      "FlexSection",
+      "FlexBlock",
+      "Layout",
+      /* And the composites that lay their OWN children out in a row. A
+         column's min-content is its widest word; a row's is the sum of its
+         children's, which on a narrow rail is wider than the rail — so these
+         have to keep the zero or they overflow instead of reflowing. */
+      "ProductBox",
+      "ProductMedia3",
+      "MediaList2",
+      "Slideshow",
+    ].map((t) => `.pf-design-export [data-pf-type="${t}"],`),
+    /* The selector list above ends in a comma; this closes it. */
+    `.pf-design-export [data-pf-type="Tabs3"] { min-width: 0; }`,
     /* width:100% as well as the cap. Without it the block is free to shrink to
        its content — a centred flex parent in the theme, or a section whose
        children all hug, and the page narrows to a column adrift in the

@@ -764,14 +764,37 @@ async function main(): Promise<void> {
     const any = await open({
       sections: [section([{ type: "text", text: "Specification" }], "story-band")],
     });
+    /* THE DEFAULT IS THE SAFE ONE AND THE LIST IS OF BOXES.
+
+       This started as one blanket `min-width: 0`, then as a `min-content`
+       exception naming Paragraph4 and Heading2. Naming the exceptions was the
+       mistake: a collection page's filter rail came back with CLEAR ALL and
+       "Update the shelf" set one letter per line, because those are Button2 and
+       Form2.Button2 and nobody had thought of them. Anything carrying words is
+       covered now without having to be remembered. */
     check(
-      any.customCSS.includes("[data-pf-type] { min-width: 0; }"),
-      "containers may still shrink",
+      /\[data-pf-type\] \{ min-width: min-content; \}/.test(any.customCSS),
+      "nothing may shrink past a word by default",
+      (any.customCSS.match(/\[data-pf-type\][^}]*\}/) ?? ["(no rule)"])[0],
     );
+    for (const box of ["FlexSection", "FlexBlock", "Layout"])
+      check(
+        new RegExp(`\\[data-pf-type="${box}"\\]`).test(any.customCSS),
+        `${box} is named as a box that may shrink`,
+      );
+    /* And the composites that lay their own children out in a ROW keep it too:
+       a column's min-content is its widest word, a row's is the sum of its
+       children's — wider than a narrow rail, so it would overflow instead of
+       reflowing. */
+    for (const box of ["ProductBox", "ProductMedia3", "MediaList2", "Slideshow", "Tabs3"])
+      check(
+        new RegExp(`\\[data-pf-type="${box}"\\]`).test(any.customCSS),
+        `${box} lays out in a row, so it keeps the zero`,
+      );
     check(
-      /\[data-pf-type="Paragraph4"\][\s\S]{0,120}min-width:\s*min-content/.test(any.customCSS),
-      "and a paragraph may not shrink past a word",
-      (any.customCSS.match(/min-content[^;]*/) ?? ["(no rule)"])[0],
+      /min-width: 0; \}/.test(any.customCSS),
+      "and the whole list resolves to zero",
+      (any.customCSS.match(/[^,\n]*min-width: 0; \}/) ?? ["(no rule)"])[0].trim(),
     );
   }
 
