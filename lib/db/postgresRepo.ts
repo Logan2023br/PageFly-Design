@@ -1034,6 +1034,37 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       }));
     },
 
+    async countEventsByDay(from, to, offsetMinutes) {
+      await ready();
+      /* THE SHIFT HAPPENS BEFORE THE TRUNCATION, and that ordering is the whole
+         point: `date_trunc` on a UTC timestamp cuts the day at UTC midnight,
+         which for a reader at +7 puts their morning on yesterday. Adding the
+         offset first moves the instant into the reader's own day, and then the
+         truncation cuts where they would cut it.
+
+         An interval built from the number rather than a named zone: the caller
+         already knows its offset — the browser hands it over — and a zone name
+         would mean agreeing on a spelling for it at both ends. */
+      const { rows } = await db.query(
+        `select to_char(
+                  date_trunc('day', created_at + ($3 || ' minutes')::interval),
+                  'YYYY-MM-DD'
+                )                               as day,
+                count(*)::int                   as n,
+                count(distinct visitor_id)::int as v
+           from events
+          where created_at >= $1 and created_at < $2
+          group by 1
+          order by 1`,
+        [from, to, String(offsetMinutes)],
+      );
+      return rows.map((r) => ({
+        date: String(r.day),
+        events: Number(r.n),
+        visitors: Number(r.v),
+      }));
+    },
+
     async eventsByStore(name, from, to, propKey, groupProp = null) {
       await ready();
       /* GROUPED BY DOMAIN AND BY THE PARAMETER AT ONCE, then folded into one

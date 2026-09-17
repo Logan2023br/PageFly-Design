@@ -30,7 +30,17 @@ function when(iso: string): string {
   return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
-export function TileDetail({ event, days }: { event: string; days: number }) {
+export function TileDetail({
+  event,
+  days,
+  day,
+}: {
+  event: string;
+  days: number;
+  /** The day the screen is showing, or null for the whole window. The tile
+      above was counted over exactly this range, so the rows must be too. */
+  day?: string | null;
+}) {
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [rows, setRows] = useState<DetailRow[]>([]);
   const [partLabel, setPartLabel] = useState("");
@@ -44,7 +54,11 @@ export function TileDetail({ event, days }: { event: string; days: number }) {
   useEffect(() => {
     let live = true;
 
-    fetch(`/api/admin/analytics/detail?event=${encodeURIComponent(event)}&days=${days}`)
+    const tz = -new Date().getTimezoneOffset();
+    fetch(
+      `/api/admin/analytics/detail?event=${encodeURIComponent(event)}` +
+        `&days=${days}&tz=${tz}${day ? `&day=${day}` : ""}`,
+    )
       .then((r) => r.json() as Promise<DetailResponse>)
       .then((body) => {
         if (!live) return;
@@ -68,7 +82,7 @@ export function TileDetail({ event, days }: { event: string; days: number }) {
     return () => {
       live = false;
     };
-  }, [event, days]);
+  }, [event, days, day]);
 
   const total = rows.reduce((a, r) => a + r.count, 0);
 
@@ -94,8 +108,9 @@ export function TileDetail({ event, days }: { event: string; days: number }) {
              weeks of a window can be genuinely blank — and "nothing here" reads
              as a broken screen unless it says why it might be. */
           <p className="px-4 py-5 text-[12px] leading-relaxed text-pf-faint">
-            Nothing recorded in this window. If the tile above shows a count,
-            those presses happened before this breakdown was being kept.
+            {day ? `Nothing recorded on ${day}.` : "Nothing recorded in this window."}{" "}
+            If the tile above shows a count, those presses happened before this
+            breakdown was being kept.
           </p>
         )}
 

@@ -601,6 +601,27 @@ export function createMemoryRepo(file: string): Repo {
       }));
     },
 
+    async countEventsByDay(from, to, offsetMinutes) {
+      sync();
+      const by = new Map<string, { events: number; visitors: Set<string> }>();
+
+      for (const e of data.events) {
+        if (e.createdAt < from || e.createdAt >= to) continue;
+        /* Shifted, then read in UTC — which is the same arithmetic the reader's
+           own clock does, without dragging a timezone database in to do it. */
+        const shifted = new Date(Date.parse(e.createdAt) + offsetMinutes * 60_000);
+        const date = shifted.toISOString().slice(0, 10);
+        const hit = by.get(date) ?? { events: 0, visitors: new Set<string>() };
+        hit.events++;
+        hit.visitors.add(e.visitorId);
+        by.set(date, hit);
+      }
+
+      return [...by.entries()]
+        .map(([date, b]) => ({ date, events: b.events, visitors: b.visitors.size }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+    },
+
     async eventsByStore(name, from, to, propKey, groupProp = null) {
       sync();
       /* Keyed by the domain as written, with `null` kept as its own key rather

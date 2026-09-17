@@ -38,11 +38,24 @@ export async function GET(request: Request) {
       { status: 404 },
     );
 
-  /* The same clamp the summary uses, so a drill-down cannot be showing a
-     window the tile above it was never counted over. */
+  /* THE SAME WINDOW ARITHMETIC AS THE SUMMARY, and it has to stay the same: a
+     tile reading 12 that opens onto 30 rows is a screen nobody can trust. The
+     day and the offset are carried through for exactly that reason — a day
+     picked on the strip narrows the tile, so it must narrow what is inside it.
+     ====================================================================== */
   const days = Math.min(365, Math.max(1, Number(url.searchParams.get("days") ?? 30) || 30));
-  const to = new Date();
-  const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
+  const tz = Math.max(
+    -840,
+    Math.min(840, Number(url.searchParams.get("tz") ?? 0) || 0),
+  );
+  const dayParam = url.searchParams.get("day");
+  const day = dayParam && /^\d{4}-\d{2}-\d{2}$/.test(dayParam) ? dayParam : null;
+
+  const to = day
+    ? new Date(Date.parse(`${day}T00:00:00.000Z`) - tz * 60_000 + 24 * 60 * 60 * 1000)
+    : new Date();
+  const span = day ? 24 * 60 * 60 * 1000 : days * 24 * 60 * 60 * 1000;
+  const from = new Date(to.getTime() - span);
 
   let rows: DetailRow[];
   try {

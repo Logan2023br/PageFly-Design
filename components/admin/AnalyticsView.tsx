@@ -13,6 +13,7 @@ import { compareViews, type Change, type Comparison } from "@/lib/analytics/comp
 import type { IconName } from "@/lib/icons";
 import { CountUp, Icon, Panel } from "../ui";
 import { StatTile, TileGroup, TileRow } from "./StatTile";
+import { DayStrip } from "./DayStrip";
 
 /* ==========================================================================
    Analytics.
@@ -66,6 +67,11 @@ const RANGES = [7, 30, 90] as const;
 
 export function AnalyticsView() {
   const [days, setDays] = useState<number>(30);
+  /* The day being read, or null for the whole window. Kept beside `days` rather
+     than replacing it: the strip of days is always drawn from the window, so
+     picking a day must not throw away which window it was picked from — that
+     would leave nowhere to press to get back. */
+  const [day, setDay] = useState<string | null>(null);
   /* Bumped to ask again. A counter rather than a boolean: two refreshes in a
      row have to be two different values or the effect does not re-run. */
   const [tick, setTick] = useState(0);
@@ -94,8 +100,13 @@ export function AnalyticsView() {
            is the half that also defeats a fetch served from the browser's own
            memory cache on a back-navigation, where no request is made at all
            and no response header can be consulted. */
+        /* NEGATED, because `getTimezoneOffset` returns minutes to ADD to
+           local time to reach UTC — so UTC+7 reports -420. The server wants
+           the reader's offset the way a person would say it. */
+        const tz = -new Date().getTimezoneOffset();
         const res = await fetch(
-          `/api/admin/analytics?days=${days}${compare ? "&compare=1" : ""}`,
+          `/api/admin/analytics?days=${days}&tz=${tz}` +
+            `${day ? `&day=${day}` : ""}${compare ? "&compare=1" : ""}`,
           { cache: "no-store" },
         );
         const body = (await res.json()) as AnalyticsResponse;
@@ -115,7 +126,7 @@ export function AnalyticsView() {
     return () => {
       live = false;
     };
-  }, [days, tick, compare]);
+  }, [days, day, tick, compare]);
 
   /* ==========================================================================
      ASKED AGAIN EVERY THIRTY SECONDS, AND ONLY WHILE THE TAB IS VISIBLE.
@@ -155,7 +166,13 @@ export function AnalyticsView() {
             <button
               key={d}
               type="button"
-              onClick={() => setDays(d)}
+              onClick={() => {
+                setDays(d);
+                /* A day picked out of the last seven is not necessarily in the
+                   last ninety's strip in the same place, and leaving it set
+                   would show one day under a button that says ninety. */
+                setDay(null);
+              }}
               aria-pressed={days === d}
               className={`rounded-pf-sm px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
                 days === d ? "bg-pf-primary text-white" : "text-pf-muted hover:text-pf-text"
@@ -207,6 +224,20 @@ export function AnalyticsView() {
         </div>
       </div>
 
+      {/* UNDER THE RANGE, ABOVE EVERYTHING ELSE. It belongs to the window the
+          buttons chose, and everything below it is what it selects — so it sits
+          between the two rather than off at the side. */}
+      {view && (
+        <Panel className="p-3.5">
+          <DayStrip
+            daily={view.daily}
+            days={view.days}
+            selected={view.day}
+            onSelect={setDay}
+          />
+        </Panel>
+      )}
+
       {error && (
         <Panel className="flex items-start gap-2 border-pf-danger/35 bg-pf-danger/10 p-4">
           <span className="mt-px text-pf-danger">
@@ -219,7 +250,9 @@ export function AnalyticsView() {
       {view && view.empty && (
         <Panel className="p-8 text-center">
           <p className="text-[13px] text-pf-muted">
-            Nothing recorded in the last {view.days} days.
+            {view.day
+              ? `Nothing recorded on ${view.day}.`
+              : `Nothing recorded in the last ${view.days} days.`}
           </p>
           <p className="mt-1 text-[11.5px] text-pf-faint">
             Events start arriving as soon as somebody opens the front page.
@@ -254,7 +287,7 @@ export function AnalyticsView() {
           </div>
 
           {view.pages.map((page) => (
-            <PageSection key={page.key} page={page} days={view.days} />
+            <PageSection key={page.key} page={page} days={view.days} day={view.day} />
           ))}
 
           <div className="mt-2 border-t border-pf-border pt-6">
@@ -330,7 +363,7 @@ function Funnel({ view }: { view: View }) {
   return (
     <TileGroup
       title="The funnel"
-      note={`Every press over ${view.days} days — five presses count five. A step can exceed the one above it: somebody exporting four pages is four, and the sign-in page has its own address so arrivals there never passed the landing page.`}
+      note={`${view.day ? `Every press on ${view.day}` : `Every press over ${view.days} days`} — five presses count five. A step can exceed the one above it: somebody exporting four pages is four, and the sign-in page has its own address so arrivals there never passed the landing page.`}
     >
       {view.funnel.map((step, i) => {
         const prev = i === 0 ? null : view.funnel[i - 1].events;
@@ -362,6 +395,7 @@ function Funnel({ view }: { view: View }) {
             hint={step.where}
             event={step.event}
             days={view.days}
+            day={view.day}
             tone={steep ? "danger" : "default"}
             delay={Math.min(i * 0.04, 0.3)}
           />
@@ -607,7 +641,15 @@ function BuildTiles({ view }: { view: View }) {
  * "The finished deck" are all `/design` — three moments on one address, and a
  * heading alone would leave somebody wondering which page is meant.
  */
-function PageSection({ page, days }: { page: PageBlock; days: number }) {
+function PageSection({
+  page,
+  days,
+  day,
+}: {
+  page: PageBlock;
+  days: number;
+  day: string | null;
+}) {
   const top = Math.max(...page.metrics.map((m) => m.count), 1);
 
   return (
@@ -653,6 +695,7 @@ function PageSection({ page, days }: { page: PageBlock; days: number }) {
             hint={m.where}
             event={m.event}
             days={days}
+            day={day}
             delay={Math.min(i * 0.03, 0.2)}
           />,
           ...(m.splitKind === "control" && m.split

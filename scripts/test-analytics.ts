@@ -555,6 +555,57 @@ async function main(): Promise<void> {
     );
   }
 
+  /* ======================================================================
+     ONE DAY AT A TIME.
+
+     The screen offered 7, 30 and 90 days and nothing between: a spike on one
+     Tuesday and the same total spread over a fortnight are indistinguishable
+     in a thirty-day window. This groups the same events by day so the screen
+     can draw them and let somebody pick one.
+
+     THE OFFSET IS NOT DECORATION. Events are stored in UTC and read by
+     somebody in Vietnam, seven hours ahead; grouped in UTC, everything they
+     did before 7am lands on the day before. The caller passes its own offset
+     and the grouping honours it — the alternative is a "today" missing its
+     morning.
+     ====================================================================== */
+  console.log("\nby day, in the reader's own timezone");
+
+  {
+    await repo.recordEvents([
+      /* 23:30 UTC on the 9th is 06:30 on the 10th at UTC+7. Which day this
+         lands on is the whole question. */
+      { id: "day1-aaaa", name: "design_landing_viewed", props: {}, visitorId: "d1", domain: null, createdAt: "2025-05-09T23:30:00.000Z" },
+      { id: "day2-aaaa", name: "design_landing_viewed", props: {}, visitorId: "d2", domain: null, createdAt: "2025-05-10T04:00:00.000Z" },
+      { id: "day3-aaaa", name: "design_landing_viewed", props: {}, visitorId: "d2", domain: null, createdAt: "2025-05-10T05:00:00.000Z" },
+      { id: "day4-aaaa", name: "design_landing_viewed", props: {}, visitorId: "d3", domain: null, createdAt: "2025-05-11T09:00:00.000Z" },
+    ]);
+
+    const from = "2025-05-01T00:00:00.000Z";
+    const to = "2025-05-20T00:00:00.000Z";
+
+    const utc = await repo.countEventsByDay(from, to, 0);
+    const utcDays = Object.fromEntries(utc.map((d) => [d.date, d.events]));
+    check(utcDays["2025-05-09"] === 1, "in UTC the late evening is its own day", JSON.stringify(utcDays));
+    check(utcDays["2025-05-10"] === 2, "and the next day has two", JSON.stringify(utcDays));
+
+    const vn = await repo.countEventsByDay(from, to, 420);
+    const vnDays = Object.fromEntries(vn.map((d) => [d.date, d.events]));
+    check(vnDays["2025-05-09"] === undefined, "at +7 it moves off the 9th", JSON.stringify(vnDays));
+    check(vnDays["2025-05-10"] === 3, "and joins the 10th", JSON.stringify(vnDays));
+
+    /* People, not just presses — two events from one browser in one day is one
+       person, and a day of one visitor reloading is not a busy day. */
+    const tenth = vn.find((d) => d.date === "2025-05-10");
+    check(tenth?.visitors === 2, "counted in people as well as presses", String(tenth?.visitors));
+
+    check(
+      vn.map((d) => d.date).join(",") === [...vn].map((d) => d.date).sort().join(","),
+      "oldest first, so a chart reads straight off it",
+      vn.map((d) => d.date).join(","),
+    );
+  }
+
   console.log(failures === 0 ? "\nall good\n" : `\n${failures} failure(s)\n`);
   process.exit(failures === 0 ? 0 : 1);
 }

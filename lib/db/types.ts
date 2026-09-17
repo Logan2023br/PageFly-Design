@@ -503,6 +503,25 @@ export type Repo = {
    */
   countEventTotals(from: string, to: string): Promise<EventTotal[]>;
   /**
+   * The same window, split into days.
+   *
+   * The screen offered 7, 30 and 90 and nothing between, so a spike on one
+   * Tuesday and the same total spread over a fortnight were the same number.
+   * This is what lets it draw the days and let somebody pick one.
+   *
+   * `offsetMinutes` is the READER's offset from UTC — 420 for UTC+7. Events are
+   * stored in UTC; grouped in UTC and read in Vietnam, everything before 7am
+   * lands on the day before, and "today" is missing its morning. Days with no
+   * events are absent rather than zero: the caller knows the window and can
+   * fill the gaps, and a query that invents rows is a query that has to know
+   * about calendars.
+   */
+  countEventsByDay(
+    from: string,
+    to: string,
+    offsetMinutes: number,
+  ): Promise<DayCount[]>;
+  /**
    * One event name, opened up: who did it, how often, and to what.
    *
    * `countEvents` answers "how many" and `countEventTotals` answers "how many
@@ -588,6 +607,15 @@ export type EventByStore = {
   lastAt: string;
   /** the `propKey` values this store produced, busiest first */
   parts: { key: string; count: number }[];
+};
+
+/** One day of events, in the reader's own timezone. */
+export type DayCount = {
+  /** `YYYY-MM-DD`, in the offset the caller asked for */
+  date: string;
+  events: number;
+  /** distinct browsers that day */
+  visitors: number;
 };
 
 /** One event name, counted across every combination of its parameters. */

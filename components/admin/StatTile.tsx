@@ -40,6 +40,7 @@ export function StatTile({
   hint,
   event,
   days,
+  day,
 }: {
   icon: IconName;
   label: string;
@@ -75,6 +76,8 @@ export function StatTile({
   event?: string;
   /** The window the screen is showing, passed to the drill-down unchanged. */
   days?: number;
+  /** And the day within it, when one is picked. */
+  day?: string | null;
 }) {
   const [over, setOver] = useState(false);
   const [open, setOpen] = useState(false);
@@ -179,7 +182,12 @@ export function StatTile({
     </div>
     </div>
     {open && event && (
-      <TileDetail key={`${event}-${days ?? 30}`} event={event} days={days ?? 30} />
+      <TileDetail
+        key={`${event}-${days ?? 30}-${day ?? "all"}`}
+        event={event}
+        days={days ?? 30}
+        day={day}
+      />
     )}
     </>
   );

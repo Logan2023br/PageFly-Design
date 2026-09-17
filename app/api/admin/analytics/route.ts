@@ -1,7 +1,7 @@
 import { getRepo } from "@/lib/db";
 import { EV } from "@/lib/analytics";
 import { readAdminSession } from "@/lib/session";
-import type { EventCount, EventTotal } from "@/lib/db/types";
+import type { DayCount, EventCount, EventTotal } from "@/lib/db/types";
 
 /* ==========================================================================
    GET /api/admin/analytics?days=30
@@ -44,6 +44,11 @@ export type AnalyticsView = {
   days: number;
   /** nothing has been recorded in this window at all */
   empty: boolean;
+  /** Every day in the window with something in it, oldest first — the strip the
+      reader picks from. Always the whole window, never the picked day. */
+  daily: DayCount[];
+  /** The day being shown, or null when this is the whole window. */
+  day: string | null;
   funnel: FunnelStep[];
   cta: Slice[];
   signin: Slice[];
@@ -188,6 +193,28 @@ function stores(totals: EventTotal[], name: string) {
   return totals.find((t) => t.name === name)?.stores ?? 0;
 }
 
+/* ==========================================================================
+   THE OUTCOMES OF A SIGN-IN, NAMED ONCE.
+
+   There were two copies of this map — the block at the top of the screen and
+   the tile in the per-screen section — and adding `needs_email` and
+   `no_such_store` to one of them left the other rendering the raw event keys
+   on screen. Which is exactly what two copies of a lookup table do.
+   ========================================================================== */
+const SIGNIN_RESULTS: Record<string, string> = {
+  success: "Signed in",
+  /* The door verifies an unknown domain against Shopify now, so an attempt can
+     end two ways it never could before: the store is real and the form is
+     asking for an email, or Shopify has no such shop. Both used to land in
+     `not_registered`, which is why that number is not comparable across the
+     change. */
+  needs_email: "Asked for an email",
+  no_such_store: "No such store",
+  not_registered: "Not registered",
+  invalid_format: "Not a store domain",
+  server_error: "Our error",
+};
+
 function slices(
   rows: EventCount[],
   name: string,
@@ -242,27 +269,74 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const days = Math.min(365, Math.max(1, Number(url.searchParams.get("days") ?? 30) || 30));
   const compare = url.searchParams.get("compare") === "1";
-  const to = new Date();
-  const span = days * 24 * 60 * 60 * 1000;
+
+  /* ==========================================================================
+     THE READER'S OWN MIDNIGHT.
+
+     Events are stored in UTC and read from Vietnam, seven hours ahead. A "day"
+     cut at UTC midnight puts a merchant's whole morning on the day before, so
+     the browser sends `new Date().getTimezoneOffset()` — negated, so +7 is 420
+     — and every day boundary here is drawn with it.
+
+     Clamped to the real range of offsets. It arrives on a query string, and it
+     is arithmetic on a timestamp.
+     ========================================================================== */
+  const tz = Math.max(
+    -840,
+    Math.min(840, Number(url.searchParams.get("tz") ?? 0) || 0),
+  );
+
+  /* ==========================================================================
+     ONE DAY, OR A WINDOW ENDING NOW.
+
+     `day=YYYY-MM-DD` narrows everything on the screen to that one day, cut at
+     the reader's midnight. Without it the window is the last N days, which is
+     what the 7/30/90 buttons ask for and what this screen has always done.
+
+     A DAY IS NOT A SHORTER WINDOW. "The last 1 day" ends at this instant and
+     reaches back twenty-four hours across two calendar days; a day picked off
+     a chart has to be the day on the chart, or the number under the bar will
+     not be the number in the tile.
+     ========================================================================== */
+  const dayParam = url.searchParams.get("day");
+  const day = dayParam && /^\d{4}-\d{2}-\d{2}$/.test(dayParam) ? dayParam : null;
+
+  const to = day
+    ? /* Midnight at the START of the next day, in the reader's offset, which is
+         the exclusive end every query here already expects. */
+      new Date(Date.parse(`${day}T00:00:00.000Z`) - tz * 60_000 + 24 * 60 * 60 * 1000)
+    : new Date();
+  const span = day ? 24 * 60 * 60 * 1000 : days * 24 * 60 * 60 * 1000;
   const from = new Date(to.getTime() - span);
   /* THE WINDOW BEFORE, THE SAME LENGTH, ENDING WHERE THIS ONE BEGINS. Seven
      days compares against the seven before them, thirty against the thirty
-     before. Anything else — the same dates a month back, a fixed baseline —
-     answers a question nobody asked while looking at a 7/30/90 switch. */
+     before, and a single day against the day before it. Anything else — the
+     same dates a month back, a fixed baseline — answers a question nobody asked
+     while looking at a 7/30/90 switch. */
   const prevTo = from;
   const prevFrom = new Date(from.getTime() - span);
 
+  /* THE STRIP IS ALWAYS THE WINDOW, NEVER THE PICKED DAY. Drawn from the last N
+     days whichever day is selected, so the chart a day was chosen from does not
+     collapse to that one day the moment it is chosen — leaving nowhere to press
+     to get back or to move along. */
+  const stripTo = new Date();
+  const stripFrom = new Date(stripTo.getTime() - days * 24 * 60 * 60 * 1000);
+
   let rows: EventCount[];
   let totals: EventTotal[];
+  let daily: DayCount[] = [];
   let prevRows: EventCount[] = [];
   let prevTotals: EventTotal[] = [];
   try {
     /* Two shapes of the same window: grouped by name and parameters for the
        breakdowns, and by name alone for the distinct counts, which cannot be
        derived from the first. */
-    [rows, totals] = await Promise.all([
+    [rows, totals, daily] = await Promise.all([
       getRepo().countEvents(from.toISOString(), to.toISOString()),
       getRepo().countEventTotals(from.toISOString(), to.toISOString()),
+      /* Over the STRIP's range, not the window's — see `stripFrom`. */
+      getRepo().countEventsByDay(stripFrom.toISOString(), stripTo.toISOString(), tz),
     ]);
     /* Only when asked. Two more queries on every load would be paid by every
        reader who never presses Compare, and this screen already polls. */
@@ -278,7 +352,9 @@ export async function GET(request: Request) {
     );
   }
 
-  const view = buildView(rows, totals, from, to, days);
+  const view = buildView(rows, totals, from, to, days, daily, day);
+  /* No strip and no day on the comparison: it is the window before this one,
+     and the reader is comparing totals rather than picking a day out of it. */
   const previous = compare ? buildView(prevRows, prevTotals, prevFrom, prevTo, days) : undefined;
 
   /* NO-STORE, AND IT IS NOT BELT AND BRACES. `force-dynamic` above tells Next
@@ -310,6 +386,11 @@ function buildView(
   from: Date,
   to: Date,
   days: number,
+  /* Both belong to the CURRENT view only. The comparison window is built by a
+     second call to this function, and a strip of days drawn from last month
+     beside tiles from this one would be a chart of the wrong thing. */
+  daily: DayCount[] = [],
+  day: string | null = null,
 ): AnalyticsView {
   /* ==========================================================================
      THE FUNNEL, and why these steps.
@@ -498,19 +579,7 @@ function buildView(
       metrics: [
         metric("viewed", "Page viewed", "reached the form", EV.signinViewed, "The form loading at /design/login"),
         metric("submitted", "Continue pressed", "counted when the server answers, not on the press", EV.signinSubmitted, "“Continue” — recorded when the server answers, so it carries the outcome", {
-          split: slices(rows, EV.signinSubmitted, "result", {
-            success: "Signed in",
-            /* The door verifies an unknown domain against Shopify now, so an
-               attempt can end two ways it never could before: the store is real
-               and the form is asking for an email, or Shopify has no such shop.
-               Both used to land in `not_registered`, which is why that number
-               stops being comparable across the change. */
-            needs_email: "Asked for an email",
-            no_such_store: "No such store",
-            not_registered: "Not registered",
-            invalid_format: "Not a store domain",
-            server_error: "Our error",
-          }),
+          split: slices(rows, EV.signinSubmitted, "result", SIGNIN_RESULTS),
         }),
         metric("register_link", "Register link", "went on rather than leaving", EV.registerLinkClicked, "The underlined word “register” in the line under the form"),
         /* ==================================================================
@@ -654,6 +723,8 @@ function buildView(
     from: from.toISOString(),
     to: to.toISOString(),
     days,
+    daily,
+    day,
     empty: rows.length === 0,
     funnel,
     cta: slices(rows, EV.ctaClicked, "location", {
@@ -662,12 +733,7 @@ function buildView(
       header_signin: "Header · Sign in",
       header_store: "Header · Store name",
     }),
-    signin: slices(rows, EV.signinSubmitted, "result", {
-      success: "Signed in",
-      not_registered: "Not registered",
-      invalid_format: "Not a store domain",
-      server_error: "Our error",
-    }),
+    signin: slices(rows, EV.signinSubmitted, "result", SIGNIN_RESULTS),
     registerResults: slices(rows, EV.registerSubmitted, "result", {
       success: "Registered",
       validation_error: "Form refused it",
