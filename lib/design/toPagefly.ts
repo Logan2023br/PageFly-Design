@@ -602,7 +602,7 @@ function counterJs(cls: string, value: string): string {
      with its separators intact by the format below. */
   const target = Number(String(value).replace(/[^\d.]/g, "")) || 0;
   return `
-var el=document.querySelector(".${cls} [data-pf-type]");
+var el=document.querySelector(".${cls}");
 if(el&&"IntersectionObserver" in window){
   var done=false;
   var io=new IntersectionObserver(function(es){es.forEach(function(e){
@@ -1112,11 +1112,24 @@ function emitNode(
          value that is already correct. */
       const n = (opts.customCount!.value += 1);
       const cls = `pfd-count-${n}`;
+      /* THE ELEMENT THE SCRIPT REWRITES CARRIES ITS OWN NAME.
+
+         The script used to reach the number as `.pfd-count-N [data-pf-type]` —
+         the first descendant of the wrapper that happens to be an element. It
+         worked, and it left the one node on the page whose text is replaced on
+         every load carrying no class at all: a merchant clicking it saw an
+         ordinary heading, with nothing to say why editing the number changes
+         nothing on the live page.
+
+         Anything this export scripts or styles should be findable from the
+         element, so the class goes on the number itself and the selector names
+         it. */
+      const valueCls = `${cls}-value`;
       opts.customBlocks?.push({
         className: cls,
         html: "",
         css: "",
-        js: counterJs(cls, node.value),
+        js: counterJs(valueCls, node.value),
       });
 
       const shown = `${node.prefix}${node.value}${node.suffix}`;
@@ -1154,7 +1167,10 @@ function emitNode(
           TYPE_PROPS,
         ),
         [
-          withTag(H2(shown, styleDataFor({ ...node, type: "heading" } as never, parent)), "div"),
+          withTag(
+            H2(shown, styleDataFor({ ...node, type: "heading" } as never, parent), valueCls),
+            "div",
+          ),
           ...(node.label
             ? [
                 P4(node.label, {

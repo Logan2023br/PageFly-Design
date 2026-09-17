@@ -83,6 +83,7 @@ async function open(
     items: Item[];
     styles: { id: string; styles: string }[];
     customCSS?: string;
+    customJS?: string;
   };
 
   /** The `&` rule for one item, at one breakpoint. Where the fidelity bugs are:
@@ -94,7 +95,7 @@ async function open(
     return parsed[device]?.[selector] ?? "";
   };
 
-  return { items: page.items, cssOf, customCSS: page.customCSS ?? "" };
+  return { items: page.items, cssOf, customCSS: page.customCSS ?? "", customJS: page.customJS ?? "" };
 }
 
 async function build(tree: unknown, name = "probe"): Promise<Item[]> {
@@ -907,6 +908,63 @@ async function main(): Promise<void> {
       "and an accent band takes whichever of the two actually reads on it",
       accent.join() || "(none)",
     );
+  }
+
+  /* ======================================================================
+     ANYTHING THE PAGE SCRIPTS IS FINDABLE FROM THE ELEMENT.
+
+     The counter's script used to reach its number as `.pfd-count-N
+     [data-pf-type]` — the first descendant of the wrapper that happens to be
+     an element. It worked, and it left the one node on the page whose text is
+     rewritten on every load carrying no class at all: a merchant clicking it
+     saw an ordinary heading, with nothing to say why editing the number
+     changes nothing on the live page.
+
+     So a script may name a class, and the class has to be on an element.
+     Reaching an element by type alone is what this forbids.
+     ====================================================================== */
+  console.log("\nwhat the page's script can reach");
+
+  {
+    const counted = await open({
+      sections: [
+        section(
+          [
+            { type: "counter", value: "30", prefix: "", suffix: "", label: "nights" },
+            { type: "counter", value: "1,240", prefix: "", suffix: "", label: "reviews" },
+          ],
+          "proof-counters",
+        ),
+      ],
+    });
+
+    const js = counted.customJS ?? "";
+    check(js.includes("querySelector"), "the counters ship a script", js ? "yes" : "(none)");
+    check(
+      !/querySelector(All)?\(["'][^"']*\[data-pf-type\][^"']*["']\)/.test(js),
+      "and it reaches nothing by element type alone",
+      (js.match(/querySelector\w*\([^)]*\)/g) ?? []).join(" ").slice(0, 96),
+    );
+
+    /* Every class the script names has to be on an element, or the rule it is
+       meant to make visible is invisible again by another route. */
+    const onElements = new Set<string>();
+    for (const i of counted.items)
+      for (const c of String((i.data as Record<string, unknown>)?.className ?? "")
+        .split(/\s+/)
+        .filter(Boolean))
+        onElements.add(c);
+
+    const named = [
+      ...new Set(
+        (js.match(/querySelector\w*\(["']\.[\w-]+/g) ?? []).map((m: string) =>
+          m.slice(m.indexOf(".") + 1),
+        ),
+      ),
+    ];
+    check(named.length > 0, "the script names classes", named.join(" ") || "(none)");
+    for (const c of named)
+      check(onElements.has(c), `.${c} is on an element a merchant can click`);
   }
 
   /* ---- the countdown, which used to be markup that counted nothing ------ */
