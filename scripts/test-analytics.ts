@@ -423,6 +423,138 @@ async function main(): Promise<void> {
   const bad = Object.values(EV).filter((n) => !/^design_[a-z0-9_]+$/.test(n));
   check(bad.length === 0, "all names match the endpoint's rule", bad.join(", ") || "none");
 
+  /* ======================================================================
+     WHICH STORE, AND HOW MANY TIMES.
+
+     A tile says "28 exports · 4 stores" and the next question is always the
+     same: WHICH four, and which pages did they take. The totals cannot answer
+     it — `countEvents` groups by name and parameters, so the domain that made
+     each press is summed away.
+
+     `eventsByStore` keeps it. One row per store per event name, with the
+     parameter breakdown inside the row, so a tile can open into the list it is
+     a summary of.
+     ====================================================================== */
+  console.log("\nthe detail behind a tile");
+
+  {
+    const at = (day: number) => `2024-03-${String(day).padStart(2, "0")}T10:00:00.000Z`;
+    await repo.recordEvents([
+      /* Two stores, four presses, three page types between them. */
+      { id: "d1-aaaaaaaa", name: "design_page_exported", props: { page_type: "home" }, visitorId: "v1", domain: "alpha.myshopify.com", createdAt: at(1) },
+      { id: "d2-aaaaaaaa", name: "design_page_exported", props: { page_type: "home" }, visitorId: "v1", domain: "alpha.myshopify.com", createdAt: at(3) },
+      { id: "d3-aaaaaaaa", name: "design_page_exported", props: { page_type: "product" }, visitorId: "v1", domain: "alpha.myshopify.com", createdAt: at(2) },
+      { id: "d4-aaaaaaaa", name: "design_page_exported", props: { page_type: "about" }, visitorId: "v9", domain: "beta.myshopify.com", createdAt: at(5) },
+      /* A different event entirely — must not leak into the rows above. */
+      { id: "d5-aaaaaaaa", name: "design_page_preview", props: { page_type: "home" }, visitorId: "v1", domain: "alpha.myshopify.com", createdAt: at(4) },
+    ]);
+
+    const rows = await repo.eventsByStore("design_page_exported", WINDOW[0], WINDOW[1], "page_type");
+
+    /* One row per store, not one per press. Asserted on the two written just
+       above rather than on the length: earlier blocks in this file export from
+       other stores into the same repo, and a total that moves whenever
+       somebody adds a fixture is a test that fails for the wrong reason. */
+    const mine = rows.filter((r) => r.domain?.startsWith("alpha") || r.domain?.startsWith("beta"));
+    check(mine.length === 2, "one row per store, not one per press", `${mine.length} row(s)`);
+
+    const alpha = rows.find((r) => r.domain === "alpha.myshopify.com");
+    check(alpha?.count === 3, "the store's own press count", String(alpha?.count));
+    check(
+      rows[0]?.domain === "alpha.myshopify.com",
+      "busiest store first",
+      rows.map((r) => r.domain).join(", "),
+    );
+
+    /* The whole reason for the drill-down: WHICH pages, not just how many. */
+    const home = alpha?.parts.find((p) => p.key === "home");
+    check(home?.count === 2, "and the page breakdown inside it", `home ×${home?.count}`);
+    check(
+      alpha?.parts.map((p) => p.key).join(",") === "home,product",
+      "every page the store took, busiest first",
+      alpha?.parts.map((p) => `${p.key}×${p.count}`).join(" "),
+    );
+
+    /* "When did this last happen" is the other question a tile cannot answer. */
+    check(alpha?.lastAt === at(3), "the most recent press, for a sense of when", String(alpha?.lastAt));
+
+    /* A preview is not an export. */
+    check(
+      !alpha?.parts.some((p) => p.key === "about"),
+      "and no other event's rows are mixed in",
+    );
+  }
+
+  /* ======================================================================
+     THE STORE THAT IS NOT SIGNED IN.
+
+     The tile everybody wants to open is "Not registered · 31", and it is the
+     one the column cannot answer: a refused sign-in happens BEFORE there is a
+     session, so `events.domain` is null for every one of them. The domain the
+     merchant typed is on the event's own props instead.
+
+     So the grouping key has to be selectable. Same query, same shape, keyed on
+     a parameter rather than on the column — otherwise the whole gate block
+     collapses into one row saying "nobody was signed in", which is true and
+     useless.
+     ====================================================================== */
+  console.log("\nthe gate, where the store is a parameter and not a column");
+
+  {
+    const at = (day: number) => `2024-04-${String(day).padStart(2, "0")}T10:00:00.000Z`;
+    const refused = (day: number, d: string, v: string) => ({
+      id: `g${day}-${d.slice(0, 3)}-aaaa`,
+      name: "design_signin_submitted",
+      props: { result: "not_registered", domain: d },
+      visitorId: v,
+      domain: null,
+      createdAt: at(day),
+    });
+    await repo.recordEvents([
+      refused(1, "turnedaway.myshopify.com", "v-a"),
+      refused(2, "turnedaway.myshopify.com", "v-a"),
+      refused(3, "other.myshopify.com", "v-b"),
+      {
+        id: "g4-suc-aaaa",
+        name: "design_signin_submitted",
+        props: { result: "success", domain: "welcome.myshopify.com" },
+        visitorId: "v-c",
+        domain: null,
+        createdAt: at(4),
+      },
+    ]);
+
+    const rows = await repo.eventsByStore(
+      "design_signin_submitted",
+      WINDOW[0],
+      WINDOW[1],
+      "result",
+      "domain",
+    );
+
+    const turned = rows.find((r) => r.domain === "turnedaway.myshopify.com");
+    check(
+      Boolean(turned),
+      "the typed domain becomes the row, though nobody was signed in",
+      rows.map((r) => r.domain).join(", ") || "(no rows)",
+    );
+    check(turned?.count === 2, "counted per store, not lumped under null", String(turned?.count));
+    check(
+      turned?.parts[0]?.key === "not_registered",
+      "and the outcome is the breakdown inside it",
+      turned?.parts.map((p) => `${p.key}×${p.count}`).join(" "),
+    );
+    check(
+      rows.some((r) => r.domain === "welcome.myshopify.com"),
+      "a store that got in is a row of its own",
+    );
+    check(
+      !rows.some((r) => r.domain === null),
+      "and nothing is left in a nameless bucket",
+      rows.filter((r) => r.domain === null).map((r) => String(r.count)).join(",") || "none",
+    );
+  }
+
   console.log(failures === 0 ? "\nall good\n" : `\n${failures} failure(s)\n`);
   process.exit(failures === 0 ? 0 : 1);
 }

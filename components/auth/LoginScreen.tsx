@@ -78,7 +78,25 @@ export function LoginScreen({ next }: { next: string }) {
           : res.status === 403
             ? "not_registered"
             : "invalid_format";
-      track(EV.signinSubmitted, { result });
+      /* ==========================================================================
+         THE DOMAIN THEY TYPED, ON THE EVENT.
+
+         Without it "Not registered · 31" is a number and nothing else. With it
+         the tile opens into the list of thirty-one stores that were turned
+         away — which, while the beta gate is what it is, is the most useful
+         list this product produces: real merchants, already interested, who
+         got as far as the door and were sent home.
+
+         NOT ON `invalid_format`. That branch is whatever somebody typed into a
+         public box, and the one thing known about it is that it is not a store
+         domain. Keeping it would file arbitrary text — an email, a name, a
+         paste — in an analytics table that is read by people, and the count
+         alone already says what that branch needs to say.
+         ========================================================================== */
+      track(EV.signinSubmitted, {
+        result,
+        ...(result === "invalid_format" ? {} : { domain: domain.trim().toLowerCase() }),
+      });
 
       if (body.ok) {
         setState("granted");

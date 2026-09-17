@@ -48,6 +48,10 @@ type Shape = {
 
 const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], photos: [], jobs: [], training: [], trainingSections: [], events: [] };
 
+/** The map key for "no store". A domain can never contain a space, so this
+    cannot collide with one — and unlike a NUL it survives grep and an editor. */
+const NO_STORE = "(no store)";
+
 export function createMemoryRepo(file: string): Repo {
   /* Writes are best-effort: a read-only filesystem downgrades this to a plain
      in-memory store rather than failing a request the merchant made. */
@@ -595,6 +599,77 @@ export function createMemoryRepo(file: string): Repo {
         visitors: b.visitors.size,
         stores: b.stores.size,
       }));
+    },
+
+    async eventsByStore(name, from, to, propKey, groupProp = null) {
+      sync();
+      /* Keyed by the domain as written, with `null` kept as its own key rather
+         than folded into the empty string — "signed out" and "a store called
+         nothing" would otherwise be the same row. */
+      const by = new Map<
+        string,
+        {
+          domain: string | null;
+          count: number;
+          visitors: Set<string>;
+          firstAt: string;
+          lastAt: string;
+          parts: Map<string, number>;
+        }
+      >();
+
+      for (const e of data.events) {
+        if (e.name !== name) continue;
+        if (e.createdAt < from || e.createdAt >= to) continue;
+
+        /* The column, unless a parameter was named. The gate fires before there
+           is a session, so for those events the store the merchant typed is
+           only ever on the props — see `groupProp` on the Repo interface. */
+        const rowDomain = groupProp
+          ? ((v) => (v === undefined || v === null || v === "" ? null : String(v)))(
+              (e.props as Record<string, unknown>)[groupProp],
+            )
+          : (e.domain ?? null);
+        const key = rowDomain ?? NO_STORE;
+        const hit = by.get(key) ?? {
+          domain: rowDomain,
+          count: 0,
+          visitors: new Set<string>(),
+          firstAt: e.createdAt,
+          lastAt: e.createdAt,
+          parts: new Map<string, number>(),
+        };
+        hit.count++;
+        hit.visitors.add(e.visitorId);
+        if (e.createdAt < hit.firstAt) hit.firstAt = e.createdAt;
+        if (e.createdAt > hit.lastAt) hit.lastAt = e.createdAt;
+
+        if (propKey) {
+          /* Arrays and numbers reach `props` too — `error_field` is a list.
+             Stringified rather than skipped: a breakdown that silently drops
+             the shapes it did not expect is a breakdown that lies. */
+          const raw = (e.props as Record<string, unknown>)[propKey];
+          if (raw !== undefined && raw !== null) {
+            const v = Array.isArray(raw) ? raw.join("+") : String(raw);
+            hit.parts.set(v, (hit.parts.get(v) ?? 0) + 1);
+          }
+        }
+
+        by.set(key, hit);
+      }
+
+      return [...by.values()]
+        .map((b) => ({
+          domain: b.domain,
+          count: b.count,
+          visitors: b.visitors.size,
+          firstAt: b.firstAt,
+          lastAt: b.lastAt,
+          parts: [...b.parts.entries()]
+            .map(([key, count]) => ({ key, count }))
+            .sort((x, y) => y.count - x.count || x.key.localeCompare(y.key)),
+        }))
+        .sort((x, y) => y.count - x.count || (x.domain ?? "").localeCompare(y.domain ?? ""));
     },
 
     async stats() {

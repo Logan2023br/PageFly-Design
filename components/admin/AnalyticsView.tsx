@@ -254,7 +254,7 @@ export function AnalyticsView() {
           </div>
 
           {view.pages.map((page) => (
-            <PageSection key={page.key} page={page} />
+            <PageSection key={page.key} page={page} days={view.days} />
           ))}
 
           <div className="mt-2 border-t border-pf-border pt-6">
@@ -360,6 +360,8 @@ function Funnel({ view }: { view: View }) {
               .join(" · ")}
             ratio={step.events / top}
             hint={step.where}
+            event={step.event}
+            days={view.days}
             tone={steep ? "danger" : "default"}
             delay={Math.min(i * 0.04, 0.3)}
           />
@@ -605,7 +607,7 @@ function BuildTiles({ view }: { view: View }) {
  * "The finished deck" are all `/design` — three moments on one address, and a
  * heading alone would leave somebody wondering which page is meant.
  */
-function PageSection({ page }: { page: PageBlock }) {
+function PageSection({ page, days }: { page: PageBlock; days: number }) {
   const top = Math.max(...page.metrics.map((m) => m.count), 1);
 
   return (
@@ -649,6 +651,8 @@ function PageSection({ page }: { page: PageBlock }) {
               .join(" · ")}
             ratio={m.count / top}
             hint={m.where}
+            event={m.event}
+            days={days}
             delay={Math.min(i * 0.03, 0.2)}
           />,
           ...(m.splitKind === "control" && m.split

@@ -72,8 +72,13 @@ export function CardActions({ page }: { page: PageMockup }) {
         type="button"
         onClick={() => {
           /* `scope` because one page and all seven are different intentions,
-             and one number covering both cannot tell them apart. */
-          track(EV.pageExported, { scope: "one", count: 1 });
+             and one number covering both cannot tell them apart.
+
+             `page_type` because "28 exports" does not say WHICH pages a
+             merchant thought were worth taking, and that is the question that
+             decides which page types are worth making more of — the same
+             reason the gallery and the preview have carried it all along. */
+          track(EV.pageExported, { scope: "one", count: 1, page_type: page.pageType });
           void onExport();
         }}
         disabled={exporting}

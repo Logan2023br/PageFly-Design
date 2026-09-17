@@ -3,7 +3,9 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import type { IconName } from "@/lib/icons";
+import { DETAIL_OF } from "@/lib/analytics/detail";
 import { CountUp, Icon, Panel } from "../ui";
+import { TileDetail } from "./TileDetail";
 
 /* ==========================================================================
    One number, in a box.
@@ -36,6 +38,8 @@ export function StatTile({
   tone = "default",
   delay = 0,
   hint,
+  event,
+  days,
 }: {
   icon: IconName;
   label: string;
@@ -59,14 +63,34 @@ export function StatTile({
    * label like "CTA pressed" could be four things on this product.
    */
   hint?: string;
+  /**
+   * The analytics event this tile counts.
+   *
+   * Given one that `lib/analytics/detail` knows how to open, the tile becomes a
+   * button and presses into the list it is a summary of. Given one it does not
+   * — the landing page, the CTA, the moving strip, where there is no store to
+   * name — the tile stays exactly as it was. That is deliberate: an opener that
+   * reveals a column of anonymous ids looks like detail and is not.
+   */
+  event?: string;
+  /** The window the screen is showing, passed to the drill-down unchanged. */
+  days?: number;
 }) {
   const [over, setOver] = useState(false);
+  const [open, setOpen] = useState(false);
+  const canOpen = Boolean(event && DETAIL_OF[event]);
   const [what, ...rest] = (hint ?? "").split("\n");
 
   return (
-    /* THE TOOLTIP LIVES OUTSIDE THE PANEL. The Panel is `overflow-hidden` so
-       the hairline can sit on its bottom edge, and anything escaping upward
-       would be cut off by the same rule. */
+    /* A FRAGMENT, AND THE REASON IS THE LAYOUT. These tiles are a four-column
+       grid; the detail panel is a second grid item with `col-span-full`, which
+       lands it under the whole row rather than inside a quarter-width cell.
+       Wrapping the pair in a div would make THAT the grid item and break the
+       row into pieces. */
+    <>
+    {/* THE TOOLTIP LIVES OUTSIDE THE PANEL. The Panel is `overflow-hidden` so
+        the hairline can sit on its bottom edge, and anything escaping upward
+        would be cut off by the same rule. */}
     <div
       className="relative"
       onMouseEnter={() => setOver(true)}
@@ -97,10 +121,34 @@ export function StatTile({
         )}
       </AnimatePresence>
 
-    <Panel className="relative overflow-hidden p-4">
+    <div
+      /* The handler sits on a wrapper rather than on `Panel`, which takes only
+         a className — one shared box component that every screen styles, and
+         giving it a click handler would be the first crack in that. */
+      onClick={canOpen ? () => setOpen((o) => !o) : undefined}
+      role={canOpen ? "button" : undefined}
+      aria-expanded={canOpen ? open : undefined}
+      className={canOpen ? "cursor-pointer" : undefined}
+    >
+    <Panel
+      className={`relative overflow-hidden p-4 ${
+        canOpen ? "transition-colors duration-150 hover:border-pf-primary-hi/50" : ""
+      }`}
+    >
       <div className="flex items-center gap-2 text-pf-muted">
         <Icon name={icon} size={14} />
         <span className="text-[12px] font-semibold">{label}</span>
+        {canOpen && (
+          /* The only thing that says a tile can be pressed. Rotated rather
+             than swapped, so the open state is the same mark turned. */
+          <Icon
+            name="ChevronDown"
+            size={13}
+            className={`ml-auto text-pf-faint transition-transform duration-150 ${
+              open ? "rotate-180" : ""
+            }`}
+          />
+        )}
       </div>
 
       <p className="mt-2 font-display text-[30px] font-bold tabular-nums leading-none tracking-[-0.03em] text-pf-text">
@@ -129,6 +177,11 @@ export function StatTile({
       )}
     </Panel>
     </div>
+    </div>
+    {open && event && (
+      <TileDetail key={`${event}-${days ?? 30}`} event={event} days={days ?? 30} />
+    )}
+    </>
   );
 }
 

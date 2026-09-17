@@ -100,6 +100,11 @@ export function RegisterScreen() {
          opposite of the question, "which box stops people". */
       track(EV.registerSubmitted, {
         result: "validation_error",
+        /* The domain rides along so the tile opens into a list of stores
+           rather than a list of counts — same reason as the sign-in event.
+           Only when the domain box itself is not the thing that failed: a
+           refused domain is by definition not one. */
+        ...(problems.domain ? {} : { domain: domain.trim().toLowerCase() }),
         error_field: [
           problems.domain ? "domain" : null,
           problems.name ? "store_name" : null,
@@ -136,6 +141,7 @@ export function RegisterScreen() {
 
       track(EV.registerSubmitted, {
         result: body.ok ? "success" : res.status >= 500 || res.status === 503 ? "server_error" : "validation_error",
+        domain: domain.trim().toLowerCase(),
         ...(body.ok ? {} : { status: res.status }),
       });
 

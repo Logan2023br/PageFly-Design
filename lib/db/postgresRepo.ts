@@ -42,6 +42,10 @@ function getPool(url: string): Pool {
   return pool;
 }
 
+/** The map key for "no store". A domain can never contain a space, so this
+    cannot collide with one — and unlike a NUL it survives grep and an editor. */
+const NO_STORE = "(no store)";
+
 const DDL = `
 create table if not exists stores (
   domain        text primary key,
@@ -1028,6 +1032,78 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
         visitors: Number(r.v),
         stores: Number(r.d),
       }));
+    },
+
+    async eventsByStore(name, from, to, propKey, groupProp = null) {
+      await ready();
+      /* GROUPED BY DOMAIN AND BY THE PARAMETER AT ONCE, then folded into one
+         row per store here. Two queries would be one round trip more and would
+         have to agree with each other about the window; one grouping cannot
+         disagree with itself.
+
+         `props->>$4` is null when the key is absent, which is also what a
+         caller passing no `propKey` gets — so the same statement serves both
+         and the fold below simply finds nothing to put in `parts`. */
+      const { rows } = await db.query(
+        /* `$5` selects the row key: the column when no parameter was named,
+           the parameter's value when one was. Written as a coalesce rather than
+           as two statements so the window and the grouping cannot drift apart. */
+        `select case when $5::text is null then domain else props->>$5 end as domain,
+                props->>$4                      as part,
+                count(*)::int                   as n,
+                count(distinct visitor_id)::int as v,
+                min(created_at)                 as first_at,
+                max(created_at)                 as last_at
+           from events
+          where name = $1 and created_at >= $2 and created_at < $3
+          group by 1, props->>$4`,
+        [name, from, to, propKey, groupProp],
+      );
+
+      type Acc = {
+        domain: string | null;
+        count: number;
+        visitors: number;
+        firstAt: string;
+        lastAt: string;
+        parts: { key: string; count: number }[];
+      };
+      /* `null` kept as its own key rather than folded into the empty string:
+         "signed out" and "a store called nothing" are not the same row. */
+      const by = new Map<string, Acc>();
+
+      for (const r of rows) {
+        const domain = (r.domain as string | null) ?? null;
+        const key = domain ?? NO_STORE;
+        const firstAt = new Date(r.first_at as string).toISOString();
+        const lastAt = new Date(r.last_at as string).toISOString();
+
+        const hit =
+          by.get(key) ??
+          ({ domain, count: 0, visitors: 0, firstAt, lastAt, parts: [] } satisfies Acc);
+
+        hit.count += Number(r.n);
+        /* SUMMED, NOT INTERSECTED, and the difference is worth stating: one
+           browser that exported two different page types appears in two rows
+           and is counted twice here. Only the database can intersect them, and
+           it cannot do so in the same grouping that produces `parts`. The
+           store-level visitor count that has to be exact is the one on the
+           tile, which comes from `countEventTotals`. */
+        hit.visitors += Number(r.v);
+        if (firstAt < hit.firstAt) hit.firstAt = firstAt;
+        if (lastAt > hit.lastAt) hit.lastAt = lastAt;
+        if (r.part !== null && r.part !== undefined)
+          hit.parts.push({ key: String(r.part), count: Number(r.n) });
+
+        by.set(key, hit);
+      }
+
+      return [...by.values()]
+        .map((b) => ({
+          ...b,
+          parts: b.parts.sort((x, y) => y.count - x.count || x.key.localeCompare(y.key)),
+        }))
+        .sort((x, y) => y.count - x.count || (x.domain ?? "").localeCompare(y.domain ?? ""));
     },
 
     async stats() {

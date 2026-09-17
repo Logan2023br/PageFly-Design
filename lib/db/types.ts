@@ -486,6 +486,35 @@ export type Repo = {
    * answer. Only the database can intersect them.
    */
   countEventTotals(from: string, to: string): Promise<EventTotal[]>;
+  /**
+   * One event name, opened up: who did it, how often, and to what.
+   *
+   * `countEvents` answers "how many" and `countEventTotals` answers "how many
+   * people". Neither can answer WHICH — the domain that made each press is
+   * summed away by both, and a tile reading "28 exports · 4 stores" is exactly
+   * the number whose next question is "which four".
+   *
+   * `propKey` is the parameter to break each store's presses down by —
+   * `page_type` for an export, `result` for a sign-in, `surface` for the
+   * install button. Pass null when the event carries nothing worth splitting.
+   *
+   * `groupProp` names a parameter to use as the row key INSTEAD of the domain
+   * column, and the gate is why it exists: a refused sign-in happens before
+   * there is a session, so `events.domain` is null for every one of them and
+   * the domain the merchant typed is on the event's own props. Without this the
+   * most-asked tile on the screen — "Not registered · 31" — opens into a single
+   * row saying nobody was signed in, which is true and useless.
+   *
+   * Rows still come back with a null domain when neither source has one, rather
+   * than being dropped: for the landing page that is the only honest answer.
+   */
+  eventsByStore(
+    name: string,
+    from: string,
+    to: string,
+    propKey: string | null,
+    groupProp?: string | null,
+  ): Promise<EventByStore[]>;
 
   /* ---- admin ---- */
   listStoreSummaries(): Promise<StoreSummary[]>;
@@ -525,6 +554,24 @@ export type EventRecord = {
   /** the signed-in store, when there is one */
   domain: string | null;
   createdAt: string;
+};
+
+/**
+ * One store's presses of one event, with the parameter breakdown inside.
+ *
+ * This is what a tile opens into. `domain` is null for anything that fired
+ * before sign-in — the landing, the gate, the register form — where there is
+ * no store to name and the `parts` are the whole of the detail.
+ */
+export type EventByStore = {
+  domain: string | null;
+  count: number;
+  /** distinct browsers, so a store used from two machines is still one store */
+  visitors: number;
+  firstAt: string;
+  lastAt: string;
+  /** the `propKey` values this store produced, busiest first */
+  parts: { key: string; count: number }[];
 };
 
 /** One event name, counted across every combination of its parameters. */

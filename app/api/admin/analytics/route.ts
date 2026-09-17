@@ -23,6 +23,9 @@ export const dynamic = "force-dynamic";
 export type FunnelStep = {
   key: string;
   label: string;
+  /** The event behind it, so a tile can ask what is inside itself. Not every
+      one of these has a drill-down — `lib/analytics/detail` decides that. */
+  event: string;
   /** what this step measures, in one line, for the screen to show */
   note: string;
   /** the element that fires it — see `Metric.where` */
@@ -72,6 +75,8 @@ export type Metric = {
   key: string;
   label: string;
   note: string;
+  /** The event behind it — see `FunnelStep.event`. */
+  event: string;
   /**
    * The element that fires it, and where that element is.
    *
@@ -335,6 +340,7 @@ function buildView(
       note: "Everyone who saw the front page",
       visitors: people(totals, EV.landingViewed),
       events: sum(rows, EV.landingViewed),
+      event: EV.landingViewed,
       unit: "browser" as const,
     },
     {
@@ -353,6 +359,7 @@ function buildView(
          people who already have an account. */
       visitors: people(totals, EV.ctaClicked),
       events: sum(rows, EV.ctaClicked),
+      event: EV.ctaClicked,
       unit: "browser" as const,
     },
     {
@@ -362,6 +369,7 @@ function buildView(
       note: "Reached the form",
       visitors: people(totals, EV.signinViewed),
       events: sum(rows, EV.signinViewed),
+      event: EV.signinViewed,
       unit: "browser" as const,
     },
     {
@@ -371,6 +379,7 @@ function buildView(
       note: "Typed a domain and pressed Continue",
       visitors: people(totals, EV.signinSubmitted),
       events: sum(rows, EV.signinSubmitted),
+      event: EV.signinSubmitted,
       unit: "browser" as const,
     },
     {
@@ -380,6 +389,7 @@ function buildView(
       note: "Through the gate, looking at the questions",
       visitors: stores(totals, EV.briefViewed),
       events: sum(rows, EV.briefViewed),
+      event: EV.briefViewed,
       unit: "store" as const,
     },
     {
@@ -389,6 +399,7 @@ function buildView(
       note: "Pressed the button",
       visitors: stores(totals, EV.generateStarted),
       events: sum(rows, EV.generateStarted),
+      event: EV.generateStarted,
       unit: "store" as const,
     },
     {
@@ -398,6 +409,7 @@ function buildView(
       note: "Reported by the server, so a closed tab still counts",
       visitors: stores(totals, EV.generateCompleted),
       events: sum(rows, EV.generateCompleted),
+      event: EV.generateCompleted,
       unit: "store" as const,
     },
     {
@@ -407,6 +419,7 @@ function buildView(
       note: "Took the file away",
       visitors: stores(totals, EV.pageExported),
       events: sum(rows, EV.pageExported),
+      event: EV.pageExported,
       unit: "store" as const,
     },
   ];
@@ -446,6 +459,7 @@ function buildView(
     key,
     label,
     note,
+    event: name,
     where: `${where}\n${name}`,
     count: sum(rows, name),
     people: opts.unit === "store" ? stores(totals, name) : people(totals, name),
