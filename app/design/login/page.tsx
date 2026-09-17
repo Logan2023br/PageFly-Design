@@ -14,9 +14,9 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; domain?: string }>;
 }) {
-  const { next } = await searchParams;
+  const { next, domain } = await searchParams;
 
   /* Already signed in — no reason to show a form. Wrapped because a database
      that is unreachable should show the form, not an error page. */
@@ -39,5 +39,11 @@ export default async function LoginPage({
   const target =
     next && next.startsWith("/") && !next.startsWith("//") ? next : "/design";
 
-  return <LoginScreen next={target} />;
+  /* Carried from the front door, where a `?login=` link found a real store
+     that has no account yet: the visitor typed it once and should not have to
+     type it again. Trimmed to a sane length — it only prefills a box a merchant
+     can edit, but it does come off a URL. */
+  const prefill = domain && domain.length <= 255 ? domain : undefined;
+
+  return <LoginScreen next={target} initialDomain={prefill} />;
 }

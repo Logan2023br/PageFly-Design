@@ -23,6 +23,22 @@
  */
 export const REGISTER_USER_TYPE = "Marketing/Register";
 
+/**
+ * `userType` for a store that signed in without ever filling the register form.
+ *
+ * The gate used to refuse an unknown domain and send it to a second screen; of
+ * thirty-one merchants turned away in a month, four finished registering. So an
+ * unknown domain is now verified against Shopify at the door, asked for an
+ * email, and admitted — and this is what marks the rows that came in that way.
+ *
+ * A SEPARATE VALUE FROM `REGISTER_USER_TYPE`, not a reuse of it. These rows
+ * were created from a domain the merchant typed and an email they gave in one
+ * breath, with nothing filled in afterwards; a row off the register form had a
+ * store name and a second deliberate step behind it. Telling them apart is the
+ * whole point of measuring the change.
+ */
+export const NO_REGISTER_USER_TYPE = "Marketing/No Register";
+
 export type StoreRecord = {
   domain: string;
   email: string | null;

@@ -71,6 +71,13 @@ export const DETAIL_OF: Record<string, DetailSpec> = {
     partLabel: "outcome",
   },
 
+  /* A store that got in without the register form. Fired from the server, which
+     stamps the domain on the event itself — so unlike the two above this one
+     needs no `groupProp`, and the row key is the column. `verified` says whether
+     Shopify confirmed the store or was unreachable at the time, which is the one
+     thing worth checking a row against afterwards. */
+  [EV.loginNoRegister]: { propKey: "verified", unit: "store", partLabel: "verified" },
+
   /* ---- behind the gate: the column already holds the store ------------- */
 
   [EV.briefViewed]: { propKey: null, unit: "store", partLabel: "" },

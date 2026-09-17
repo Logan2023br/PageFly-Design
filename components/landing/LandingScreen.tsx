@@ -121,6 +121,18 @@ export function LandingScreen() {
       }
 
       if (!body.ok) {
+        /* NOT A REFUSAL — an email is wanted, and there is nowhere here to ask
+           for one. The store checked out, so this hands the visitor to the
+           sign-in form, which draws the box. The domain stays armed so the
+           form can be reached with it already filled in rather than making
+           them type it a second time. */
+        if ("needsEmail" in body) {
+          window.location.assign(
+            `/design/login?domain=${encodeURIComponent(body.domain)}`,
+          );
+          return;
+        }
+
         setLinkError(body.error);
         setLinkSignIn("refused");
         /* Spent. A domain the list refused will be refused again, and leaving

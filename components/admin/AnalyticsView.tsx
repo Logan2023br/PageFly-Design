@@ -716,6 +716,7 @@ const METRIC_ICON: Record<string, IconName> = {
   gallery: "Images",
   submitted: "Keyboard",
   register_link: "ArrowRight",
+  no_register: "UserPlus",
   fields: "CircleAlert",
   shopify: "ArrowUpRight",
   done: "CircleCheck",

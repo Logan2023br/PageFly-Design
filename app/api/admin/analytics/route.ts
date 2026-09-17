@@ -500,12 +500,32 @@ function buildView(
         metric("submitted", "Continue pressed", "counted when the server answers, not on the press", EV.signinSubmitted, "“Continue” — recorded when the server answers, so it carries the outcome", {
           split: slices(rows, EV.signinSubmitted, "result", {
             success: "Signed in",
+            /* The door verifies an unknown domain against Shopify now, so an
+               attempt can end two ways it never could before: the store is real
+               and the form is asking for an email, or Shopify has no such shop.
+               Both used to land in `not_registered`, which is why that number
+               stops being comparable across the change. */
+            needs_email: "Asked for an email",
+            no_such_store: "No such store",
             not_registered: "Not registered",
             invalid_format: "Not a store domain",
             server_error: "Our error",
           }),
         }),
         metric("register_link", "Register link", "went on rather than leaving", EV.registerLinkClicked, "The underlined word “register” in the line under the form"),
+        /* ==================================================================
+           LOGIN NO REGISTER — the point of the change, counted.
+
+           A store that reached the product without ever seeing the register
+           form: domain typed, verified against Shopify, email given, in. Read
+           against `Register pressed` on the block below, it is the whole
+           before-and-after — the second screen used to cost twenty-seven of
+           every thirty-one merchants who met it.
+
+           `unit: "store"` because one merchant creating one account is one
+           store, whatever browser they did it in. Server-fired, so the domain
+           is on the event and the tile opens into the list of them. */
+        metric("no_register", "Login No Register", "signed in without the register form", EV.loginNoRegister, "The sign-in form, when an unknown domain checked out against Shopify and an email was given", { unit: "store" }),
       ],
     },
     {

@@ -17,13 +17,28 @@ import { Button, Eyebrow, GradientWord, Icon, Panel } from "../ui";
    bolted on the front.
    ========================================================================== */
 
-type State = "idle" | "checking" | "denied" | "granted";
+/* `email` is a state of the FORM, not an error. The store is real and the
+   merchant is getting in; one more box has appeared. Kept out of `denied` on
+   purpose — the two look nothing alike on screen and must not share a branch. */
+type State = "idle" | "checking" | "email" | "denied" | "granted";
 
-export function LoginScreen({ next }: { next: string }) {
-  const [domain, setDomain] = useState("");
+export function LoginScreen({
+  next,
+  initialDomain,
+}: {
+  next: string;
+  /** Prefilled when the front door already found a store at this address and
+      sent the visitor here for the email. */
+  initialDomain?: string;
+}) {
+  const [domain, setDomain] = useState(initialDomain ?? "");
+  const [email, setEmail] = useState("");
   const [state, setState] = useState<State>("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
+  /* Shown beside the email box, so a merchant can see the door opened for the
+     store they meant. Shopify's own name for it, when it gave one. */
+  const [foundName, setFoundName] = useState<string | null>(null);
 
   /* The second denominator, and the one that says where traffic went. Compared
      against `design_landing_viewed` it is the whole of "people pressed the CTA
@@ -35,7 +50,11 @@ export function LoginScreen({ next }: { next: string }) {
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (state === "checking" || !domain.trim()) return;
+    /* Once the email box is up it is required — pressing again with it empty
+       would ask the route the same question and get the same answer. */
+    if (state === "email" && !email.trim()) return;
 
+    const asking = state === "email";
     setState("checking");
     setMessage(null);
     setHint(null);
@@ -44,7 +63,10 @@ export function LoginScreen({ next }: { next: string }) {
       const res = await fetch("/api/auth/store", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ domain }),
+        /* The email only goes up once the route has asked for it. Sending it
+           unprompted would create an account for somebody who was only ever
+           signing in to a store already on the list. */
+        body: JSON.stringify({ domain, ...(asking ? { email } : {}) }),
       });
 
       /* A crashed route answers with an HTML error page, and res.json() throws on
@@ -73,11 +95,20 @@ export function LoginScreen({ next }: { next: string }) {
          ========================================================================== */
       const result = body.ok
         ? "success"
-        : res.status === 503
-          ? "server_error"
-          : res.status === 403
-            ? "not_registered"
-            : "invalid_format";
+        : "needsEmail" in body
+          ? /* Not a refusal and not a success: the store checked out and the
+               form is asking for an email. Given its own name so the outcome
+               split on the admin screen keeps meaning what it says — filing it
+               under `not_registered` would report a merchant being let in as a
+               merchant being turned away. */
+            "needs_email"
+          : res.status === 503
+            ? "server_error"
+            : res.status === 404
+              ? "no_such_store"
+              : res.status === 403
+                ? "not_registered"
+                : "invalid_format";
       /* ==========================================================================
          THE DOMAIN THEY TYPED, ON THE EVENT.
 
@@ -103,6 +134,15 @@ export function LoginScreen({ next }: { next: string }) {
         /* Full navigation, not router.push: the destination is behind the proxy
            guard, which reads the cookie the browser has only just been given. */
         window.location.assign(next);
+        return;
+      }
+
+      if ("needsEmail" in body) {
+        setFoundName(body.storeName);
+        setState("email");
+        /* Only after a second refusal, so the first sight of the box is an
+           invitation rather than a correction. */
+        if (asking) setMessage("That does not look like an email address.");
         return;
       }
 
@@ -177,7 +217,16 @@ export function LoginScreen({ next }: { next: string }) {
                     value={domain}
                     onChange={(e) => {
                       setDomain(e.target.value);
-                      if (state === "denied") setState("idle");
+                      /* Back to the start on ANY edit, not just after a
+                         refusal. A domain changed while the email box is open
+                         is a different store, and leaving the box up would
+                         offer to create an account for the one they just
+                         stopped typing. */
+                      if (state === "denied" || state === "email") {
+                        setState("idle");
+                        setFoundName(null);
+                        setMessage(null);
+                      }
                     }}
                     // No type="url": a merchant types "mystore.myshopify.com"
                     // without a scheme, and the browser would reject it as
@@ -195,6 +244,53 @@ export function LoginScreen({ next }: { next: string }) {
                     }`}
                   />
                 </label>
+
+                {/* ==========================================================
+                    THE EMAIL BOX, WHICH APPEARS RATHER THAN BEING THERE.
+
+                    Most merchants signing in are already on the list and never
+                    see this. It is drawn only once the route has confirmed the
+                    store is real and asked for an address — so the merchant
+                    meets it as "you're in, one more thing" rather than as a
+                    form standing between them and the product.
+
+                    It replaces a second screen. Thirty-one merchants were sent
+                    to one in a month and four came back; this box is the same
+                    question asked where they already are.
+                    ========================================================== */}
+                {state === "email" && (
+                  <motion.label
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                    className="grid gap-1.5 overflow-hidden"
+                  >
+                    <span className="flex items-center gap-1.5 text-[12px] font-semibold text-pf-body">
+                      <span className="text-pf-success">
+                        <Icon name="CircleCheck" size={13} />
+                      </span>
+                      {/* Names the store Shopify found, so a typo that happens
+                          to be somebody else's real store is visible before an
+                          account is made for it. */}
+                      {foundName ? `Found ${foundName} — your email` : "Your email"}
+                    </span>
+                    <input
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      autoCapitalize="off"
+                      spellCheck={false}
+                      autoFocus
+                      placeholder="you@yourstore.com"
+                      className="h-11 w-full rounded-pf-md border border-pf-border bg-pf-bg-deep px-3 text-[14px] text-pf-text outline-none transition-colors placeholder:text-pf-faint focus:border-pf-primary-hi"
+                    />
+                    <span className="text-[11.5px] text-pf-muted">
+                      Three pages free. No password to set up.
+                    </span>
+                  </motion.label>
+                )}
 
                 {message && (
                   <motion.div
@@ -221,7 +317,11 @@ export function LoginScreen({ next }: { next: string }) {
                 <Button
                   type="submit"
                   size="lg"
-                  disabled={state === "checking" || !domain.trim()}
+                  disabled={
+                    state === "checking" ||
+                    !domain.trim() ||
+                    (state === "email" && !email.trim())
+                  }
                   iconRight={state === "granted" ? "CircleCheck" : "ArrowRight"}
                   className="w-full"
                 >
@@ -229,7 +329,9 @@ export function LoginScreen({ next }: { next: string }) {
                     ? "Checking…"
                     : state === "granted"
                       ? "Signed in"
-                      : "Continue"}
+                      : state === "email"
+                        ? "Create account and sign in"
+                        : "Continue"}
                 </Button>
               </form>
             </Panel>

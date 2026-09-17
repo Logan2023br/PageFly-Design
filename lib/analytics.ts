@@ -193,6 +193,10 @@ export const EV = {
   signinViewed: "design_signin_viewed",
   signinSubmitted: "design_signin_submitted",
   registerLinkClicked: "design_register_link_clicked",
+  /* A store that got in without the register form — see NO_REGISTER_USER_TYPE.
+     Fired from the server, so it carries the domain even though nobody was
+     signed in at the moment it happened. */
+  loginNoRegister: "design_login_no_register",
 
   registerViewed: "design_register_viewed",
   shopifySignupClicked: "design_shopify_signup_clicked",
