@@ -89,6 +89,28 @@ is why `validate()` in the builder is not optional.
 | Accordion opens to an empty body | content not placed inside `Accordion3.Flex.Content` |
 | Custom CSS "not working" | `::hover` instead of `:hover`, or Liquid `{{` eaten on publish |
 | JS "broken" | it is the editor: `customJS` runs on preview and live only |
+| Text set one letter per line, **in the editor only** | a layout rule was written into `customCSS` — see below |
+
+## Layout may not live in `customCSS`
+
+`customCSS` runs on preview and live and **not in the editor canvas**, so any rule there
+that decides where a box ends up is missing from the first place a merchant sees the page.
+
+This is not theoretical. The page's own `max-width`/`width: 100%` cap lived in `customCSS`
+as `.pf-design-export { … }`, and every block beneath it is `--pf-flex-layout-width: fill`,
+which the engine expands to `flex-grow: 1; flex-basis: 0px`. A chain of those resolves to
+nothing unless something states a real width — so in the editor the page had no definite
+width at all and text bands came apart one character per line. Preview and live were fine.
+Three separate commits "fixed" it by rewriting a `min-width` rule in that same stylesheet.
+
+The floor and the cap now live in each element's own `styleData`, which the editor reads:
+`cssAt` and `pageflyFromTree` in `lib/design/toPagefly.ts`, `cssFor` and
+`pageFromBreakpoints` in `lib/pagefly/fromDom.ts`. `scripts/test-export.ts` asserts that
+neither a `min-width` nor a page cap comes back into `customCSS` on either path.
+
+What belongs in `customCSS`: the webfont `@import`, and resets that stop the host theme's
+base styles reaching the tree. If a rule added there would move a box, it is in the wrong
+place.
 
 ## Liquid
 

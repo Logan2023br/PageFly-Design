@@ -17,6 +17,7 @@
    ========================================================================== */
 
 import { unzipSync, strFromU8 } from "fflate";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import Module from "node:module";
 
@@ -752,49 +753,236 @@ async function main(): Promise<void> {
   }
 
   /* ======================================================================
-     AND THE PAGE RULE THAT CAUSED IT.
+     THE WIDTH CHAIN MAY NOT LIVE IN `customCSS`.
 
-     One blanket `min-width: 0` over every element. Right for a flex container,
-     which cannot let its children shrink without it; wrong for a paragraph,
-     where it removes the only thing keeping a word whole.
+     Three commits fixed the one-letter-per-line collapse by rewriting one
+     `min-width` rule inside `pageCss()`, and the editor stayed broken every
+     time. `customCSS` runs on preview and live and NOT in the editor canvas —
+     see `docs/pagefly-file-format.md` — so every layout guarantee written
+     there is absent in the one place the merchant meets the page first.
+
+     The collapse itself is what PageFly's Flex engine does to a container with
+     no definite width: the export makes every block `--pf-flex-layout-width:
+     fill`, which the engine expands to `flex-grow: 1; flex-basis: 0px`, and a
+     chain of those resolves to nothing unless something at the top states a
+     real width. That statement was `.pf-design-export { width: 100% }` — in
+     `customCSS`. In the editor there was nothing holding the page open, so a
+     text band squeezed to about one character.
+
+     These tests lock the rule rather than the instance: whatever the export
+     needs in order to lay out has to be in the element's OWN styleData, which
+     the editor reads. `customCSS` is for decoration — the webfont and the
+     resets — and a page whose stylesheet were dropped entirely must still come
+     out the right shape.
      ====================================================================== */
-  console.log("\nthe page's own min-width rule");
+  console.log("\nthe width chain, and where it has to live");
 
   {
-    const any = await open({
-      sections: [section([{ type: "text", text: "Specification" }], "story-band")],
+    /* No product, no productList, no accordion: `needsFill` is false, so this
+       is the section that had nothing holding it open. */
+    const band = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "row",
+              css: { display: "flex", gap: "48px" },
+              children: [
+                {
+                  type: "col",
+                  css: { display: "flex", flexDirection: "column" },
+                  children: [
+                    { type: "heading", level: 2, text: "Every dollar stays within a few blocks" },
+                    { type: "text", text: "The owner drives the van herself." },
+                  ],
+                },
+                { type: "image", query: "shop front", css: { width: "50%" } },
+              ],
+            },
+          ],
+          "story-band",
+        ),
+      ],
     });
-    /* THE DEFAULT IS THE SAFE ONE AND THE LIST IS OF BOXES.
 
-       This started as one blanket `min-width: 0`, then as a `min-content`
-       exception naming Paragraph4 and Heading2. Naming the exceptions was the
-       mistake: a collection page's filter rail came back with CLEAR ALL and
-       "Update the shelf" set one letter per line, because those are Button2 and
-       Form2.Button2 and nobody had thought of them. Anything carrying words is
-       covered now without having to be remembered. */
-    check(
-      /\[data-pf-type\] \{ min-width: min-content; \}/.test(any.customCSS),
-      "nothing may shrink past a word by default",
-      (any.customCSS.match(/\[data-pf-type\][^}]*\}/) ?? ["(no rule)"])[0],
+    /* The content block — the one carrying `pf-design-export`. Its width used
+       to come only from the class rule. */
+    const content = band.items.find(
+      (i) => i.type === "FlexBlock" && String(i.data?.className ?? "").includes("pf-design-export"),
     );
-    for (const box of ["FlexSection", "FlexBlock", "Layout"])
-      check(
-        new RegExp(`\\[data-pf-type="${box}"\\]`).test(any.customCSS),
-        `${box} is named as a box that may shrink`,
-      );
-    /* And the composites that lay their own children out in a ROW keep it too:
-       a column's min-content is its widest word, a row's is the sum of its
-       children's — wider than a narrow rail, so it would overflow instead of
-       reflowing. */
-    for (const box of ["ProductBox", "ProductMedia3", "MediaList2", "Slideshow", "Tabs3"])
-      check(
-        new RegExp(`\\[data-pf-type="${box}"\\]`).test(any.customCSS),
-        `${box} lays out in a row, so it keeps the zero`,
-      );
+    const contentCss = band.cssOf(content?.id ?? "");
+    check(Boolean(content), "the content block is found");
     check(
-      /min-width: 0; \}/.test(any.customCSS),
-      "and the whole list resolves to zero",
-      (any.customCSS.match(/[^,\n]*min-width: 0; \}/) ?? ["(no rule)"])[0].trim(),
+      /width:\s*100%/.test(contentCss),
+      "the content block states its own width, not the stylesheet's",
+      contentCss.slice(0, 120) || "(no css)",
+    );
+    check(
+      /max-width:\s*1180px/.test(contentCss),
+      "and its own page cap",
+      (contentCss.match(/max-width:[^;]*/) ?? ["(no cap)"])[0],
+    );
+
+    /* A word-carrying leaf keeps the floor a browser would have given it. */
+    const heading = band.items.find((i) => i.type === "Heading2");
+    const para = band.items.find((i) => i.type === "Paragraph4");
+    for (const [label, item] of [
+      ["a heading", heading],
+      ["a paragraph", para],
+    ] as const) {
+      const css = band.cssOf(item?.id ?? "");
+      check(
+        /min-width:\s*min-content/.test(css),
+        `${label} may not shrink past its longest word`,
+        (css.match(/min-width:[^;]*/) ?? ["(no floor)"])[0],
+      );
+    }
+
+    /* And a box still may: that is how a two-column row narrows. */
+    const box = band.items.find(
+      (i) => i.type === "FlexBlock" && !String(i.data?.className ?? "").includes("pf-design-export"),
+    );
+    check(
+      /min-width:\s*0/.test(band.cssOf(box?.id ?? "")),
+      "a box may still shrink",
+      (band.cssOf(box?.id ?? "").match(/min-width:[^;]*/) ?? ["(no rule)"])[0],
+    );
+
+    /* A PICTURE HAS NO WORDS TO PROTECT, and `min-content` means something
+       else entirely on a replaced element: the photograph's own intrinsic
+       width. A 2000px source would refuse to shrink below 2000px and take the
+       row open with it — the floor turned into the overflow it exists to
+       prevent. The floor is for text; anything without text keeps the zero. */
+    const img = band.items.find((i) => i.type === "Image5");
+    check(
+      /min-width:\s*0/.test(band.cssOf(img?.id ?? "")),
+      "a picture keeps the zero — min-content there is its intrinsic width",
+      (band.cssOf(img?.id ?? "").match(/min-width:[^;]*/) ?? ["(no rule)"])[0],
+    );
+
+    /* THE COMPOSITES THAT LAY THEIR OWN CHILDREN OUT IN A ROW.
+
+       A column's min-content is its widest word; a ROW's is the sum of its
+       children's, which on a narrow rail is wider than the rail. The old page
+       rule named ProductBox, ProductMedia3, MediaList2, Slideshow and Tabs3 for
+       exactly this reason, and the floor moving onto the elements has to carry
+       that with it — otherwise they overflow instead of reflowing. */
+    const rowish = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "slideshow",
+              perView: 3,
+              autoplay: false,
+              slides: Array.from({ length: 3 }, (_, i) => ({
+                type: "col",
+                children: [{ type: "text", text: `Look ${i + 1}` }],
+              })),
+            },
+            { type: "productList", columns: 3, limit: 3, source: "collection", listLayout: "grid", query: "bedding" },
+          ],
+          "showcase",
+        ),
+      ],
+    });
+    for (const type of ["Slideshow", "MediaList2", "ProductList2"]) {
+      const node = rowish.items.find((i) => i.type === type);
+      if (!node) continue;
+      check(
+        !/min-width:\s*min-content/.test(rowish.cssOf(node.id)),
+        `${type} lays out in a row, so it keeps the zero`,
+        (rowish.cssOf(node.id).match(/min-width:[^;]*/) ?? ["(no rule)"])[0],
+      );
+    }
+
+    /* THE RULE ITSELF. Nothing that decides a layout may be left in the
+       stylesheet the editor does not read. */
+    check(
+      !/min-width/.test(band.customCSS),
+      "no min-width is left in customCSS",
+      (band.customCSS.match(/[^\n]*min-width[^\n]*/) ?? ["(none)"])[0].trim(),
+    );
+    /* The page cap specifically. `img { max-width: 100% }` may stay: it keeps a
+       picture inside a box that already has a width, which is decoration. The
+       rule that GIVES the page its width may not. */
+    check(
+      !/\.pf-design-export \{/.test(band.customCSS),
+      "and the page cap is no longer a class rule",
+      (band.customCSS.match(/[^\n]*\.pf-design-export \{[^\n]*/) ?? ["(none)"])[0].trim(),
+    );
+  }
+
+  /* ======================================================================
+     THE SAME RULE ON THE OTHER EXPORT PATH.
+
+     `fromDom.ts` is the DOM walk a deck saved before the design tree existed
+     still exports through, and it shipped the original blanket `min-width: 0`
+     and the same class-scoped page cap — the two rules the tree path has just
+     moved onto the elements. A stylesheet the editor does not read is no more
+     load-bearing on one path than the other.
+
+     Only the stylesheet is asserted here. The per-element half of that path
+     cannot be tested in Node: `fromDom` reads `getComputedStyle` and measured
+     boxes, and jsdom does no layout, so a harness for it needs a real headless
+     browser. That is a separate piece of infrastructure and it does not exist
+     yet — see the note in `docs/pagefly-file-format.md`.
+     ====================================================================== */
+  /* ======================================================================
+     AND THE LIST MAY NOT GO STALE.
+
+     Every version of this floor has been a list, and every version broke when
+     the list fell behind the vocabulary — `Paragraph4` and `Heading2` named
+     while `Button2` was not, and a filter rail came back with CLEAR ALL set one
+     letter per line. The classification now lives beside `schema.ts`'s node
+     types, so this reads that file and insists the two agree: a node type
+     nobody has classified is the bug, caught here rather than in an import.
+
+     A new type defaults to keeping the floor, which is the safe side — this
+     test failing means "decide", not "it is broken".
+     ====================================================================== */
+  console.log("\nevery node type is classified");
+
+  {
+    const { _internals } = await import("../lib/design/toPagefly");
+    const schemaSrc = readFileSync(
+      new URL("../lib/design/schema.ts", import.meta.url),
+      "utf8",
+    );
+    const vocabulary = [
+      ...new Set([...schemaSrc.matchAll(/z\.literal\("([a-zA-Z]+)"\)/g)].map((m) => m[1])),
+    ].filter((t) => t !== "section");
+
+    /* The word-carriers, and the whole point of the default: anything holding
+       text this exporter writes into a single element keeps `min-content`. */
+    const CARRIES_WORDS = ["bound", "button", "countdown", "counter", "heading", "text"];
+    const keeps = vocabulary.filter((t) => !_internals.mayShrink(t)).sort();
+    check(
+      keeps.join(" ") === CARRIES_WORDS.join(" "),
+      "exactly the word-carrying node types keep the floor",
+      keeps.join(" ") || "(none)",
+    );
+    check(
+      vocabulary.length >= 20,
+      "and the vocabulary was actually read from schema.ts",
+      `${vocabulary.length} types`,
+    );
+  }
+
+  console.log("\nthe DOM-walk path's stylesheet");
+
+  {
+    const { __pageCssForTest } = await import("../lib/pagefly/fromDom");
+    const css = __pageCssForTest();
+    check(
+      !/min-width/.test(css),
+      "no min-width is left in the fallback's customCSS",
+      (css.match(/[^\n]*min-width[^\n]*/) ?? ["(none)"])[0].trim(),
+    );
+    check(
+      !/\.pf-design-export \{/.test(css),
+      "and its page cap is no longer a class rule either",
+      (css.match(/[^\n]*\.pf-design-export \{[^\n]*/) ?? ["(none)"])[0].trim(),
     );
   }
 

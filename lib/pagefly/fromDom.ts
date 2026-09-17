@@ -507,6 +507,14 @@ function cssFor(el: Element, parent: ParentLayout | null): string {
     );
   }
 
+  /* The floor, stated on the element rather than in the page stylesheet. The
+     engine gives a text element a min-width from its own sizing model, and on a
+     flex child that breaks the line per character; this path's containers
+     already carry the real widths measured off the mockup, so a zero here costs
+     nothing and stops the engine's floor being applied instead. In `customCSS`
+     — where it lived — it never reached the editor canvas at all. */
+  if (!/(^|[;\s])min-width\s*:/.test(body)) own.push("min-width: 0;");
+
   const tail = [
     `--pf-flex-layout-width: ${widthMode(el, d)};`,
     `--pf-flex-layout-height: ${heightMode(d)};`,
@@ -963,7 +971,7 @@ function convert(sources: Sources, parent: ParentLayout | null): PFNode | null {
 /** Page-level CSS. Two jobs: stop the host theme's base styles from reaching
     the imported tree, and pin the section to the width the mockup was laid out
     at so nothing re-wraps. Scoped to the page — it does not touch the theme. */
-function pageCss(width: number): string {
+function pageCss(): string {
   return [
     /* First, because @import is only valid before any other rule. This is what
        makes the exported page use the same faces the mockup did: the store has no
@@ -979,17 +987,19 @@ function pageCss(width: number): string {
     `.pf-design-export ul, .pf-design-export ol { margin: 0; padding: 0; list-style: none; }`,
     `.pf-design-export a { color: inherit; text-decoration: none; }`,
     `.pf-design-export img, .pf-design-export svg { display: block; max-width: 100%; }`,
-    /* The engine gives text elements a min-width it computes from its own
-       sizing model; when that lands on a flex child the line breaks per
-       character. The mockup's containers already carry their real widths. */
-    `.pf-design-export [data-pf-type] { min-width: 0; }`,
-    /* width:100% as well as the cap. Without it the block is free to shrink to
-       its content — a centred flex parent in the theme, or a section whose
-       children all hug, and the page narrows to a column adrift in the
-       middle of the screen. The max-width still bounds it. */
-    `.pf-design-export { max-width: ${width}px; margin-left: auto; margin-right: auto; width: 100%; }`,
+    /* NOTHING THAT DECIDES A LAYOUT BELONGS IN THIS FILE — the same rule the
+       tree path now keeps, and for the same reason. The floor that stops the
+       engine breaking a line per character, and the cap that gives the page a
+       width at all, were both here and both are now written onto the elements
+       in `cssFor` and `pageFromBreakpoints`. `customCSS` runs on preview and
+       live and NOT in the editor canvas, so a layout guarantee written here is
+       missing from the first place the merchant sees the page. */
   ].join("\n");
 }
+
+/** Exposed for tests: the page stylesheet this path ships. The rest of the file
+    needs a laid-out DOM and cannot be reached from Node — see `test-export.ts`. */
+export const __pageCssForTest = pageCss;
 
 export type BuiltPage = { blob: Blob; filename: string };
 
@@ -1039,6 +1049,12 @@ export function pageFromBreakpoints(
         "&":
           `display: flex !important; flex-flow: column !important;` +
           ` align-items: stretch !important; width: 100% !important;` +
+          /* The cap, on the block rather than in the stylesheet. `width: 100%`
+             was already here and the `max-width` that bounds it was not — it was
+             the `.pf-design-export` rule in `customCSS`, which the editor canvas
+             does not read, so the imported page ran the full width of the screen
+             there and the merchant's first look was the wrong measure. */
+          ` max-width: ${width}px !important; margin-left: auto; margin-right: auto;` +
           ` background-color: ${page.tokens.bg}; color: ${page.tokens.ink};` +
           ` font-family: ${page.tokens.fontBody};` +
           ` --pf-flex-layout-width: fill; --pf-flex-layout-height: hug;` +
@@ -1058,7 +1074,7 @@ export function pageFromBreakpoints(
   const name = fileStem(page);
   const doc = new Page({
     name,
-    customCSS: pageCss(width),
+    customCSS: pageCss(),
   });
   doc.addSection(section);
 

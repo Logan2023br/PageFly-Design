@@ -292,6 +292,53 @@ function dirsOf(node: DesignNode | DesignSection): Record<Device, Dir> {
 
 const HAS_KIDS = new Set(["section", "row", "col"]);
 
+/* ==========================================================================
+   WHAT MAY SHRINK PAST ITS CONTENT, and it is everything that is not words.
+
+   The floor in `cssAt` defaults to `min-content` because the failure this
+   project keeps shipping is text coming apart one character per line, and a
+   default of `0` is what removes the only thing keeping a word whole. So the
+   default is the safe one and these are the exceptions — read against the node
+   vocabulary in `schema.ts`, which is where a new type gets added.
+
+   Three reasons a node belongs here:
+
+     HAS_KIDS      a box. It has no words of its own, and shrinking is how a
+                   two-column row narrows on a phone.
+     WORDLESS      a leaf with no text. On a picture `min-content` is not a
+                   sensible minimum at all — it is the source file's intrinsic
+                   width, so a 2000px photograph would refuse to shrink below
+                   2000px and take the row open with it.
+     LAYS_OUT_A_ROW  a composite that arranges its OWN children horizontally. A
+                   column's min-content is its widest word; a row's is the SUM
+                   of its children's, which on a narrow rail is wider than the
+                   rail — so these overflow instead of reflowing without it.
+
+   Everything else carries words and keeps the floor without being named, which
+   is the half of this that must not become a list: `Button2` and
+   `Form2.Button2` were once forgotten and a filter rail came back with CLEAR
+   ALL set one letter per line.
+   ========================================================================== */
+const WORDLESS = new Set(["image", "divider", "icon", "custom"]);
+
+const LAYS_OUT_A_ROW = new Set([
+  "product",
+  "productList",
+  "slideshow",
+  "tabs",
+  "marquee",
+  "beforeAfter",
+  "table",
+  "accordion",
+  "form",
+  "overlay",
+  "sticky",
+]);
+
+/** True when this node may shrink past its own content. See the block above. */
+const mayShrink = (type: string): boolean =>
+  HAS_KIDS.has(type) || WORDLESS.has(type) || LAYS_OUT_A_ROW.has(type);
+
 /** The full CSS for one node at one breakpoint, engine properties included. */
 function cssAt(
   node: DesignNode | DesignSection,
@@ -349,6 +396,27 @@ function cssAt(
   ) {
     own.push("width: 100% !important;");
   }
+
+  /* ==========================================================================
+     CONTAINERS MAY SHRINK; WORDS MAY NOT — AND THE ELEMENT HAS TO SAY SO.
+
+     This floor spent three commits in `pageCss()`, as a blanket `min-width: 0`,
+     then as a `min-content` exception naming Paragraph4 and Heading2, then as a
+     list of boxes. Every version was correct CSS and none of them reached the
+     editor, because `customCSS` runs on preview and live and not in the editor
+     canvas. Written here it is in the element's own styleData, which the editor
+     reads, so the merchant meets the same page the mockup drew.
+
+     The default is the safe one and the list is of BOXES — that much the third
+     version got right. A flex container genuinely needs to shrink, which is how
+     a two-column row narrows, and a box has no words of its own to break.
+     Anything carrying words keeps the `min-content` a browser would have given
+     it, without having to be remembered by name.
+
+     Which nodes are the exceptions, and why each one is, is `mayShrink` above.
+     A design that states its own `minWidth` is left alone. */
+  if (css.minWidth === undefined)
+    own.push(`min-width: ${mayShrink(node.type) ? "0" : "min-content"};`);
 
   const tail = [
     `--pf-flex-layout-width: ${widthMode(node, css, parentDir)};`,
@@ -2104,58 +2172,20 @@ function pageCss(width: number, motion: boolean): string {
     `.pf-design-export h6 { margin: 0; }`,
     `.pf-design-export a { color: inherit; text-decoration: none; }`,
     `.pf-design-export img, .pf-design-export svg { display: block; max-width: 100%; }`,
-    /* CONTAINERS MAY SHRINK; WORDS MAY NOT.
+    /* NOTHING THAT DECIDES A LAYOUT BELONGS IN THIS FILE.
 
-       This was one blanket rule over every element, and it is half right. A
-       flex or grid container needs `min-width: 0` or its children cannot shrink
-       at all — `render.tsx` gives the mockup's columns exactly that, and the
-       rule was written for them.
+       The `min-width` floor and the page's own `max-width` cap both used to be
+       here, and both have moved onto the elements: the floor into `cssAt`, the
+       cap onto the content block in `pageflyFromTree`. The reason is the whole
+       point of the move — `customCSS` runs on preview and live and NOT in the
+       editor canvas, so a layout guarantee written here is missing from the one
+       place the merchant meets the page first. Three separate fixes rewrote the
+       floor in this file and the editor stayed broken through all three.
 
-       It also landed on every paragraph and heading, and there it removed the
-       one thing keeping a word whole: a flex item's default `min-width: auto`
-       is what stops it shrinking past its own longest word. Without it a column
-       squeezed to eight pixels and `SPECIFICATION` came down the page one
-       letter at a time — the exact symptom the rule was added to cure, caused
-       by the cure.
-
-       `min-content` is the narrowest width that breaks no word. It cannot
-       overflow by more than one long word, and it is what these elements would
-       have had if nothing had been said at all. */
-    `.pf-design-export [data-pf-type] { min-width: min-content; }`,
-    /* THE CONTAINERS, AND ONLY THEM.
-
-       The pair above started as one blanket `min-width: 0` over every element,
-       then as a `min-content` exception naming Paragraph4 and Heading2. Naming
-       the exceptions was the mistake: a collection page's filter rail came back
-       with CLEAR ALL and "Update the shelf" set one letter per line, because
-       those are Button2 and Form2.Button2 and nobody had thought of them.
-
-       So the default is the safe one and the list is of BOXES. A flex or grid
-       container genuinely needs to shrink — that is how a two-column layout
-       narrows — and a container has no words of its own to break. Anything that
-       carries words is covered without having to be remembered, including the
-       next element type this exporter learns to emit. */
-    ...[
-      /* The boxes this exporter builds its layouts out of. */
-      "FlexSection",
-      "FlexBlock",
-      "Layout",
-      /* And the composites that lay their OWN children out in a row. A
-         column's min-content is its widest word; a row's is the sum of its
-         children's, which on a narrow rail is wider than the rail — so these
-         have to keep the zero or they overflow instead of reflowing. */
-      "ProductBox",
-      "ProductMedia3",
-      "MediaList2",
-      "Slideshow",
-    ].map((t) => `.pf-design-export [data-pf-type="${t}"],`),
-    /* The selector list above ends in a comma; this closes it. */
-    `.pf-design-export [data-pf-type="Tabs3"] { min-width: 0; }`,
-    /* width:100% as well as the cap. Without it the block is free to shrink to
-       its content — a centred flex parent in the theme, or a section whose
-       children all hug, and the page narrows to a column adrift in the
-       middle of the screen. The max-width still bounds it. */
-    `.pf-design-export { max-width: ${width}px; margin-left: auto; margin-right: auto; width: 100%; }`,
+       What is left is decoration: the webfont, the margin and list resets that
+       stop the host theme's base styles reaching the tree, and a cap that keeps
+       a picture inside a box which already has a width of its own. If a rule
+       added here would change where a box ends up, it is in the wrong file. */
     /* Only when something on the page moves. A page with no motion should not
        ship a stylesheet for motion — the merchant reads this field. */
     motion && `\n/* motion — matches the mockup */\n${MOTION_CSS}`,
@@ -2271,12 +2301,34 @@ export function pageflyFromTree(
     const desktop = splitBleed(styleAt(section, "all")).bleed;
     const mobile = splitBleed(styleAt(section, "mobile")).bleed;
 
-    /* A section's reveal rides on the content block, not on the FlexSection.
-       The band's paint stays put and its contents rise into it — fading the
-       whole section would fade the background out of the page and back in,
-       which reads as a flicker rather than an entrance. */
+    /* The content block. Two things ride on it and neither is obvious.
+
+       A SECTION'S REVEAL, not the FlexSection's. The band's paint stays put and
+       its contents rise into it — fading the whole section would fade the
+       background out of the page and back in, which reads as a flicker rather
+       than an entrance.
+
+       AND THE PAGE'S WIDTH, which is the load-bearing one. This was
+       `.pf-design-export { max-width: Npx; margin: auto; width: 100% }` in
+       `customCSS`: every block below it is `--pf-flex-layout-width: fill`, which
+       the engine expands to `flex-grow: 1; flex-basis: 0px`, and a chain of
+       those resolves to nothing unless something at the top states a real width.
+
+       `customCSS` does not run in the editor canvas. So in the editor nothing
+       held the page open, the whole chain resolved to its flex share of an
+       indefinite width, and a band with no picture in it to give the row a
+       definite size came apart one character per line. Live and preview were
+       fine, which is why this read as an editor bug for three fixes running.
+
+       On the block it is styleData, which the editor reads. */
     const inner = FB(
-      styleDataFor({ ...section, css: splitBleed(section.css).rest, mobile: splitBleed(section.mobile).rest }, null),
+      filling(
+        styleDataFor(
+          { ...section, css: splitBleed(section.css).rest, mobile: splitBleed(section.mobile).rest },
+          null,
+        ),
+        `max-width: ${width}px !important; margin-left: auto; margin-right: auto;`,
+      ),
       kids,
       ["pf-design-export", ...motionClasses(section.anim)].join(" "),
     );
@@ -2329,5 +2381,5 @@ export function pageflyFromTree(
 }
 
 /** Exposed for tests: the exact styleData one node would carry. */
-export const _internals = { styleDataFor, cssAt, widthMode, declarations };
+export const _internals = { styleDataFor, cssAt, widthMode, declarations, mayShrink };
 export type { DeviceKey };
