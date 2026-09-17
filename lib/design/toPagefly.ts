@@ -396,9 +396,62 @@ function styleDataFor(
  * `--pf-flex-layout-width: fill` does not save it, because the CSS rule wins.
  * An explicit 100% does.
  */
-/** `color: <ink>;` or nothing, so the caller can interpolate it unconditionally. */
-function inkRule(opts: EmitOptions): string {
+/** `color: <ink>;` or nothing, so the caller can interpolate it unconditionally.
+ *
+ * `sd` is the composite's OWN style, and it wins when it carries a colour. The
+ * design writes one on a node it wants a particular shade of — a muted spec
+ * table, a quieter FAQ — and the mockup honours it because the cells inherit.
+ * Restating the band's ink over the top would quietly flatten every one of
+ * those back to the default. */
+function inkRule(opts: EmitOptions, sd?: StyleData): string {
+  const own = /(?:^|[;\s])color\s*:\s*([^;]+)/.exec(sd?.all?.["&"] ?? "")?.[1]?.trim();
+  if (own) return `color: ${own};`;
   return opts.ink ? `color: ${opts.ink};` : "";
+}
+
+/**
+ * The ink for one band, which is not always the page's.
+ *
+ * WHY THIS EXISTS. `opts.ink` is set once, from the page, and travels to every
+ * composite — the table's cells, the accordion's rows, the buy box's labels.
+ * That was added because PageFly makes a composite inherit from the MERCHANT'S
+ * THEME rather than from the surface it sits on, so a page with no colour
+ * stated came back dark-on-dark and invisible.
+ *
+ * One colour for a whole page is right until a band inverts. A dark band's text
+ * is the page's background, not its ink, and the export was writing the page's
+ * ink into every cell of a table sitting on near-black — present, correctly
+ * positioned, and unreadable. The mockup never had it: there the cells state no
+ * colour and inherit the one the design put on the band.
+ *
+ * CONTRAST, NOT A FLAG. `dark` is a hint the design may or may not set, and a
+ * band painted with the accent — a green conversion strip — is neither dark nor
+ * the page background. Asking which of the two candidates actually reads on
+ * this paint answers all three cases with one rule.
+ */
+function bandInk(section: DesignSection, page: { bg: string; ink: string }): string {
+  /* A photograph under a scrim is dark whatever the CSS says, and the scrim is
+     the thing that makes the heading readable — so the text goes light. */
+  if (section.bg?.query && section.bg.scrim !== "none") return page.bg;
+
+  const paint = String(
+    (section.css as Record<string, unknown> | undefined)?.background ??
+      (section.css as Record<string, unknown> | undefined)?.backgroundImage ??
+      "",
+  );
+
+  /* The first colour in the value: a gradient's first stop is the one the top
+     of the band is painted in, and a band is read from the top. */
+  const hex = /#[0-9a-f]{3,8}\b/i.exec(paint)?.[0];
+  const rgb = /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i.exec(paint);
+  const colour = hex
+    ? hex.slice(0, 7)
+    : rgb
+      ? `#${[rgb[1], rgb[2], rgb[3]].map((n) => Number(n).toString(16).padStart(2, "0")).join("")}`
+      : null;
+
+  if (!colour) return page.ink;
+  return readableInk(colour, page.bg, page.ink);
 }
 
 /**
@@ -833,6 +886,20 @@ function emitNode(
         "& input":
           `border: 1px solid ${inputRule}; border-radius: ${inputRadius}px; padding: 12px 14px;` +
           ` width: 100%; background: transparent;${inkRule(opts)}`,
+        /* THE BOX THE INPUT IS A HUNDRED PERCENT OF.
+
+           `& input` reaches the rendered `<input>`; the FormInput wrapper around
+           it is a node of its own, and a node with no width opinion is hugged by
+           the layout engine. So the rule above was a hundred percent of a box
+           that had already shrunk to the width of nothing — a forty-pixel email
+           field beside a full-width button.
+
+           Written HERE rather than on the FormInput, because `fields.md` marks
+           that element "cannot be styled on its own" and a style entry on it
+           makes the editor answer "Something went wrong" over the whole page.
+           Its look is set on this parent; so is its width. */
+        '& [data-pf-type="FormInput"]': "width: 100%;",
+        '& [data-pf-type="Form2.Field"]': "width: 100%;",
         "& button": `background-color: ${opts.accent ?? "#111111"}; color: #FFFFFF; border: 0; border-radius: ${inputRadius}px; padding: 13px 26px; cursor: pointer;`,
       });
       /* The label carries the field's name, so it is type the merchant reads —
@@ -1821,7 +1888,7 @@ function tableAsFlex(
   if (rows.length === 0) return null;
 
   const rule = opts.border ?? "rgba(0,0,0,.14)";
-  const ink = inkRule(opts);
+  const ink = inkRule(opts, sd);
   const columns = rows.reduce((n, r) => Math.max(n, r.length), 0);
   if (columns === 0) return null;
 
@@ -1995,10 +2062,10 @@ function accordionOf(
       /* No border here. The row wrapper above carries it, and both drawing one
          is what put two rules under every header on the live page. */
       "& .pf-header-item-wrapper":
-        `padding: 18px 0; font-size: 16px; font-weight: 600; ${inkRule(opts)}`,
+        `padding: 18px 0; font-size: 16px; font-weight: 600; ${inkRule(opts, sd)}`,
       "& .pf-accordion-body":
-        `padding-bottom: 18px; line-height: 1.6; opacity: .72; ${inkRule(opts)}`,
-      "& .pf-accordion-icon": `font-size: 18px; opacity: .5; ${inkRule(opts)}`,
+        `padding-bottom: 18px; line-height: 1.6; opacity: .72; ${inkRule(opts, sd)}`,
+      "& .pf-accordion-icon": `font-size: 18px; opacity: .5; ${inkRule(opts, sd)}`,
     },
   };
 
@@ -2136,9 +2203,13 @@ export function pageflyFromTree(
   };
   const sections = tree.sections.map((section) => {
     const fills = needsFill(section);
+    /* THE BAND'S OWN INK, NOT THE PAGE'S. Everything emitted below inherits it,
+       which is what makes a table on an inverted band readable — see
+       `bandInk`. */
+    const bandOpts: EmitOptions = { ...opts, ink: bandInk(section, page) };
     const kids = section.children
       .map((c) => {
-        const emitted = emit(c, dirsOf(section), opts);
+        const emitted = emit(c, dirsOf(section), bandOpts);
         /* A row or col sitting straight under the content block is the band's
            own layout, and in a band built around a composite it has to claim the
            full width or the block collapses to its content. Leaves are left

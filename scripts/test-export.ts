@@ -527,41 +527,54 @@ async function main(): Promise<void> {
     check(btn.includes("border-radius: 14px"), "and the same radius as the field beside it");
 
     /* ====================================================================
-       AND EVERY PART OF THE FORM HAS A WIDTH.
+       EVERY PART OF THE FORM HAS A WIDTH, AND ONE OF THEM MUST NOT HAVE A
+       STYLE.
 
-       `& input { width: 100% }` was already here, and it is a hundred percent
-       of whatever box the input is in. That box — Form2.Field — was built with
-       a null styleData, which means no style entry and no
-       `--pf-flex-layout-width`, and a node with no width opinion is hugged by
-       the layout engine. What shipped was a newsletter block with a label, a
-       forty-pixel email field beside it, and a full-width button underneath:
-       the button was the one control that had been given a width of its own.
+       `& input { width: 100% }` is a hundred percent of whatever box the input
+       sits in, and both boxes around it — Form2.Field and FormInput — were
+       built with a null styleData, so neither had a width and the engine hugged
+       them. What shipped was a label, a forty-pixel email field beside it, and
+       a full-width button underneath.
 
-       A null styleData is also the `undefined` an editor panel reads when it
-       opens the element — the failure FORM_FIELD's own comment records for
-       FormLabel, on two siblings that still had it.
+       The first attempt fixed that by giving both a style. `fields.md` marks
+       FormInput "cannot be styled on its own", and that note is not a
+       preference: a style entry on it made the editor answer "Something went
+       wrong" the moment a merchant clicked the field, over the whole page. So
+       the width for that one is set on the Form2 by type, where the
+       documentation puts its look.
        ==================================================================== */
-    for (const ty of ["Form2.Field", "FormInput", "Form2.Button2"] as const) {
-      const n = styled.items.find((i) => i.type === ty);
-      const own = styled.cssOf(n?.id ?? "");
-      check(own !== "", `${ty} has a style entry at all`, own ? "yes" : "(none)");
-      check(
-        /--pf-flex-layout-width:/.test(own),
-        `and says whether it fills or hugs`,
-        (own.match(/--pf-flex-layout-width:[^;]*/) ?? ["(unsaid)"])[0],
-      );
-    }
+    const field = styled.items.find((i) => i.type === "Form2.Field");
+    check(styled.cssOf(field?.id ?? "") !== "", "Form2.Field has a style entry of its own");
+    check(
+      /width:\s*100%/.test(styled.cssOf(field?.id ?? "")),
+      "and fills the form's width",
+      styled.cssOf(field?.id ?? "").slice(0, 56),
+    );
 
-    /* The two that carry the typing fill; the button is content-sized, which is
-       what a submit button should be beside a full-width field. */
-    for (const ty of ["Form2.Field", "FormInput"] as const) {
-      const n = styled.items.find((i) => i.type === ty);
-      check(
-        /width:\s*100%/.test(styled.cssOf(n?.id ?? "")),
-        `${ty} fills the form's width`,
-        styled.cssOf(n?.id ?? "").slice(0, 60),
-      );
-    }
+    const input = styled.items.find((i) => i.type === "FormInput");
+    check(Boolean(input), "the input is built");
+    check(
+      styled.cssOf(input?.id ?? "") === "",
+      "FormInput carries NO style of its own — the editor refuses the page otherwise",
+      styled.cssOf(input?.id ?? "") || "(none, correct)",
+    );
+
+    /* Its width comes from the parent instead, by type, alongside the rule that
+       paints the `<input>` itself. */
+    check(
+      /width:\s*100%/.test(styled.cssOf(wrap?.id ?? "", "all", '& [data-pf-type="FormInput"]')),
+      "its width is set on the Form2 by type",
+      styled.cssOf(wrap?.id ?? "", "all", '& [data-pf-type="FormInput"]') || "(no rule)",
+    );
+
+    /* The button is content-sized, which is what a submit button should be
+       beside a full-width field — and it IS styleable, so it keeps its entry. */
+    const btn2 = styled.items.find((i) => i.type === "Form2.Button2");
+    check(
+      /--pf-flex-layout-width:\s*hug/.test(styled.cssOf(btn2?.id ?? "")),
+      "the button hugs its label",
+      (styled.cssOf(btn2?.id ?? "").match(/--pf-flex-layout-width:[^;]*/) ?? ["(unsaid)"])[0],
+    );
   }
 
   /* ---- a stack is one per row, not N across ----------------------------- */
@@ -758,6 +771,141 @@ async function main(): Promise<void> {
       /\[data-pf-type="Paragraph4"\][\s\S]{0,120}min-width:\s*min-content/.test(any.customCSS),
       "and a paragraph may not shrink past a word",
       (any.customCSS.match(/min-content[^;]*/) ?? ["(no rule)"])[0],
+    );
+  }
+
+  /* ======================================================================
+     AND NOTHING ANYWHERE CARRIES A STYLE IT CANNOT CARRY.
+
+     `fields.md` marks exactly two elements "cannot be styled on its own", and
+     a style entry on one of them is not a cosmetic mistake — it is a page the
+     editor will not open. FormInput got one and clicking a form field answered
+     "Something went wrong" over the whole page.
+
+     Asserted over a page carrying both of them rather than at the two call
+     sites, because the next builder to reach for one of these types will not
+     be looking at this test.
+     ====================================================================== */
+  console.log("\nthe two elements that must carry no style");
+
+  {
+    const both = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "form", intent: "contact", submitText: "Send",
+              fields: [{ label: "Email", kind: "email", required: true }],
+            },
+            {
+              type: "tabs", open: 0,
+              items: [
+                { label: "One", children: [{ type: "text", text: "First" }] },
+                { label: "Two", children: [{ type: "text", text: "Second" }] },
+              ],
+            },
+          ],
+          "faq-two-column",
+        ),
+      ],
+    });
+
+    for (const ty of ["FormInput", "TabHeader3"] as const) {
+      const nodes = both.items.filter((i) => i.type === ty);
+      check(nodes.length > 0, `${ty} is on the page to be checked`, String(nodes.length));
+      check(
+        nodes.every((n) => both.cssOf(n.id) === ""),
+        `and no ${ty} carries a style of its own`,
+        nodes.map((n) => both.cssOf(n.id)).filter(Boolean).join(" | ") || "(none, correct)",
+      );
+    }
+  }
+
+  /* ======================================================================
+     A BAND'S TEXT IS THE BAND'S, NOT THE PAGE'S.
+
+     `opts.ink` was set once from the page and written into every composite —
+     the table's cells, the accordion's rows. That exists because PageFly makes
+     a composite inherit from the MERCHANT'S theme rather than from the surface
+     it sits on, so stating nothing came back dark-on-dark and invisible.
+
+     One colour for a whole page is right until a band inverts. Reported from
+     the editor: a spec table on a near-black band, its cells carrying the
+     page's dark ink — present, correctly positioned, unreadable. The mockup
+     never had it, because there the cells state no colour and inherit the one
+     the design put on the band.
+     ====================================================================== */
+  console.log("\nink follows the band");
+
+  {
+    const band = (bg: string, pattern: string) => ({
+      type: "section", pattern, role: "content",
+      css: { padding: "96px 56px", background: bg },
+      children: [
+        { type: "table", rows: [["Specification", "Detail"], ["Alloy", "Solid brass"]] },
+        { type: "accordion", items: [{ q: "Question?", a: "Answer." }] },
+      ],
+    });
+
+    const bands = await open(
+      {
+        sections: [
+          band("#F6F3EC", "light-band"),
+          band("#28301F", "dark-band"),
+          /* Neither the page background nor its ink — a conversion strip in the
+             accent. A `dark` boolean cannot answer this one; contrast can. */
+          band("#5C7A4A", "accent-band"),
+        ],
+      },
+      "probe",
+      { border: "rgba(40,48,31,.14)", accent: "#5C7A4A" },
+    );
+
+
+
+    /* Read the colours straight off every text node in the page, grouped by the
+       band each one sits under. */
+    const byId = new Map(bands.items.map((i) => [i.id, i]));
+    const colours = (rootId: string): string[] => {
+      const out: string[] = [];
+      const walk = (id: string) => {
+        const n = byId.get(id);
+        if (!n) return;
+        if (n.type === "Paragraph4") {
+          const c = /color:\s*([^;]+)/.exec(bands.cssOf(n.id))?.[1]?.trim();
+          if (c) out.push(c);
+        }
+        for (const k of n.children ?? []) walk(k);
+      };
+      walk(rootId);
+      return [...new Set(out)];
+    };
+
+    const sections = bands.items.filter((i) => i.type === "FlexSection");
+    check(sections.length === 3, "three bands", String(sections.length));
+
+    const [light, dark, accent] = sections.map((sec) => colours(sec.id));
+
+    /* Asserted against each other rather than against two hex literals: the
+       page's own palette belongs to the helper, and a test that restates it is
+       a test that breaks when somebody changes a default it was never about. */
+    check(light.length === 1 && dark.length === 1, "each band settles on one ink", `${light} / ${dark}`);
+    check(light.join() !== dark.join(), "and the two bands do not share it", `${light} vs ${dark}`);
+
+    const lum = (hex: string) => {
+      const m = /^#?([0-9a-f]{6})/i.exec(hex.trim());
+      if (!m) return -1;
+      const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16));
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    check(lum(dark.join()) > lum(light.join()), "the dark band's text is the lighter of the two", `${dark} vs ${light}`);
+
+    /* Neither the page background nor its ink. A `dark` boolean cannot answer
+       this one; contrast can, and it lands on the same side as the dark band. */
+    check(
+      accent.join() === dark.join(),
+      "and an accent band takes whichever of the two actually reads on it",
+      accent.join() || "(none)",
     );
   }
 

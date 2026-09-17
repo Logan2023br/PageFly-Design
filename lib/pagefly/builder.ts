@@ -72,6 +72,15 @@ function node(
   styleData: StyleData = null,
   kids: PFNode[] = [],
 ): PFNode {
+  /* THROWN AT COMPOSITION TIME, not at validation. A style entry for one of
+     these is a page the editor cannot open, and the stack trace from here names
+     the builder that wrote it — `validate` would name a flat node id, which is
+     the difference between a fix and a search. See `UNSTYLEABLE`. */
+  if (styleData !== null && UNSTYLEABLE.has(type))
+    throw new Error(
+      `${type} cannot carry a style of its own — the editor refuses the page. ` +
+        `Set it on the parent that owns its look.`,
+    );
   return { type, data, styleData, _kids: kids };
 }
 
@@ -1311,20 +1320,19 @@ export function FORM_FIELD(
        * object — which is the other half of the crash.
        */
       node("FormLabel", { label }, labelStyle, []),
-      /* THE SAME REASON AS THE LABEL ABOVE, AND ONE MORE.
+      /* NO STYLE, AND THAT IS THE DOCUMENTED RULE.
 
-         A null styleData means no style entry, which is the `undefined` the
-         panel above describes. It also means no `--pf-flex-layout-width`, and
-         a node with no width opinion is hugged by the layout engine: the
-         `& input { width: 100% }` written on the Form2 is a hundred percent of
-         a box that had already shrunk to nothing. A newsletter block shipped
-         with a forty-pixel email field beside a full-width button. */
-      node(
-        "FormInput",
-        { required, inputType: INPUT_TYPE[kind] ?? 0 },
-        { all: { "&": "width: 100% !important; --pf-flex-layout-width: fill;" } },
-        [],
-      ),
+         `fields.md` marks exactly two elements "cannot be styled on its own" —
+         this and TabHeader3 — and says this one's look "is set on the parent
+         Form2". Giving it a style entry anyway made the editor answer
+         "Something went wrong" the moment a merchant clicked the field, and
+         took the whole page down with it.
+
+         It was given one to fix a real problem: the wrapper had no width, so
+         `& input { width: 100% }` was a hundred percent of a box that had
+         already shrunk. The fix belongs where the documentation puts it — a
+         rule on the Form2 reaching this element by type. See `toPagefly`. */
+      node("FormInput", { required, inputType: INPUT_TYPE[kind] ?? 0 }, null, []),
     ],
   );
 }
@@ -1468,6 +1476,22 @@ const SLOT_RULES: Record<string, string[]> = {
 };
 
 /** Parents whose children must ALL be one type (count is free). */
+/**
+ * Elements the editor refuses to open once they carry a style of their own.
+ *
+ * WRITTEN AFTER ONE OF THEM TOOK THE EDITOR DOWN. `fields.md` marks exactly
+ * these two "cannot be styled on its own", and the note reads like a styling
+ * preference rather than a rule — so a width was put on FormInput to fix a real
+ * layout bug, and clicking the field answered "Something went wrong" over the
+ * whole page. A merchant with a form on their page could not edit the page.
+ *
+ * The prose said so and prose is not enforced, which is why this is a list and
+ * a throw. Anything these elements need is set on the parent that owns their
+ * look: `& input` and `& [data-pf-type="FormInput"]` on the Form2,
+ * `& [data-pf-type="TabsMenu3"] > label` on the Tabs3.
+ */
+const UNSTYLEABLE = new Set(["FormInput", "TabHeader3"]);
+
 const UNIFORM_CHILDREN: Record<string, string> = {
   Accordion3: "Accordion3.Content.Wrapper",
   Slideshow: "SlideshowSlide",
