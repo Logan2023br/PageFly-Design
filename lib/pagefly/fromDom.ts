@@ -981,12 +981,12 @@ function pageCss(): string {
        font. customCSS survives import and runs on preview and live. */
     `@import url("${WEBFONT_CSS_URL}");`,
     `/* PageFly Design export — keeps the imported page matching its mockup. */`,
-    `.pf-design-export, .pf-design-export * { box-sizing: border-box; }`,
-    `.pf-design-export p, .pf-design-export h1, .pf-design-export h2,`,
-    `.pf-design-export h3, .pf-design-export h4 { margin: 0; }`,
-    `.pf-design-export ul, .pf-design-export ol { margin: 0; padding: 0; list-style: none; }`,
-    `.pf-design-export a { color: inherit; text-decoration: none; }`,
-    `.pf-design-export img, .pf-design-export svg { display: block; max-width: 100%; }`,
+    `#__pf, #__pf * { box-sizing: border-box; }`,
+    `#__pf p, #__pf h1, #__pf h2,`,
+    `#__pf h3, #__pf h4 { margin: 0; }`,
+    `#__pf ul, #__pf ol { margin: 0; padding: 0; list-style: none; }`,
+    `#__pf a { color: inherit; text-decoration: none; }`,
+    `#__pf img, #__pf svg { display: block; max-width: 100%; }`,
     /* NOTHING THAT DECIDES A LAYOUT BELONGS IN THIS FILE — the same rule the
        tree path now keeps, and for the same reason. The floor that stops the
        engine breaking a line per character, and the cap that gives the page a
@@ -1051,7 +1051,7 @@ export function pageFromBreakpoints(
           ` align-items: stretch !important; width: 100% !important;` +
           /* The cap, on the block rather than in the stylesheet. `width: 100%`
              was already here and the `max-width` that bounds it was not — it was
-             the `.pf-design-export` rule in `customCSS`, which the editor canvas
+             the `#__pf` rule in `customCSS`, which the editor canvas
              does not read, so the imported page ran the full width of the screen
              there and the merchant's first look was the wrong measure. */
           ` max-width: ${width}px !important; margin-left: auto; margin-right: auto;` +

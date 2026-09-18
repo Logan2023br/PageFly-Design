@@ -97,6 +97,21 @@ export function onlyOn(target: PFNode, devices: DeviceKey[]): PFNode {
 
 /* ---- node constructors -------------------------------------------------- */
 
+/* ==========================================================================
+   `classGlobalStyling`, NOT `className`, and the difference was invisible.
+
+   Every class this file attaches went into `className`. PageFly writes that key
+   on NONE of the 480 elements in `reference/all-elements.pagefly`; it writes
+   `classGlobalStyling`, and its own custom CSS targets those classes —
+   `#__pf .pu-eyebrow { … }` — with 42 of its values carrying several classes
+   separated by spaces, which is exactly what `className` was being used for.
+
+   What was riding on the wrong key: `pf-design-export`, which every page-level
+   rule was scoped to; `pfd-reveal`, which every scroll animation needs;
+   `pfd-count-N`, which the counter's own script looks itself up by; and the
+   marquee and sticky classes. None of it landed, and nothing said so — a class
+   on a key the editor does not read is not an error, it is an absence.
+   ========================================================================== */
 export function FB(
   styleData: StyleData,
   kids: PFNode[] = [],
@@ -107,7 +122,7 @@ export function FB(
   bg?: { backgroundSrc: string; scrim: string },
 ) {
   const d: Record<string, unknown> = {};
-  if (cls) d.className = cls;
+  if (cls) d.classGlobalStyling = cls;
   if (bg) {
     /* Written into data as well as into CSS. PageFly's own sections carry a
        `src` for their background; whether the editor picks the image up from
@@ -229,13 +244,13 @@ export function H2(value: string, styleData: StyleData, cls?: string) {
     editable: true,
     placeholder: "Enter heading...",
   };
-  if (cls) d.className = cls;
+  if (cls) d.classGlobalStyling = cls;
   return node("Heading2", d, styleData, []); // light form — no Icon2 slot
 }
 
 export function P4(value: string, styleData: StyleData, cls?: string) {
   const d: Record<string, unknown> = { value };
-  if (cls) d.className = cls;
+  if (cls) d.classGlobalStyling = cls;
   return node("Paragraph4", d, styleData, []); // light form — no Dropcap slot
 }
 
@@ -259,8 +274,8 @@ export function BTN(
     d.href = href;
     d.clickAction = "url";
   }
-  if (cls) d.className = cls;
-  return node("Button2", d, styleData, []);
+  if (cls) d.classGlobalStyling = cls;
+  return node("Button2", d, styleData, [ICON2()]);
 }
 
 export function IMG(src: string, styleData: StyleData, cls?: string) {
@@ -271,13 +286,13 @@ export function IMG(src: string, styleData: StyleData, cls?: string) {
     linkTarget: "_self",
   };
   if (src) d.src = src;
-  if (cls) d.className = cls;
+  if (cls) d.classGlobalStyling = cls;
   return node("Image5", d, styleData, []);
 }
 
 export function CUSTOM_HTML(code: string, styleData?: StyleData, cls?: string) {
   const d: Record<string, unknown> = { code };
-  if (cls) d.className = cls;
+  if (cls) d.classGlobalStyling = cls;
   return node(
     "Custom.HTML",
     d,
@@ -653,7 +668,7 @@ export function PRODUCT_ATC(
   if (opts.added?.trim()) d.added = opts.added.trim();
   if (opts.soldout?.trim()) d.soldout = opts.soldout.trim();
 
-  return node("ProductATC2", d, styleData, []);
+  return node("ProductATC2", d, styleData, [ICON2()]);
 }
 
 /** Four tiers, and the real content has to sit in the innermost one — content
@@ -824,12 +839,36 @@ export function TABS(
     },
     styleData,
     [
-      node("TabsMenu3", { activeTab: active + 1 }, null,
-        tabs.map((t) => node("TabHeader3", { value: t.label, activeTab: active + 1 }, null, [])),
+      /* NO `activeTab` ON THE MENU. PageFly's own export writes it on every
+         TabHeader3 and on nothing else; on the menu it is a key the editor
+         does not read. */
+      node("TabsMenu3", {}, null,
+        /* `activeTab` IS THE HEADER'S OWN INDEX, not which tab is open — and
+           that is the opposite of what this file assumed. The reference has
+           header 1 carrying 0, header 2 carrying 1, header 3 carrying 2, with
+           `Tabs3.active` saying which of them opens. Written as `active + 1` on
+           all three, every header claimed to be the same tab. */
+        tabs.map((t, i) =>
+          node(
+            "TabHeader3",
+            { value: t.label, activeTab: i, showIcon: false, iconPos: "left", isNavButton: false },
+            null,
+            [ICON2()],
+          ),
+        ),
       ),
       node("TabContentWrapper3", {}, null,
         tabs.map((t) => node("TabsContent3", {}, null, t.body)),
       ),
+      /* THE THREE SLOTS THIS FILE DID NOT KNOW ABOUT. `Tabs3` declares four
+         things it contains and only two were emitted. The reference has the
+         other two: a `DropdownButton`, which is the collapsed-navigation
+         control, and a pair of loose `TabHeader3`s that are the scroll arrows —
+         `isNavButton` is a STRING there, `start` and `end`, not the boolean the
+         menu's own headers carry. */
+      node("DropdownButton", {}, null, []),
+      node("TabHeader3", { activeTab: 0, showIcon: false, iconPos: "left", isNavButton: "start" }, null, [ICON2()]),
+      node("TabHeader3", { activeTab: 0, showIcon: false, iconPos: "left", isNavButton: "end" }, null, [ICON2()]),
     ],
   );
 }
@@ -922,7 +961,11 @@ export function ACCORDION_HEADER(
   styleData: StyleData,
   kids: PFNode[] = [],
 ) {
-  return node("Accordion3.Header", { label, showIcon: false }, styleData, kids);
+  /* `showIcon` IS NOT A FIELD HERE. PageFly's own export writes it on Button2
+     and TabHeader3 and not on this one — what it writes instead is the Icon2
+     child, which every Accordion3.Header in the reference carries. The child is
+     the icon; the flag was an invention. */
+  return node("Accordion3.Header", { label }, styleData, [ICON2(), ...kids]);
 }
 
 /**
@@ -1281,6 +1324,9 @@ export function FORM_FIELD(
   styleData: StyleData = null,
   /** typography for the label; also guarantees it a style entry — see below */
   labelStyle: StyleData = null,
+  /** Which form this field belongs to. Written onto the field and the input the
+      way the reference does — see `context` below. */
+  formType: "customer" | "contact" = "contact",
 ) {
   return node(
     "Form2.Field",
@@ -1296,14 +1342,19 @@ export function FORM_FIELD(
        * them. Clicking one opened a settings panel reading a sub-field off a
        * string and the editor answered "Something went wrong".
        *
-       * `{ on, text }` is the convention the same file uses for every other
-       * label that carries copy — CountDown's `timeData` is documented as
-       * "Object w/d/h/m/s each { on, text }", and its `label` as
-       * "Object { on, reverse }". `value` rides along because `text` is the
-       * inferred key of the two and an unread extra key costs nothing; when an
-       * import confirms which one PageFly reads, delete the other.
+       * `{ text, on, position }` — SETTLED BY THE REFERENCE, not inferred. Every
+       * one of the eleven Form2.Fields in PageFly's own export carries exactly
+       * those three keys and no `value`. The `value` this file used to send
+       * alongside `text` was the guess its own comment asked to have deleted
+       * "when an import confirms which one PageFly reads"; the import has.
+       *
+       * `context` rides on the field AND on the input in the reference, and it
+       * is the likeliest thing an inspector panel reads when it opens: a field
+       * that does not know which form it belongs to cannot know which settings
+       * to show.
        */
-      label: { on: true, text: label, value: label },
+      label: { text: label, on: true, position: "top" },
+      context: { formType },
       required,
     },
     styleData,
@@ -1319,7 +1370,12 @@ export function FORM_FIELD(
        * An editor panel reading either one finds `undefined` where it expects an
        * object — which is the other half of the crash.
        */
-      node("FormLabel", { label }, labelStyle, []),
+      /* NO `label` KEY. The reference's eleven FormLabels carry `name` and a
+         class and nothing else — the copy lives on the parent field's
+         `label.text`, which is what "shown by the parent label.on sub-field"
+         meant. A key on an element documented as having none is the shape of a
+         panel reading something that is not there. */
+      node("FormLabel", {}, labelStyle, []),
       /* NO STYLE, AND THAT IS THE DOCUMENTED RULE.
 
          `fields.md` marks exactly two elements "cannot be styled on its own" —
@@ -1332,7 +1388,20 @@ export function FORM_FIELD(
          `& input { width: 100% }` was a hundred percent of a box that had
          already shrunk. The fix belongs where the documentation puts it — a
          rule on the Form2 reaching this element by type. See `toPagefly`. */
-      node("FormInput", { required, inputType: INPUT_TYPE[kind] ?? 0 }, null, []),
+      /* `context` and `id`, both on every one of the reference's inputs. The
+         id is what a label's `for` points at, and PageFly's own are
+         `field-<8 hex>` — the shape is copied, the value is ours. */
+      node(
+        "FormInput",
+        {
+          required,
+          inputType: INPUT_TYPE[kind] ?? 0,
+          context: { formType },
+          id: `field-${uid().replace(/-/g, "").slice(0, 8)}`,
+        },
+        null,
+        [],
+      ),
     ],
   );
 }
@@ -1362,9 +1431,18 @@ export function FORM(
          still the Form2's `& button` rule — this is the box, not the paint. */
       node(
         "Form2.Button2",
-        { value: submit, buttonType: "text" },
+        {
+          value: submit,
+          /* `placeholder` beside `value` on every one of the reference's, and
+             `context` for the same reason the fields carry it. */
+          placeholder: submit,
+          buttonType: "text",
+          showIcon: false,
+          iconPos: "right",
+          context: { formType: intent === "signup" ? "customer" : "contact" },
+        },
         { all: { "&": "--pf-flex-layout-width: hug;" } },
-        [],
+        [ICON2()],
       ),
     ],
   );
@@ -1470,9 +1548,26 @@ const SLOT_RULES: Record<string, string[]> = {
      quietly: a CountDown with no children imports without complaint and draws
      nothing, which is the worst shape a bug can take in this file. */
   CountDown: ["CountdownNumber", "CountdownLabel"],
-  /* The header row and the panel wrapper, in that order and exactly once each.
-     A Tabs3 missing either imports as an element with no tabs in it. */
-  Tabs3: ["TabsMenu3", "TabContentWrapper3"],
+  /* FIVE SLOTS, AND THIS FILE KNEW ABOUT TWO OF THEM.
+
+     The header row and the panel wrapper were the two anybody would guess, and
+     `fields.md` lists two more it does not explain — `DropdownButton` and a
+     `TabHeader3` collection. `reference/all-elements.pagefly`, the editor's own
+     export, shows what they are for: the dropdown is the collapsed-navigation
+     control, and the loose headers are the two scroll arrows, marked
+     `isNavButton: "start"` and `"end"` where the menu's own headers carry
+     `false`.
+
+     A Tabs3 with only the first two imports as an element the renderer cannot
+     finish building — which is the "Something went wrong" a merchant met where
+     the size table should have been. */
+  Tabs3: [
+    "TabsMenu3",
+    "TabContentWrapper3",
+    "DropdownButton",
+    "TabHeader3",
+    "TabHeader3",
+  ],
 };
 
 /** Parents whose children must ALL be one type (count is free). */
@@ -1490,6 +1585,24 @@ const SLOT_RULES: Record<string, string[]> = {
  * look: `& input` and `& [data-pf-type="FormInput"]` on the Form2,
  * `& [data-pf-type="TabsMenu3"] > label` on the Tabs3.
  */
+/* ==========================================================================
+   THE ICON CHILD THAT IS ALWAYS THERE.
+
+   Five element types can show an icon, and `fields.md` describes the child as
+   "config, shown by `showIcon`" — which reads as optional and is not. In
+   PageFly's own export every one of them carries an `Icon2` whether the icon is
+   shown or not: a TabHeader3 with `showIcon: false` still has the child, with
+   no `icon` key on it.
+
+   A component that renders its child and finds none is not an element with a
+   hidden icon. It is the shape behind "Something went wrong".
+
+   Read off `reference/all-elements.pagefly`, which is the editor's own file and
+   the only artefact here that shows what a correct one looks like. */
+export function ICON2(icon?: string) {
+  return node("Icon2", icon ? { icon } : {}, null, []);
+}
+
 const UNSTYLEABLE = new Set(["FormInput", "TabHeader3"]);
 
 /* ==========================================================================

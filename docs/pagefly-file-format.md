@@ -6,15 +6,18 @@ page is imported from: the zip, its single entry, the top-level keys, or the par
 `styles` array. That knowledge came from `pagefly-template-builder/`, which is being
 removed, and `lib/pagefly/builder.ts` depends on all of it. So it is recorded here.
 
-**Trust level.** Everything below was confirmed by round-tripping real files through the
-builder and unzipping the result, but it has NOT been re-checked against the new
-reference — the new reference does not cover it. If the two ever disagree about an
-element's `type` or fields, `MD Json PageFly/fields.md` wins; it is generated from the
-application's own registry. This file is only authoritative about the container.
+**Trust level, and the order it now runs in.** There are three sources here and they
+do not agree. In descending authority:
 
-**Still unverified.** No real `.pagefly` exported from a live store has been compared
-against what this builder produces. Until one is, treat the container shape as
-"works in testing", not "known correct".
+1. **`reference/all-elements.pagefly`** — a page the PageFly editor itself exported,
+   99 element types, imports clean. It shows what a correct file IS.
+2. **`MD Json PageFly/fields.md`** — generated from the application's registry. It
+   describes what a field is FOR, and its placement notes describe one authoring path
+   among several.
+3. **This file** — the container, confirmed by round-tripping.
+
+Where 1 and 2 disagree, 1 wins: `fields.md` says `Tabs3` takes no child nodes and the
+editor's own export gives it five. See the last section.
 
 ## The container
 
@@ -117,3 +120,37 @@ place.
 Shopify's Liquid engine consumes `{{` and `{%` on publish. Neither `customJS` nor any
 `Custom.HTML` `code` may contain them; the builder rejects both rather than shipping a
 page that breaks only once published.
+
+## The reference export, and what it settled
+
+`reference/all-elements.pagefly` is a product page built by hand in the PageFly
+editor — 480 items, 99 element types, imports clean. It is the only artefact in
+this repository that shows the shape of a correct file rather than describing
+one, and it is now the thing `scripts/test-conformance.ts` compares our output
+against.
+
+**It overruled the field reference in one place.** `fields.md` says of `Tabs3`:
+"single block — emit the type alone, no child nodes; the renderer owns the tab
+structure". The editor's own export has `Tabs3` holding a `TabsMenu3`, a
+`TabContentWrapper3`, a `DropdownButton` and two loose `TabHeader3`s, with a
+heading and a `ProductDescription` inside a panel. The note describes an
+authoring path; the file is what opens.
+
+**Five things it settled that nothing else could.**
+
+| | What the file shows |
+| --- | --- |
+| `className` | PageFly writes it on **none** of 480 elements. It uses `classGlobalStyling`, and its own CSS targets those classes. 42 values carry several classes separated by spaces. |
+| Page scope | Custom CSS is scoped `#__pf`, 92 times. `customJS` finds the page with `getElementById('__pf')`. A class we attach can fail to; an id PageFly wraps the page in cannot. |
+| `Icon2` | Present on every `Button2`, `TabHeader3`, `Accordion3.Header`, `Form2.Button2` and `ProductATC2` — **even with `showIcon: false`**. "Config, shown by showIcon" reads as optional and is not. |
+| `Tabs3` slots | Five, not two: menu, wrapper, `DropdownButton`, and two `TabHeader3` scroll arrows carrying `isNavButton: "start"` / `"end"` where menu headers carry `false`. |
+| `TabHeader3.activeTab` | The header's **own index**, 0-based — not which tab is open. `Tabs3.active` says that. |
+
+**What it did not settle.** The report lists ~37 types that still diverge, most
+of them missing `classGlobalStyling`, `name` or `placeholder` — editor
+conveniences rather than import failures. `REPORT=1 npx tsx
+scripts/test-conformance.ts` ranks them.
+
+**When a newer export arrives**, replace the file and run the test. A divergence
+that appears is either a change in PageFly or a habit of ours that was always
+wrong; the version string in the report says which build answered.

@@ -2166,13 +2166,26 @@ function pageCss(width: number, motion: boolean): string {
        the wrong font. customCSS survives import and runs on preview and live. */
     `@import url("${WEBFONT_CSS_URL}");`,
     `/* PageFly Design export — keeps the imported page matching its mockup. */`,
-    `.pf-design-export, .pf-design-export * { box-sizing: border-box; }`,
-    `.pf-design-export p, .pf-design-export h1, .pf-design-export h2,`,
-    `.pf-design-export h3, .pf-design-export h4, .pf-design-export h5,`,
-    `.pf-design-export h6 { margin: 0; }`,
-    `.pf-design-export a { color: inherit; text-decoration: none; }`,
-    `.pf-design-export img, .pf-design-export svg { display: block; max-width: 100%; }`,
-    /* NOTHING THAT DECIDES A LAYOUT BELONGS IN THIS FILE.
+    `#__pf, #__pf * { box-sizing: border-box; }`,
+    `#__pf p, #__pf h1, #__pf h2,`,
+    `#__pf h3, #__pf h4, #__pf h5,`,
+    `#__pf h6 { margin: 0; }`,
+    `#__pf a { color: inherit; text-decoration: none; }`,
+    `#__pf img, #__pf svg { display: block; max-width: 100%; }`,
+    /* SCOPED TO `#__pf`, WHICH IS ALWAYS THERE.
+
+       Every rule here used to read `.pf-design-export …` — a class put on the
+       content block through `className`, a key PageFly does not read. So the
+       class never reached the DOM and not one of these rules has ever applied,
+       which is why three separate rewrites of the `min-width` line changed
+       nothing.
+
+       `#__pf` is the id PageFly wraps the whole page in. Its own custom CSS
+       uses it 92 times in `reference/all-elements.pagefly`, and its own custom
+       JS finds the page with `getElementById('__pf')`. A selector that is
+       always there beats one we have to attach and can fail to.
+
+       NOTHING THAT DECIDES A LAYOUT BELONGS IN THIS FILE.
 
        The `min-width` floor and the page's own `max-width` cap both used to be
        here, and both have moved onto the elements: the floor into `cssAt`, the
@@ -2309,7 +2322,7 @@ export function pageflyFromTree(
        than an entrance.
 
        AND THE PAGE'S WIDTH, which is the load-bearing one. This was
-       `.pf-design-export { max-width: Npx; margin: auto; width: 100% }` in
+       `#__pf { max-width: Npx; margin: auto; width: 100% }` in
        `customCSS`: every block below it is `--pf-flex-layout-width: fill`, which
        the engine expands to `flex-grow: 1; flex-basis: 0px`, and a chain of
        those resolves to nothing unless something at the top states a real width.

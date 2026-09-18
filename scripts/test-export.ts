@@ -643,8 +643,24 @@ async function main(): Promise<void> {
     const wrapper = tabs.items.find((i) => i.type === "TabContentWrapper3");
     check(Boolean(menu && wrapper), "the two slots the element requires");
 
-    const headers = tabs.items.filter((i) => i.type === "TabHeader3");
+    /* THE MENU'S HEADERS, NOT EVERY TabHeader3. `Tabs3` also carries two loose
+       ones that are the scroll arrows — `isNavButton: "start"` and `"end"` in
+       PageFly's own export, where the menu's own headers carry `false`.
+       Counting all five would make this assertion about the wrong thing. */
+    const headers = tabs.items.filter(
+      (i) => i.type === "TabHeader3" && menu?.children.includes(i.id),
+    );
     check(headers.length === 3, "one header per tab", String(headers.length));
+    check(
+      tabs.items.filter((i) => i.type === "DropdownButton").length === 1,
+      "and the dropdown slot the element declares",
+    );
+    check(
+      tabs.items.filter(
+        (i) => i.type === "TabHeader3" && !menu?.children.includes(i.id),
+      ).length === 2,
+      "and the two scroll arrows",
+    );
     /* The label is `value` ON the header. Nested as a Heading it imports and
        the editor shows an empty tab — the same trap as ACCORDION_HEADER. */
     const labels = headers.map((h) => String((h.data as Record<string, unknown>)?.value ?? ""));
@@ -668,14 +684,22 @@ async function main(): Promise<void> {
       "a table inside a tab is built, not flattened to prose",
     );
 
-    /* `activeFront` counts from zero and `activeTab` from one. Setting one
-       without the other opens a different tab in the editor than the shopper
-       sees. */
+    /* `activeTab` IS THE HEADER'S OWN INDEX — settled by PageFly's own export,
+       against this file's previous reading of it. The reference has header 1
+       carrying 0, header 2 carrying 1, header 3 carrying 2, and `Tabs3.active`
+       saying which of them opens. Written as "the open tab, counting from one"
+       on every header, all three claimed to be the same tab, and the menu
+       carried a key the editor writes on nothing. */
     const d = (shell?.data ?? {}) as Record<string, unknown>;
     check(d.activeFront === 1, "open:1 is the tab that starts open", String(d.activeFront));
     check(
-      (menu?.data as Record<string, unknown>)?.activeTab === 2,
-      "stated for the canvas too, counting from one",
+      headers.every((h, i) => (h.data as Record<string, unknown>)?.activeTab === i),
+      "each header carries its own index",
+      headers.map((h) => (h.data as Record<string, unknown>)?.activeTab).join(","),
+    );
+    check(
+      (menu?.data as Record<string, unknown>)?.activeTab === undefined,
+      "and the menu carries none — the editor writes it on nothing else",
       String((menu?.data as Record<string, unknown>)?.activeTab),
     );
 
@@ -808,7 +832,7 @@ async function main(): Promise<void> {
     /* The content block — the one carrying `pf-design-export`. Its width used
        to come only from the class rule. */
     const content = band.items.find(
-      (i) => i.type === "FlexBlock" && String(i.data?.className ?? "").includes("pf-design-export"),
+      (i) => i.type === "FlexBlock" && String(i.data?.classGlobalStyling ?? "").includes("pf-design-export"),
     );
     const contentCss = band.cssOf(content?.id ?? "");
     check(Boolean(content), "the content block is found");
@@ -840,7 +864,7 @@ async function main(): Promise<void> {
 
     /* And a box still may: that is how a two-column row narrows. */
     const box = band.items.find(
-      (i) => i.type === "FlexBlock" && !String(i.data?.className ?? "").includes("pf-design-export"),
+      (i) => i.type === "FlexBlock" && !String(i.data?.classGlobalStyling ?? "").includes("pf-design-export"),
     );
     check(
       /min-width:\s*0/.test(band.cssOf(box?.id ?? "")),
@@ -1255,7 +1279,7 @@ async function main(): Promise<void> {
        meant to make visible is invisible again by another route. */
     const onElements = new Set<string>();
     for (const i of counted.items)
-      for (const c of String((i.data as Record<string, unknown>)?.className ?? "")
+      for (const c of String((i.data as Record<string, unknown>)?.classGlobalStyling ?? "")
         .split(/\s+/)
         .filter(Boolean))
         onElements.add(c);
