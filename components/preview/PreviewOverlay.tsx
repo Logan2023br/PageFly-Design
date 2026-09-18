@@ -252,9 +252,9 @@ export function PreviewOverlay({
     return () => ro.disconnect();
   }, []);
 
+  /* Only the width. The frame's own chrome height used to feed the fit's height
+     term, and that term is gone — see `fitScale`. */
   const chromeW = device === "mobile" ? 22 : device === "tablet" ? 28 : 0;
-  const chromeH =
-    device === "mobile" ? 58 : device === "tablet" ? 44 : 38;
 
   /* Breathing room between the frame and the edges of the stage.
 
@@ -265,10 +265,23 @@ export function PreviewOverlay({
      object. */
   const GUTTER = 32;
 
+  /* WIDTH ONLY, and that is not a simplification — it is what this always did.
+
+     The height term used to be dead. `stage.h` was the stage's CONTENT height
+     and the content was the frame, so the term was `(938 - 32) / 938` on every
+     window ever: a constant 0.966 that never bound. Pinning the stage to its
+     row made the measurement honest and the term suddenly real, which shrank
+     the frame on any window shorter than the device — a 1440 x 900 mockup needs
+     938px of stage, and a laptop gives about 870.
+
+     A device frame is a window onto a page taller than itself. Fitting its
+     height on screen means shrinking the page to read a viewport that was never
+     meant to be seen whole; the footer has said "Scroll inside the frame" the
+     entire time. So the width sets the scale, the frame runs off the bottom,
+     and the mockup scrolls — which is what it looked like before. */
   const fitScale = Math.min(
     1,
     stage.w > 0 ? (stage.w - GUTTER) / (spec.width + chromeW) : 1,
-    stage.h > 0 ? (stage.h - GUTTER) / (spec.height + chromeH) : 1,
   );
   const scale = zoom ?? fitScale;
 
@@ -602,8 +615,8 @@ export function PreviewOverlay({
             and `transform: scale` does not shrink layout, so the frame occupies
             its full 938px however far it is zoomed out. On a stage shorter than
             that the track still became 938, starting at the stage's top edge,
-            and `place-items-center` then centred the frame in the TRACK rather
-            than in the stage. While the stage grew to its content the two were
+            and centring then put the frame in the middle of the TRACK rather
+            than of the stage. While the stage grew to its content the two were
             the same box and nobody could tell. Measured, same class chain, on a
             521px stage:
 
@@ -614,7 +627,7 @@ export function PreviewOverlay({
             the track grow right back. */}
         <div
           ref={stageRef}
-          className="relative grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] self-stretch place-items-center overflow-hidden"
+          className="relative grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] items-start justify-items-center self-stretch overflow-hidden"
         >
           {/* OPAQUE, and across the whole stage.
 
