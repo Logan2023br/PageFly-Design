@@ -589,7 +589,7 @@ export function PreviewOverlay({
 
         <div
           ref={stageRef}
-          className="grid min-h-0 flex-1 place-items-center overflow-hidden"
+          className="relative grid min-h-0 flex-1 place-items-center overflow-hidden"
         >
           {/* OPAQUE, and across the whole stage.
 
@@ -601,16 +601,26 @@ export function PreviewOverlay({
               so the ground is full-bleed and the reading measure is set inside
               the panel.
 
-              AN IN-FLOW GRID ITEM, and it has to be. This was `absolute
-              inset-0`, which renders NOTHING here: the stage is a grid with
-              `place-items-center`, and an absolutely-positioned box inherits
-              that `align-self: center`, which makes it shrink to its content
-              instead of stretching to the inset rectangle — so the panel's own
-              `h-full w-full` resolved against `auto` and collapsed. As a grid
-              item the same `h-full w-full` resolves against the grid area, which
-              is the whole stage. */}
+              AND OUT OF FLOW, which is what lets a long brief scroll.
+
+              As an in-flow grid item it could not. The stage's single row is
+              `auto`, and a percentage height against a track that is still
+              being sized is indefinite — so the item's contribution to the
+              track was its CONTENT height, the track grew to the whole brief,
+              and the stage's `overflow-hidden` cut it off top and bottom with
+              nothing to scroll. The panel's own `overflow-y-auto` never had a
+              box smaller than its content to scroll inside.
+
+              Absolutely positioned against the stage — which is why the stage
+              is now `relative` — the panel contributes nothing to track sizing
+              and `h-full` resolves against a padding box that is already
+              definite. An earlier attempt at `absolute inset-0` was reverted
+              because the box shrank to its content and centred: that is real,
+              `place-items-center` does reach an out-of-flow box whose height is
+              `auto`, and the answer is the explicit `h-full w-full` here rather
+              than going back in flow. */}
           {showBrief && (
-            <div className="h-full w-full bg-pf-bg-deep">
+            <div className="absolute inset-0 h-full w-full bg-pf-bg-deep">
               <BriefPanel brief={pageBrief} />
             </div>
           )}

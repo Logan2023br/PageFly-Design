@@ -44,7 +44,12 @@ export function BriefPanel({ brief }: { brief: Brief | null }) {
   const storeType = STORE_TYPES.find((t) => t.id === brief.storeType);
 
   return (
-    <div className="pfd-scroll-none h-full w-full overflow-y-auto px-5 py-6 sm:px-8">
+    /* THE SCROLLBAR SHOWS HERE, unlike everywhere else in the overlay. A
+       hidden one is right over a mockup, where the frame's own edge says there
+       is more page. A wall of text has no such edge: with the bar hidden and
+       the last line cut mid-sentence, the panel reads as broken rather than
+       scrollable. */
+    <div className="h-full w-full overflow-y-auto px-5 py-6 pb-16 sm:px-8">
       <div className="mx-auto max-w-[720px]">
         <h2 className="text-[15px] font-semibold text-pf-text">Brief</h2>
         <p className="mt-1 text-[12.5px] text-pf-faint">
