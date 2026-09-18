@@ -252,9 +252,9 @@ export function PreviewOverlay({
     return () => ro.disconnect();
   }, []);
 
-  /* Only the width. The frame's own chrome height used to feed the fit's height
-     term, and that term is gone — see `fitScale`. */
   const chromeW = device === "mobile" ? 22 : device === "tablet" ? 28 : 0;
+  const chromeH =
+    device === "mobile" ? 58 : device === "tablet" ? 44 : 38;
 
   /* Breathing room between the frame and the edges of the stage.
 
@@ -265,23 +265,10 @@ export function PreviewOverlay({
      object. */
   const GUTTER = 32;
 
-  /* WIDTH ONLY, and that is not a simplification — it is what this always did.
-
-     The height term used to be dead. `stage.h` was the stage's CONTENT height
-     and the content was the frame, so the term was `(938 - 32) / 938` on every
-     window ever: a constant 0.966 that never bound. Pinning the stage to its
-     row made the measurement honest and the term suddenly real, which shrank
-     the frame on any window shorter than the device — a 1440 x 900 mockup needs
-     938px of stage, and a laptop gives about 870.
-
-     A device frame is a window onto a page taller than itself. Fitting its
-     height on screen means shrinking the page to read a viewport that was never
-     meant to be seen whole; the footer has said "Scroll inside the frame" the
-     entire time. So the width sets the scale, the frame runs off the bottom,
-     and the mockup scrolls — which is what it looked like before. */
   const fitScale = Math.min(
     1,
     stage.w > 0 ? (stage.w - GUTTER) / (spec.width + chromeW) : 1,
+    stage.h > 0 ? (stage.h - GUTTER) / (spec.height + chromeH) : 1,
   );
   const scale = zoom ?? fitScale;
 
@@ -600,34 +587,29 @@ export function PreviewOverlay({
           <Icon name="ChevronLeft" size={18} />
         </button>
 
-        {/* `self-stretch` IS LOAD-BEARING, and it is what an out-of-flow panel
-            costs. The row above is `items-center`, so this box does not stretch
-            — its height is its content's. That was invisible for as long as the
-            content was a mockup or an in-flow panel. The moment the brief went
-            out of flow the stage had nothing left to measure (the mockup branch
-            is `hidden` while the brief is up), collapsed to zero, and the
-            panel's `h-full` resolved to nothing: the brief did not scroll, it
-            disappeared. Stretched, the stage is the flex line's height and both
-            children have a real box to size against.
+        {/* STRETCHED ONLY WHILE THE BRIEF IS UP, and the condition is the whole
+            fix. This box does not stretch on its own — the row above is
+            `items-center` — so its height has always been its content's, and
+            the mockup path depends on that: `stage.h` comes back as the frame's
+            own height, which makes the fit's height term the constant it has
+            always been, and the frame is as large as the width allows and runs
+            off the bottom to be scrolled inside.
 
-            AND THE TRACK IS PINNED TO THE STAGE, which stretching alone does
-            not do. The row was `auto`, so it took the mockup's LAYOUT height —
-            and `transform: scale` does not shrink layout, so the frame occupies
-            its full 938px however far it is zoomed out. On a stage shorter than
-            that the track still became 938, starting at the stage's top edge,
-            and centring then put the frame in the middle of the TRACK rather
-            than of the stage. While the stage grew to its content the two were
-            the same box and nobody could tell. Measured, same class chain, on a
-            521px stage:
+            Stretching it unconditionally is what shrank the preview. The height
+            term went honest, a 1440 x 900 mockup wants 938px of stage, a laptop
+            gives about 870, and the frame lost a third of its size to fit a
+            viewport nobody needs to see whole.
 
-                auto track       frame 209px below centre, 192px cut off
-                minmax(0,1fr)    frame on centre, nothing cut
-
-            `minmax(0,1fr)` — not `1fr`, whose implicit `auto` minimum would let
-            the track grow right back. */}
+            The brief needs the opposite and can have it for free: the mockup is
+            `hidden` while the brief is up, so there is nothing left for the
+            stretch to affect. Out of flow, the panel contributes no height of
+            its own, and without the stretch the stage would collapse to zero
+            and take the panel with it. */}
         <div
           ref={stageRef}
-          className="relative grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] items-start justify-items-center self-stretch overflow-hidden"
+          className={`relative grid min-h-0 flex-1 place-items-center overflow-hidden ${
+            showBrief ? "self-stretch" : ""
+          }`}
         >
           {/* OPAQUE, and across the whole stage.
 
