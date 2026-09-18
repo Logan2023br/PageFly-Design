@@ -832,10 +832,23 @@ export function TABS(
          labels beside the panel, which is a two-column layout on a phone. */
       headerPosition: { all: "top", laptop: "top", tablet: "top", mobile: "top" },
       align: { all: "start", laptop: "start", tablet: "start", mobile: "start" },
-      /* Stretched labels fill the bar evenly, which is what keeps four tabs
-         from crowding into the left third on a wide page — and on a phone it
-         is what stops them from wrapping into a ragged block. */
-      fitted: { all: false, laptop: false, tablet: true, mobile: true },
+      fitted: { all: false, laptop: false, tablet: false, mobile: false },
+      /* THE THREE THE EDITOR REPORTED AS "Something went wrong", and the
+         divergence report had named them all along — dismissed as cosmetic
+         because `name` and `classGlobalStyling` sat in the same list.
+
+         `tabMenuLayout` is a per-breakpoint object exactly like `fitted` and
+         `align` above. A component that reads `.mobile` off one of those and
+         finds the whole object undefined throws; it does not fall back. It is
+         also what stops four labels crowding on a phone, which is the job
+         `fitted: true` was doing here badly — the bar scrolls instead.
+
+         `icon` is the chevron `DropdownButton` draws, and `targetStyle` is how
+         the element finds its own style bucket. Both PageFly exports of the
+         same page carry all three. */
+      tabMenuLayout: { all: "wrap", laptop: "wrap", tablet: "scroll", mobile: "scroll" },
+      icon: "angle-down",
+      targetStyle: "Tabs3",
     },
     styleData,
     [
@@ -843,11 +856,11 @@ export function TABS(
          TabHeader3 and on nothing else; on the menu it is a key the editor
          does not read. */
       node("TabsMenu3", {}, null,
-        /* `activeTab` IS THE HEADER'S OWN INDEX, not which tab is open — and
-           that is the opposite of what this file assumed. The reference has
-           header 1 carrying 0, header 2 carrying 1, header 3 carrying 2, with
-           `Tabs3.active` saying which of them opens. Written as `active + 1` on
-           all three, every header claimed to be the same tab. */
+        /* `activeTab` CARRIES NOTHING. Two PageFly exports of the same page
+           disagree about it — one has the headers at 0,1,2 and the other has
+           all three at 0 — and both import clean, so it is stale editor state
+           and no reader depends on it. The header's own index is what we write
+           because one of the two files does; nothing turns on the choice. */
         tabs.map((t, i) =>
           node(
             "TabHeader3",
@@ -858,7 +871,13 @@ export function TABS(
         ),
       ),
       node("TabContentWrapper3", {}, null,
-        tabs.map((t) => node("TabsContent3", {}, null, t.body)),
+        /* `TAB_CONTENT` IS NOT A LABEL. Every other `name` in a PageFly export
+           is prose a merchant typed — "Tab header 1", "Product tabs". This one
+           is an uppercase literal identical on every panel in both exports,
+           which is what a renderer looks a panel up BY rather than something it
+           displays. Emitted with no panel body it is the only field here that
+           could not have been guessed from the field reference. */
+        tabs.map((t) => node("TabsContent3", { name: "TAB_CONTENT" }, null, t.body)),
       ),
       /* THE THREE SLOTS THIS FILE DID NOT KNOW ABOUT. `Tabs3` declares four
          things it contains and only two were emitted. The reference has the
@@ -867,8 +886,13 @@ export function TABS(
          `isNavButton` is a STRING there, `start` and `end`, not the boolean the
          menu's own headers carry. */
       node("DropdownButton", {}, null, []),
-      node("TabHeader3", { activeTab: 0, showIcon: false, iconPos: "left", isNavButton: "start" }, null, [ICON2()]),
-      node("TabHeader3", { activeTab: 0, showIcon: false, iconPos: "left", isNavButton: "end" }, null, [ICON2()]),
+      /* AND THESE TWO HOLD NOTHING. The `Icon2`-is-always-there rule is real
+         for a header in the menu and wrong for these: a scroll arrow draws its
+         own glyph, and both exports give the pair zero children. A child on a
+         component that renders none of its own is a node the editor has to
+         place and cannot. */
+      node("TabHeader3", { activeTab: 0, showIcon: false, iconPos: "left", isNavButton: "start" }, null, []),
+      node("TabHeader3", { activeTab: 0, showIcon: false, iconPos: "left", isNavButton: "end" }, null, []),
     ],
   );
 }

@@ -189,6 +189,7 @@ async function main(): Promise<void> {
   const cssFiles = unzipSync(new Uint8Array(await cssBlob.arrayBuffer()));
   const cssPage = JSON.parse(strFromU8(cssFiles[Object.keys(cssFiles)[0]])) as {
     customCSS: string;
+    items: { type: string; data: Record<string, unknown>; children: string[] }[];
   };
 
   check(
@@ -217,6 +218,55 @@ async function main(): Promise<void> {
       d?.missingChildren.join(", ") || "ok",
     );
   }
+
+  /* ======================================================================
+     THE TABS FAMILY, FIELD BY FIELD.
+
+     `Tabs3` reported "Something went wrong" in the editor on a page that was
+     otherwise fine, and the five-slot fix was not enough. The divergence report
+     had said why the whole time and it was dismissed as cosmetic: `Tabs3` was
+     missing `icon`, `tabMenuLayout` and `targetStyle`.
+
+     `tabMenuLayout` is a per-breakpoint object exactly like `fitted` and
+     `align`, both of which we do emit — a component that reads `.mobile` off
+     one of those and finds the object absent throws rather than falls back.
+     `icon` is the chevron the `DropdownButton` draws. And `TabsContent3.name`
+     is not a label: every panel in both PageFly exports carries the literal
+     `TAB_CONTENT`, uppercase, which is what a renderer looks a panel up BY.
+
+     Two PageFly exports of the same page disagree on `TabHeader3.activeTab`
+     (0,1,2 in one, 0,0,0 in the other) and both import clean, so that one is
+     stale editor state and is asserted on by nobody.
+     ====================================================================== */
+  console.log("\nthe tabs family, field by field");
+
+  const item = (type: string) => cssPage.items.find((i) => i.type === type);
+  const tabs3 = item("Tabs3");
+
+  for (const key of ["icon", "tabMenuLayout", "targetStyle"]) {
+    check(
+      tabs3 !== undefined && tabs3.data[key] !== undefined,
+      `Tabs3 carries \`${key}\``,
+      tabs3 ? JSON.stringify(tabs3.data[key]) : "no Tabs3 in the fixture",
+    );
+  }
+
+  const panels = cssPage.items.filter((i) => i.type === "TabsContent3");
+  check(
+    panels.length > 0 && panels.every((p) => p.data.name === "TAB_CONTENT"),
+    "every TabsContent3 is named TAB_CONTENT, which is how a panel is found",
+    panels.map((p) => JSON.stringify(p.data.name)).join(" ") || "(no panels)",
+  );
+
+  const navs = cssPage.items.filter(
+    (i) => i.type === "TabHeader3" && typeof i.data.isNavButton === "string",
+  );
+  check(
+    navs.length === 2 && navs.every((n) => n.children.length === 0),
+    "the two scroll-arrow TabHeader3s hold nothing — the editor's own hold nothing",
+    navs.map((n) => `${String(n.data.isNavButton)}:${n.children.length}`).join(" ") ||
+      "(no nav headers)",
+  );
 
   /* ====================================================================== */
   console.log("\nthe rest, for deciding what is next");

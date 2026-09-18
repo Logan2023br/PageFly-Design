@@ -144,12 +144,29 @@ authoring path; the file is what opens.
 | Page scope | Custom CSS is scoped `#__pf`, 92 times. `customJS` finds the page with `getElementById('__pf')`. A class we attach can fail to; an id PageFly wraps the page in cannot. |
 | `Icon2` | Present on every `Button2`, `TabHeader3`, `Accordion3.Header`, `Form2.Button2` and `ProductATC2` — **even with `showIcon: false`**. "Config, shown by showIcon" reads as optional and is not. |
 | `Tabs3` slots | Five, not two: menu, wrapper, `DropdownButton`, and two `TabHeader3` scroll arrows carrying `isNavButton: "start"` / `"end"` where menu headers carry `false`. |
-| `TabHeader3.activeTab` | The header's **own index**, 0-based — not which tab is open. `Tabs3.active` says that. |
+| `TabHeader3.activeTab` | **Nothing.** Two exports of the same page disagree — one has the menu headers at 0,1,2 and the other has all three at 0 — and both import clean. Stale editor state; no reader depends on it. |
 
-**What it did not settle.** The report lists ~37 types that still diverge, most
-of them missing `classGlobalStyling`, `name` or `placeholder` — editor
-conveniences rather than import failures. `REPORT=1 npx tsx
-scripts/test-conformance.ts` ranks them.
+**What it did not settle, and the cost of calling that cosmetic.** The report
+lists ~36 types that still diverge, most of them missing `classGlobalStyling`,
+`name` or `placeholder`. Those three read as editor conveniences and the whole
+list was once dismissed on that basis. That dismissal hid a crash for three
+turns: `Tabs3` showed "Something went wrong" in the editor, and the report had
+been printing `Tabs3 missing: icon, tabMenuLayout, targetStyle` the entire time.
+
+So read a divergence by what the field DOES, never by the company it keeps:
+
+| | Why it mattered |
+| --- | --- |
+| `Tabs3.tabMenuLayout` | A per-breakpoint object, exactly like `fitted` and `align` beside it. A component that reads `.mobile` off one of those and finds the object absent **throws** — it does not fall back. |
+| `Tabs3.icon` | The chevron `DropdownButton` draws. |
+| `Tabs3.targetStyle` | How the element finds its own style bucket. |
+| `TabsContent3.name` | `"TAB_CONTENT"` — an uppercase literal, identical on every panel in both exports. Every other `name` in an export is prose a merchant typed. This one is the key a panel is looked up BY, and it could not have been guessed from `fields.md`. |
+| the two nav `TabHeader3`s | Zero children in both exports. The `Icon2`-is-always-there rule is real for a header in the menu and wrong for a scroll arrow, which draws its own glyph. |
+
+`REPORT=1 npx tsx scripts/test-conformance.ts` ranks the rest. Values are the
+report's blind spot: `diff()` compares which keys exist and never what they
+hold, so a wrong value passes it. `scripts/test-conformance.ts` asserts the
+tabs family's values directly for that reason.
 
 **When a newer export arrives**, replace the file and run the test. A divergence
 that appears is either a change in PageFly or a habit of ours that was always
