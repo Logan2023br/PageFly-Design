@@ -832,8 +832,15 @@ function withMotion(n: PFNode, anim: Anim): PFNode {
   }
 
   if (classes.length) {
-    const existing = typeof n.data.className === "string" ? n.data.className : "";
-    n.data.className = [existing, ...classes].filter(Boolean).join(" ");
+    /* `classGlobalStyling`, THE SAME KEY THE BUILDER USES. This was the second
+       path writing `className` and the builder's own change did not reach it —
+       so a heading with a reveal kept its animation classes on a key the editor
+       does not read, while the block around it had them on the right one. Both
+       are appended to whatever is already there, because a node can arrive here
+       with the builder's class on it already. */
+    const existing =
+      typeof n.data.classGlobalStyling === "string" ? n.data.classGlobalStyling : "";
+    n.data.classGlobalStyling = [existing, ...classes].filter(Boolean).join(" ");
   }
   return n;
 }

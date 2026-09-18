@@ -74,8 +74,15 @@ const TREE = {
       pattern: "spec-table",
       role: "content",
       css: { padding: "80px 48px" },
+      /* MOTION IS IN THE FIXTURE ON PURPOSE. Classes reach an element by two
+         separate paths — the builder's `cls` argument and `motionClasses` in
+         `toPagefly`. The first was moved to `classGlobalStyling` and the second
+         was not, so a heading with a reveal kept its animation on the dead key
+         while the block around it had it on the live one, and a tree with no
+         `anim` on it could not tell. */
+      anim: { reveal: "fade-up" },
       children: [
-        { type: "heading", level: 2, text: "Specification" },
+        { type: "heading", level: 2, text: "Specification", anim: { reveal: "fade-up" } },
         { type: "table", rows: [["Size", "34", "36"], ["Chest", "82", "86"]] },
         {
           type: "tabs",
