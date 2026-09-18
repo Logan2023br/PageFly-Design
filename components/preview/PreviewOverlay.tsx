@@ -587,9 +587,18 @@ export function PreviewOverlay({
           <Icon name="ChevronLeft" size={18} />
         </button>
 
+        {/* `self-stretch` IS LOAD-BEARING, and it is what an out-of-flow panel
+            costs. The row above is `items-center`, so this box does not stretch
+            — its height is its content's. That was invisible for as long as the
+            content was a mockup or an in-flow panel. The moment the brief went
+            out of flow the stage had nothing left to measure (the mockup branch
+            is `hidden` while the brief is up), collapsed to zero, and the
+            panel's `h-full` resolved to nothing: the brief did not scroll, it
+            disappeared. Stretched, the stage is the flex line's height and both
+            children have a real box to size against. */}
         <div
           ref={stageRef}
-          className="relative grid min-h-0 flex-1 place-items-center overflow-hidden"
+          className="relative grid min-h-0 flex-1 self-stretch place-items-center overflow-hidden"
         >
           {/* OPAQUE, and across the whole stage.
 
