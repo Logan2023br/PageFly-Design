@@ -665,14 +665,20 @@ async function run(
         }
 
         console.log(
-          `[build] ${entry.label} ok · ${outcome.tree.sections.length} sections · ` +
-            `audit ${outcome.auditFailures} · in ${outcome.usage.input} out ${outcome.usage.output}`,
+          `[build] ${entry.label} ok · ` +
+            (outcome.html
+              ? `html mockup ${outcome.html.length.toLocaleString()} chars · `
+              : `${outcome.tree.sections.length} sections · audit ${outcome.auditFailures} · `) +
+            `in ${outcome.usage.input} out ${outcome.usage.output}`,
         );
 
         pages.push({
           ...base,
           design: {
             tree: outcome.tree,
+            /* Undefined on every normal build, so the field is absent from the
+               snapshot rather than present and empty. */
+            ...(outcome.html ? { html: outcome.html } : {}),
             images: outcome.images,
             videos: outcome.videos,
             credits: outcome.credits,

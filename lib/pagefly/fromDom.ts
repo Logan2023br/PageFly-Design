@@ -394,6 +394,29 @@ function align(
   base: Element[],
   other: Element[],
 ): { pairs: Map<number, Element>; extra: { after: number; el: Element }[] } {
+  /* BY POSITION WHEN THE COUNTS AGREE, and in verbatim mode they always do.
+
+     LCS over signatures is the right tool for the React mockup, whose four
+     renders are four separate component trees that may genuinely differ — an
+     element can be rendered at one width and not another.
+
+     The HTML path is not that. The four renders are ONE document laid out at
+     four widths, so child n is child n everywhere, and matching by signature
+     only introduces a way to be wrong: the signature counts children, a
+     materialised pseudo-element can exist at one width and not another, and a
+     single mismatch makes LCS drop the pair — which silently hands that
+     element AND ITS WHOLE SUBTREE the desktop stylesheet at every width.
+
+     Measured: 139 of 451 elements had no mobile entry, and the export rendered
+     18,359px tall at 390px against the mockup's 12,507. Converted from the
+     mobile render alone — where no alignment happens — the same code produced
+     12,625px. The conversion was never wrong; the pairing was. */
+  if (verbatim && base.length === other.length) {
+    const pairs = new Map<number, Element>();
+    base.forEach((_, i) => pairs.set(i, other[i]));
+    return { pairs, extra: [] };
+  }
+
   const a = base.map(signature);
   const b = other.map(signature);
 
@@ -459,14 +482,85 @@ function only(key: DeviceKey, el: Element): Sources {
  * The mockup's own declarations, plus the layout-engine props PageFly needs to
  * leave them alone.
  */
+/* ==========================================================================
+   VERBATIM MODE — for a page whose CSS is already complete.
+
+   Everything below was written for the React mockup, whose elements carry a few
+   inline declarations and nothing else: no `display`, no `flex-flow`, no gaps.
+   So `cssFor` supplies them, from what the browser laid out, and forces them
+   with `!important` because silence in PageFly means PageFly's default rather
+   than the browser's.
+
+   A page the build model wrote as HTML, flattened through `flatten.ts`, arrives
+   with the opposite problem. Its declarations are the FULL computed set — the
+   whole `@media` cascade already resolved at the width it was measured at — and
+   the rules this function adds do not supplement them, they overrule them.
+   Measured on the first real page: `display: grid` dropped and `display: flex
+   !important; flex-flow: row nowrap !important` written over it, on every
+   container. The page came out 31,026px tall against the mockup's 16,720, with
+   the hero headline 7,697px down a page where it belongs at 500.
+
+   In verbatim mode the copied CSS is the last word and this function adds only
+   what PageFly cannot infer: the `--pf-flex-layout-*` variables the editor
+   reads to show Fill/Hug correctly, and the min-width floor. Grid survives —
+   `styles[]` is plain CSS and the browser renders it whatever the editor's
+   layout panel makes of it.
+   ========================================================================== */
+/** Tags whose layout comes from what they ARE, not from what CSS says about
+    them. `<button>` is absent deliberately: it is an inline-block box and a
+    FlexBlock carrying the same declarations reproduces it exactly, while a
+    Custom.HTML would take a real, editable call-to-action out of the editor. */
+/** The wrapper of a pass-through, reduced to nothing that can be applied
+    twice.
+
+    Everything it might copy — padding, background, border, type, margins,
+    width, and `display` above all — is on the element inside it too, and a
+    declaration made in both places is made twice: the size chart wrapped in its
+    own `display: table` shrank to its content and moved 407px, the sign-up form
+    wrapped in its own centring margin moved 180px, and even the flex-child
+    properties shifted 34 leaves by 11-30px each.
+
+    So it states only that it is a block filling its parent, and lets the markup
+    inside do the rest. */
+const PASS_THROUGH: StyleData = {
+  all: {
+    "&":
+      "display: block !important; width: 100%; max-width: 100%;" +
+      /* THE ONE THING A PASS-THROUGH CANNOT DO IS REFLOW. `data.code` is the
+         DESKTOP markup with the desktop measurements baked into it, and there
+         is no per-breakpoint form of it — so a size chart that is 1,220px wide
+         on a laptop is still 1,220px wide on a phone. Left alone it does not
+         merely look wrong: it makes the whole PAGE 1,352px wide at a 390px
+         viewport, and every section slides sideways under a horizontal
+         scrollbar.
+
+         Scrolling it inside its own box is what the mockup does with the same
+         tables (`.tbl-wrap{overflow-x:auto}`), so this is the source's own
+         answer rather than a new invention. */
+      " overflow-x: auto; --pf-flex-layout-width: fill;",
+  },
+};
+
+const TAG_SEMANTIC = new Set(["TABLE", "UL", "OL", "FORM", "SELECT", "DL"]);
+
+let verbatim = false;
+
+/** Turn verbatim mode on for the next conversion. Off is the behaviour every
+    caller had before this existed. */
+export function setVerbatimStyles(on: boolean): void {
+  verbatim = on;
+}
+
 function cssFor(el: Element, parent: ParentLayout | null): string {
   /* Grid and its properties are dropped: the Flex editor has no grid, so
      `display: grid` and `grid-template-columns` are dead weight that also stop
      the explicit flex rules below from being the last word. */
-  const d = decl(el).filter(
-    ([p, v]) =>
-      !p.startsWith("grid-") && !(p === "display" && v.includes("grid")),
-  );
+  const all = decl(el);
+  const d = verbatim
+    ? all
+    : all.filter(
+        ([p, v]) => !p.startsWith("grid-") && !(p === "display" && v.includes("grid")),
+      );
 
   const body = d
     .map(([p, v]) =>
@@ -482,7 +576,7 @@ function cssFor(el: Element, parent: ParentLayout | null): string {
   /* Stated for every container, because silence means "PageFly's default" rather
      than "the browser's default", and those differ. */
   const own: string[] = [];
-  if (hasKids) {
+  if (hasKids && !verbatim) {
     own.push("display: flex !important;");
     own.push(
       layout.dir === "vertical"
@@ -499,7 +593,7 @@ function cssFor(el: Element, parent: ParentLayout | null): string {
      equal, so an equal basis reproduces it. A flex row's children are not — they
      size themselves — and forcing a basis on them is how a headline ended up one
      character wide. */
-  if (parent && parent.columns > 1) {
+  if (parent && parent.columns > 1 && !verbatim) {
     const gaps = parent.gapPx * (parent.columns - 1);
     own.push(
       `flex: 0 0 calc((100% - ${gaps}px) / ${parent.columns}) !important;`,
@@ -555,7 +649,63 @@ function styleOfAll(sources: Sources, parent: ParentLayout | null): StyleData {
     const css = cssFor(s.el, parent);
     if (css !== base) out[s.key] = { "&": css };
   }
-  return out;
+  return verbatim ? evenOut(out, sources) : out;
+}
+
+/* ==========================================================================
+   EVERY BREAKPOINT STATES WHAT ANY BREAKPOINT STATES.
+
+   Breakpoint CSS is an override, not a replacement: a property written at `all`
+   and left out of `mobile` still applies on a phone. So the four sets have to
+   agree about WHICH properties exist, and `flatten`'s probe does not guarantee
+   that — it cancels a value the element merely inherited, and whether a value
+   counts as inherited can itself change with the width. Measured: the hero
+   headline kept `font-size` at 1440 and 860 and lost it at 390, so a 95px
+   headline rendered on a 390px screen and ran off the side.
+
+   This fills the holes rather than widening the sets: for every property some
+   breakpoint states, each of the others gets ITS OWN measured value, read from
+   the full set `flatten` left on the element. Nothing is invented and nothing
+   is copied across widths.
+   ========================================================================== */
+function evenOut(
+  out: Record<string, Record<string, string>>,
+  sources: Sources,
+): StyleData {
+  const keys = Object.keys(out);
+  if (keys.length < 2) return out as StyleData;
+
+  const parsed = new Map<string, Map<string, string>>();
+  for (const k of keys) parsed.set(k, new Map(declarations(out[k]["&"])));
+
+  const union = new Set<string>();
+  for (const m of parsed.values()) for (const p of m.keys()) union.add(p);
+
+  const fullOf = (key: string): Map<string, string> => {
+    const el = key === "all" ? sources[0].el : sources.find((s) => s.key === key)?.el;
+    return new Map(declarations(el?.getAttribute("data-pf-full") ?? ""));
+  };
+
+  const fixed: Record<string, Record<string, string>> = {};
+  for (const k of keys) {
+    const mine = parsed.get(k)!;
+    const missing = [...union].filter((p) => !mine.has(p));
+    if (missing.length === 0) {
+      fixed[k] = out[k];
+      continue;
+    }
+    const full = fullOf(k);
+    const add = missing
+      .map((p) => [p, full.get(p)] as const)
+      .filter(([, v]) => v !== undefined)
+      .map(([p, v]) =>
+        LAYOUT_PROPS.has(p) && !v!.includes("!important")
+          ? `${p}: ${v} !important;`
+          : `${p}: ${v};`,
+      );
+    fixed[k] = { "&": `${out[k]["&"]} ${add.join(" ")}`.trim() };
+  }
+  return fixed as StyleData;
 }
 
 /** Kept for the single-breakpoint paths (drawn artwork, loose text). */
@@ -924,15 +1074,72 @@ function convert(sources: Sources, parent: ParentLayout | null): PFNode | null {
     if (mapped) return mapped;
   }
 
-  // Whole drawn-artwork subtrees go through verbatim.
-  /* Drawn artwork keeps DESKTOP's markup. `data.code` has no per-breakpoint
+  /* ==========================================================================
+     TAG-SEMANTIC SUBTREES GO THROUGH WHOLE.
+
+     A table does not lay out because of its CSS; it lays out because it is a
+     table. The same is true of a list's markers and a form's controls. Walked
+     into FlexBlocks they keep every declaration and lose the thing that made
+     them work — measured on the first real page, the size chart's cells landed
+     434px left of where they belong and 122px too narrow, every one of them.
+
+     So in verbatim mode these arrive as `Custom.HTML`, markup intact. The cost
+     is that PageFly cannot edit inside them, which is the honest trade: a table
+     that renders correctly and cannot be restyled beats a table of forty loose
+     boxes that can. Everything around them stays real PageFly elements.
+
+     Only in verbatim mode. The React mockup builds its tables out of divs and
+     has no forms, so this would change nothing there but the risk. */
+  if (verbatim && TAG_SEMANTIC.has(el.tagName)) {
+    /* A PLAIN WRAPPER, not the element's own style.
+
+       `styleOfAll` would give the wrapper the declarations of the thing inside
+       it, and the thing inside it is already carrying them — the markup went
+       through flattened. A `<table>` wrapped in a `display: table` div becomes
+       a table inside a table: the outer one shrinks to its content and the
+       whole block moves. Measured, the size chart landed 407px left and 119px
+       narrow with every cell in it.
+
+       The wrapper exists only to occupy the parent's flow, so that is all it
+       states. */
+    /* THE WRAPPER KEEPS EVERYTHING BUT `display`.
+
+       Blanking it entirely was too much: the sign-up form lost the box that
+       centred it and went 180px left, taking the footer 91px down with it. The
+       wrapper still has to sit in its parent's flow the way the element did —
+       its margins, its basis, its alignment.
+
+       Only `display` is wrong to copy, and only for the tag that carries its
+       layout in it: a `display: table` div wrapping a `<table>` makes a table
+       inside a table, and the outer one shrinks to its content. */
+    return CUSTOM_HTML(liquidSafe(el.outerHTML), PASS_THROUGH);
+  }
+
+  /* Whole drawn-artwork subtrees go through verbatim.
+
+     NOT IN VERBATIM MODE. `isDrawnArtwork` asks whether the inline style states
+     an `aspect-ratio` and the subtree holds no text — a sound test for the
+     React mockup, where only `MockImage` writes that inline. Flattened, EVERY
+     element carries its computed `aspect-ratio`, so the test matches every
+     image frame on the page and freezes each one as desktop markup. `data.code`
+     has no per-breakpoint form, so those frames kept their 1440px boxes at
+     390px: the atelier section came out 2,191px too tall and the proof section
+     2,574px, which between them is most of a 50% overrun.
+
+     Drawn artwork keeps DESKTOP's markup. `data.code` has no per-breakpoint
      form, so the SVG cannot vary; what does vary is its box, and that is CSS. */
-  if (isDrawnArtwork(el)) {
-    return CUSTOM_HTML(liquidSafe(el.outerHTML), styleOfAll(sources, parent));
+  if (!verbatim && isDrawnArtwork(el)) {
+    return CUSTOM_HTML(
+      liquidSafe(el.outerHTML),
+      verbatim ? PASS_THROUGH : styleOfAll(sources, parent),
+    );
   }
 
   if (el.tagName === "SVG" || el.tagName === "svg") {
-    return CUSTOM_HTML(liquidSafe(el.outerHTML), styleOfAll(sources, parent));
+    return CUSTOM_HTML(
+      liquidSafe(el.outerHTML),
+      verbatim ? PASS_THROUGH : styleOfAll(sources, parent),
+    );
   }
 
   if (el.tagName === "IMG") {
@@ -956,8 +1163,30 @@ function convert(sources: Sources, parent: ParentLayout | null): PFNode | null {
   }
 
   /* CSS-only decoration: a divider, rail or dot. As a childless FlexBlock the
-     editor covers it with a "Drop element here" placeholder. */
+     editor covers it with a "Drop element here" placeholder.
+
+     THE STYLE GOES ON ONE OF THE TWO, NOT BOTH. `data.code` is the element's
+     own `outerHTML`, which in verbatim mode is carrying its full flattened
+     style already — so giving the wrapper the same declarations paints
+     everything twice. Invisible on a photograph, since one copy covers the
+     other exactly; not invisible on a translucent one. The hero's scrim is
+     `rgba(18,16,12,.74)` at the top, and two of them made the headline
+     underneath it almost unreadable. */
   if (kids.length === 0 && !text) {
+    /* AN EMPTY BOX IS CSS, SO IT STAYS CSS.
+
+       Wrapping it as `Custom.HTML` keeps the editor from stamping a "Drop
+       element here" placeholder on it, which is why it was done — and it freezes
+       the DESKTOP markup, because `data.code` has no per-breakpoint form. For a
+       drawn SVG that is the right trade. For a box whose whole appearance is a
+       background and a border it is the wrong one: the hero's photograph layer
+       and the page's rules kept their 1,440px and 1,320px widths at a 390px
+       viewport and made the page itself 1,352px wide.
+
+       As a FlexBlock the same box carries four breakpoints of CSS and reflows.
+       The placeholder is a cosmetic cost in the editor; a page that scrolls
+       sideways on a phone is not cosmetic. */
+    if (verbatim) return FB(styleOfAll(sources, parent), []);
     return CUSTOM_HTML(liquidSafe(el.outerHTML), styleOfAll(sources, parent));
   }
 
@@ -1026,8 +1255,18 @@ export function pageFromBreakpoints(
   const desktop = renders.find((r) => r.key === "all");
   if (!desktop) throw new Error("The desktop render is required");
 
+  /* THE ONLY child, not the first one.
+     
+     The React mockup renders one surface div inside the stage, so "unwrap one
+     level" and "take the first child" were the same instruction and the cheaper
+     one was written. A page the build model wrote as HTML has a body with five
+     children — header, main, three more — and taking the first exported the
+     header alone: 21 elements for a ten-section page, the other four silently
+     gone. Unwrap only when there is genuinely one wrapper to unwrap. */
   const innerOf = (root: HTMLElement) =>
-    (root.firstElementChild as HTMLElement | null) ?? root;
+    root.children.length === 1
+      ? ((root.firstElementChild as HTMLElement | null) ?? root)
+      : root;
 
   const roots: Sources = [
     { key: "all", el: innerOf(desktop.root) },
@@ -1043,11 +1282,29 @@ export function pageFromBreakpoints(
 
   /* One FlexSection wrapping the page, carrying the mockup's own background so
      the area outside the content column matches too. */
+  /* THE WRAPPER MATCHES WHAT IT WRAPS.
+
+     A flex column with `align-items: stretch` is right for the React mockup,
+     whose surface is exactly that. It is wrong for a document: a body is a
+     block, adjacent block margins COLLAPSE inside one and do not inside a flex
+     container, so every collapsed margin in the source became a real gap in the
+     export and the error accumulated down the page. Measured: 26 of 198 leaves
+     within 2px of where they belong, with a spread of −224 to +271 while their
+     own heights were right to the pixel.
+
+     The width cap goes for the same reason. The mockup's own sections decide
+     where the page is full-bleed and where it caps; imposing 1440px over the
+     top of that turns every full-bleed band into a centred column. */
   const wrapper = FB(
     {
       all: {
-        "&":
-          `display: flex !important; flex-flow: column !important;` +
+        "&": verbatim
+          ? `display: block; width: 100%;` +
+            ` background-color: ${page.tokens.bg}; color: ${page.tokens.ink};` +
+            ` font-family: ${page.tokens.fontBody};` +
+            ` --pf-flex-layout-width: fill; --pf-flex-layout-height: hug;` +
+            ` --pf-flex-layout-direction: vertical;`
+          : `display: flex !important; flex-flow: column !important;` +
           ` align-items: stretch !important; width: 100% !important;` +
           /* The cap, on the block rather than in the stylesheet. `width: 100%`
              was already here and the `max-width` that bounds it was not — it was

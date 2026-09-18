@@ -68,6 +68,21 @@ export type Provider = {
     maxTokens: number;
     signal?: AbortSignal;
     /**
+     * Whether the answer is expected to be a JSON object. Default true, which
+     * is what every caller wanted for the whole life of this file.
+     *
+     * It reaches the wire on DeepSeek, which takes a `response_format` and then
+     * REFUSES the request if the prompt does not also contain the word "json":
+     *
+     *   Prompt must contain the word 'json' in some form to use
+     *   'response_format' of type 'json_object'.
+     *
+     * So a caller that asks for HTML must say so here as well as in the prompt.
+     * Leaving the flag out of the call and only out of the prompt is a 400 from
+     * the vendor, which is how this was found.
+     */
+    json?: boolean;
+    /**
      * Called as output arrives, with the characters seen so far.
      *
      * OPT-IN, AND THAT IS DELIBERATE. Passing it switches the call to a
@@ -413,7 +428,7 @@ function deepseekProvider(role: Role): Provider {
   return {
     name: "deepseek",
     model,
-    async complete({ system, user, maxTokens, signal, onProgress }) {
+    async complete({ system, user, maxTokens, signal, onProgress, json = true }) {
       const res = await fetch("https://api.deepseek.com/chat/completions", {
         method: "POST",
         headers: {
@@ -427,7 +442,9 @@ function deepseekProvider(role: Role): Provider {
             { role: "system", content: system },
             { role: "user", content: user },
           ],
-          response_format: { type: "json_object" },
+          /* Omitted entirely rather than set to a "text" type: the parameter
+             is optional, and a mode nobody asked for is a mode nobody tested. */
+          ...(json ? { response_format: { type: "json_object" as const } } : {}),
           /* Only when somebody is listening. A streaming response is parsed by
              a different code path, and this one builds every page — so the
              request stays byte-for-byte what it has always been unless a caller

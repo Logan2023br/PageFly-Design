@@ -150,6 +150,14 @@ export type DesignOutcome =
       used: true;
       tree: DesignTree;
       /**
+       * The document, when `MOCKUP_HTML` is on — and then `tree` is empty.
+       *
+       * Optional because it is one mode of two and every existing reader of
+       * this type predates it. A reader that does not know about it gets a page
+       * with no sections, which is what a page with no tree honestly is.
+       */
+      html?: string;
+      /**
        * How many problems the audit found on the FIRST pass.
        *
        * Recorded because it is the number that says which skill file is
@@ -589,6 +597,38 @@ function orderLines(order: Order, bg: string, ink: string): string[] {
  * real thing rather than a reconstruction. Async because `trainingLines`
  * reads the database.
  */
+/* ==========================================================================
+   HTML MOCKUP MODE — the pipeline with our half switched off.
+
+   Normally this stage hands the model PageFly's alphabet and a skill set that
+   says how to use it, and takes back a design tree. That tree is what makes the
+   export deterministic, and it is also what makes the question below
+   unanswerable: how good a page does the build model produce from Opus's
+   description ALONE, with nothing of ours in the prompt?
+
+   So this mode sends the user half unchanged — that half IS Opus's description
+   — and replaces the entire system half with one sentence naming the output
+   format. Not a rule: without it the model does not know whether to answer in
+   HTML or in JSON, and the experiment is about design freedom, not about
+   guessing a wire format.
+
+   It is off unless `MOCKUP_HTML` is set, and it is read per call rather than at
+   module load so a test can turn it on and off in one process.
+
+   WHAT IT COSTS, stated because the mode is easy to leave on by accident: the
+   answer is HTML, so there is no tree — and no tree means no audit against
+   Opus's spec, no image resolution, and no `.pagefly`. The page can be looked
+   at and nothing else.
+   ========================================================================== */
+export function htmlMockupEnabled(): boolean {
+  const v = process.env.MOCKUP_HTML;
+  return v === "1" || v === "true";
+}
+
+const HTML_SYSTEM =
+  "Return one complete, self-contained HTML document and nothing else. " +
+  "No markdown fence, no commentary before or after it.";
+
 async function buildPrompts(
   input: DesignInput,
 ): Promise<{ system: string; user: string }> {
@@ -599,7 +639,10 @@ async function buildPrompts(
      which read as a broken build rather than as a mode working correctly.
      Asking is the bug, not the miss. */
   const free = order ? isFreeOrder(order) : false;
-  const system = order
+  const html = htmlMockupEnabled();
+  const system = html
+    ? HTML_SYSTEM
+    : order
     ? [
         loadSkills("design"),
         ...(free
@@ -658,7 +701,9 @@ async function buildPrompts(
     ...(marketLines(input.market ?? null).length
       ? [...marketLines(input.market ?? null), ``]
       : []),
-    `Return the JSON object now.`,
+    html
+      ? `Return the HTML document now.`
+      : `Return the JSON object now.`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -976,6 +1021,10 @@ export async function designPageTree(
       system,
       user,
       onProgress,
+      /* The answer is a document, so the JSON response format must come off the
+         request too — DeepSeek refuses `json_object` when the prompt no longer
+         says "json". */
+      json: !htmlMockupEnabled(),
       /* Measured, per provider, and not interchangeable. A truncated tree is
          not parseable JSON, so running out of budget costs the whole page.
 
@@ -1088,6 +1137,7 @@ export async function designPageTree(
 
     try {
       const again = await provider.complete({
+        json: !htmlMockupEnabled(),
         system,
         user,
         maxTokens: ceilingFor(),
@@ -1116,6 +1166,56 @@ export async function designPageTree(
     input: u.input + discarded.input,
     output: u.output + discarded.output,
   });
+
+  /* ==========================================================================
+     HTML MOCKUP MODE STOPS HERE, and stops before everything that follows.
+
+     Placed after the retry loop so a truncated answer is still asked again —
+     HTML runs longer than the tree it replaces, so truncation is MORE likely,
+     not less — and before the parse, because there is no tree to parse and
+     nothing below this line can run without one: the audit compares Opus's
+     spec to nodes, the image resolver walks nodes for their queries, and the
+     repair prompt quotes nodes back at the model.
+
+     The fence is stripped rather than forbidden. The system sentence asks for a
+     bare document and the model wraps it in ```html anyway, with a paragraph of
+     its own either side — measured at 142 characters before and 1,124 after. A
+     mode whose whole point is to add no rules cannot answer that by adding a
+     rule, so it is cleaned up here instead.
+     ========================================================================== */
+  if (htmlMockupEnabled()) {
+    const fenced = completion.text.match(/```(?:html)?\s*([\s\S]*?)```/);
+    const html = (fenced ? fenced[1] : completion.text).trim();
+
+    if (!/<html[\s>]/i.test(html))
+      return {
+        used: false,
+        reason: completion.truncated
+          ? `ran out of output budget at ${completion.usage.output} tokens — the document was cut off`
+          : `model did not return HTML — ${completion.usage.output} output tokens, ` +
+            `answer began: ${JSON.stringify(html.slice(0, 120))}`,
+        usage: spent(completion.usage),
+      };
+
+    console.log(
+      `[design] ${input.pageType} · html mockup · ${html.length.toLocaleString()} chars` +
+        `${/<\/html>\s*$/i.test(html) ? "" : " · WARNING: no closing </html>, likely truncated"}`,
+    );
+
+    return {
+      used: true,
+      /* There is no tree, and pretending otherwise would put an empty one in
+         front of every reader downstream. The page carries the document and
+         says so; `MockupPage` draws it and the export path declines it. */
+      tree: { motionPlan: "", sections: [] } as unknown as DesignTree,
+      html,
+      auditFailures: 0,
+      images: {},
+      videos: {},
+      credits: [],
+      usage: spent(completion.usage),
+    };
+  }
 
   const raw = parseObject(completion.text);
   if (!raw)

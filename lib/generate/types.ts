@@ -353,6 +353,15 @@ export type PageMockup = {
     anything that pulls in zod or React. */
 export type DesignOverlay = {
   tree: unknown;
+  /**
+   * The whole page as one HTML document, when the build ran in HTML mockup mode
+   * (`MOCKUP_HTML`). Then `tree` is an empty shell and this is the page.
+   *
+   * Optional and last of the required fields, so a deck snapshotted before this
+   * existed still reopens — and a deck built WITH it reopens anywhere, since it
+   * is a string and survives the database round trip like everything else here.
+   */
+  html?: string;
   /** image query → resolved photo URL */
   images: Record<string, string>;
   /** query → background-video URL, at most one per page. Absent on a page

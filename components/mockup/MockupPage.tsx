@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { MockupBlock, PageMockup } from "@/lib/generate/types";
 import { deviceForWidth } from "@/lib/design/derive";
 import { DesignRender } from "@/lib/design/render";
@@ -150,6 +150,22 @@ export const MockupPage = memo(function MockupPage({
     fontFamily: page.tokens.fontBody,
   };
 
+  /* A page built in HTML mockup mode is a document, not a tree. It goes in an
+     iframe and the two reasons are the whole design of this branch.
+
+     `@media`. The model writes its own breakpoints, and a media query asks the
+     VIEWPORT how wide it is — not the box it happens to sit in. Inlined, a
+     390px phone preview would answer with the laptop's width and every mobile
+     rule would be wrong in a way that looks like the model's fault. An iframe
+     IS a viewport, so `width` reaches the query.
+
+     And its CSS is its own. The document arrives with whatever resets and
+     `body` rules the model chose; injected into this page they would reach the
+     app around it. The frame is the boundary that already exists — the free
+     collections use it for the same reason (`lib/collections/pagefly.ts`). */
+  if (typeof page.design?.html === "string" && page.design.html.trim() !== "")
+    return <HtmlMockup html={page.design.html} width={width} bg={page.tokens.bg} />;
+
   /* A page the model designed is rendered from its tree instead of its blocks.
      Same surface, same width, so every frame, capture and export path around
      this component is unaffected by which one it got. */
@@ -184,6 +200,55 @@ export const MockupPage = memo(function MockupPage({
     </MockProvider>
   );
 });
+
+/**
+ * One HTML document, drawn at a real device width.
+ *
+ * HEIGHT IS MEASURED, NOT ASSUMED. Left at a fixed height the iframe would
+ * scroll inside itself, and everything outside this component scrolls the page
+ * instead — the results card's hover-scroll, Scrub, and the preview frame all
+ * move a tall element past a short window. So the frame grows to its content
+ * and stays a passive picture, exactly as the tree render does.
+ *
+ * `srcDoc` keeps it same-origin, which is what makes that measurement legal at
+ * all; a cross-origin frame would not hand over `scrollHeight`.
+ */
+function HtmlMockup({ html, width, bg }: { html: string; width: number; bg: string }) {
+  const ref = useRef<HTMLIFrameElement>(null);
+  const [height, setHeight] = useState(900);
+
+  const measure = useCallback(() => {
+    const doc = ref.current?.contentDocument;
+    if (!doc?.body) return;
+    /* `scrollHeight` on both, because a document whose body is floated or
+       absolutely positioned reports 0 on one of them and the real figure on the
+       other. */
+    const h = Math.max(doc.body.scrollHeight, doc.documentElement?.scrollHeight ?? 0);
+    if (h > 0) setHeight(h);
+  }, []);
+
+  /* Re-measured after load AND on the document's own size changes: webfonts
+     land late and reflow the page, and a height taken before they arrive cuts
+     the last section off. */
+  useEffect(() => {
+    const doc = ref.current?.contentDocument;
+    if (!doc?.body || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(doc.body);
+    return () => ro.disconnect();
+  }, [measure, html, width]);
+
+  return (
+    <iframe
+      ref={ref}
+      title="Page mockup"
+      srcDoc={html}
+      onLoad={measure}
+      scrolling="no"
+      style={{ width, height, border: 0, display: "block", background: bg }}
+    />
+  );
+}
 
 /**
  * The tree on a page, once, validated.
