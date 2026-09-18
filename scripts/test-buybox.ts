@@ -125,6 +125,113 @@ async function main(): Promise<void> {
   );
 
   console.log();
+  /* ======================================================================
+     A SECOND GALLERY BESIDE THE BUY BOX.
+
+     One build put a five-slide `slideshow` in the same band as the `product`
+     node, each slide a photograph of the same dress. The page showed the
+     product twice — once in an element bound to the merchant's real media and
+     once in one bound to nothing — and the two galleries argued with each other
+     down the whole opening screen.
+
+     The contract already said "never put `image` nodes beside it". It named the
+     one shape somebody had got wrong before, and a slideshow is the same
+     mistake with a different element, so the rule is now about GALLERIES rather
+     than about `image`.
+
+     ONLY IN THE BAND THAT HOLDS THE BUY BOX. A product page is meant to carry
+     photographs further down — the fabric, the styling, the detail shots — and
+     a rule that reached those would delete the page's whole argument.
+     ====================================================================== */
+  console.log("\nand a second gallery beside the buy box");
+
+  const detailOrder = {
+    vertical: "general",
+    archetype: "E" as const,
+    patternIds: ["product-detail-gallery"],
+    motionIds: [],
+    sections: [{ role: "commerce", pattern: "product-detail-gallery" }],
+  };
+
+  const bandWith = (extra: unknown[]) => ({
+    sections: [
+      {
+        type: "section" as const,
+        role: "commerce",
+        pattern: "product-detail-gallery",
+        children: [
+          {
+            type: "row" as const,
+            children: [
+              ...extra,
+              { type: "product" as const, extras: [{}, {}] },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+
+  const twoGalleries = audit(
+    bandWith([{ type: "slideshow", slides: [{}, {}, {}, {}, {}] }]) as never,
+    detailOrder as never,
+    "#FFFFFF",
+    "product",
+  );
+  const g = twoGalleries.filter((p) => p.includes("second gallery"));
+  check(g.length === 1, "a slideshow beside the buy box is reported", g[0]?.slice(0, 80));
+  check(g[0]?.includes("slideshow"), "and the offending element is named", g[0]?.slice(0, 80));
+
+  const withImage = audit(
+    bandWith([{ type: "image", query: "dress", ratio: 1.2 }]) as never,
+    detailOrder as never,
+    "#FFFFFF",
+    "product",
+  );
+  check(
+    withImage.filter((p) => p.includes("second gallery")).length === 1,
+    "so is a loose image — the shape the contract already named",
+  );
+
+  const clean = audit(
+    bandWith([]) as never,
+    detailOrder as never,
+    "#FFFFFF",
+    "product",
+  );
+  check(
+    clean.filter((p) => p.includes("second gallery")).length === 0,
+    "a band with only the buy box in it is fine",
+  );
+
+  /* The rest of a product page is photographs, and must stay that way. */
+  const storyBand = audit(
+    {
+      sections: [
+        {
+          type: "section" as const,
+          role: "content",
+          pattern: "story-band",
+          children: [{ type: "image" as const, query: "fabric", ratio: 1.2 }],
+        },
+      ],
+    } as never,
+    {
+      vertical: "general",
+      archetype: "E" as const,
+      patternIds: ["story-band"],
+      motionIds: [],
+      sections: [{ role: "content", pattern: "story-band" }],
+    } as never,
+    "#FFFFFF",
+    "product",
+  );
+  check(
+    storyBand.filter((p) => p.includes("second gallery")).length === 0,
+    "and a photograph in any other band is left alone",
+    storyBand.filter((p) => p.includes("second gallery"))[0]?.slice(0, 90) ?? null,
+  );
+
   console.log(failures === 0 ? "PASS" : `FAIL — ${failures} problem${failures === 1 ? "" : "s"}`);
   if (failures) process.exitCode = 1;
 }

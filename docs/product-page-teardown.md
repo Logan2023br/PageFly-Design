@@ -5,8 +5,9 @@
 registry. The page is `product-3` for `mxhxua-6i.myshopify.com`, built
 2026-09-18, and it is the page the editor shows three faults on.
 
-**Why it is written down.** Two of the three faults are in code that knowingly
-contradicts the reference, with a comment saying so. That is worth a document
+**Why it is written down.** One fault is in code that knowingly contradicts the
+reference, with a comment saying so; one has already been repaired once against
+this same symptom and is back; one is a gap the last repair did not reach. That is worth a document
 rather than a commit message, because the same reasoning will otherwise be
 applied to the next element.
 
@@ -145,33 +146,53 @@ comes out.
 
 ---
 
-## 4 · Fault 2 — clicking a form input
+## 4 · Fault 2 — clicking a form input — NOT DIAGNOSED
 
-**What the reference says.**
+**A first reading of this said `Form2.Field.label` should be a string, because
+the field table says string and an object is written. That reading was wrong,
+and the code says why.** `builder.ts:1288`:
 
-| Element | Field | Type |
+> Written as a bare string, `label.on` is undefined, so every label was hidden —
+> the imported form showed three inputs carrying PageFly's own placeholder text
+> and no Name, Email or Message anywhere. Clicking one opened a settings panel
+> reading a sub-field off a string and the editor answered "Something went
+> wrong".
+
+The string was tried. It failed, and it failed at the same click. The object is
+what fixed it, together with two other corrections made at the same time:
+`FormLabel` was given a style entry, and `FormInput` was deliberately left
+without one because `fields.md` marks it "cannot be styled on its own".
+
+So the form has already been repaired once, against this exact symptom, and the
+symptom is back. **Guessing a fourth shape for `label` would be the third guess
+on one element.** What can be said without guessing:
+
+**Two things in the file contradict the reference, and neither is proven to be
+the cause.**
+
+1. `Form2.Field.label` carries `value` as well as `text`. The comment above it
+   asks for exactly this test — "when an import confirms which one PageFly
+   reads, delete the other" — and the import has happened, but it shows only
+   that both were shipped, not which is read.
+2. `FormLabel` is given `data: { label }`. The reference says of it: **"copy: no
+   directly editable text"** and **"No configurable fields. Styling and copy
+   only."** An element with no fields is being handed one. By `page-json.md`'s
+   rule an undocumented key is "accepted, stored, and does nothing" — so this is
+   suspicious rather than damning.
+
+**How to settle it, in one import.** Build one page with four variants of the
+same one-field form and import them together:
+
+| # | `Form2.Field.label` | `FormLabel` data |
 |---|---|---|
-| `Form2.Field` | `label` | **string** |
-| `Form2.Field` | contains `FormLabel` (slot) | "shown by the parent `label.on` sub-field, **which is not writable here**" |
+| A | `{ on, text, value }` — as now | `{ label }` — as now |
+| B | `{ on, text, value }` | `{}` |
+| C | `{ on, text }` | `{}` |
+| D | `"E-mailadres"` | `{}` |
 
-**What was emitted.**
-
-```json
-{ "label": { "on": true, "text": "E-mailadres", "value": "E-mailadres" },
-  "required": true }
-```
-
-An object where a string is documented — and `label.on`, which the reference
-says is not writable. The inspector opens when the field is clicked, reads
-`label` expecting a string, and gets an object.
-
-**This one was a guess, and says so.** `builder.ts:1303`:
-
-> the inferred key of the two and an unread extra key costs nothing; **when an
-> import confirms which one PageFly reads, delete the other.**
-
-The import has now confirmed it. An unread extra key costs nothing; an unread
-extra key **of the wrong type on a documented field** costs the inspector.
+Click the input on each. The one that survives is the shape; the rest get
+deleted along with the guessing. Ten minutes, and it ends a question that has
+now cost three attempts.
 
 ---
 
@@ -196,6 +217,47 @@ letter at a time.
 **The table rows are fine** — `tableAsFlex` gives each row `min-width: 880px`,
 which is the fix from `SPECIFICATION, one letter at a time`. It is the cells
 inside other composites that have nothing.
+
+**FIXED.** `withFloor` in `builder.ts` now writes the floor into every style a
+composite emits, on the same split `cssAt` uses: boxes and pictures `0`,
+anything carrying words `min-content`.
+
+It never CREATES a style entry, and that restraint is the whole of the risk.
+Forty-five elements in this export carry none, and two of them must never carry
+one — `fields.md` marks `FormInput` and `TabHeader3` "cannot be styled on its
+own", and giving `FormInput` a style once answered "Something went wrong" on the
+first click and took the page with it. Those 45 keep whatever PageFly gives
+them; the other 129 get the floor.
+
+---
+
+## 5b · Two rules added while reading this
+
+Neither is a defect in the file. Both are shapes the file is allowed to have and
+should not be.
+
+**The product-detail band is the buy box and nothing else.** Section 1 of this
+page carries 110 elements: a five-slide `slideshow` of the dress, AND a
+`ProductBox` buried five FlexBlocks deep which has its own `ProductMedia3`
+gallery of six. The page shows the product twice — once in an element bound to
+the merchant's real media, once in one bound to nothing. A merchant changing the
+product in Shopify would watch half their own opening screen stay as it was.
+
+The contract said *"never put `image` nodes beside it"*, which named the one
+shape somebody had got wrong before; a slideshow is the same mistake in a
+different element. It now names galleries rather than `image`, and `audit.ts`
+reports a `slideshow`, `image` or `beforeAfter` in the band that holds the buy
+box — **only** that band, because the rest of a product page is meant to be full
+of photographs.
+
+**No filter or sort on a collection page.** Not a style preference. PageFly's
+catalogue does contain `ProductFilterAndSort`, `FilterButton`, `FilterOption`
+and a dozen more — they appear 180 times in `nesting.md`. **Not one of them has
+a documented field.** Ninety-six elements carry a field table; none of those do.
+There is no documented way to say what a facet filters on, what a sort sorts by,
+or which collection either reads, so a filter rail built out of rows and buttons
+is exactly as connected to the store as a photograph of one. A build shipped
+`CLEAR ALL` beside three collapsed facets above a grid that ignored all of them.
 
 ---
 
@@ -226,8 +288,8 @@ Worth stating, because three faults in one screenshot reads worse than it is.
 | # | Fault | Where | First step |
 |---|---|---|---|
 | 1 | Tabs render fails | `builder.ts` `TABS()` | **Import one page both ways and look.** `content` is in no field table and in no node shape, so nothing in the file says what it takes. Then either delete the tree, or stop using `Tabs3` for rich panels. Drop `TabHeader3.value` and add `DropdownButton` either way. |
-| 2 | Form inspector fails | `builder.ts:1306` | Write `label` as a plain string. Drop `label.on` — the reference says it is not writable. |
-| 3 | Text collapses | `builder.ts` composites | Give the floor to elements built there too, the same rule `cssAt` uses: boxes and pictures `0`, anything carrying words `min-content`. |
+| 2 | Form inspector fails | `builder.ts:1306` | **Not diagnosed — do not guess a fourth time.** Import the four-variant page in §4 and read the answer off it. |
+| 3 | Text collapses | `builder.ts` composites | **Done** — `withFloor`, on styles that already exist. |
 
 **Fault 1 needs an import to settle it**, and that is the same ten-minute loop
 `test-export.ts` was written around: build a page with one tabs section both

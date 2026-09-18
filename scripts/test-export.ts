@@ -969,6 +969,100 @@ async function main(): Promise<void> {
     );
   }
 
+  /* ======================================================================
+     THE FLOOR REACHES WHAT COMPOSITES BUILD, TOO.
+
+     `cssAt` gives every design-tree node a `min-width`, and that is where the
+     one-character-per-line fix lives. But a composite's internals never pass
+     through it: a table's cells, an accordion's rows, a media list's items and
+     every part of a buy box are constructed in `builder.ts` and reach the file
+     with whatever that function wrote.
+
+     Measured on a real export: 129 of 412 elements carried a style entry and no
+     `min-width` at all — 65 of them Paragraph4, which is the element the
+     collapse is visible on.
+
+     ONLY WHERE A STYLE ALREADY EXISTS. Forty-five more elements have no style
+     entry, and two of them must never have one — `fields.md` marks `FormInput`
+     and `TabHeader3` "cannot be styled on its own", and giving `FormInput` a
+     style once took the whole editor down on a click. Creating entries to carry
+     a floor would walk straight back into that.
+     ====================================================================== */
+  console.log("\nthe floor inside a composite");
+
+  {
+    const table = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "table",
+              rows: [
+                ["Maat", "34", "36", "38"],
+                ["Borst (cm)", "82", "86", "90"],
+              ],
+            },
+          ],
+          "spec-table",
+        ),
+      ],
+    });
+
+    const cells = table.items.filter((i) => i.type === "Paragraph4");
+    check(cells.length > 0, "the table has cells to check", `${cells.length}`);
+    const floored = cells.filter((c) => /min-width/.test(table.cssOf(c.id)));
+    check(
+      floored.length === cells.length,
+      "every table cell carries a floor",
+      `${floored.length}/${cells.length}`,
+    );
+    check(
+      /min-width:\s*min-content/.test(table.cssOf(cells[0]?.id ?? "")),
+      "and it is min-content — a cell carries words",
+      (table.cssOf(cells[0]?.id ?? "").match(/min-width:[^;]*/) ?? ["(none)"])[0],
+    );
+
+    /* The row is a box and must still be able to shrink; its own 110px-a-column
+       floor is what makes the table scroll rather than break. */
+    const rows = table.items.filter(
+      (i) => i.type === "FlexBlock" && /flex-direction: row/.test(table.cssOf(i.id)),
+    );
+    check(
+      rows.length > 0 && rows.every((r) => /min-width/.test(table.cssOf(r.id))),
+      "and the rows keep the floor they already had",
+      table.cssOf(rows[0]?.id ?? "").match(/min-width:[^;]*/)?.[0] ?? "(none)",
+    );
+  }
+
+  {
+    /* The two the reference forbids a style on. A floor must not be the thing
+       that finally gives them one. */
+    const form = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "form",
+              intent: "signup",
+              submit: "Aanmelden",
+              fields: [{ label: "E-mailadres", kind: "email", required: true }],
+            },
+          ],
+          "signup-band",
+        ),
+      ],
+    });
+    for (const type of ["FormInput"]) {
+      const el = form.items.find((i) => i.type === type);
+      if (!el) continue;
+      check(
+        form.cssOf(el.id) === "",
+        `${type} still carries no style of its own`,
+        form.cssOf(el.id) || "(none)",
+      );
+    }
+  }
+
   console.log("\nthe DOM-walk path's stylesheet");
 
   {

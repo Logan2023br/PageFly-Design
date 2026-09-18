@@ -1492,6 +1492,87 @@ const SLOT_RULES: Record<string, string[]> = {
  */
 const UNSTYLEABLE = new Set(["FormInput", "TabHeader3"]);
 
+/* ==========================================================================
+   CONTAINERS MAY SHRINK; WORDS MAY NOT — inside a composite as well.
+
+   `cssAt` in `toPagefly` gives every design-tree node this floor, and that is
+   where the one-character-per-line fix lives. A composite's internals never
+   pass through it: a table's cells, an accordion's rows, a media list's items
+   and every bound part of a buy box are built here and reach the file with
+   whatever this file wrote. Measured on a real export, 129 elements carried a
+   style and no floor at all — 65 of them Paragraph4, which is the element the
+   collapse shows on.
+
+   The same split as `toPagefly`, read off PageFly's own types rather than the
+   tree's: a box has no words of its own and shrinking is how a layout narrows,
+   so it keeps the zero. Everything else carries words and keeps `min-content`,
+   which is the width a browser would have given it before PageFly's base rules
+   overrode it. A picture is not a box and not words — on a replaced element
+   `min-content` is the source file's own width, so those keep the zero too.
+   ========================================================================== */
+const MAY_SHRINK = new Set([
+  /* The boxes layouts are built out of. */
+  "Body",
+  "Layout",
+  "FlexSection",
+  "FlexBlock",
+  /* Composites that lay their OWN children out in a row: a column's min-content
+     is its widest word, a row's is the SUM of its children's, which on a narrow
+     rail is wider than the rail. */
+  "ProductBox",
+  "ProductMedia3",
+  "MediaMain3",
+  "MediaList2",
+  "MediaListItem2",
+  "Slideshow",
+  "SlideshowSlide",
+  "Tabs3",
+  "TabsMenu3",
+  "TabContentWrapper3",
+  "TabsContent3",
+  "ContentList2",
+  "ContentListItem",
+  "Accordion3",
+  "Accordion3.Content.Wrapper",
+  "Accordion3.Content",
+  "Accordion3.Flex.Content",
+  "Form2",
+  "Form2.Field",
+  "ProductVariantSwatches",
+  "ProductQuantity",
+  "ImageComparison",
+  "CountDown",
+  /* Replaced elements — `min-content` there is the source file's intrinsic
+     width, which would refuse to shrink rather than refuse to break a word. */
+  "Image5",
+  "Divider2",
+  "Custom.HTML",
+]);
+
+/**
+ * The floor, written into a style that already exists.
+ *
+ * NEVER CREATES A STYLE ENTRY. Forty-five elements in a real export carry none,
+ * and two of them must never carry one — `fields.md` marks `FormInput` and
+ * `TabHeader3` "cannot be styled on its own", and giving `FormInput` a style
+ * once answered "Something went wrong" on the first click and took the page
+ * with it. A floor is not worth walking back into that; a node with no style is
+ * left exactly as it is.
+ */
+function withFloor(type: string, styleData: StyleData): StyleData {
+  if (styleData === null) return null;
+  const want = MAY_SHRINK.has(type) ? "0" : "min-content";
+  const out: Record<string, Record<string, string>> = {};
+  for (const [device, rules] of Object.entries(styleData)) {
+    const css = rules["&"] ?? "";
+    out[device] =
+      /(^|[;\s])min-width\s*:/.test(css)
+        ? { ...rules }
+        : { ...rules, "&": `${css} min-width: ${want};`.trim() };
+  }
+  return out;
+}
+
 const UNIFORM_CHILDREN: Record<string, string> = {
   Accordion3: "Accordion3.Content.Wrapper",
   Slideshow: "SlideshowSlide",
@@ -1673,7 +1754,7 @@ export class Page {
           __v: 0,
           id,
           type: n.type,
-          styles: JSON.stringify(n.styleData),
+          styles: JSON.stringify(withFloor(n.type, n.styleData)),
           createdAt: ts,
           updatedAt: ts,
         });

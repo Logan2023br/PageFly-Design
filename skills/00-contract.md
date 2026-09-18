@@ -80,8 +80,27 @@ users wrench zap`
 ## The four you must not get wrong
 
 **`product`** is the BUY BOX. One per page, maximum. It renders a live
-add-to-cart form AND its own image gallery — main shot plus thumbnails. Never
-put `image` nodes beside it for the product's own photos.
+add-to-cart form AND its own image gallery — main shot plus thumbnails.
+
+**THE PRODUCT-DETAIL SECTION IS THE `product` NODE AND NOTHING ELSE.** Not a
+`product` node beside something that also shows the product. One build put a
+five-slide `slideshow` in the same band as the buy box, each with its own
+photographs of the same dress: the page showed the product twice, once in an
+element bound to nothing and once in the real one, and the merchant met two
+galleries arguing with each other.
+
+So in the band that holds the buy box, these do not appear beside it:
+
+  `slideshow` · `image` · `beforeAfter` · any row of photographs of THIS product
+
+Every one of them is a second gallery. The `product` node already has one, it is
+bound to the merchant's real media, and it updates when they change the product.
+A hand-built gallery beside it never does.
+
+Put the buy box **directly in the section**, not wrapped in a stack of `row` and
+`col` around other things. Everything that argues for the purchase — the fabric
+story, the size table, the reviews — is its OWN section further down the page.
+One band, one job.
 
 `gallery: true` turns the thumbnail strip on; `galleryEdge` is `bottom | left |
 right | top`. That flag IS the gallery — one element with a setting. Do not model
@@ -348,6 +367,36 @@ mockup and collect nothing.
 Rule of thumb: if the platform has an element for the thing, use the node that
 becomes it. `custom` is for what has no element — a wave divider, a progress
 ring, a marquee of logos — and nothing else.
+
+## Controls that do nothing
+
+Some things a shopper expects are not yours to draw, because nothing behind them
+works. Drawn anyway they are a picture of a control: it looks pressable, it is
+pressable, and pressing it changes nothing on the merchant's live store.
+
+**NO FILTER OR SORT ON A COLLECTION PAGE.** No filter chips, no facet rail, no
+"Sort by", no "Clear all", no price slider, no collapsed category list.
+
+This is not a style preference. PageFly's element catalogue does contain filter
+elements — `ProductFilterAndSort`, `FilterButton`, `FilterOption` and a dozen
+more — and **not one of them has a documented field**. Ninety-six elements carry
+a field table; none of those do. There is no way to say what a facet filters on,
+what a sort sorts by, or which collection either reads. A filter rail built out
+of rows and buttons is exactly as connected to the store as a photograph of one.
+
+A build did it anyway: `CLEAR ALL` beside three collapsed facets and a price
+range, above a grid that ignored every one of them.
+
+**What a collection page is instead.** The products, well shown, and a reason to
+scroll:
+
+  `productList` with `source "collection"` — the grid, bound to the real
+  collection · a heading that names it · one or two editorial bands between
+  grids · links to sibling collections as `button` nodes, which DO work because
+  a link is a real destination
+
+A shopper who wants to narrow a list uses the theme's own collection page. This
+page is for the one the merchant is selling.
 
 ## Backgrounds
 

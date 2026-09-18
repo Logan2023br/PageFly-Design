@@ -262,6 +262,46 @@ export function audit(
   });
 
   /* ==========================================================================
+     TWO GALLERIES IN THE BAND THAT HOLDS THE BUY BOX.
+
+     One build put a five-slide `slideshow` in the same band as the `product`
+     node, each slide a photograph of the same dress. The page showed the
+     product twice — once in an element bound to the merchant's real media, once
+     in one bound to nothing — and a merchant changing the product in Shopify
+     would watch half of their own opening screen stay as it was.
+
+     The contract said "never put `image` nodes beside it", which named the one
+     shape somebody had got wrong before. A slideshow is the same mistake in a
+     different element, so the rule is about GALLERIES rather than about `image`.
+
+     ONLY IN THIS BAND. A product page is meant to be full of photographs — the
+     fabric, the styling, the detail shots — and every one of them is a section
+     of its own further down. A rule that reached those would delete the page's
+     whole argument for the purchase.
+     ========================================================================== */
+  const GALLERY_TYPES = new Set(["slideshow", "image", "beforeAfter"]);
+
+  order.sections.forEach((want, i) => {
+    if (!want.pattern?.startsWith("product-detail")) return;
+    const section = sections[i];
+    if (!section) return;
+    const inBand = walk(section);
+    if (!inBand.some((n) => n.type === "product")) return;
+
+    const others = inBand.filter((n) => GALLERY_TYPES.has(n.type));
+    if (others.length === 0) return;
+
+    const named = [...new Set(others.map((n) => n.type))].join(", ");
+    problems.push(
+      `The buy box band carries a second gallery (${named}). The "product" node ` +
+        `already has one, bound to the merchant's real media — a ${others[0].type} ` +
+        `beside it shows the same product twice and never updates when they ` +
+        `change it. Delete it, and put photographs of the fabric or the styling ` +
+        `in their own sections further down.`,
+    );
+  });
+
+  /* ==========================================================================
      A BUY BOX ON A PAGE THAT HAS NO PRODUCT.
 
      A `product` node is a ProductBox, and the exporter binds it to nothing — it
