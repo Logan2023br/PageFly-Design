@@ -164,6 +164,21 @@ export function ExportProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    /* A PAGE WRITTEN AS HTML IS LAID OUT ELSEWHERE.
+
+       Everything below reads the staged React render, and in HTML mockup mode
+       there is nothing there to read but an iframe — the document has its own
+       stylesheet and its own media queries, so it has to be laid out as a
+       document, at each width, before anything can be measured off it. */
+    const html = page.design?.html;
+    if (typeof html === "string" && html.trim() !== "") {
+      const { pageflyFromHtml } = await import("@/lib/pagefly/fromHtml");
+      const built = await pageflyFromHtml(html, page, EXPORT_WIDTH);
+      downloadBlob(built.blob, built.filename);
+      announceExport();
+      return;
+    }
+
     const renders: Rendered[] = [];
     EXPORT_BREAKPOINTS.forEach((bp, i) => {
       const node = bpRefs.current[i];
