@@ -1848,6 +1848,12 @@ export class Page {
     this.sections.push(section);
   }
 
+  /** How many sections are on the page. Read by callers that build a page one
+      section at a time and need to know whether any survived. */
+  sectionCount(): number {
+    return this.sections.length;
+  }
+
   build(): PageFlyFile {
     const ts = stamp();
     const items: Item[] = [];

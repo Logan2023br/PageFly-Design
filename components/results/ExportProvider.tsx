@@ -66,6 +66,47 @@ export function useExportOptional(): ExportState | null {
   return useContext(Ctx);
 }
 
+/**
+ * Ask the server to convert the document with the `pagefly-builder` skill.
+ *
+ * Returns null when the route is unavailable or answers badly, so the caller
+ * falls back to the converter that needs no model at all. A merchant who has
+ * waited for a build should get a file, not an apology, even on the day the
+ * vendor is down.
+ */
+async function pageflyFromHtmlViaSkill(
+  page: PageMockup,
+  html: string,
+): Promise<{ blob: Blob; filename: string } | null> {
+  const name = fileStem(page);
+  try {
+    const res = await fetch("/api/pagefly/from-html", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      /* The page's own palette travels with it: the converter writes the
+         wrapper's background, ink and face from these, and PageFly Design's
+         tokens would repaint a document that already chose its own. */
+      body: JSON.stringify({
+        html,
+        name,
+        bg: page.tokens.bg,
+        ink: page.tokens.ink,
+        fontBody: page.tokens.fontBody,
+        accent: page.tokens.accent,
+        border: page.tokens.border,
+        radius: page.tokens.radius,
+        band: page.tokens.surfaceAlt,
+      }),
+    });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    if (blob.size === 0) return null;
+    return { blob, filename: `${name}.pagefly` };
+  } catch {
+    return null;
+  }
+}
+
 const EXPORT_WIDTH = 1440;
 
 /* Every breakpoint the mockup supports, mapped to the keys PageFly styles
@@ -172,9 +213,28 @@ export function ExportProvider({ children }: { children: ReactNode }) {
        document, at each width, before anything can be measured off it. */
     const html = page.design?.html;
     if (typeof html === "string" && html.trim() !== "") {
+      /* TWO CONVERTERS, AND THE SKILL ONE IS ON.
+
+         `lib/pagefly/fromHtml.ts` lays the document out in four hidden frames
+         and writes PageFly nodes from what the browser measured. It is exact
+         about pixels and knows about PageFly only what `builder.ts` was taught
+         one import bug at a time.
+
+         The route below hands the `pagefly-builder` skill — 99 element types
+         with their verified shapes, every field, every legal nesting — to the
+         model that already wrote the page, and lets it choose the elements. The
+         measuring converter is not deleted and nothing about it has changed;
+         set `PAGEFLY_FROM_HTML=measure` to go back to it. */
+      const built = await pageflyFromHtmlViaSkill(page, html);
+      if (built) {
+        downloadBlob(built.blob, built.filename);
+        announceExport();
+        return;
+      }
+
       const { pageflyFromHtml } = await import("@/lib/pagefly/fromHtml");
-      const built = await pageflyFromHtml(html, page, EXPORT_WIDTH);
-      downloadBlob(built.blob, built.filename);
+      const fallback = await pageflyFromHtml(html, page, EXPORT_WIDTH);
+      downloadBlob(fallback.blob, fallback.filename);
       announceExport();
       return;
     }

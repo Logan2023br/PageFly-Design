@@ -669,6 +669,11 @@ function counterJs(cls: string, value: string): string {
   /* The digits only. A value of "1,240" animates to 1240 and is written back
      with its separators intact by the format below. */
   const target = Number(String(value).replace(/[^\d.]/g, "")) || 0;
+  /* NO `<` ANYWHERE IN THIS STRING. PageFly's custom-code validator rejects any
+     `<` in customJS and decodes percent-encoding before it looks, so there is no
+     way to smuggle one past it — and one character refuses the whole stylesheet
+     or script, not the line it is on. The loop below reads `p!==1` for that
+     reason alone; `p` is clamped to 1 the line above, so it is the same test. */
   return `
 var el=document.querySelector(".${cls}");
 if(el&&"IntersectionObserver" in window){
@@ -678,7 +683,7 @@ if(el&&"IntersectionObserver" in window){
     var t=${target},s=null,txt=el.textContent||"",pre=txt.split(/[0-9]/)[0],suf=txt.slice(txt.search(/[0-9][^0-9]*$/)+1);
     function step(now){ if(!s)s=now; var p=Math.min(1,(now-s)/900);
       el.textContent=pre+Math.round(t*(1-Math.pow(1-p,3))).toLocaleString()+suf;
-      if(p<1)requestAnimationFrame(step); }
+      if(p!==1)requestAnimationFrame(step); }
     requestAnimationFrame(step);
   });},{threshold:.4});
   io.observe(el);

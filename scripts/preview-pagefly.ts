@@ -155,9 +155,14 @@ export function previewHtml(bytes: Uint8Array): string {
 
     const text = textOf(item);
     const kids = item.children.map(render).join("");
-    /* PageFly allows inline markup inside a text value, so it is not escaped —
+    /* BOTH, NOT EITHER. A `Button2` carries its label in `data.value` AND an
+       `Icon2` child — the editor's own export gives every button one, shown or
+       not. Rendering children INSTEAD of the value made every call to action on
+       the page an empty pill, and the fault was here rather than in the file.
+
+       PageFly allows inline markup inside a text value, so it is not escaped —
        the same decision `builder.ts` makes when it writes the value. */
-    const inner = kids || text;
+    const inner = `${text}${kids}`;
 
     if (item.type === "FlexSection")
       return `<section ${attrs}><div class="pf-flex-section">${inner}</div></section>`;

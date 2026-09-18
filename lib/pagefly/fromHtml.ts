@@ -96,26 +96,39 @@ export async function pageflyFromHtml(
   width = 1440,
 ): Promise<{ blob: Blob; filename: string }> {
   const frames: HTMLIFrameElement[] = [];
-  const renders: Rendered[] = [];
 
   try {
-    for (const { key, width: w, height: h } of LAYOUTS) {
-      const el = frame(w, h);
-      document.body.appendChild(el);
-      frames.push(el);
+    /* ALL FOUR AT ONCE. They are four layouts of one document and nothing
+       passes between them, so running them in turn spends four times the wall
+       clock for no reason — and the slow part is waiting on the network, which
+       four frames share: the first to ask for an image warms the cache for the
+       other three.
 
-      el.srcdoc = html;
-      await new Promise<void>((done) => {
-        el.addEventListener("load", () => done(), { once: true });
-        setTimeout(done, 8_000);
-      });
+       This is the whole of the export's cost. There is no work here that can be
+       skipped, only overlapped: the measuring IS the fidelity. */
+    const laid = await Promise.all(
+      LAYOUTS.map(async ({ key, width: w, height: h }) => {
+        const el = frame(w, h);
+        document.body.appendChild(el);
+        frames.push(el);
 
-      const doc = el.contentDocument;
-      if (!doc?.body) continue;
-      await settle(doc);
-      flattenComputedStyles(doc.body);
-      renders.push({ key, root: doc.body });
-    }
+        el.srcdoc = html;
+        await new Promise<void>((done) => {
+          el.addEventListener("load", () => done(), { once: true });
+          setTimeout(done, 8_000);
+        });
+
+        const doc = el.contentDocument;
+        if (!doc?.body) return null;
+        await settle(doc);
+        flattenComputedStyles(doc.body);
+        return { key, root: doc.body } as Rendered;
+      }),
+    );
+
+    /* In the order `LAYOUTS` declares, which is the order the converter reads:
+       desktop first, because it is the base every other breakpoint overrides. */
+    const renders = laid.filter((r): r is Rendered => r !== null);
 
     if (renders.length === 0) throw new Error("The document did not lay out");
 
