@@ -77,13 +77,15 @@ const ASK = [
   "  whose logo, navigation and icons sit side by side is one `row` of three",
   "  children, not three stacked blocks.",
   "",
-  "· A ROW OF DIFFERENT THINGS GIVES ITS CHILDREN A `basis`. Three or more",
-  "  children of one type and no stated widths reads as a grid of repeating",
-  "  cards, and the exporter turns it into one — a card grid stacks, which is",
-  "  right for four product tiles and wrong for a header. A logo, a menu and a",
-  "  set of icons are three different things that happen to sit in a row: give",
-  "  each the width the stylesheet gives it (`basis: \"auto\"` where it hugs its",
-  "  content) and it stays a row.",
+  "· A ROW OF DIFFERENT THINGS PUTS A WIDTH IN EACH CHILD\'S `css`. Three or",
+  "  more children of one type, none of which states `css.flexBasis` or",
+  "  `css.width`, reads as a grid of repeating cards and is exported as one — a",
+  "  card grid stacks its cards, which is right for four product tiles and wrong",
+  "  for a header. A logo, a menu and a row of icons are three different things",
+  "  that happen to sit side by side, so give each one the width the stylesheet",
+  "  gives it: `\"css\": { \"flexBasis\": \"auto\" }` where it hugs its content,",
+  "  a percentage or a pixel value where the stylesheet states one. It must be",
+  "  inside `css`; a `basis` field on the node itself does not say this.",
 ].join("\n");
 
 function firstObject(text: string): unknown {
