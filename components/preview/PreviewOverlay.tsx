@@ -595,10 +595,26 @@ export function PreviewOverlay({
             is `hidden` while the brief is up), collapsed to zero, and the
             panel's `h-full` resolved to nothing: the brief did not scroll, it
             disappeared. Stretched, the stage is the flex line's height and both
-            children have a real box to size against. */}
+            children have a real box to size against.
+
+            AND THE TRACK IS PINNED TO THE STAGE, which stretching alone does
+            not do. The row was `auto`, so it took the mockup's LAYOUT height —
+            and `transform: scale` does not shrink layout, so the frame occupies
+            its full 938px however far it is zoomed out. On a stage shorter than
+            that the track still became 938, starting at the stage's top edge,
+            and `place-items-center` then centred the frame in the TRACK rather
+            than in the stage. While the stage grew to its content the two were
+            the same box and nobody could tell. Measured, same class chain, on a
+            521px stage:
+
+                auto track       frame 209px below centre, 192px cut off
+                minmax(0,1fr)    frame on centre, nothing cut
+
+            `minmax(0,1fr)` — not `1fr`, whose implicit `auto` minimum would let
+            the track grow right back. */}
         <div
           ref={stageRef}
-          className="relative grid min-h-0 flex-1 self-stretch place-items-center overflow-hidden"
+          className="relative grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] self-stretch place-items-center overflow-hidden"
         >
           {/* OPAQUE, and across the whole stage.
 
