@@ -1445,6 +1445,21 @@ function productBox(
       const accent = opts.accent ?? "currentColor";
       const r = opts.radius ?? 0;
 
+      /* THE PAGE'S OWN LOOK, LAID OVER THE DEFAULTS.
+
+         Every rule below is a base the page may amend, not a decision it has to
+         accept. `part("dot")` appends what the design stated for that part, so
+         a mockup drawing 54px squares gets 54px squares while keeping the
+         border, the cursor and the transition it never mentioned.
+
+         Appended rather than merged because CSS already settles this: the last
+         declaration of a property wins, and a partial override is exactly what
+         "state the size, keep the rest" means. */
+      const part = (name: "dot" | "dotSelected" | "tile" | "tileSelected" | "label" | "dropdown") => {
+        const declared = node.swatchStyle?.[name];
+        return declared ? ` ${declarations(declared)}` : "";
+      };
+
       /* ======================================================================
          EVERY FORM STYLED, NO FORM FORCED.
 
@@ -1469,14 +1484,17 @@ function productBox(
               `padding: 12px 14px; border: 1px solid ${rule}; background: transparent;` +
               ` font-size: 15px; ${inkRule(opts)}` +
               (r ? ` border-radius: ${r}px;` : "") +
-              " appearance: none; cursor: pointer; width: 100%;",
+              " appearance: none; cursor: pointer; width: 100%;" +
+              part("dropdown"),
 
             /* colour dots */
             "& .pf-vs-color label":
               `width: 28px; height: 28px; border-radius: 999px; border: 1px solid ${rule};` +
-              " cursor: pointer; transition: box-shadow .15s ease;",
+              " cursor: pointer; transition: box-shadow .15s ease;" +
+              part("dot"),
             '& .pf-vs-color > input[type="radio"]:checked + label':
-              `box-shadow: 0 0 0 2px ${opts.ink ?? "#fff"}, 0 0 0 4px ${accent};`,
+              `box-shadow: 0 0 0 2px ${opts.ink ?? "#fff"}, 0 0 0 4px ${accent};` +
+              part("dotSelected"),
             '& .pf-vs-color > input[type="radio"]:disabled + label':
               `opacity: .3; cursor: not-allowed;`,
 
@@ -1485,9 +1503,11 @@ function productBox(
               `min-width: 48px; padding: 10px 14px; border: 1px solid ${rule};` +
               ` text-align: center; cursor: pointer; font-size: 14px; ${inkRule(opts)}` +
               (r ? ` border-radius: ${r}px;` : "") +
-              " transition: border-color .15s ease, background .15s ease;",
+              " transition: border-color .15s ease, background .15s ease;" +
+              part("tile"),
             '& .pf-vs-label > input[type="radio"]:checked + label':
-              `border-color: ${accent}; background: ${accent}; color: ${readableInk(accent)};`,
+              `border-color: ${accent}; background: ${accent}; color: ${readableInk(accent)};` +
+              part("tileSelected"),
             /* Sold out has to READ as sold out. It ships at opacity .4, which is
                indistinguishable from "faint" — a shopper clicks it and nothing
                happens. */
@@ -1495,9 +1515,14 @@ function productBox(
               `opacity: .35; cursor: not-allowed; text-decoration: line-through;`,
 
             /* image / square swatches */
+            /* A square swatch is a dot that is not round, so it takes the same
+               amendment — a mockup stating 54px squares means both. */
             "& .pf-vs-square label":
-              `border: 1px solid ${rule}; cursor: pointer;` + (r ? ` border-radius: ${r}px;` : ""),
-            '& .pf-vs-square > input[type="radio"]:checked + label': `border-color: ${accent};`,
+              `border: 1px solid ${rule}; cursor: pointer;` +
+              (r ? ` border-radius: ${r}px;` : "") +
+              part("dot"),
+            '& .pf-vs-square > input[type="radio"]:checked + label':
+              `border-color: ${accent};` + part("dotSelected"),
             '& .pf-vs-square > input[type="radio"]:disabled + label':
               `opacity: .35; cursor: not-allowed;`,
 
@@ -1510,7 +1535,8 @@ function productBox(
           all: {
             "&":
               "font-size: 11px; font-weight: 600; letter-spacing: .08em;" +
-              ` text-transform: uppercase; opacity: .55; ${inkRule(opts)}`,
+              ` text-transform: uppercase; opacity: .55; ${inkRule(opts)}` +
+              part("label"),
           },
         },
         { all: { "&": "display: flex !important; gap: 10px; flex-wrap: wrap;" } },

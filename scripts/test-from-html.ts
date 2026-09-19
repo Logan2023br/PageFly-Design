@@ -182,6 +182,76 @@ const file = pageflyFromTree(
   { images: wired.images, videos: wired.videos },
 );
 
+/* ── the option controls ───────────────────────────────────────────────── */
+
+/* The exporter has always styled these, in code: 28px circles, 48px-wide
+   tiles, an option name at .55 opacity. A mockup drawing 54px squares imported
+   as circles and the file said nothing about it. `swatchStyle` is the page's
+   amendment, and the test is that it reaches the CSS without taking the
+   defaults with it — state the size, keep the border. */
+
+const swatched = {
+  motionPlan: "",
+  sections: [
+    {
+      kind: "commerce",
+      band: false,
+      children: [
+        {
+          type: "product",
+          layout: "sideBySide",
+          title: "The Cordelia Coat",
+          price: "$468.00",
+          atcText: "Add to cart — $468.00",
+          swatches: 0,
+          variants: [
+            { name: "Colour", values: 3, as: "dots" },
+            { name: "Size", values: 8, as: "tiles" },
+          ],
+          swatchStyle: {
+            dot: { width: 54, height: 54, borderRadius: 2 },
+            tile: { minWidth: 78, padding: "18px 0", fontSize: 17 },
+            tileSelected: { background: "#12100C", color: "#FBFAF7" },
+            label: { letterSpacing: ".26em", color: "#8A1C1C", opacity: 1 },
+          },
+          gallery: true,
+          galleryEdge: "bottom",
+          mediaRatio: 1.2,
+          css: {},
+          mobile: {},
+        },
+      ],
+    },
+  ],
+} as unknown as Parameters<typeof pageflyFromTree>[0];
+
+const swatchFile = pageflyFromTree(
+  swatched,
+  { name: "swatches", bg: "#FBFAF7", ink: "#12100C", fontBody: "Inter" },
+  1440,
+  { images: {}, videos: {}, accent: "#8A1C1C", border: "rgba(18,16,12,.22)", radius: 2 },
+);
+
+swatchFile.blob.arrayBuffer().then((buf) => {
+  const css = strFromU8(Object.values(unzipSync(new Uint8Array(buf)))[0]);
+
+  console.log("\nthe option controls take the mockup's look");
+  check(/width: 54px/.test(css) && /height: 54px/.test(css), "the swatch is the size the page drew");
+  check(/min-width: 78px/.test(css), "the size tile is the width the page drew");
+  check(/padding: 18px 0/.test(css), "and its padding");
+  check(/background: #12100C/.test(css), "the chosen tile is filled as the page said");
+  check(/letter-spacing: \.26em/.test(css), "the option name is tracked as the page said");
+
+  /* The half that matters as much: a part the page amended keeps everything it
+     did not mention. Without this the override would be a replacement, and a
+     mockup stating one number would silently drop the border and the cursor. */
+  check(/transition: box-shadow/.test(css), "an amended part keeps the transition it never mentioned");
+  check(/cursor: pointer/.test(css), "and the cursor");
+
+  /* And a part the page said nothing about is untouched. */
+  check(/border-radius: 999px/.test(css), "a part left alone keeps its default");
+});
+
 file.blob.arrayBuffer().then((buf) => {
   const json = strFromU8(Object.values(unzipSync(new Uint8Array(buf)))[0]);
 

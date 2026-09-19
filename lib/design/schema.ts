@@ -329,6 +329,26 @@ export type Anim =
   | { hover?: Hover; reveal?: Reveal; delay?: number }
   | undefined;
 
+/**
+ * A map of named parts to declaration sets — `{dot: {width: 54}, …}`.
+ *
+ * Every part is optional and every part is parsed by `css`, so an unknown key
+ * costs itself and a malformed value costs one declaration. An empty result is
+ * `undefined`, not `{}`: the exporter branches on the property being absent.
+ */
+function parts<T extends readonly string[]>(names: T) {
+  return loose().transform((value): Partial<Record<T[number], Css>> | undefined => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+    const o = value as Record<string, unknown>;
+    const out: Partial<Record<T[number], Css>> = {};
+    for (const name of names) {
+      const declared = css.parse(o[name]);
+      if (declared) out[name as T[number]] = declared;
+    }
+    return Object.keys(out).length ? out : undefined;
+  });
+}
+
 const styled = {
   /** desktop, and the base every other breakpoint inherits from */
   css,
@@ -543,6 +563,35 @@ const product = z.object({
     }),
     2,
   ),
+  /**
+   * How the option controls LOOK, when the page states it.
+   *
+   * The exporter has always styled these — dots, tiles, the dropdown and the
+   * option name all carry the page's border, accent and radius. What it could
+   * not do is take a look it was not built with: the dots are 28px circles in
+   * code, so a mockup drawing 54px squares imported as circles and nothing in
+   * the file said otherwise. Transcription made that visible, because there the
+   * mockup is not a suggestion — it is the thing being copied.
+   *
+   * Six named parts, each a plain declaration set, laid over the defaults
+   * rather than replacing them: state the radius and the size, keep the border
+   * and the transition. Absent, nothing changes, which is why this is safe on
+   * the path that designs a page rather than copying one.
+   *
+   * NOT THE COLOURS OF THE DOTS. Those come from the merchant's own product —
+   * Shopify holds them, PageFly reads them, and no field in the export format
+   * carries them. A page whose product has no swatch colours configured renders
+   * grey circles whatever this says, and that is a store setting, not a bug in
+   * the file.
+   */
+  swatchStyle: parts([
+    "dot",
+    "dotSelected",
+    "tile",
+    "tileSelected",
+    "label",
+    "dropdown",
+  ] as const),
   /**
    * The thumbnail strip under (or beside) the main photograph.
    *
@@ -962,6 +1011,10 @@ export type DesignNode =
       atcText: string;
       swatches: number;
       variants: { name: string; values: number; as: "dots" | "tiles" | "dropdown" }[];
+      /** per-part declaration sets laid over the exporter's own; see `parts` */
+      swatchStyle?: Partial<
+        Record<"dot" | "dotSelected" | "tile" | "tileSelected" | "label" | "dropdown", Css>
+      >;
       gallery: boolean;
       galleryEdge: "bottom" | "left" | "right" | "top";
       mediaRatio: number;
