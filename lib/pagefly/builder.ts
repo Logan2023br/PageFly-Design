@@ -424,43 +424,67 @@ export function PRODUCT_MEDIA(
   );
 }
 
-export function MEDIA_MAIN(styleData: StyleData) {
-  return node("MediaMain3", {}, styleData, []);
+/**
+ * The main product photograph.
+ *
+ * `name: "MAIN_MEDIA"` IS THE FIELD THAT MAKES THE STRIP WORK. This shipped
+ * with `{}` for its data, on the reading that the renderer supplies what it
+ * needs — and the strip rendered, and clicking a thumbnail did nothing, because
+ * the list has to find the main image by name to swap it. It is the same fault
+ * as `TabsContent3.name = "TAB_CONTENT"`, in the same shape, and it was found
+ * the same way: PageFly's own export has the field and ours did not.
+ *
+ * The rest are the editor's own defaults for a product page, written out. An
+ * absent field is `undefined`, and a renderer reading `data.navStyle` directly
+ * gets nothing rather than the documented default.
+ */
+export function MEDIA_MAIN(
+  styleData: StyleData,
+  look: { nav?: "none" | "nav-style-1"; pagination?: "none" | "pagination-style-1" } = {},
+) {
+  return node(
+    "MediaMain3",
+    {
+      name: "MAIN_MEDIA",
+      navStyle: look.nav ?? "nav-style-1",
+      paginationStyle: look.pagination ?? "none",
+      /* Numbers here, strings on ProductMedia3 — the two elements encode the
+         same two settings differently, and this is the editor's own encoding
+         for each. Copied, not reasoned about. */
+      onHover: 0,
+      clickAction: 2,
+      hoverAction: 1,
+      slidesToShow: { all: 1, laptop: 1, tablet: 1, mobile: 1 },
+      slidesToScroll: { all: 1, laptop: 1, tablet: 1, mobile: 1 },
+      loading: "eager",
+    },
+    styleData,
+    [],
+  );
 }
 
 /**
  * The thumbnail strip under the main product image.
  *
- * `MediaListItem2`, NOT `MediaItem2`. `fields.md` lists both as children of a
- * MediaList2 and says what separates them in five words — "older item
- * generation; same purpose" — and the difference is not cosmetic. The editor
- * renders the old generation happily, which is exactly why this survived: the
- * strip looked correct in the editor, and on the live storefront clicking a
- * thumbnail did nothing, because the click-to-swap behaviour belongs to the
- * current generation.
+ * ONE `MediaItem2`, NOT SIX `MediaListItem2`, and both halves of that were
+ * wrong here for the same reason: `fields.md` describes `MediaItem2` as the
+ * "older item generation; same purpose", so the code took the newer-sounding
+ * name and built one child per thumbnail. PageFly's own export settles it —
+ * `MediaList2` holds exactly one `MediaItem2`, carrying nothing but a class,
+ * and the renderer repeats it once per media on the merchant's product.
  *
- * `slidesToShow` is per breakpoint and is what decides how many thumbnails are
- * visible; left unset the list takes its own default and can crop the strip on
- * a laptop. Six on desktop, four on a tablet — the count is a template, since
- * the real media comes from the merchant's product.
+ * A description got this wrong and an artefact got it right, which is the whole
+ * reason `reference/all-elements.pagefly` is in this repository. The symptom
+ * was the one a wrong child type always gives: the strip looked correct in the
+ * editor and clicking a thumbnail on the storefront did nothing.
+ *
+ * `count` is kept in the signature and ignored. The number of thumbnails is a
+ * property of the merchant's product, not of this file, and every caller was
+ * passing a guess at it.
  */
 export function MEDIA_LIST(count: number, styleData: StyleData, itemStyle: StyleData) {
-  const n = Math.max(1, count);
-  const items = Array.from({ length: n }, () => node("MediaListItem2", {}, itemStyle, []));
-  return node(
-    "MediaList2",
-    {
-      navStyle: "none",
-      slidesToShow: {
-        all: Math.min(6, n),
-        laptop: Math.min(6, n),
-        tablet: Math.min(4, n),
-        mobile: Math.min(4, n),
-      },
-    },
-    styleData,
-    items,
-  );
+  void count;
+  return node("MediaList2", {}, styleData, [node("MediaItem2", {}, itemStyle, [])]);
 }
 
 export function PRODUCT_TITLE(styleData: StyleData) {
@@ -522,8 +546,17 @@ export function PRODUCT_SWATCHES(
     },
     styleData,
     [
+      /* THE STYLE DATA ON BOTH OF THESE IS DEAD, and it is the caller's job to
+         know it. PageFly's renderer draws the swatch block itself and attaches
+         no style class to either child — its own export carries no `styles`
+         entry for them either, only a global class. The look is written on the
+         PARENT, through `& .pf-variant-label` and `& .pf-option-swatches`.
+
+         `source`, `useContext` and `name` are the editor's own fields for the
+         Swatch, written out for the same reason as everywhere else here: an
+         absent field is `undefined`, not its documented default. */
       node("OptionLabel", {}, labelStyle, []),
-      node("Swatch", {}, swatchStyle, []),
+      node("Swatch", { source: "auto", useContext: true, name: "Option value" }, swatchStyle, []),
     ],
   );
 }
@@ -1660,7 +1693,7 @@ const MAY_SHRINK = new Set([
   "ProductMedia3",
   "MediaMain3",
   "MediaList2",
-  "MediaListItem2",
+  "MediaItem2",
   "Slideshow",
   "SlideshowSlide",
   "Tabs3",
@@ -1713,7 +1746,7 @@ function withFloor(type: string, styleData: StyleData): StyleData {
 const UNIFORM_CHILDREN: Record<string, string> = {
   Accordion3: "Accordion3.Content.Wrapper",
   Slideshow: "SlideshowSlide",
-  MediaList2: "MediaListItem2",
+  MediaList2: "MediaItem2",
   ContentList2: "ContentListItem",
   /* One label per tab and one panel per tab; the two collections are read in
      step, so a stray node in either shifts every panel out from under its
@@ -1879,7 +1912,7 @@ export class Page {
          clicking a Form Field answered "Something went wrong" — its FormLabel
          was built with `{}`.
 
-         MediaMain3, MediaList2, MediaListItem2 and ContentListItem are all emitted
+         MediaMain3, MediaList2, MediaItem2 and ContentListItem are all emitted
          the same way and had the same exposure. `data: {}` is what an element
          with no settings is supposed to look like, and the bytes are nothing
          next to a class of bug that only shows up as a white screen. */

@@ -250,7 +250,130 @@ swatchFile.blob.arrayBuffer().then((buf) => {
 
   /* And a part the page said nothing about is untouched. */
   check(/border-radius: 999px/.test(css), "a part left alone keeps its default");
+
+  /* ── the two children whose own style data goes nowhere ──────────────── */
+
+  /* PageFly draws the swatch block itself and gives neither the option name
+     nor the swatch row a style class — its own export has no `styles` entry
+     for either. So "Colour — Ivory" arrived as plain body text with a rule one
+     element away that could never reach it. Both looks belong on the parent. */
+  check(/& \.pf-variant-label/.test(css), "the option name is styled from the parent");
+  check(/letter-spacing: \.26em/.test(css), "and takes the page's own tracking");
+  check(/& \.pf-option-swatches/.test(css), "so is the row the swatches sit in");
+
+  /* The size tile held its text against the top: PageFly fixes the inner
+     span's line-height, so padding pushes it below centre. */
+  check(
+    /& \.pf-vs-label label[^}]*align-items: center/.test(css),
+    "the size tile centres its text on both axes",
+  );
 });
+
+/* ── the gallery, against PageFly's own export ─────────────────────────── */
+
+/* Both of these were settled by `reference/all-elements.pagefly` rather than
+   by `fields.md`, and both had the same symptom: the strip rendered correctly
+   in the editor and clicking a thumbnail on the storefront did nothing. */
+
+const galleried = {
+  motionPlan: "",
+  sections: [
+    {
+      kind: "commerce",
+      band: false,
+      children: [
+        {
+          type: "product",
+          layout: "sideBySide",
+          title: "The Silk Shirt",
+          price: "$148.00",
+          atcText: "Add to cart",
+          swatches: 0,
+          variants: [],
+          mediaStyle: { dot: { width: 28, height: 2 } },
+          gallery: true,
+          galleryEdge: "bottom",
+          mediaRatio: 1.2,
+          css: {},
+          mobile: {},
+        },
+      ],
+    },
+  ],
+} as unknown as Parameters<typeof pageflyFromTree>[0];
+
+pageflyFromTree(
+  galleried,
+  { name: "gallery", bg: "#FBFAF7", ink: "#12100C", fontBody: "Inter" },
+  1440,
+  { images: {}, videos: {} },
+)
+  .blob.arrayBuffer()
+  .then((buf) => {
+    const raw = strFromU8(Object.values(unzipSync(new Uint8Array(buf)))[0]);
+    const doc = JSON.parse(raw) as { items: { type: string; data?: Record<string, unknown>; children: string[] }[] };
+    const byId = new Map(doc.items.map((i) => [(i as unknown as { id: string }).id, i]));
+    const main = doc.items.find((i) => i.type === "MediaMain3");
+    const list = doc.items.find((i) => i.type === "MediaList2");
+
+    console.log("\nthe gallery, against PageFly's own export");
+    check(main?.data?.name === "MAIN_MEDIA", "the main photograph is named, so the strip can find it");
+    check(main?.data?.navStyle !== undefined, "and carries the settings the editor writes out");
+
+    const kids = (list?.children ?? []).map((c) => byId.get(c)?.type);
+    check(kids.length === 1, "the strip holds ONE child, a template", `${kids.length}`);
+    check(kids[0] === "MediaItem2", "and it is MediaItem2, not MediaListItem2", String(kids[0]));
+    check(!doc.items.some((i) => i.type === "MediaListItem2"), "no MediaListItem2 anywhere");
+
+    check(raw.includes("pf-slider-nav"), "the pagination is styled");
+    check(/width: 28px; height: 2px/.test(raw), "and takes the dash the page drew");
+  });
+
+/* ── the tab bar ───────────────────────────────────────────────────────── */
+
+const tabbed = {
+  motionPlan: "",
+  sections: [
+    {
+      kind: "editorial",
+      band: false,
+      children: [
+        {
+          type: "tabs",
+          open: 0,
+          tabStyle: { labelActive: { fontWeight: 700 } },
+          items: [
+            { label: "Classic cut", children: [] },
+            { label: "Relaxed cut", children: [] },
+          ],
+          css: {},
+          mobile: {},
+        },
+      ],
+    },
+  ],
+} as unknown as Parameters<typeof pageflyFromTree>[0];
+
+pageflyFromTree(
+  tabbed,
+  { name: "tabs", bg: "#FBFAF7", ink: "#12100C", fontBody: "Inter" },
+  1440,
+  { images: {}, videos: {}, accent: "#8A1C1C" },
+)
+  .blob.arrayBuffer()
+  .then((buf) => {
+    const css = strFromU8(Object.values(unzipSync(new Uint8Array(buf)))[0]);
+
+    console.log("\nthe tab bar");
+    /* PageFly's own label class ships `background:#f0f2f3`, so a bar drawn as
+       plain underlined text imported as a row of grey boxes. */
+    check(/background: transparent/.test(css), "the platform's grey fill is cleared");
+    check(
+      css.includes("data-pf-tab-active"),
+      "the chosen tab is reachable — the attribute the renderer maintains",
+    );
+    check(/font-weight: 700/.test(css), "and takes what the page said about it");
+  });
 
 file.blob.arrayBuffer().then((buf) => {
   const json = strFromU8(Object.values(unzipSync(new Uint8Array(buf)))[0]);

@@ -2155,14 +2155,30 @@ async function main(): Promise<void> {
   const thumbKids = (thumbs?.children ?? []).map(
     (c) => arranged.items.find((x) => x.id === c)?.type ?? "?",
   );
+  /* THIS CHECK USED TO ASSERT THE OPPOSITE, and it was wrong in the way only an
+     artefact can settle. `fields.md` calls `MediaItem2` the "older item
+     generation; same purpose", so the code took the newer-sounding
+     `MediaListItem2` and emitted one per thumbnail — and the check was written
+     to hold it there. The strip then rendered correctly in the editor and did
+     nothing on the storefront, which is exactly the symptom the old label
+     predicted for the OTHER type.
+
+     PageFly's own export decides it: `MediaList2` holds exactly ONE
+     `MediaItem2`, carrying nothing but a class, and the renderer repeats it per
+     media on the merchant's product. A description got it wrong; the artefact
+     got it right; `reference/all-elements.pagefly` is in this repository for
+     precisely this. */
   check(
-    thumbKids.length > 0 && thumbKids.every((t) => t === "MediaListItem2"),
-    "thumbnails are the CURRENT generation, or clicking one does nothing live",
+    thumbKids.length === 1 && thumbKids[0] === "MediaItem2",
+    "the strip is ONE MediaItem2 template, as the editor's own export writes it",
     thumbKids.join(" · "),
   );
+  /* And no `slidesToShow`, for the same reason: the editor writes none. How
+     many thumbnails are visible is the renderer's business, decided from the
+     product's real media, not a count this file can guess. */
   check(
-    !!(thumbs?.data?.slidesToShow as Record<string, unknown> | undefined)?.mobile,
-    "the strip states how many thumbnails are visible per breakpoint",
+    (thumbs?.data as Record<string, unknown> | undefined)?.slidesToShow === undefined,
+    "and states no thumbnail count — the product decides that",
   );
 
   const acc = await open(
@@ -2235,7 +2251,8 @@ async function main(): Promise<void> {
     shot.cssOf(main.id, "all").slice(0, 60),
   );
 
-  const thumb = shot.items.find((i) => i.type === "MediaListItem2")!;
+  /* `MediaItem2` — the template the strip repeats; see the note above. */
+  const thumb = shot.items.find((i) => i.type === "MediaItem2")!;
   const active = shot.cssOf(thumb.id, "all", '&[data-active="true"]');
   check(
     active.includes("#C6A667"),

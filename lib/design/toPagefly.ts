@@ -1350,10 +1350,35 @@ function productBox(
   const mediaAccent = opts.accent ?? "currentColor";
   const mediaRadius = opts.radius ? `border-radius: ${opts.radius}px;` : "";
 
+  /* The gallery's own controls. PageFly ships two canned looks for each and
+     neither is "round white arrows and thin dashes", so the page states it and
+     these rules carry it — written on the MediaMain3, which is the element the
+     slider markup lives inside. */
+  const shot = (name: "nav" | "dot" | "dotActive") => {
+    const declared = node.mediaStyle?.[name];
+    return declared ? ` ${declarations(declared)}` : "";
+  };
+
   const media = PRODUCT_MEDIA(
-    MEDIA_MAIN({
-      all: { "&": `width: 100%; aspect-ratio: 1 / ${ratio}; overflow: hidden; ${mediaRadius}` },
-    }),
+    MEDIA_MAIN(
+      {
+        all: {
+          "&": `width: 100%; aspect-ratio: 1 / ${ratio}; overflow: hidden; ${mediaRadius}`,
+          "& .pf-slider-prev, & .pf-slider-next":
+            "width: 44px; height: 44px; border-radius: 999px; background: rgba(255,255,255,.92);" +
+            ` border: 1px solid ${opts.border ?? "rgba(0,0,0,.10)"}; cursor: pointer;` +
+            " display: flex; align-items: center; justify-content: center;" +
+            shot("nav"),
+          "& .pf-slider-nav button":
+            "width: 28px; height: 2px; border-radius: 0; border: 0; padding: 0;" +
+            " background: rgba(255,255,255,.55); cursor: pointer;" +
+            shot("dot"),
+          "& .pf-slider-nav button.active":
+            "background: #FFFFFF;" + shot("dotActive"),
+        },
+      },
+      { nav: "nav-style-1", pagination: "pagination-style-1" },
+    ),
     MEDIA_LIST(
       6,
       { all: { "&": "gap: 10px; margin-top: 10px;" } },
@@ -1499,8 +1524,15 @@ function productBox(
               `opacity: .3; cursor: not-allowed;`,
 
             /* text tiles — a size grid */
+            /* FLEX, NOT `text-align`. The label holds a `<span>` and PageFly
+               gives it a fixed `line-height: 22px`, so a tile told to be 62px
+               tall renders its text against the top of the box and the padding
+               pushes it below centre — which is what "the size sits low" was.
+               Centring both axes makes the tile the same height whatever is in
+               it, which a size grid needs anyway. */
             "& .pf-vs-label label":
               `min-width: 48px; padding: 10px 14px; border: 1px solid ${rule};` +
+              " display: flex; align-items: center; justify-content: center;" +
               ` text-align: center; cursor: pointer; font-size: 14px; ${inkRule(opts)}` +
               (r ? ` border-radius: ${r}px;` : "") +
               " transition: border-color .15s ease, background .15s ease;" +
@@ -1529,17 +1561,31 @@ function productBox(
             /* round radios, the universal fallback */
             "& .pf-vs-radio": `font-size: 14px; ${inkRule(opts)}`,
             '& .pf-vs-radio > input[type="radio"]:checked + label': `color: ${accent};`,
-          },
-        },
-        {
-          all: {
-            "&":
-              "font-size: 11px; font-weight: 600; letter-spacing: .08em;" +
+
+            /* ==================================================================
+               THE OPTION NAME AND THE ROW, STYLED FROM HERE.
+
+               Both are passed below as their own elements with their own style
+               data, and BOTH OF THOSE ARE DEAD. PageFly's renderer draws the
+               swatch block itself — `.pf-variant-label`, `.pf-option-swatches`
+               — and never attaches a style class to the OptionLabel or the
+               Swatch child. Its own export agrees: neither child has an entry
+               in `styles` at all, only a global class.
+
+               So "Colour — Ivory" arrived as plain sentence-case body text with
+               a rule sitting one element away that could never reach it. The
+               children still ship, because the element requires them; the look
+               is written here, where the class exists.
+               ================================================================== */
+            "& .pf-variant-label":
+              "display: block; font-size: 11px; font-weight: 600; letter-spacing: .08em;" +
               ` text-transform: uppercase; opacity: .55; ${inkRule(opts)}` +
               part("label"),
+            "& .pf-option-swatches": "display: flex !important; gap: 10px; flex-wrap: wrap;",
           },
         },
-        { all: { "&": "display: flex !important; gap: 10px; flex-wrap: wrap;" } },
+        { all: {} },
+        { all: {} },
         /* A design that named ONE group and asked for a dropdown or tiles knows
            what it is looking at, so its choice is forced. Two groups, or none
            named, and the merchant's own per-option config wins — it is the only
@@ -2117,12 +2163,18 @@ function tabsOf(
     body: t.children.map((c) => emit(c, "vertical", opts)).filter(Boolean) as PFNode[],
   }));
 
+  /* Same contract as the buy box's: named parts over the defaults. */
+  const tab = (name: "bar" | "label" | "labelActive" | "panel") => {
+    const declared = node.tabStyle?.[name];
+    return declared ? ` ${declarations(declared)}` : "";
+  };
+
   return TABS(
     tabs,
     node.open,
     withParts(filling(sd, "width: 100%;"), {
       "& .tab3-headers-wrapper":
-        `display: flex; flex-wrap: wrap; border-bottom: 1px solid ${rule};`,
+        `display: flex; flex-wrap: wrap; border-bottom: 1px solid ${rule};` + tab("bar"),
       /* THE GAP GOES ON THE MENU, NOT ON THE BAR. The wrapper's children are
          the dropdown button, the scroll arrows and the group that holds the
          menu — three things, so a gap there spaces those and never the labels.
@@ -2130,10 +2182,29 @@ function tabsOf(
          horizontal padding they render touching: three tabs reading as one run
          of words, "The inch chartOn a real bodyCare, in four steps". */
       '& [data-pf-type="TabsMenu3"]': "display: flex; flex-wrap: wrap; gap: 28px;",
+      /* `background: transparent` IS NOT DECORATION. PageFly's own label class
+         ships `background:#f0f2f3`, so a bar designed as plain underlined text
+         imported as a row of grey boxes — the rule below set the padding and
+         the colour and left the fill standing. A tab bar that is transparent in
+         the mockup has to say so here, because the default is not nothing.
+
+         The colour is the page's INK, not its accent. Every label in the accent
+         reads as every tab being the chosen one. */
       '& [data-pf-type="TabsMenu3"] > label':
         "cursor: pointer; padding: 12px 0; font-size: 12.5px; letter-spacing: .12em;" +
-        ` text-transform: uppercase; border-bottom: 2px solid transparent; color: ${accent};`,
-      "& .pf-tab3-content-container": "padding-top: 28px;",
+        " background: transparent; border-radius: 0;" +
+        ` text-transform: uppercase; border-bottom: 2px solid transparent; ${inkRule(opts)}` +
+        " opacity: .55; transition: opacity .15s ease, border-color .15s ease;" +
+        tab("label"),
+      /* THE CHOSEN TAB, and this is the only hook a file has. `fields.md`
+         describes the active state as a sibling rule against the radio the
+         panels switch on, and that radio's id is generated at publish time —
+         a guess at it is a dead rule that reports no error. PageFly's renderer
+         also marks the label itself with `data-pf-tab-active`, which is
+         knowable, stable, and what its own tab script maintains. */
+      '& [data-pf-type="TabsMenu3"] > label[data-pf-tab-active="true"]':
+        `opacity: 1; border-bottom-color: ${accent};` + tab("labelActive"),
+      "& .pf-tab3-content-container": "padding-top: 28px;" + tab("panel"),
     }),
   );
 }

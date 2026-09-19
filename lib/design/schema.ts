@@ -593,6 +593,16 @@ const product = z.object({
     "dropdown",
   ] as const),
   /**
+   * How the gallery's own controls look — the arrows over the photograph, and
+   * the dots or dashes under it.
+   *
+   * Same contract as `swatchStyle`: named parts over the defaults. A mockup
+   * whose slideshow pages with thin dashes and round white arrows says so here,
+   * because PageFly's `navStyle` and `paginationStyle` are two canned looks and
+   * neither of them is that one.
+   */
+  mediaStyle: parts(["nav", "dot", "dotActive"] as const),
+  /**
    * The thumbnail strip under (or beside) the main photograph.
    *
    * A property of the node rather than something the exporter guesses, because
@@ -1015,6 +1025,8 @@ export type DesignNode =
       swatchStyle?: Partial<
         Record<"dot" | "dotSelected" | "tile" | "tileSelected" | "label" | "dropdown", Css>
       >;
+      /** the gallery's arrows and pagination; see `parts` */
+      mediaStyle?: Partial<Record<"nav" | "dot" | "dotActive", Css>>;
       gallery: boolean;
       galleryEdge: "bottom" | "left" | "right" | "top";
       mediaRatio: number;
@@ -1089,6 +1101,8 @@ export type DesignNode =
   | {
       type: "tabs";
       open: number;
+      /** per-part declaration sets laid over the exporter's own; see `parts` */
+      tabStyle?: Partial<Record<"bar" | "label" | "labelActive" | "panel", Css>>;
       items: { label: string; children: DesignNode[] }[];
       css?: Css;
       mobile?: Css;
@@ -1144,6 +1158,16 @@ const node: z.ZodType<DesignNode> = z.lazy(() =>
       type: z.literal("tabs"),
       /** which panel is open on arrival, zero-based */
       open: whole(0, 5, 0),
+      /**
+       * How the tab bar LOOKS, when the page states it.
+       *
+       * Four parts, laid over the exporter's defaults exactly as
+       * `product.swatchStyle` is. `labelActive` is the chosen tab — PageFly
+       * marks it with `data-pf-tab-active`, which is the only hook a file can
+       * write against, since the radio id the panels switch on is generated at
+       * publish time and is not knowable from here.
+       */
+      tabStyle: parts(["bar", "label", "labelActive", "panel"] as const),
       ...styled,
       items: list(
         z.object({ label: saying(40), children: list(node, 16) }),
