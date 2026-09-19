@@ -1764,23 +1764,60 @@ const SIZED = new Set([
   "align-self",
 ]);
 
-/** Declarations of one rule, split on the semicolons that end them — not on
-    the ones inside `url(data:image/png;base64,…)`. */
-function splitDecls(css: string): string[] {
+/** Split on a separator that is not inside brackets — so declarations break on
+    the semicolons that end them and not on the one in
+    `url(data:image/png;base64,…)`, and a selector list breaks on its own commas
+    and not on the ones in `:is(a, b)`. */
+function splitTop(text: string, sep: string): string[] {
   const out: string[] = [];
   let depth = 0;
   let start = 0;
-  for (let i = 0; i < css.length; i++) {
-    const c = css[i];
-    if (c === "(") depth++;
-    else if (c === ")") depth--;
-    else if (c === ";" && depth === 0) {
-      out.push(css.slice(start, i));
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === "(" || c === "[") depth++;
+    else if (c === ")" || c === "]") depth--;
+    else if (c === sep && depth === 0) {
+      out.push(text.slice(start, i));
       start = i + 1;
     }
   }
-  out.push(css.slice(start));
+  out.push(text.slice(start));
   return out.map((d) => d.trim()).filter(Boolean);
+}
+
+const splitDecls = (css: string): string[] => splitTop(css, ";");
+
+/* ==========================================================================
+   ONE SELECTOR PER KEY. PageFly keeps what is before the first comma.
+
+   `"& .pf-slider-prev, & .pf-slider-next"` is ordinary CSS and reads as one
+   rule for two elements. PageFly's generator does not: the stylesheet it
+   returned held
+
+       .__pf .pf-18_ .pf-slider-prev { … }
+
+   and nothing at all for the next arrow — a pale bordered plate on the left of
+   the photograph and PageFly's stock dark circle on the right, in the same
+   gallery. Its own `fields.md` names that styleable part with a comma in it,
+   which is where the habit came from.
+
+   Nothing is lost by splitting: a selector list means the same thing written
+   out. Doing it here rather than at each composite means the next one cannot
+   reintroduce it, and a key naming one selector passes through untouched.
+   ========================================================================== */
+function splitSelectors(styleData: StyleData): StyleData {
+  if (styleData === null) return null;
+  const out: Record<string, Record<string, string>> = {};
+  for (const [device, rules] of Object.entries(styleData)) {
+    const here: Record<string, string> = {};
+    for (const [selector, css] of Object.entries(rules)) {
+      for (const one of splitTop(selector, ",")) {
+        here[one] = here[one] ? `${here[one]} ${css}` : css;
+      }
+    }
+    out[device] = here;
+  }
+  return out;
 }
 
 const propOf = (decl: string): string =>
@@ -1819,7 +1856,7 @@ function pinSize(styleData: StyleData): StyleData {
  * left exactly as it is.
  */
 function withFloor(type: string, styleData: StyleData): StyleData {
-  const pinned = pinSize(styleData);
+  const pinned = pinSize(splitSelectors(styleData));
   if (pinned === null) return null;
   const want = MAY_SHRINK.has(type) ? "0" : "min-content";
   const out: Record<string, Record<string, string>> = {};

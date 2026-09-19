@@ -96,7 +96,23 @@ async function open(
     return parsed[device]?.[selector] ?? "";
   };
 
-  return { items: page.items, cssOf, customCSS: page.customCSS ?? "", customJS: page.customJS ?? "" };
+  /** Every selector key on the page, across every item and breakpoint. */
+  const selectorsOf = (): string[] => {
+    const out = new Set<string>();
+    for (const entry of page.styles) {
+      const parsed = JSON.parse(entry.styles) as Record<string, Record<string, string>>;
+      for (const rules of Object.values(parsed)) for (const k of Object.keys(rules)) out.add(k);
+    }
+    return [...out];
+  };
+
+  return {
+    items: page.items,
+    cssOf,
+    selectorsOf,
+    customCSS: page.customCSS ?? "",
+    customJS: page.customJS ?? "",
+  };
 }
 
 async function build(tree: unknown, name = "probe"): Promise<Item[]> {
@@ -2260,11 +2276,44 @@ async function main(): Promise<void> {
     active.slice(0, 60),
   );
 
-  const arrows = shot.cssOf(med.id, "all", "& .splide__arrow--prev, & .splide__arrow--next");
+  /* ==========================================================================
+     ONE SELECTOR PER KEY. PageFly keeps what is before the first comma.
+
+     `"& .pf-slider-prev, & .pf-slider-next"` is ordinary CSS and reads as one
+     rule for two elements. PageFly's generator does not read it that way: the
+     stylesheet that came back held
+
+         .__pf .pf-18_ .pf-slider-prev { … }
+
+     and nothing at all for the next arrow. On the live page that is a pale
+     bordered plate on the left of the photograph and PageFly's stock dark
+     circle on the right — two arrows on one gallery that do not match, which
+     is what the screenshots showed.
+
+     This test used to ask the tree, so it read its own comma key back out and
+     passed. It asks a stylesheet's question now: every key names ONE selector,
+     and each arrow has a rule of its own.
+     ========================================================================== */
+  for (const side of ["prev", "next"]) {
+    const arrows = shot.cssOf(med.id, "all", `& .splide__arrow--${side}`);
+    check(
+      arrows.includes("#F4F1E8"),
+      `the gallery's ${side} arrow sits on a plate from this page`,
+      arrows.slice(0, 60),
+    );
+    const slider = shot.cssOf(main.id, "all", `& .pf-slider-${side}`);
+    check(
+      slider.includes("border-radius"),
+      `and the slider's ${side} arrow is styled at all`,
+      slider.slice(0, 56) || "(no rule — PageFly kept only what preceded the comma)",
+    );
+  }
+
+  const commaKeys = shot.selectorsOf().filter((k) => k.includes(","));
   check(
-    arrows.includes("#F4F1E8"),
-    "the gallery arrows sit on a plate from this page, not a guessed white",
-    arrows.slice(0, 60),
+    commaKeys.length === 0,
+    "no style key names two selectors at once",
+    commaKeys.slice(0, 2).join(" | "),
   );
 
   /* ---- how a product is chosen ------------------------------------------- */
