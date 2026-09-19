@@ -2494,6 +2494,39 @@ async function main(): Promise<void> {
   check(headerCss.includes("uppercase"), "row zero is set as the header", headerCss.slice(0, 60));
   check(headerCss.includes("flex: 1 1 0"), "and every cell shares the width evenly");
 
+  /* ==========================================================================
+     A BREAKPOINT THAT SAYS NOTHING IS NOT A BREAKPOINT THAT INHERITS.
+
+     Ordinary declarations do cascade off `all` — colour, padding, type. The
+     SIZE does not: PageFly re-states each element's width and height per
+     breakpoint from its own settings, and an element with no entry at a
+     breakpoint is read as its default, which is hug. So a table cell declared
+     `flex: 1 1 0` at `all` and nothing else arrived below 1200px as
+     `width: fit-content; flex-grow: unset`, shrank past its own longest word,
+     and set CLOTH one letter per line down the page — on the laptop the
+     merchant was looking at, not some narrow phone.
+     ========================================================================== */
+  for (const device of ["laptop", "tablet", "mobile"]) {
+    const css = chart.cssOf(headerCell?.id ?? "", device);
+    check(
+      css.includes("flex: 1 1 0"),
+      `and still shares it at ${device}`,
+      css ? css.slice(0, 70) : "(no block at this width)",
+    );
+  }
+
+  const chartRow = chart.items.find(
+    (i) => i.type === "FlexBlock" && chart.cssOf(i.id).includes("flex-direction: row"),
+  );
+  for (const device of ["laptop", "tablet", "mobile"]) {
+    const css = chart.cssOf(chartRow?.id ?? "", device);
+    check(
+      css.includes("width: 100%") && css.includes("flex-direction: row"),
+      `the row is still a full-width row at ${device}`,
+      css ? css.slice(0, 70) : "(no block at this width)",
+    );
+  }
+
   /* Digits that do not line up turn a size chart back into prose. */
   const numeric = chart.items.find(
     (i) => i.type === "Paragraph4" && (i.data as Record<string, unknown>)?.value === "102 cm",

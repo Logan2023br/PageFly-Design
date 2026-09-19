@@ -1719,6 +1719,95 @@ const MAY_SHRINK = new Set([
   "Custom.HTML",
 ]);
 
+/* ==========================================================================
+   SIZE IS RE-STATED PER BREAKPOINT; EVERYTHING ELSE CASCADES.
+
+   `all` cascades the way a stylesheet does — a colour, a padding, a font size
+   written once is what every width gets. The SIZE does not cascade. PageFly
+   rebuilds each element's width and height at each breakpoint from that
+   breakpoint's own settings, and an element with no entry at a breakpoint is
+   read as the default, which is hug:
+
+       @media (max-width: 767.5px) {
+         .pf-64_ { width: fit-content; height: fit-content;
+                   flex-grow: unset; align-self: unset; }
+       }
+
+   Four declarations, none of them ours, and they undo a `flex: 1 1 0` written
+   at `all`. A table cell then shrinks past its own longest word and sets CLOTH
+   one letter per line down the page — on the laptop, not some narrow phone,
+   because everything under 1200px is a "breakpoint" to this engine.
+
+   The styles this file writes itself — a table's rows and cells, the buy box,
+   a stepper — describe one size and mean it at every width. So the sizing half
+   of `all` is repeated into any breakpoint that does not already state its
+   own, and nothing else is: colour, spacing and type still cascade, so a
+   merchant editing the desktop view still changes the phone.
+
+   Repeat only what the engine re-states, which is the list below — plus the
+   custom properties it re-states them FROM, or its own defaults win again.
+   ========================================================================== */
+const SIZED = new Set([
+  "--pf-flex-layout-width",
+  "--pf-flex-layout-height",
+  "--pf-flex-layout-direction",
+  "--pf-flex-layout-parent-direction",
+  "display",
+  "flex-direction",
+  "width",
+  "height",
+  "min-width",
+  "flex",
+  "flex-grow",
+  "flex-basis",
+  "flex-shrink",
+  "align-self",
+]);
+
+/** Declarations of one rule, split on the semicolons that end them — not on
+    the ones inside `url(data:image/png;base64,…)`. */
+function splitDecls(css: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < css.length; i++) {
+    const c = css[i];
+    if (c === "(") depth++;
+    else if (c === ")") depth--;
+    else if (c === ";" && depth === 0) {
+      out.push(css.slice(start, i));
+      start = i + 1;
+    }
+  }
+  out.push(css.slice(start));
+  return out.map((d) => d.trim()).filter(Boolean);
+}
+
+const propOf = (decl: string): string =>
+  decl.slice(0, decl.indexOf(":")).trim().toLowerCase();
+
+/** `all`'s sizing, repeated into every breakpoint that is silent about its own.
+    See the block above. Adds no declaration a breakpoint already states. */
+function pinSize(styleData: StyleData): StyleData {
+  if (styleData === null) return null;
+  const base = styleData.all?.["&"];
+  if (!base) return styleData;
+
+  const sizing = splitDecls(base).filter((d) => SIZED.has(propOf(d)));
+  if (sizing.length === 0) return styleData;
+
+  const out: Record<string, Record<string, string>> = { ...styleData };
+  for (const device of ["laptop", "tablet", "mobile"] as const) {
+    const here = out[device];
+    const css = here?.["&"] ?? "";
+    const stated = new Set(splitDecls(css).map(propOf));
+    const add = sizing.filter((d) => !stated.has(propOf(d)));
+    if (add.length === 0) continue;
+    out[device] = { ...here, "&": `${css} ${add.join("; ")};`.trim() };
+  }
+  return out;
+}
+
 /**
  * The floor, written into a style that already exists.
  *
@@ -1730,10 +1819,11 @@ const MAY_SHRINK = new Set([
  * left exactly as it is.
  */
 function withFloor(type: string, styleData: StyleData): StyleData {
-  if (styleData === null) return null;
+  const pinned = pinSize(styleData);
+  if (pinned === null) return null;
   const want = MAY_SHRINK.has(type) ? "0" : "min-content";
   const out: Record<string, Record<string, string>> = {};
-  for (const [device, rules] of Object.entries(styleData)) {
+  for (const [device, rules] of Object.entries(pinned)) {
     const css = rules["&"] ?? "";
     out[device] =
       /(^|[;\s])min-width\s*:/.test(css)
