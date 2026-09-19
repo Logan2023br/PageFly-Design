@@ -601,7 +601,22 @@ const product = z.object({
    * because PageFly's `navStyle` and `paginationStyle` are two canned looks and
    * neither of them is that one.
    */
-  mediaStyle: parts(["nav", "dot", "dotActive"] as const),
+  mediaStyle: parts([
+    "nav",
+    "dot",
+    "dotActive",
+    /* ==================================================================
+       `counter` IS NOT A PAGEFLY SETTING, and naming it here is how the
+       exporter learns to build one.
+
+       `paginationStyle` offers four looks and all four are dots or dashes. A
+       gallery that pages with `01 / 06` in the corner of the photograph — an
+       editorial habit, and the one this mockup drew — is asking for something
+       the element does not have. Declared here, the dashes go off and the
+       badge is written instead. Left out, the dashes stay.
+       ================================================================== */
+    "counter",
+  ] as const),
   /**
    * The thumbnail strip under (or beside) the main photograph.
    *
@@ -1026,7 +1041,7 @@ export type DesignNode =
         Record<"dot" | "dotSelected" | "tile" | "tileSelected" | "label" | "dropdown", Css>
       >;
       /** the gallery's arrows and pagination; see `parts` */
-      mediaStyle?: Partial<Record<"nav" | "dot" | "dotActive", Css>>;
+      mediaStyle?: Partial<Record<"nav" | "dot" | "dotActive" | "counter", Css>>;
       gallery: boolean;
       galleryEdge: "bottom" | "left" | "right" | "top";
       mediaRatio: number;

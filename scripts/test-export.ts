@@ -2316,6 +2316,66 @@ async function main(): Promise<void> {
     commaKeys.slice(0, 2).join(" | "),
   );
 
+  /* ==========================================================================
+     AND THE OTHER HALF OF A GALLERY'S NAVIGATION: HOW IT SAYS WHERE YOU ARE.
+
+     `paginationStyle` has four settings and every one of them is dots or
+     dashes. A mockup that pages with `01 / 06` in the corner of the photograph
+     is asking for something the element does not have, so the dashes go off
+     and the badge is written — the same bargain `mediaStyle` already makes for
+     the arrows, and the reason that field exists.
+
+     Declared, never guessed: a design silent about a counter keeps the dashes.
+     ========================================================================== */
+  const counted = await open(
+    {
+      sections: [
+        section(
+          [
+            {
+              type: "product",
+              title: "Overshirt",
+              price: "$480",
+              atcText: "Add",
+              gallery: true,
+              mediaStyle: {
+                counter: { background: "rgba(18,16,12,.62)", color: "#FBFAF7", letterSpacing: ".2em" },
+              },
+              children: [],
+            },
+          ],
+          "product-detail-gallery",
+        ),
+      ],
+    },
+    "probe",
+    { accent: "#8A1C1C" },
+  );
+
+  const cMain = counted.items.find((i) => i.type === "MediaMain3")!;
+  check(
+    cMain.data?.paginationStyle === "none",
+    "a gallery that pages by number switches PageFly's dashes off",
+    String(cMain.data?.paginationStyle),
+  );
+  check(
+    counted.customJS.includes("pfd-slide-count"),
+    "and the counter is written, because the element has no such setting",
+  );
+  check(
+    !counted.customJS.includes("<"),
+    "the counter's script carries no `<` — PageFly's validator refuses the whole file for one",
+  );
+  check(
+    counted.customCSS.includes("rgba(18,16,12,.62)"),
+    "the counter wears the colours the design gave it",
+  );
+  check(
+    main.data?.paginationStyle === "pagination-style-1",
+    "a design that never mentions a counter keeps the dashes",
+    String(main.data?.paginationStyle),
+  );
+
   /* ---- how a product is chosen ------------------------------------------- */
 
   console.log("\nhow a product is chosen");
