@@ -2096,7 +2096,14 @@ function tabsOf(
     node.open,
     withParts(filling(sd, "width: 100%;"), {
       "& .tab3-headers-wrapper":
-        `display: flex; flex-wrap: wrap; gap: 28px; border-bottom: 1px solid ${rule};`,
+        `display: flex; flex-wrap: wrap; border-bottom: 1px solid ${rule};`,
+      /* THE GAP GOES ON THE MENU, NOT ON THE BAR. The wrapper's children are
+         the dropdown button, the scroll arrows and the group that holds the
+         menu — three things, so a gap there spaces those and never the labels.
+         The labels are the menu's own children, and with no gap and no
+         horizontal padding they render touching: three tabs reading as one run
+         of words, "The inch chartOn a real bodyCare, in four steps". */
+      '& [data-pf-type="TabsMenu3"]': "display: flex; flex-wrap: wrap; gap: 28px;",
       '& [data-pf-type="TabsMenu3"] > label':
         "cursor: pointer; padding: 12px 0; font-size: 12.5px; letter-spacing: .12em;" +
         ` text-transform: uppercase; border-bottom: 2px solid transparent; color: ${accent};`,

@@ -86,6 +86,23 @@ const ASK = [
   "  gives it: `\"css\": { \"flexBasis\": \"auto\" }` where it hugs its content,",
   "  a percentage or a pixel value where the stylesheet states one. It must be",
   "  inside `css`; a `basis` field on the node itself does not say this.",
+  "",
+  "· WHEN TWO COLUMNS BECOME ONE ELEMENT, THE ELEMENT IS AS WIDE AS THE ROW.",
+  "  A gallery beside a buy box is one `productBox` here, because PageFly draws",
+  "  both halves from one element. So the node takes the width of the row that",
+  "  held them — never the `flex-basis`, `width` or `max-width` the stylesheet",
+  "  gives to one of the two columns. Carrying the buy column's `max-width:",
+  "  560px` onto it squeezes the gallery and the buy box together into half the",
+  "  page, and every measurement inside them is then wrong. The same holds for",
+  "  any element that swallows a row: a table, a slideshow, an accordion.",
+  "",
+  "· AN IMAGE ALREADY HAS ITS PHOTOGRAPH, so `query` is not a search phrase",
+  "  here. Copy the `src` of the `<img>` verbatim into `query` — the whole URL,",
+  "  query string included. Same for `beforeQuery` / `afterQuery` on a",
+  "  comparison, for a band's `bg.query`, and for a `<video>`, whose `query` is",
+  "  the `<source>` URL. A phrase instead of a URL loses the photograph: there",
+  "  is no stock search on this path, and a node whose query is not a URL is",
+  "  exported with no image at all.",
 ].join("\n");
 
 function firstObject(text: string): unknown {
@@ -122,6 +139,90 @@ function firstObject(text: string): unknown {
     }
   }
   return null;
+}
+
+/* ==========================================================================
+   Two things the transcript carries that the live path never had to.
+
+   CUSTOM PROPERTIES. A mockup declares its faces and its palette once, in
+   `:root{--serif: Gelasio, Georgia, serif}`, and every rule after that says
+   `font-family: var(--serif)`. The model copies the declaration across exactly
+   as instructed — and `--serif` is not defined anywhere in a PageFly page, so
+   the storefront falls back to the theme's font and the export renders in the
+   wrong typeface while every value in it is literally correct. The variables
+   have to be resolved here, against the document they were declared in,
+   because this is the last place both halves are in the same room.
+
+   THE PHOTOGRAPHS. `image.query` is a stock-search phrase on the live path,
+   resolved to a URL by a stage that runs before the export. Transcription has
+   no such stage: the photograph is already chosen and its URL is in the markup.
+   So a query that IS a URL resolves to itself, which is what `assetsOf` builds
+   below — without it every `opts.images` lookup misses and the page exports
+   with placeholder rectangles where its pictures were.
+   ========================================================================== */
+
+/** `--name: value` declarations, first definition winning — the base value.
+    Exported, like `splitSections`, so the three repairs below can be tested
+    without spending a model call on each. */
+export function customProps(head: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const re = /--([A-Za-z0-9_-]+)\s*:\s*([^;}]+)[;}]/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(head)) !== null) {
+    const name = `--${m[1]}`;
+    if (!(name in out)) out[name] = m[2].trim();
+  }
+  return out;
+}
+
+/** `var(--x)` → its declared value, or its own fallback, or left alone. */
+function fillVars(value: string, props: Record<string, string>, depth = 0): string {
+  if (depth > 4 || !value.includes("var(")) return value;
+  const next = value.replace(
+    /var\(\s*(--[A-Za-z0-9_-]+)\s*(?:,\s*([^()]*))?\)/g,
+    (whole, name: string, fallback?: string) =>
+      props[name] ?? (fallback?.trim() ? fallback.trim() : whole),
+  );
+  /* Custom properties reference custom properties; stop when it settles. */
+  return next === value ? value : fillVars(next, props, depth + 1);
+}
+
+/** The same tree with every `var()` in every string resolved. */
+export function resolveVars<T>(value: T, props: Record<string, string>): T {
+  if (typeof value === "string") return fillVars(value, props) as unknown as T;
+  if (Array.isArray(value)) return value.map((v) => resolveVars(v, props)) as unknown as T;
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>))
+      out[k] = resolveVars(v, props);
+    return out as unknown as T;
+  }
+  return value;
+}
+
+const VIDEO_FILE = /\.(mp4|webm|ogv|mov|m4v)(\?|#|$)/i;
+const ASSET_KEYS = new Set(["query", "beforeQuery", "afterQuery"]);
+
+/**
+ * Every URL the tree names, mapped to itself.
+ *
+ * Split by extension because the exporter reads the two maps for different
+ * jobs: a `.mp4` reaching `images` would be handed to `background-image`, which
+ * paints nothing and hides the fact that it painted nothing.
+ */
+export function assetsOf(value: unknown, into: { images: Record<string, string>; videos: Record<string, string> }) {
+  if (Array.isArray(value)) {
+    for (const v of value) assetsOf(v, into);
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (ASSET_KEYS.has(k) && typeof v === "string" && /^(https?:)?\/\//.test(v.trim())) {
+      const url = v.trim();
+      (VIDEO_FILE.test(url) ? into.videos : into.images)[url] = url;
+    }
+    assetsOf(v, into);
+  }
 }
 
 /** Everything in `<head>`: the model reads declared values off the stylesheet. */
@@ -161,6 +262,7 @@ export async function pageflyFromHtmlLive(
     : ASK;
 
   const head = headOf(html);
+  const props = customProps(head);
   const bands = splitSections(html);
 
   const usage = { input: 0, output: 0 };
@@ -194,7 +296,9 @@ export async function pageflyFromHtmlLive(
         usage.output += answer.usage.output;
 
         const parsed = firstObject(answer.text) as { section?: unknown } | null;
-        const raw = parsed?.section ?? parsed;
+        /* Before validation, so the schema sees the value the mockup states
+           rather than the `var()` that stands for it. */
+        const raw = resolveVars(parsed?.section ?? parsed, props);
 
         /* Validated through the LIVE schema, which coerces rather than rejects —
            a malformed value costs itself and nothing else. A band that survives
@@ -225,13 +329,17 @@ export async function pageflyFromHtmlLive(
 
   const tree: DesignTree = { motionPlan: "", sections };
 
+  /* The photographs the markup already chose. */
+  const assets = { images: {} as Record<string, string>, videos: {} as Record<string, string> };
+  assetsOf(sections, assets);
+
   const built = pageflyFromTree(
     tree,
     { name, bg: tokens.bg, ink: tokens.ink, fontBody: tokens.fontBody },
     1440,
     {
-      images: {},
-      videos: {},
+      images: assets.images,
+      videos: assets.videos,
       accent: tokens.accent,
       border: tokens.border,
       radius: tokens.radius,

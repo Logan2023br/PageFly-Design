@@ -625,9 +625,23 @@ export function htmlMockupEnabled(): boolean {
   return v === "1" || v === "true";
 }
 
+/* The whole system half, and it says two things.
+
+   THE FORMAT, because without it the model does not know whether to answer in
+   HTML or in JSON, and this mode is about design freedom, not about guessing a
+   wire format.
+
+   AND WHERE THE PAGE LANDS. A PageFly page is rendered inside a Shopify theme
+   that has already drawn the store's header and footer. A mockup that opens on
+   its own masthead therefore ships a second one — two logos, two menus, two
+   carts stacked down the top of the storefront. Saying so is not a design rule;
+   it is the frame the design sits in, and the model cannot see it from here. */
 const HTML_SYSTEM =
   "Return one complete, self-contained HTML document and nothing else. " +
-  "No markdown fence, no commentary before or after it.";
+  "No markdown fence, no commentary before or after it. " +
+  "The page is the body of a storefront page: no site header, no top navigation " +
+  "bar, no footer — the store's theme already draws those around it. " +
+  "Put the page's own sections in a <main> element.";
 
 async function buildPrompts(
   input: DesignInput,

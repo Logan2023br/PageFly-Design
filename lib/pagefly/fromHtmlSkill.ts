@@ -56,41 +56,49 @@ const ASK = [
 /* ==========================================================================
    Splitting the document.
 
-   On `<section>` first, because that is what the page is made of and what the
-   model that wrote it was told to make. Falling back to the body's own children
-   covers a document that uses `<div>` bands, and the whole body is the last
-   resort — a single oversized call is still better than no answer.
+   ON `<section>`, because that is what the page is made of and what the model
+   that wrote it was told to make. A `<div>` band is the fallback, and the whole
+   body the last resort — one oversized call is still better than no answer.
+
+   THE HEADER AND THE FOOTER ARE NOT BANDS, and this is the one rule here worth
+   the paragraph. An earlier version took them, on the reasoning that a page
+   that opens on its masthead should keep it. That reasoning was wrong about
+   where the page ends up: a PageFly page is rendered INSIDE a Shopify theme
+   that has already drawn its own header and its own footer. Transcribing the
+   mockup's chrome puts a second masthead directly under the theme's — two
+   logos, two menus, two carts — which is exactly the duplication the merchant
+   sees in the editor and reports as a broken import.
+
+   So the scope is `<main>` where the document has one, and the body with its
+   chrome cut away where it does not. Dropping it here rather than only in the
+   mockup prompt is deliberate: it makes the rule hold for every mockup already
+   written, not only the ones written after the prompt changed.
    ========================================================================== */
 export function splitSections(html: string): string[] {
   const body = /<body[^>]*>([\s\S]*)<\/body>/i.exec(html)?.[1] ?? html;
 
-  /* `<section>` ALONE IS NOT THE PAGE. The first version matched sections and
-     nothing else, and the header — a `<header>`, as it should be — was silently
-     dropped: the export opened on the masthead with no navigation at all.
+  /* `<main>` is the page's own content by definition — everything the theme
+     does not already provide. Where the mockup marks one, nothing outside it is
+     ever a band. */
+  const main = outermost(body, ["main"])[0];
+  const scope = main
+    ? main.replace(/^<main\b[^>]*>/i, "").replace(/<\/main>\s*$/i, "")
+    : stripChrome(body);
 
-     So every band is taken, in document order, and `<main>` is opened up rather
-     than sent whole: it holds every section on the page and would arrive as one
-     call far past the ceiling. */
-  /* NO `nav`, NO `aside`. A page's navigation lives inside its header, and a
-     `<nav>` loose in the body is almost always a drawer's menu — hidden behind
-     a transform until a burger is tapped. Taken as a band of its own it becomes
-     a list of links sitting in the middle of the page, visible, in a file where
-     nothing can hide it again. */
-  const bands = outermost(body, ["header", "footer", "section", "main"]);
-  const out: string[] = [];
-  for (const band of bands) {
-    if (/^<main\b/i.test(band)) {
-      const inner = outermost(band.replace(/^<main\b[^>]*>/i, "").replace(/<\/main>\s*$/i, ""), [
-        "section",
-        "article",
-        "div",
-      ]);
-      out.push(...(inner.length > 0 ? inner : [band]));
-    } else {
-      out.push(band);
-    }
-  }
-  return out.length > 0 ? out : [body];
+  /* `div` is not in the first list on purpose: a wrapper div holding every
+     section would come back as one band far past the model's ceiling. It is
+     tried only when the document turns out not to use sections at all. */
+  let bands = outermost(scope, ["section", "article"]);
+  if (bands.length === 0) bands = outermost(scope, ["div"]);
+
+  return bands.length > 0 ? bands : [scope];
+}
+
+/** The body with its top-level `<header>` and `<footer>` removed. */
+function stripChrome(html: string): string {
+  let out = html;
+  for (const band of outermost(html, ["header", "footer"])) out = out.replace(band, "");
+  return out;
 }
 
 /**
