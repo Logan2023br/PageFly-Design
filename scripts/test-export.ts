@@ -96,7 +96,23 @@ async function open(
     return parsed[device]?.[selector] ?? "";
   };
 
-  return { items: page.items, cssOf, customCSS: page.customCSS ?? "", customJS: page.customJS ?? "" };
+  /** Every selector key on the page, across every item and breakpoint. */
+  const selectorsOf = (): string[] => {
+    const out = new Set<string>();
+    for (const entry of page.styles) {
+      const parsed = JSON.parse(entry.styles) as Record<string, Record<string, string>>;
+      for (const rules of Object.values(parsed)) for (const k of Object.keys(rules)) out.add(k);
+    }
+    return [...out];
+  };
+
+  return {
+    items: page.items,
+    cssOf,
+    selectorsOf,
+    customCSS: page.customCSS ?? "",
+    customJS: page.customJS ?? "",
+  };
 }
 
 async function build(tree: unknown, name = "probe"): Promise<Item[]> {
@@ -2173,12 +2189,26 @@ async function main(): Promise<void> {
     "the strip is ONE MediaItem2 template, as the editor's own export writes it",
     thumbKids.join(" · "),
   );
-  /* And no `slidesToShow`, for the same reason: the editor writes none. How
-     many thumbnails are visible is the renderer's business, decided from the
-     product's real media, not a count this file can guess. */
+  /* ==========================================================================
+     AND THE COUNT, WHICH THIS CHECK ALSO USED TO READ THE OTHER WAY.
+
+     The reference writes no `slidesToShow` on its MediaList2, and the note here
+     read that as "the renderer decides, a count cannot be guessed". Half right:
+     a count cannot be GUESSED. It can be STATED — `fields.md` documents the
+     field as per-breakpoint and editable, and the editor omits it only because
+     the merchant left the default of five alone, which is what an editor omits.
+
+     What made the difference is that the design now says. A mockup that drew
+     four wide thumbnails is a different composition from five square ones, and
+     five was arriving on every gallery whatever the mockup showed. So the
+     assertion is that the strip carries the design's own count — and a design
+     silent about it still lands on PageFly's five, which is the behaviour the
+     reference actually documents.
+     ========================================================================== */
   check(
-    (thumbs?.data as Record<string, unknown> | undefined)?.slidesToShow === undefined,
-    "and states no thumbnail count — the product decides that",
+    (thumbs?.data as { slidesToShow?: Record<string, number> } | undefined)?.slidesToShow?.all === 5,
+    "and a design silent about the count keeps PageFly's five",
+    JSON.stringify((thumbs?.data as Record<string, unknown> | undefined)?.slidesToShow ?? null),
   );
 
   const acc = await open(
@@ -2260,11 +2290,117 @@ async function main(): Promise<void> {
     active.slice(0, 60),
   );
 
-  const arrows = shot.cssOf(med.id, "all", "& .splide__arrow--prev, & .splide__arrow--next");
+  /* ==========================================================================
+     ONE SELECTOR PER KEY. PageFly keeps what is before the first comma.
+
+     `"& .pf-slider-prev, & .pf-slider-next"` reached the editor as a rule on
+     the PREV arrow alone, and the live page showed it: a pale plate on the
+     left, PageFly's stock dark circle on the right, in the same gallery. The
+     tree looked right, which is why this test used to ask the tree — it read
+     the comma key back out of its own object and passed.
+
+     So the assertion is on what a stylesheet can hold: every key names one
+     selector, and both arrows have a rule of their own.
+     ========================================================================== */
+  for (const side of ["prev", "next"]) {
+    const arrows = shot.cssOf(med.id, "all", `& .splide__arrow--${side}`);
+    check(
+      arrows.includes("#F4F1E8"),
+      `the gallery's ${side} arrow sits on a plate from this page`,
+      arrows.slice(0, 60),
+    );
+    const slider = shot.cssOf(main.id, "all", `& .pf-slider-${side}`);
+    check(
+      slider.includes("border-radius"),
+      `and the slider's ${side} arrow is styled at all`,
+      slider.slice(0, 60) || "(no rule — PageFly kept only what preceded the comma)",
+    );
+  }
+
+  const commaKeys = shot.selectorsOf().filter((k) => k.includes(","));
   check(
-    arrows.includes("#F4F1E8"),
-    "the gallery arrows sit on a plate from this page, not a guessed white",
-    arrows.slice(0, 60),
+    commaKeys.length === 0,
+    "no style key names two selectors at once",
+    commaKeys.slice(0, 3).join(" | "),
+  );
+
+  /* ==========================================================================
+     THE GALLERY'S PAGING, WHEN THE MOCKUP PAGES BY NUMBER.
+
+     PageFly's `paginationStyle` is four canned looks and every one of them is
+     dots or dashes. A mockup that pages with `01 / 06` in the corner of the
+     photograph is asking for something the element does not have — so the
+     dashes are switched OFF and the counter is written, which is the same
+     bargain `mediaStyle` already makes for the arrows.
+
+     A design that says nothing about a counter keeps the dashes. This is an
+     addition to the vocabulary, not a new default.
+     ========================================================================== */
+  const counted = await open(
+    {
+      sections: [
+        section(
+          [
+            {
+              type: "product",
+              title: "Overshirt",
+              price: "$480",
+              atcText: "Add",
+              gallery: true,
+              mediaThumbs: 4,
+              mediaStyle: {
+                counter: { background: "rgba(18,16,12,.62)", color: "#FBFAF7", letterSpacing: ".2em" },
+                thumb: { aspectRatio: "1.35 / 1" },
+                thumbSelected: { borderColor: "#8A1C1C" },
+              },
+              children: [],
+            },
+          ],
+          "product-detail-gallery",
+        ),
+      ],
+    },
+    "probe",
+    { accent: "#8A1C1C" },
+  );
+
+  const cMain = counted.items.find((i) => i.type === "MediaMain3")!;
+  check(
+    cMain.data?.paginationStyle === "none",
+    "a counted gallery switches PageFly's dashes off",
+    String(cMain.data?.paginationStyle),
+  );
+  check(
+    counted.customJS.includes("pfd-slide-count"),
+    "and the counter is written, because the element has no such setting",
+  );
+  check(
+    counted.customCSS.includes("rgba(18,16,12,.62)"),
+    "the counter wears the colours the design gave it",
+  );
+  check(
+    shot.items.find((i) => i.type === "MediaMain3")!.data?.paginationStyle === "pagination-style-1",
+    "a design that never mentions a counter keeps the dashes",
+  );
+
+  /* Four thumbnails is a different composition from six, and the strip is the
+     one part of the gallery whose count the mockup states outright. */
+  const strip = counted.items.find((i) => i.type === "MediaList2")!;
+  check(
+    (strip.data?.slidesToShow as Record<string, number>)?.all === 4,
+    "the strip shows as many thumbnails as the mockup drew",
+    JSON.stringify(strip.data?.slidesToShow ?? null),
+  );
+
+  const cThumb = counted.items.find((i) => i.type === "MediaItem2")!;
+  check(
+    counted.cssOf(cThumb.id, "all").includes("1.35 / 1"),
+    "a thumbnail is the shape the design asked for, not a hardcoded square",
+    counted.cssOf(cThumb.id, "all").slice(0, 70),
+  );
+  check(
+    counted.cssOf(cThumb.id, "all", '&[data-active="true"]').includes("#8A1C1C"),
+    "and the chosen one takes the design's own selected state",
   );
 
   /* ---- how a product is chosen ------------------------------------------- */

@@ -601,7 +601,26 @@ const product = z.object({
    * because PageFly's `navStyle` and `paginationStyle` are two canned looks and
    * neither of them is that one.
    */
-  mediaStyle: parts(["nav", "dot", "dotActive"] as const),
+  mediaStyle: parts([
+    "nav",
+    "dot",
+    "dotActive",
+    /* ==================================================================
+       `counter` IS NOT A PAGEFLY SETTING, and naming it here is how the
+       exporter learns to build one.
+
+       `paginationStyle` offers four looks and all four are dots or dashes.
+       A gallery that pages with `01 / 06` in the corner of the photograph —
+       an editorial habit, and the one the mockup drew — is asking for
+       something the element does not have. Declared here, the dashes go off
+       and the counter is written instead.
+       ================================================================== */
+    "counter",
+    /* The strip's own tiles: a thumbnail is not always a square, and the
+       chosen one has to read as chosen in the page's own accent. */
+    "thumb",
+    "thumbSelected",
+  ] as const),
   /**
    * The thumbnail strip under (or beside) the main photograph.
    *
@@ -617,6 +636,15 @@ const product = z.object({
   gallery: flag(false),
   /** where the strip sits relative to the main image */
   galleryEdge: choice(["bottom", "left", "right", "top"] as const, "bottom"),
+
+  /**
+   * How many thumbnails the strip shows at once.
+   *
+   * PageFly's own default is five and a mockup that drew four is a different
+   * composition — wider tiles, and the strip ending where the photograph ends
+   * rather than running past it.
+   */
+  mediaThumbs: within(2, 8, 5),
 
   /**
    * The shape of the main photograph.
@@ -1026,9 +1054,12 @@ export type DesignNode =
         Record<"dot" | "dotSelected" | "tile" | "tileSelected" | "label" | "dropdown", Css>
       >;
       /** the gallery's arrows and pagination; see `parts` */
-      mediaStyle?: Partial<Record<"nav" | "dot" | "dotActive", Css>>;
+      mediaStyle?: Partial<
+        Record<"nav" | "dot" | "dotActive" | "counter" | "thumb" | "thumbSelected", Css>
+      >;
       gallery: boolean;
       galleryEdge: "bottom" | "left" | "right" | "top";
+      mediaThumbs: number;
       mediaRatio: number;
       mediaHover: "magnifier" | "none";
       qty: boolean;

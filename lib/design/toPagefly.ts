@@ -665,6 +665,58 @@ function marqueeCss(cls: string, speed: number): string {
   ].join("\n");
 }
 
+/* ==========================================================================
+   THE GALLERY'S PAGE NUMBER, WHICH PAGEFLY DOES NOT HAVE.
+
+   `paginationStyle` has four settings and all four are dots or dashes. A
+   gallery that pages with `01 / 06` in the corner of the photograph is asking
+   for an element that does not exist, so it is written: the dashes go off and
+   this pair of blocks puts a badge over the slider and keeps it in step.
+
+   Runs on preview and live, NOT in the editor canvas — PageFly does not run
+   custom JS there. In the editor the corner is simply empty.
+   ========================================================================== */
+function galleryCountCss(style: Css | undefined): string {
+  return [
+    "#__pf [data-pf-type=MediaMain3]{position:relative;}",
+    ".pfd-slide-count{position:absolute;left:14px;bottom:14px;z-index:4;" +
+      "pointer-events:none;font-size:11px;font-weight:600;letter-spacing:.2em;" +
+      "line-height:1;padding:7px 12px;background:rgba(18,16,12,.55);color:#fff;" +
+      (style ? declarations(style) : "") +
+      "}",
+  ].join("\n");
+}
+
+/** NO `<` ANYWHERE — see `counterJs`. Hence `("0"+n).slice(-2)` for the pad and
+    an unquoted attribute selector, neither of which needs one. */
+function galleryCountJs(): string {
+  return `
+var host=document.querySelector("#__pf [data-pf-type=MediaMain3]");
+if(host){
+  var slider=host.querySelector(".pf-media-slider");
+  if(slider){
+    var box=slider.parentElement||host;
+    var badge=document.createElement("span");
+    badge.className="pfd-slide-count";
+    box.appendChild(badge);
+    var pad=function(n){return ("0"+n).slice(-2);};
+    var sync=function(){
+      var slides=slider.querySelectorAll(".pf-slide-main-media");
+      if(!slides.length){badge.textContent="";return;}
+      var at=0;
+      slides.forEach(function(s,n){
+        if(s.getAttribute("data-active")==="true"||s.classList.contains("is-current"))at=n;
+      });
+      badge.textContent=pad(at+1)+" / "+pad(slides.length);
+    };
+    sync();
+    var tick=0;
+    slider.addEventListener("scroll",function(){clearTimeout(tick);tick=setTimeout(sync,90);});
+    new MutationObserver(sync).observe(slider,{subtree:true,attributes:true,attributeFilter:["data-active","class"]});
+  }
+}`.trim();
+}
+
 function counterJs(cls: string, value: string): string {
   /* The digits only. A value of "1,240" animates to 1240 and is written back
      with its separators intact by the format below. */
@@ -1354,10 +1406,23 @@ function productBox(
      neither is "round white arrows and thin dashes", so the page states it and
      these rules carry it — written on the MediaMain3, which is the element the
      slider markup lives inside. */
-  const shot = (name: "nav" | "dot" | "dotActive") => {
+  const shot = (name: "nav" | "dot" | "dotActive" | "thumb" | "thumbSelected") => {
     const declared = node.mediaStyle?.[name];
     return declared ? ` ${declarations(declared)}` : "";
   };
+
+  /* A counter is a thing to build, not a setting — see `galleryCountCss`. The
+     dashes and the number are two answers to one question, so declaring the
+     counter switches the dashes off rather than stacking them. */
+  const counter = node.mediaStyle?.counter;
+  if (counter) {
+    opts.customBlocks?.push({
+      className: "pfd-slide-count",
+      html: "",
+      css: galleryCountCss(counter),
+      js: galleryCountJs(),
+    });
+  }
 
   const media = PRODUCT_MEDIA(
     MEDIA_MAIN(
@@ -1377,21 +1442,23 @@ function productBox(
             "background: #FFFFFF;" + shot("dotActive"),
         },
       },
-      { nav: "nav-style-1", pagination: "pagination-style-1" },
+      { nav: "nav-style-1", pagination: counter ? "none" : "pagination-style-1" },
     ),
     MEDIA_LIST(
-      6,
+      node.mediaThumbs,
       { all: { "&": "gap: 10px; margin-top: 10px;" } },
       {
         all: {
           "&": `aspect-ratio: 1 / 1; overflow: hidden; cursor: pointer;` +
             ` border: 1px solid transparent; ${mediaRadius}` +
-            " opacity: .62; transition: opacity .18s ease, border-color .18s ease;",
+            " opacity: .62; transition: opacity .18s ease, border-color .18s ease;" +
+            shot("thumb"),
           /* The chosen thumbnail has to be visible as chosen. Left alone the
              strip is six identical squares and a shopper cannot tell which one
              they are looking at. */
           "&:hover": "opacity: 1;",
-          '&[data-active="true"]': `opacity: 1; border-color: ${mediaAccent};`,
+          '&[data-active="true"]':
+            `opacity: 1; border-color: ${mediaAccent};` + shot("thumbSelected"),
         },
       },
     ),
