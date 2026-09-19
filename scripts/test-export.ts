@@ -2376,6 +2376,42 @@ async function main(): Promise<void> {
     String(main.data?.paginationStyle),
   );
 
+  /* ==========================================================================
+     `object-fit: cover` WAS WRITTEN FOR A WRAPPER THAT IS NOT THERE.
+
+     The rule said `& .pf-media-wrapper img`. Nothing in a rendered gallery
+     carries that class — the live DOM has
+
+         .pf-slide-main-media   holding the main photograph
+         .pf-slide-list-media   holding one thumbnail
+
+     and `.pf-media-wrapper` only appears around video and 3D media. So the
+     rule matched nothing and BOTH images kept PageFly's own defaults:
+
+         .eEfYdg { width:100%; height:auto; object-fit:cover }   main
+         .dxatTz img { height:auto; object-fit:contain }          thumbnail
+
+     `height: auto` is why the main photograph ignores the frame the design
+     gave it — the box is `aspect-ratio: 1 / 1.24` with `overflow: hidden`, so
+     a wide photograph leaves the bottom empty and a tall one is cut off
+     instead of being cropped to fill. `contain` is why the thumbnails look
+     like a ragged row: every one is letterboxed inside its square, so each
+     photograph shows at a different size.
+     ========================================================================== */
+  const mainImg = shot.cssOf(main.id, "all", "& .pf-slide-main-media img");
+  check(
+    /object-fit:\s*cover/.test(mainImg) && /height:\s*100%/.test(mainImg),
+    "the main photograph fills the frame the design drew",
+    mainImg.slice(0, 70) || "(no rule — the old selector named a wrapper that is not rendered)",
+  );
+
+  const thumbImg = shot.cssOf(thumb.id, "all", "& img");
+  check(
+    /object-fit:\s*cover/.test(thumbImg) && /height:\s*100%/.test(thumbImg),
+    "and a thumbnail is cropped to its square, not letterboxed inside it",
+    thumbImg.slice(0, 70) || "(no rule — thumbnails kept PageFly's `contain`)",
+  );
+
   /* ---- how a product is chosen ------------------------------------------- */
 
   console.log("\nhow a product is chosen");

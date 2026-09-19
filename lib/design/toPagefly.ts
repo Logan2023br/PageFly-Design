@@ -1434,6 +1434,25 @@ function productBox(
       {
         all: {
           "&": `width: 100%; aspect-ratio: 1 / ${ratio}; overflow: hidden; ${mediaRadius}`,
+          /* ==================================================================
+             THE PHOTOGRAPH FILLS THE FRAME, and until now it did not.
+
+             The frame is `aspect-ratio: 1 / ratio` with `overflow: hidden`,
+             which only crops something that is already as tall as the box.
+             PageFly's own rule leaves the image `height: auto`, so a wide
+             photograph sat in the top of a portrait frame with the rest empty
+             and a tall one was cut off at the bottom — the design's shape
+             applied to the box and not to the picture inside it.
+
+             The old rule meant to say this and named `.pf-media-wrapper`,
+             which a rendered gallery does not have: the live DOM holds
+             `.pf-slide-main-media` for the photograph and keeps that wrapper
+             for video and 3D media. A selector that matches nothing fails
+             quietly, which is why it survived several passes.
+             ================================================================== */
+          "& .pf-slide-main-media": "height: 100%;",
+          "& .pf-slide-main-media img":
+            "width: 100% !important; height: 100% !important; object-fit: cover !important;",
           "& .pf-slider-prev, & .pf-slider-next":
             "width: 44px; height: 44px; border-radius: 999px; background: rgba(255,255,255,.92);" +
             ` border: 1px solid ${opts.border ?? "rgba(0,0,0,.10)"}; cursor: pointer;` +
@@ -1460,6 +1479,12 @@ function productBox(
           /* The chosen thumbnail has to be visible as chosen. Left alone the
              strip is six identical squares and a shopper cannot tell which one
              they are looking at. */
+          /* Same miss, the other half of the gallery. PageFly gives a
+             thumbnail `object-fit: contain`, so every photograph letterboxes
+             inside its square at its own size and the strip reads as a ragged
+             row rather than a row. The tile is already square and clipped; the
+             picture has to fill it. */
+          "& img": "width: 100% !important; height: 100% !important; object-fit: cover !important;",
           "&:hover": "opacity: 1;",
           '&[data-active="true"]': `opacity: 1; border-color: ${mediaAccent};`,
         },
