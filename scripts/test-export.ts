@@ -2934,6 +2934,53 @@ async function main(): Promise<void> {
 
   /* ---- and the class the form bug belonged to --------------------------- */
 
+  /* ---- a card whose own insides are three of a shape ---------------------
+
+     The "what is worn with it" row: three product cards, each of them a
+     photograph, a block of copy and a quick-add row — three children of the
+     same shape inside a card that is itself one of three. */
+  console.log("\na card list, and cards that look like card lists");
+
+  const nested = await open({
+    sections: [
+      section(
+        [
+          {
+            type: "row",
+            css: { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "24px" },
+            children: [1, 2, 3].map(() => ({
+              type: "col" as const,
+              children: [
+                { type: "col" as const, children: [{ type: "image" as const, query: "a.jpg" }] },
+                { type: "col" as const, children: [{ type: "heading" as const, text: "The Bias Camisole" }] },
+                { type: "col" as const, children: [{ type: "text" as const, text: "Quick add" }] },
+              ],
+            })),
+          },
+        ],
+        "usecase-tiles-overlay",
+      ),
+    ],
+  });
+
+  const outerLists = nested.items.filter((i) => i.type === "ContentList2");
+  check(
+    outerLists.length === 1,
+    "the row of three cards is one card list",
+    `${outerLists.length} list(s)`,
+  );
+  const nestedCards = nested.items.filter((i) => i.type === "ContentListItem");
+  const nestedInside = nestedCards.filter((i) =>
+    i.children.some(
+      (c) => nested.items.find((x) => x.id === c)?.type === "ContentList2",
+    ),
+  );
+  check(
+    nestedInside.length === 0,
+    "and a card's own three children stay a flex block, not a second list",
+    `${nestedInside.length} card(s) holding a list`,
+  );
+
   console.log("\nevery element, every page above");
 
   const everything = [
@@ -2942,7 +2989,7 @@ async function main(): Promise<void> {
     ...stacked.items, ...inRow.items, ...labelled.items,
     ...slider.items, ...exact.items, ...banded.items, ...plain.items, ...unresolved.items,
     ...rail.items, ...buyBar.items, ...atc.items, ...bound.items, ...plainBtn.items, ...full.items,
-    ...tiles.items,
+    ...tiles.items, ...nested.items,
   ];
   /* Body and Layout are excluded: the format doc says both are required and
      carry no styles, they are built outside the element path, and neither has
@@ -2952,6 +2999,39 @@ async function main(): Promise<void> {
   const dataless = everything.filter(
     (i) => i.data === undefined && i.type !== "Body" && i.type !== "Layout",
   );
+  /* ==========================================================================
+     A CARD LIST INSIDE A CARD, WHICH THE PLATFORM DOES NOT ALLOW.
+
+     `nesting.md` lists what a `ContentListItem` may hold — 140 of the 241
+     types — and `ContentList` and `ContentList2` are two of the exceptions.
+
+     It happened on the "what is worn with it" row. Three cards of the same
+     shape qualify as a card list, which is right; but each card is itself three
+     children of the same shape — the photograph, the copy, the quick-add row —
+     and nothing stopped `cardList` from firing a second time one level down.
+     The editor drew it, so the tree looked plausible and the breadcrumb read
+
+         Content list / Content list item / Content list / Content list item
+
+     which is the shape the documentation refuses. Asserted across every page
+     this file builds rather than on the one that showed it, because "three
+     children of the same shape" is not a rare arrangement.
+     ========================================================================== */
+  const listItems = new Set(
+    everything.filter((i) => i.type === "ContentListItem").map((i) => i.id),
+  );
+  const byIdAll = new Map(everything.map((i) => [i.id, i]));
+  const nestedLists = everything.filter(
+    (i) =>
+      listItems.has(i.id) &&
+      i.children.some((c) => byIdAll.get(c)?.type === "ContentList2"),
+  );
+  check(
+    nestedLists.length === 0,
+    "no card list is nested inside a card — nesting.md refuses it",
+    `${nestedLists.length} offending item(s)`,
+  );
+
   check(
     dataless.length === 0,
     "no element reaches the editor without a data key",

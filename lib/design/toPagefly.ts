@@ -862,6 +862,17 @@ export type EmitOptions = {
      page. These collect what each block contributed on the way past. */
   customBlocks?: CleanBlock[];
   customCount?: { value: number };
+  /**
+   * True while emitting anything that will end up inside a ContentListItem.
+   *
+   * `nesting.md` lets a `ContentListItem` hold 140 of the 241 types and
+   * `ContentList` / `ContentList2` are two of the exceptions — a card list
+   * cannot contain a card list. It happened because the test for one is
+   * "three or more children of the same shape", and a card is very often
+   * exactly that: a photograph, a block of copy, a row of buttons. The outer
+   * row of product cards qualified, and so did every card inside it.
+   */
+  inCard?: boolean;
 };
 
 function emit(node: DesignNode, parent: ParentDir, opts: EmitOptions): PFNode | null {
@@ -1351,8 +1362,15 @@ function emitNode(
     case "row":
     case "col": {
       const dir = dirsOf(node);
+      /* DECIDED BEFORE THE CHILDREN ARE BUILT, because the answer changes how
+         they must be built: everything inside a card list is inside a card,
+         and a card may not hold another list. Every disqualifier reads the
+         DESIGN node, so the question can be asked this early — which is the
+         whole reason `becomesCardList` is separate from `cardList`. */
+      const willList = !opts.inCard && becomesCardList(node);
+      const inner = willList || opts.inCard ? { ...opts, inCard: true } : opts;
       const kids = node.children
-        .map((c) => emit(c, dir, opts))
+        .map((c) => emit(c, dir, inner))
         .filter((n): n is PFNode => n !== null);
 
       /* A container that lost every child is decoration — a rail, a spacer, a
@@ -1361,7 +1379,7 @@ function emitNode(
 
       /* A row of cards is a card list, not a box holding boxes. See
          `asCardList` for what qualifies and why it matters on import. */
-      const asList = cardList(node, kids, sd);
+      const asList = willList ? cardList(node, kids, sd) : null;
       if (asList) return asList;
 
       return FB(sd, kids);
@@ -1992,13 +2010,42 @@ function declaredColumns(css: Css): number | null {
   return tracks > 1 ? tracks : null;
 }
 
+/**
+ * Does this row or column become a ContentList2?
+ *
+ * SPLIT OUT OF `cardList` SO IT CAN BE ASKED EARLY. Every disqualifier below
+ * reads the design node — the child count, their type, their declared width,
+ * what is in their subtree — so the answer is knowable before a single child
+ * has been emitted. That matters because the answer decides how the children
+ * must be built: inside a card list they are inside a card, and `nesting.md`
+ * refuses a card holding another card list.
+ */
+function becomesCardList(node: Extract<DesignNode, { type: "row" | "col" }>): boolean {
+  const children = node.children;
+  if (children.length < 3) return false;
+
+  const shape = children[0].type;
+  if (shape !== "col" && shape !== "row" && shape !== "image" && shape !== "overlay")
+    return false;
+  if (!children.every((c) => c.type === shape)) return false;
+
+  for (const c of children) {
+    if (c.css?.width !== undefined || c.css?.flexBasis !== undefined) return false;
+    if (walkNode(c).some((n) => NOT_IN_A_CARD.has(n.type))) return false;
+  }
+  return true;
+}
+
 function cardList(
   node: Extract<DesignNode, { type: "row" | "col" }>,
   kids: PFNode[],
   sd: StyleData,
 ): PFNode | null {
   const children = node.children;
-  if (children.length < 3 || children.length !== kids.length) return null;
+  /* The one thing `becomesCardList` cannot answer: a child that emitted
+     nothing leaves the list one card short of the design. */
+  if (children.length !== kids.length) return null;
+  if (!becomesCardList(node)) return null;
 
   /* One shape, repeated.
 
@@ -2008,15 +2055,6 @@ function cardList(
      states no width. `elementFor` already says `usecase-tiles-overlay` IS a
      ContentList2, and two files disagreeing is what shipped three photo tiles
      as a nest of FlexBlocks with no column control in the editor. */
-  const shape = children[0].type;
-  if (shape !== "col" && shape !== "row" && shape !== "image" && shape !== "overlay") return null;
-  if (!children.every((c) => c.type === shape)) return null;
-
-  for (const c of children) {
-    if (c.css?.width !== undefined || c.css?.flexBasis !== undefined) return null;
-    if (walkNode(c).some((n) => NOT_IN_A_CARD.has(n.type))) return null;
-  }
-
   const css = styleAt(node, "all");
 
   /* THE DIRECTION DECIDES THE COLUMN COUNT.
