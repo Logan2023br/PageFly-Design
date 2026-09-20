@@ -1469,7 +1469,7 @@ function productBox(
       { nav: "nav-style-1", pagination: counter ? "none" : "pagination-style-1" },
     ),
     MEDIA_LIST(
-      6,
+      node.mediaThumbs,
       { all: { "&": "gap: 10px; margin-top: 10px;" } },
       {
         all: {
@@ -1872,7 +1872,7 @@ function productGrid(
          PRODUCT_MEDIA applies, so the list is not rendered at all. Hiding a
          rendered list with `display:none` left it in the editor's tree as an
          element a merchant could turn back on and get a broken card. */
-      MEDIA_LIST(1, null, null),
+      MEDIA_LIST(undefined, null, null),
       /* SHAPE THE PHOTO, or the grid arrives ragged.
          `aspect-ratio` on the root gives every card the same box; `object-fit`
          on the `img` is what makes the photograph fill it. `fields.md` names

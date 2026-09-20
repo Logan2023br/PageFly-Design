@@ -482,9 +482,30 @@ export function MEDIA_MAIN(
  * property of the merchant's product, not of this file, and every caller was
  * passing a guess at it.
  */
-export function MEDIA_LIST(count: number, styleData: StyleData, itemStyle: StyleData) {
-  void count;
-  return node("MediaList2", {}, styleData, [node("MediaItem2", {}, itemStyle, [])]);
+/**
+ * The thumbnail strip, holding ONE `MediaItem2` the renderer repeats.
+ *
+ * `count` is how many tiles are visible at once, and it is optional on
+ * purpose. `fields.md` documents `slidesToShow` as per-breakpoint and
+ * editable; `reference/all-elements.pagefly` omits it, because its merchant
+ * left PageFly's five alone and that is what an editor omits. So the field is
+ * written only when a design states a number — silence produces exactly the
+ * bytes the reference does.
+ */
+export function MEDIA_LIST(
+  count: number | undefined,
+  styleData: StyleData,
+  itemStyle: StyleData,
+) {
+  const show = count === undefined ? undefined : Math.max(2, Math.round(count));
+  return node(
+    "MediaList2",
+    show === undefined
+      ? {}
+      : { slidesToShow: { all: show, laptop: show, tablet: show, mobile: show } },
+    styleData,
+    [node("MediaItem2", {}, itemStyle, [])],
+  );
 }
 
 export function PRODUCT_TITLE(styleData: StyleData) {

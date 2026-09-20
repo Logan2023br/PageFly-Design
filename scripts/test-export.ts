@@ -2457,6 +2457,55 @@ async function main(): Promise<void> {
     "a design silent about the shape still gets the square",
   );
 
+  /* ==========================================================================
+     HOW MANY TILES, AND THE ONE FIELD THE REFERENCE DOES NOT WRITE.
+
+     PageFly's strip shows five. The mockup's shows four, which is a different
+     composition — wider tiles, and the strip ending where the photograph ends
+     instead of running past it.
+
+     `MediaList2.slidesToShow` is documented per-breakpoint and editable, and
+     `reference/all-elements.pagefly` still omits it — because its merchant left
+     the default alone, which is what an editor omits. Both readings are true,
+     so the field is written ONLY when the design states a count. A design
+     silent about it produces the same bytes it produces today, which is the
+     assertion that keeps the reference honest a few blocks above this one.
+     ========================================================================== */
+  const four = await open(
+    {
+      sections: [
+        section(
+          [
+            {
+              type: "product",
+              title: "Overshirt",
+              price: "$480",
+              atcText: "Add",
+              gallery: true,
+              mediaThumbs: 4,
+              children: [],
+            },
+          ],
+          "product-detail-gallery",
+        ),
+      ],
+    },
+  );
+
+  const fourStrip = four.items.find((i) => i.type === "MediaList2")!;
+  check(
+    (fourStrip.data as { slidesToShow?: Record<string, number> })?.slidesToShow?.all === 4,
+    "a strip shows as many thumbnails as the mockup drew",
+    JSON.stringify((fourStrip.data as Record<string, unknown>)?.slidesToShow ?? null),
+  );
+
+  const silentStrip = shot.items.find((i) => i.type === "MediaList2")!;
+  check(
+    (silentStrip.data as Record<string, unknown>)?.slidesToShow === undefined,
+    "and a design silent about it writes no count at all, as the reference does",
+    JSON.stringify((silentStrip.data as Record<string, unknown>)?.slidesToShow ?? null),
+  );
+
   const thumbImg = shot.cssOf(thumb.id, "all", "& img");
   check(
     /object-fit:\s*cover/.test(thumbImg) && /height:\s*100%/.test(thumbImg),

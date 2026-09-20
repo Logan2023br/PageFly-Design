@@ -127,6 +127,23 @@ function whole(min: number, max: number, fallback: number) {
   });
 }
 
+/**
+ * A whole number the design may simply not have an opinion about.
+ *
+ * `whole` and `within` always answer, which is right for a shape or a ratio —
+ * something has to be drawn. It is wrong for a setting whose absence is
+ * itself the instruction: PageFly has its own default for the thumbnail
+ * count, and writing ours on every gallery would overwrite that default with
+ * a copy of it on pages nobody asked about. Undefined means "say nothing",
+ * and the exporter writes no field at all.
+ */
+function count(min: number, max: number) {
+  return loose().transform((v) => {
+    const n = numberish(v);
+    return n === null ? undefined : Math.min(max, Math.max(min, Math.round(n)));
+  });
+}
+
 /** The same, for values that are meant to be fractional. */
 function within(min: number, max: number, fallback: number) {
   return loose().transform((v) => {
@@ -640,6 +657,15 @@ const product = z.object({
   galleryEdge: choice(["bottom", "left", "right", "top"] as const, "bottom"),
 
   /**
+   * How many thumbnails the strip shows at once, when the mockup is specific.
+   *
+   * Absent means absent: PageFly shows five and the file says nothing, which is
+   * what its own export does. Four wide tiles is a different composition from
+   * five square ones, and until this existed five was what every gallery got.
+   */
+  mediaThumbs: count(2, 8),
+
+  /**
    * The shape of the main photograph.
    *
    * Square was hardcoded, and square is right for a bottle and wrong for a
@@ -1052,6 +1078,7 @@ export type DesignNode =
       >;
       gallery: boolean;
       galleryEdge: "bottom" | "left" | "right" | "top";
+      mediaThumbs?: number;
       mediaRatio: number;
       mediaHover: "magnifier" | "none";
       qty: boolean;
