@@ -10,7 +10,7 @@ import { freeDesignEnabled, planSpecs, sectionSpecEnabled } from "../design/sect
 import { verticalFor } from "../design/plan";
 import type { DeckOutcome } from "../design/deckPlan";
 import { getRepo } from "../db";
-import { SUPPORT_MESSAGE, merchantMessage } from "./failureMessage";
+import { BUILD_FAILED, merchantMessage } from "./failureMessage";
 import type { JobRecord, RunPageRecord, RunRecord } from "../db/types";
 import { buildPage, expandSelection } from "../generate/mock";
 import { CHROME_KINDS, INCLUDE_CHROME } from "../pageChrome";
@@ -208,7 +208,7 @@ export async function startBuild(
           /* Never the raw message. "terminated" is a word from inside a HTTP
              library; it tells a merchant nothing and tells support less than
              the stack above already did. */
-          error: SUPPORT_MESSAGE,
+          error: BUILD_FAILED,
         })
         .catch(() => {});
     })
@@ -793,7 +793,7 @@ async function run(
            trace's message is not something a merchant can act on either. The
            real one is still thrown and logged; this is only what the screen
            says. */
-        error: SUPPORT_MESSAGE,
+        error: BUILD_FAILED,
         pages: inOrder(pages),
         failures,
         tokens,

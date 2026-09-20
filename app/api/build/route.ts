@@ -4,6 +4,7 @@ import { cancelBuild, planFor, startBuild } from "@/lib/build/runner";
 import { getRepo } from "@/lib/db";
 import type { JobStatus } from "@/lib/db/types";
 import { OVER_PAGE_LIMIT, briefSchema } from "@/lib/validation";
+import { merchantFailures } from "@/lib/build/failureMessage";
 
 /* ==========================================================================
    POST /api/build   start one
@@ -61,7 +62,13 @@ function view(job: {
     status: job.status,
     plan: Array.isArray(job.plan) ? (job.plan as JobView["plan"]) : [],
     pages: Array.isArray(job.pages) ? job.pages : [],
-    failures: Array.isArray(job.failures) ? (job.failures as JobView["failures"]) : [],
+    /* REASONS OUT, HERE, because this is the one place a job crosses to a
+       browser. Three screens printed `reason` straight at the merchant — the
+       sticky bar, the generating card, the results list — and the vendor's own
+       prose went with it, naming the model we run and an HTTP status nobody
+       reading it could act on. The full reason stays in the job row and the
+       log; see lib/build/failureMessage.ts. */
+    failures: merchantFailures(job.failures),
     /* Shaped on the way out rather than trusted. This column is jsonb and a row
        written by an older deploy has no `progress` at all, which would reach the
        bar as `undefined` and be added to a number. */
