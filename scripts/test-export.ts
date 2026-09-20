@@ -2405,6 +2405,58 @@ async function main(): Promise<void> {
     mainImg.slice(0, 70) || "(no rule — the old selector named a wrapper that is not rendered)",
   );
 
+  /* ==========================================================================
+     A THUMBNAIL IS NOT ALWAYS A SQUARE, and the exporter was sure it was.
+
+     `aspect-ratio: 1 / 1` is hardcoded on the tile. The mockup's strip is four
+     landscape tiles, so every photograph in it arrived cropped to a square it
+     was never composed for. Same contract as the arrows above it: a part the
+     design states, over a default it keeps by staying silent.
+     ========================================================================== */
+  const stripShape = await open(
+    {
+      sections: [
+        section(
+          [
+            {
+              type: "product",
+              title: "Overshirt",
+              price: "$480",
+              atcText: "Add",
+              gallery: true,
+              mediaStyle: {
+                thumb: { aspectRatio: "1.35 / 1" },
+                thumbSelected: { borderColor: "#8A1C1C", borderWidth: "2px" },
+              },
+              children: [],
+            },
+          ],
+          "product-detail-gallery",
+        ),
+      ],
+    },
+    "probe",
+    { accent: "#C6A667" },
+  );
+
+  const sThumb = stripShape.items.find((i) => i.type === "MediaItem2")!;
+  check(
+    stripShape.cssOf(sThumb.id, "all").includes("1.35 / 1"),
+    "a thumbnail takes the shape the design drew, not a hardcoded square",
+    stripShape.cssOf(sThumb.id, "all").slice(0, 64),
+  );
+  check(
+    stripShape.cssOf(sThumb.id, "all", '&[data-active="true"]').includes("2px"),
+    "and the chosen one takes the design's own selected state",
+    stripShape.cssOf(sThumb.id, "all", '&[data-active="true"]').slice(0, 64),
+  );
+  /* The default survives for anything that says nothing — `shot` is the same
+     mockup-silent gallery the block above asserted on. */
+  check(
+    shot.cssOf(thumb.id, "all").includes("aspect-ratio: 1 / 1"),
+    "a design silent about the shape still gets the square",
+  );
+
   const thumbImg = shot.cssOf(thumb.id, "all", "& img");
   check(
     /object-fit:\s*cover/.test(thumbImg) && /height:\s*100%/.test(thumbImg),

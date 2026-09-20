@@ -1411,7 +1411,7 @@ function productBox(
      neither is "round white arrows and thin dashes", so the page states it and
      these rules carry it — written on the MediaMain3, which is the element the
      slider markup lives inside. */
-  const shot = (name: "nav" | "dot" | "dotActive") => {
+  const shot = (name: "nav" | "dot" | "dotActive" | "thumb" | "thumbSelected") => {
     const declared = node.mediaStyle?.[name];
     return declared ? ` ${declarations(declared)}` : "";
   };
@@ -1475,7 +1475,8 @@ function productBox(
         all: {
           "&": `aspect-ratio: 1 / 1; overflow: hidden; cursor: pointer;` +
             ` border: 1px solid transparent; ${mediaRadius}` +
-            " opacity: .62; transition: opacity .18s ease, border-color .18s ease;",
+            " opacity: .62; transition: opacity .18s ease, border-color .18s ease;" +
+            shot("thumb"),
           /* The chosen thumbnail has to be visible as chosen. Left alone the
              strip is six identical squares and a shopper cannot tell which one
              they are looking at. */
@@ -1486,7 +1487,8 @@ function productBox(
              picture has to fill it. */
           "& img": "width: 100% !important; height: 100% !important; object-fit: cover !important;",
           "&:hover": "opacity: 1;",
-          '&[data-active="true"]': `opacity: 1; border-color: ${mediaAccent};`,
+          '&[data-active="true"]':
+            `opacity: 1; border-color: ${mediaAccent};` + shot("thumbSelected"),
         },
       },
     ),

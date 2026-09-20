@@ -616,6 +616,12 @@ const product = z.object({
        badge is written instead. Left out, the dashes stay.
        ================================================================== */
     "counter",
+    /* The strip's own tiles. `aspectRatio` above all: the default is a square,
+       so a mockup whose thumbnails are landscape had every photograph in the
+       strip cropped to a shape it was never composed for. `thumbSelected` is
+       the border the mockup draws on the one being shown. */
+    "thumb",
+    "thumbSelected",
   ] as const),
   /**
    * The thumbnail strip under (or beside) the main photograph.
@@ -1041,7 +1047,9 @@ export type DesignNode =
         Record<"dot" | "dotSelected" | "tile" | "tileSelected" | "label" | "dropdown", Css>
       >;
       /** the gallery's arrows and pagination; see `parts` */
-      mediaStyle?: Partial<Record<"nav" | "dot" | "dotActive" | "counter", Css>>;
+      mediaStyle?: Partial<
+        Record<"nav" | "dot" | "dotActive" | "counter" | "thumb" | "thumbSelected", Css>
+      >;
       gallery: boolean;
       galleryEdge: "bottom" | "left" | "right" | "top";
       mediaRatio: number;
