@@ -39,6 +39,7 @@ export function StatTile({
   delay = 0,
   hint,
   event,
+  part,
   days,
   day,
 }: {
@@ -74,6 +75,14 @@ export function StatTile({
    * reveals a column of anonymous ids looks like detail and is not.
    */
   event?: string;
+  /**
+   * One value of the event's parameter, when this tile counts one slice of it.
+   *
+   * The five Install PageFly tiles are one event fired from five placements.
+   * Opening "Top bar · Sign in · 3" into all thirty-eight presses would be a
+   * list that does not match the number above it.
+   */
+  part?: string;
   /** The window the screen is showing, passed to the drill-down unchanged. */
   days?: number;
   /** And the day within it, when one is picked. */
@@ -183,8 +192,9 @@ export function StatTile({
     </div>
     {open && event && (
       <TileDetail
-        key={`${event}-${days ?? 30}-${day ?? "all"}`}
+        key={`${event}-${part ?? "all"}-${days ?? 30}-${day ?? "all"}`}
         event={event}
+        part={part}
         days={days ?? 30}
         day={day}
       />

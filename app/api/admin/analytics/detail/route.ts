@@ -57,6 +57,20 @@ export async function GET(request: Request) {
   const span = day ? 24 * 60 * 60 * 1000 : days * 24 * 60 * 60 * 1000;
   const from = new Date(to.getTime() - span);
 
+  /* ONE SLICE OF THE PARAMETER, when the tile is one slice of it.
+
+     The Install PageFly tiles are a single event fired from five placements,
+     drawn as a tile each; a tile that opened into all five presses would not
+     be the list it is a summary of. The KEY is still the one this route looked
+     up in a table it does not own — only the VALUE arrives here, bounded and
+     bound into the statement, and ignored outright for an event that has no
+     parameter to slice. */
+  const partParam = url.searchParams.get("part");
+  const part =
+    spec.propKey && partParam && partParam.length > 0 && partParam.length <= 120
+      ? partParam
+      : null;
+
   let rows: DetailRow[];
   try {
     rows = await getRepo().eventsByStore(
@@ -65,6 +79,7 @@ export async function GET(request: Request) {
       to.toISOString(),
       spec.propKey,
       spec.groupProp ?? null,
+      part,
     );
   } catch {
     /* Same posture as the summary: a database that is not there is not an

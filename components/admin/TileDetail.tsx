@@ -23,19 +23,32 @@ import { Icon, Panel } from "../ui";
    this screen.
    ========================================================================== */
 
-/** A date a person can read, without the year — every row is inside the window. */
-function when(iso: string): string {
+/**
+ * When, to the minute — without the year, because every row is inside the
+ * window.
+ *
+ * THE TIME AS WELL AS THE DAY. "Who pressed it and when" is the whole reason a
+ * tile is opened, and a date alone cannot tell two presses on one afternoon
+ * from two a week apart. Rendered on two lines so the column stays narrow.
+ */
+function when(iso: string): { day: string; time: string } {
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  if (Number.isNaN(d.getTime())) return { day: "—", time: "" };
+  return {
+    day: d.toLocaleDateString(undefined, { day: "numeric", month: "short" }),
+    time: d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
+  };
 }
 
 export function TileDetail({
   event,
+  part,
   days,
   day,
 }: {
   event: string;
+  /** One value of the event's parameter — see `StatTile.part`. */
+  part?: string;
   days: number;
   /** The day the screen is showing, or null for the whole window. The tile
       above was counted over exactly this range, so the rows must be too. */
@@ -57,7 +70,8 @@ export function TileDetail({
     const tz = -new Date().getTimezoneOffset();
     fetch(
       `/api/admin/analytics/detail?event=${encodeURIComponent(event)}` +
-        `&days=${days}&tz=${tz}${day ? `&day=${day}` : ""}`,
+        `&days=${days}&tz=${tz}${day ? `&day=${day}` : ""}` +
+        (part ? `&part=${encodeURIComponent(part)}` : ""),
     )
       .then((r) => r.json() as Promise<DetailResponse>)
       .then((body) => {
@@ -82,7 +96,7 @@ export function TileDetail({
     return () => {
       live = false;
     };
-  }, [event, days, day]);
+  }, [event, part, days, day]);
 
   const total = rows.reduce((a, r) => a + r.count, 0);
 
@@ -160,7 +174,10 @@ export function TileDetail({
                       </td>
                     )}
                     <td className="px-4 py-2 text-right tabular-nums text-pf-faint">
-                      {when(r.lastAt)}
+                      {when(r.lastAt).day}
+                      <span className="block text-[10.5px] text-pf-faint/70">
+                        {when(r.lastAt).time}
+                      </span>
                     </td>
                   </tr>
                 ))}

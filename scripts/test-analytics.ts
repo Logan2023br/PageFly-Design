@@ -486,6 +486,82 @@ async function main(): Promise<void> {
   }
 
   /* ======================================================================
+     ONE PLACEMENT OF ONE BUTTON.
+
+     The Install PageFly tiles are one event fired from five places, and the
+     screen draws a tile per place. A tile that opens into every press from
+     every placement is not the list that tile is a summary of — the reader
+     pressed "Top bar · Sign in · 3" and wants those three.
+
+     So the same query takes the parameter VALUE as well as its key. The key
+     still comes from `lib/analytics/detail`, which this route does not own;
+     only the value comes from the query string, and it is bound, never
+     interpolated.
+     ====================================================================== */
+  console.log("\nthe stores behind one placement");
+
+  {
+    const at = (day: number) => `2024-05-${String(day).padStart(2, "0")}T10:00:00.000Z`;
+    const press = (day: number, surface: string, domain: string | null, v: string) => ({
+      id: `i${day}-${surface.slice(0, 3)}-aaa`,
+      name: "design_pagefly_install_clicked",
+      props: { surface },
+      visitorId: v,
+      domain,
+      createdAt: at(day),
+    });
+    await repo.recordEvents([
+      press(1, "topbar_signin", "one.myshopify.com", "v-1"),
+      press(2, "topbar_signin", "one.myshopify.com", "v-1"),
+      press(3, "topbar_design", "two.myshopify.com", "v-2"),
+      /* Signed out, which for this button is the finding rather than a gap. */
+      press(4, "topbar_signin", null, "v-3"),
+    ]);
+
+    const all = await repo.eventsByStore(
+      "design_pagefly_install_clicked",
+      WINDOW[0],
+      WINDOW[1],
+      "surface",
+    );
+    const mineAll = all.filter(
+      (r) => r.domain === "one.myshopify.com" || r.domain === "two.myshopify.com",
+    );
+    check(mineAll.length === 2, "unfiltered, every store that pressed it", `${mineAll.length}`);
+
+    const one = await repo.eventsByStore(
+      "design_pagefly_install_clicked",
+      WINDOW[0],
+      WINDOW[1],
+      "surface",
+      null,
+      "topbar_signin",
+    );
+    check(
+      !one.some((r) => r.domain === "two.myshopify.com"),
+      "filtered, a store that pressed it somewhere else is not in the list",
+      one.map((r) => r.domain ?? "not signed in").join(", ") || "(no rows)",
+    );
+    check(
+      one.find((r) => r.domain === "one.myshopify.com")?.count === 2,
+      "and the count is that placement's own",
+      String(one.find((r) => r.domain === "one.myshopify.com")?.count),
+    );
+    check(
+      one.some((r) => r.domain === null),
+      "a press by somebody not signed in still has a row",
+    );
+    /* The time, not only the day: "who pressed it and when" is the question
+       the tile is opened to answer, and two presses on one afternoon read
+       differently from two a week apart. */
+    check(
+      one.find((r) => r.domain === "one.myshopify.com")?.lastAt === at(2),
+      "carrying the moment of the most recent press",
+      String(one.find((r) => r.domain === "one.myshopify.com")?.lastAt),
+    );
+  }
+
+  /* ======================================================================
      THE STORE THAT IS NOT SIGNED IN.
 
      The tile everybody wants to open is "Not registered · 31", and it is the

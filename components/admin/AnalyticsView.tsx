@@ -301,7 +301,12 @@ export function AnalyticsView() {
           </div>
 
           {view.shared.map((block) => (
-            <SharedSection key={block.key} block={block} />
+            <SharedSection
+              key={block.key}
+              block={block}
+              days={view.days}
+              day={view.day}
+            />
           ))}
 
           <RawTable view={view} />
@@ -787,7 +792,29 @@ const METRIC_ICON: Record<string, IconName> = {
  * answers "how many did it at all". Adding the columns would produce a third
  * number that is neither.
  */
-function SharedSection({ block }: { block: SharedBlock }) {
+/* ==========================================================================
+   THE ONE BLOCK ON THIS SCREEN WHOSE TILES DID NOT OPEN.
+
+   Every other tile here presses into the list it is a summary of, and these
+   did not — not by decision, but because the block never carried the event
+   name the drill-down is keyed on. The number that gets asked about most on
+   this screen is "fourteen presses of Install PageFly, by whom, and when", and
+   the answer existed behind a route nothing on this block called.
+
+   Each tile opens into its OWN rows: the total into every store that pressed
+   it anywhere, a placement into the stores that pressed it there. A tile whose
+   list does not add up to the number printed on it is worse than a tile that
+   does not open.
+   ========================================================================== */
+function SharedSection({
+  block,
+  days,
+  day,
+}: {
+  block: SharedBlock;
+  days: number;
+  day: string | null;
+}) {
   if (block.total === 0) return null;
   const peak = Math.max(...block.bySurface.map((s) => s.count), 1);
 
@@ -805,6 +832,9 @@ function SharedSection({ block }: { block: SharedBlock }) {
           value={block.total}
           hint={block.where}
           footnote={`${block.totalPeople.toLocaleString()} ${block.totalPeople === 1 ? "person" : "people"}`}
+          event={block.event}
+          days={days}
+          day={day}
         />
         {block.bySurface.map((s, i) => (
           <StatTile
@@ -816,6 +846,10 @@ function SharedSection({ block }: { block: SharedBlock }) {
             ratio={s.count / peak}
             hint={`${s.label}\n${block.where.split("\n")[1] ?? ""}`}
             delay={Math.min((i + 1) * 0.04, 0.24)}
+            event={block.event}
+            part={s.key}
+            days={days}
+            day={day}
           />
         ))}
       </TileRow>

@@ -549,6 +549,16 @@ export type Repo = {
     to: string,
     propKey: string | null,
     groupProp?: string | null,
+    /**
+     * One value of `propKey`, when the caller wants a single slice of it.
+     *
+     * The Install PageFly tiles are one event fired from five placements and
+     * the screen draws a tile per placement; a tile that opened into all five
+     * would not be the list it is a summary of. The KEY still comes from
+     * `lib/analytics/detail`, which the route does not own — only this value
+     * comes from a query string, and it is bound, never interpolated.
+     */
+    part?: string | null,
   ): Promise<EventByStore[]>;
 
   /* ---- admin ---- */

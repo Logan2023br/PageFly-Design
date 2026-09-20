@@ -1065,7 +1065,7 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       }));
     },
 
-    async eventsByStore(name, from, to, propKey, groupProp = null) {
+    async eventsByStore(name, from, to, propKey, groupProp = null, part = null) {
       await ready();
       /* GROUPED BY DOMAIN AND BY THE PARAMETER AT ONCE, then folded into one
          row per store here. Two queries would be one round trip more and would
@@ -1087,8 +1087,9 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
                 max(created_at)                 as last_at
            from events
           where name = $1 and created_at >= $2 and created_at < $3
+            and ($6::text is null or props->>$4 = $6)
           group by 1, props->>$4`,
-        [name, from, to, propKey, groupProp],
+        [name, from, to, propKey, groupProp, part],
       );
 
       type Acc = {

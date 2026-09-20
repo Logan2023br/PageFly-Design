@@ -622,7 +622,7 @@ export function createMemoryRepo(file: string): Repo {
         .sort((a, b) => a.date.localeCompare(b.date));
     },
 
-    async eventsByStore(name, from, to, propKey, groupProp = null) {
+    async eventsByStore(name, from, to, propKey, groupProp = null, part = null) {
       sync();
       /* Keyed by the domain as written, with `null` kept as its own key rather
          than folded into the empty string — "signed out" and "a store called
@@ -642,6 +642,11 @@ export function createMemoryRepo(file: string): Repo {
       for (const e of data.events) {
         if (e.name !== name) continue;
         if (e.createdAt < from || e.createdAt >= to) continue;
+        /* One slice of the parameter, when the caller asked for one. */
+        if (part !== null && propKey) {
+          const v = (e.props as Record<string, unknown>)[propKey];
+          if (v === undefined || v === null || String(v) !== part) continue;
+        }
 
         /* The column, unless a parameter was named. The gate fires before there
            is a session, so for those events the store the merchant typed is

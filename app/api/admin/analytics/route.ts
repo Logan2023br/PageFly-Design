@@ -133,6 +133,14 @@ export type SharedBlock = {
   key: string;
   title: string;
   note: string;
+  /**
+   * The event these tiles count — see `Metric.event`.
+   *
+   * Without it the tiles here were the only ones on the screen that could not
+   * be opened, and nothing said why: the drill-down is keyed on an event name
+   * and this block simply never carried one.
+   */
+  event: string;
   /** what fires it — see `Metric.where` */
   where: string;
   total: number;
@@ -692,6 +700,7 @@ function buildView(
     {
       key: "install",
       title: "Install PageFly",
+      event: EV.pageflyInstallClicked,
       where:
         "The purple “Install PageFly” button and the quieter “Need the app to open these?” link — five placements in all\ndesign_pagefly_install_clicked",
       note: "One button, five placements. The total is not the sum of the columns — the same person can press it on two screens.",
@@ -702,6 +711,7 @@ function buildView(
     {
       key: "collections",
       title: "Free collections exported",
+      event: EV.collectionExported,
       where:
         "Any of the three download controls in the Collections section: Export on a set card, “Export all” inside a set, or Export on one page\ndesign_collection_exported",
       note: "The section is on two screens: a visitor browsing the landing page, and a merchant waiting for a build.",
