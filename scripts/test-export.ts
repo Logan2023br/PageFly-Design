@@ -1610,7 +1610,83 @@ async function main(): Promise<void> {
   }
 
 
-    console.log("\nan accordion's own look");
+    console.log("\nmotion");
+
+  {
+    /* ==========================================================================
+       THE MACHINERY WORKED AND NOBODY WAS TOLD IT EXISTED.
+
+       An exported page carried the whole motion stylesheet — `.pfd-reveal`,
+       `.pfd-delay-*`, `.pfd-hover-*` — and not one element wearing any of it,
+       and an empty customJS. `anim` appeared ZERO times in the prompt the html
+       path sends, so the model never wrote it, so nothing revealed and nothing
+       lifted on hover. The mockup's own `.reveal`, `.d1/.d2/.d3`,
+       `.hover-float` and `:hover img{transform:scale}` all landed on the floor
+       and nothing reported it.
+
+       This test is the proof the machinery was never the problem: the same
+       tree WITH `anim` on it ships the class and the observer.
+       ========================================================================== */
+    const moving = await open({
+      sections: [
+        section(
+          [
+            { type: "heading", level: 2, text: "It still hangs like this", anim: { reveal: "fade-up" } },
+            { type: "text", text: "Fourteen hours later.", anim: { reveal: "fade-up", delay: 2 } },
+            { type: "button", text: "Add to bag", anim: { hover: "float-shadow" } },
+            {
+              type: "col",
+              anim: { hover: "grow" },
+              children: [{ type: "text", text: "A crop that grows under the cursor" }],
+            },
+          ],
+          "wear-test",
+        ),
+      ],
+    }, "motion");
+
+    const classes = moving.items
+      .flatMap((i) => String((i.data as { classGlobalStyling?: string })?.classGlobalStyling ?? "").split(/\s+/))
+      .filter((c) => c.startsWith("pfd-"));
+    check(classes.includes("pfd-reveal"), "a revealing node wears the class", classes.join(" ") || "(none)");
+    check(classes.includes("pfd-reveal-fade-up"), "and names which reveal it is");
+    check(classes.includes("pfd-delay-2"), "a stated delay reaches the element", classes.join(" "));
+    /* A HOVER GOES TWO WAYS, and which one is not ours to pick twice. PageFly
+       has `animationHover` on the types that support it, so a button takes the
+       platform's own field and our class is REMOVED — left on, the element
+       would carry PageFly's transform and ours at once and travel twice as
+       far. Everything else takes the class. */
+    const btn = moving.items.find((i) => i.type === "Button2");
+    check(
+      btn?.data?.animationHover === "float-shadow",
+      "a button hands its hover to PageFly's own field",
+      String(btn?.data?.animationHover),
+    );
+    check(
+      !String((btn?.data as { classGlobalStyling?: string })?.classGlobalStyling ?? "").includes("pfd-hover"),
+      "and does not also wear ours, or it moves twice",
+      String((btn?.data as { classGlobalStyling?: string })?.classGlobalStyling ?? ""),
+    );
+    check(classes.includes("pfd-hover-grow"), "a block with no such field wears the class", classes.join(" "));
+    check(
+      moving.customJS.includes("pfd-motion-ready"),
+      "the observer ships, or every revealing element stays invisible",
+      moving.customJS.slice(0, 60) || "(no JS)",
+    );
+
+    /* A page with no motion ships no observer — the script costs the storefront
+       something, and a page that reveals nothing should not pay it. */
+    const still = await open({
+      sections: [section([{ type: "heading", level: 2, text: "Cut and measure" }], "wear-test")],
+    }, "motion");
+    check(
+      !still.customJS.includes("pfd-motion-ready"),
+      "and a page that moves nothing ships no observer",
+      still.customJS.slice(0, 40),
+    );
+  }
+
+  console.log("\nan accordion's own look");
 
   {
     /* ==========================================================================
