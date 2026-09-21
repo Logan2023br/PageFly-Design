@@ -44,7 +44,7 @@ import { splitSections } from "./fromHtmlSkill";
    invented.
    ========================================================================== */
 
-const ASK = [
+export const ASK = [
   "TRANSCRIBE, DO NOT DESIGN.",
   "",
   "The page below is finished. Every layout decision, every word, every colour",
@@ -177,6 +177,31 @@ const ASK = [
   "  the `<source>` URL. A phrase instead of a URL loses the photograph: there",
   "  is no stock search on this path, and a node whose query is not a URL is",
   "  exported with no image at all.",
+  "",
+  "· A COUNTDOWN HAS TWO INDEPENDENT PARTS. `labels` is the unit names under",
+  "  the figures; `separator` is the `:` between the columns. Read the markup:",
+  "  a `<span>` carrying `:` between the units means `\"separator\": true`, and",
+  "  no such element means false. Most mockups draw both, some draw neither.",
+  "",
+  "· A `productList` repeats ONE card over the shop's real products, so the",
+  "  card is described once. Read what the mockup's card holds: `atcLabel` is",
+  "  its button in the mockup's own words — `Quick add — $58.00` — and leaving",
+  "  it out means the card draws no button. `showCompareAt` is true only when",
+  "  the card draws a struck-through was-price beside the price. A star rating",
+  "  or a review count on a card has no field: those come from a reviews app",
+  "  this page cannot read.",
+  "",
+  "· A `beforeAfter`'s two captions are `beforeLabel` and `afterLabel`, and",
+  "  `compareLabelAt` is WHERE THEY HANG. READ THE MARKUP, because both",
+  "  arrangements are common: a caption that is a child of the drag handle",
+  "  travels with it and is `\"handle\"`; one that is a child of the frame and",
+  "  pinned to a corner is `\"corner\"`. You cannot say this in `css` — the",
+  "  positioning properties are stripped from a node's css.",
+  "  `compareStyle` carries their look: `label` is one caption chip and `knob`",
+  "  is the grip in the middle of the bar, which the platform draws as a plain",
+  "  round dot and a mockup draws as whatever it draws — a square plate, a",
+  "  bordered circle. `knobGlyph` is the character inside the grip, usually the",
+  "  two-headed arrow the mockup puts there.",
 ].join("\n");
 
 function firstObject(text: string): unknown {
