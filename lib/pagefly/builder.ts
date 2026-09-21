@@ -1092,6 +1092,17 @@ export function PRODUCT_LIST(
         mobile: 1,
       },
       spacing: { all: `${opts.gap ?? 24}px` },
+      /* BOTH DEFAULT TO A VISIBLE CONTROL, and a grid has nowhere to page to.
+         Left unsaid, the platform draws `nav-style-1` — a round dark arrow —
+         over the first and last card, and `pagination-style-1` dots under a
+         list that does not scroll. ContentList2 has passed `none` here since it
+         was written; this element was never told, so every exported grid
+         arrived wearing controls the mockup does not have.
+
+         A slideshow keeps them: a carousel with no way to advance is a
+         carousel showing one row of a list the visitor cannot reach. */
+      navStyle: layout === "slideshow" ? "nav-style-1" : "none",
+      paginationStyle: layout === "slideshow" ? "pagination-style-1" : "none",
       maxHeight: true,
       loadingMode: "none",
       pagination: false,

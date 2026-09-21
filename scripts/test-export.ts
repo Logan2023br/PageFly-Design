@@ -351,6 +351,18 @@ async function main(): Promise<void> {
     );
     const layout = plist.data?.listLayout as Record<string, string> | undefined;
     check(layout?.all === "grid", "a grid, not the platform's slideshow default", layout?.all);
+    /* A GRID HAS NOWHERE TO PAGE TO, and the platform draws the controls anyway.
+       `navStyle` and `paginationStyle` both default to a visible style, so a
+       grid emitted without them arrives with a round arrow floating over the
+       first and last card and a row of dots under a list that does not scroll.
+       ContentList2 has said `none` here since it was written; this element was
+       simply never told. */
+    check(plist.data?.navStyle === "none", "no arrows over a grid", String(plist.data?.navStyle));
+    check(
+      plist.data?.paginationStyle === "none",
+      "and no pagination dots under it",
+      String(plist.data?.paginationStyle),
+    );
   }
 
   /* A home page's featured row is store-wide, not a collection. */
