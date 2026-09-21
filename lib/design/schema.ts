@@ -1642,6 +1642,47 @@ export const designTreeSchema = z.object({
   }),
 });
 
+/**
+ * Why a band could not be read as a section — or `null` when it can.
+ *
+ * `list()` DROPS WHAT IT CANNOT PARSE, which is right everywhere else in this
+ * file: one invented node costs itself and not its thirty siblings. It costs
+ * something here. A band whose section fails outright is dropped by the same
+ * rule, the document then reaches the one refine still allowed to reject it,
+ * and the only thing said out loud is `no usable sections` — a sentence about
+ * the wrapper, written after the reason was thrown away.
+ *
+ * It read, in a real log, as `9/10 sections · 1 failed`, on a product page that
+ * came back with no buy box. Ten bands in the mockup, nine in the file, and
+ * nothing anywhere naming the tenth or saying what was wrong with it.
+ *
+ * So the section is parsed ON ITS OWN, where Zod still has the issue and the
+ * path it happened at, and the caller can put both in the line it was already
+ * writing.
+ */
+export function whyNotASection(raw: unknown): string | null {
+  const parsed = section.safeParse(raw);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    if (!issue) return "not a section";
+    const where = issue.path.length ? issue.path.join(".") : "the section itself";
+    return `${where}: ${issue.message}`;
+  }
+
+  /* AND THE SILENCE THAT IS NOT A FAILURE.
+
+     A malformed child is dropped by `list()` and the section parses, so a band
+     ships one element short with no failure line anywhere — which is exactly
+     how a buy box leaves a product page that still reports every band built.
+     The count is the only evidence there is, so the count is said. */
+  const asked = Array.isArray((raw as { children?: unknown })?.children)
+    ? ((raw as { children: unknown[] }).children).length
+    : 0;
+  const kept = parsed.data.children.length;
+  if (asked > kept) return `kept ${kept} of ${asked} children — ${asked - kept} dropped`;
+  return null;
+}
+
 export type DesignSection = z.infer<typeof section>;
 export type DesignTree = z.infer<typeof designTreeSchema>;
 

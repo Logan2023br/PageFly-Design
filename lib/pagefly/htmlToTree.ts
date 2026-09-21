@@ -1,6 +1,6 @@
 import "server-only";
 
-import { designTreeSchema, type DesignTree } from "../design/schema";
+import { designTreeSchema, whyNotASection, type DesignTree } from "../design/schema";
 import { pageflyFromTree } from "../design/toPagefly";
 import { loadSkills } from "../ai/skills";
 import { getProvider } from "../ai/provider";
@@ -616,14 +616,25 @@ export async function pageflyFromHtmlLive(
            here is one `toPagefly.ts` is already known to handle. */
         const checked = designTreeSchema.safeParse({ motionPlan: "", sections: [raw] });
         if (!checked.success) {
+          /* `no usable sections` is the message from the one refine still
+             allowed to reject a document, and it is written AFTER `list()` has
+             already dropped the section and thrown the reason away. Asking the
+             section schema directly is the only way to get the issue and the
+             path it happened at — see `whyNotASection`. */
           failures.push({
             index,
             reason: answer.truncated
               ? `ran out of output budget at ${answer.usage.output} tokens`
-              : `not a section: ${checked.error.issues[0]?.message ?? "unknown"}`,
+              : `not a section: ${whyNotASection(raw) ?? checked.error.issues[0]?.message ?? "unknown"}`,
           });
           return null;
         }
+        /* PARSED IS NOT THE SAME AS COMPLETE. A child the schema could not read
+           is dropped in silence and the band ships one element short — a buy
+           box leaving a product page that still reports every band built. It is
+           not a failure and must not be one; it is worth a line. */
+        const lost = whyNotASection(raw);
+        if (lost) console.log(`[pagefly] band ${index + 1} · ${lost}`);
         return checked.data.sections[0];
       } catch (err) {
         failures.push({ index, reason: (err as Error).message.slice(0, 160) });
