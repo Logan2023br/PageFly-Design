@@ -51,6 +51,10 @@ const STATED: [string, string][] = [
   ["compareLabelAt", "corner or handle for a comparison's captions"],
   ["compareStyle", "how those captions and the grip look"],
   ["knobGlyph", "the character inside the grip"],
+  ["accordionStyle", "how an accordion's rows, answers and mark look"],
+  ["tabStyle", "how a tab bar and its panels look"],
+  ["swatchStyle", "how the variant chips and size tiles look"],
+  ["mediaStyle", "how the gallery's own controls look"],
 ];
 
 async function main(): Promise<void> {

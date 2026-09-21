@@ -1149,6 +1149,18 @@ const accordion = z.object({
   items: list(z.object({ q: saying(200), a: saying(1200) }), 12).refine(
     (v) => v.length > 0,
   ),
+  /**
+   * How the rows, the answers and the mark look.
+   *
+   * THE ONLY COMPOSITE THAT HAD NONE. Its rows carried the exporter's numbers
+   * and nothing else — 18px of padding, 16px at weight 600, a body at 1.6 and
+   * .72 opacity, an 18px mark at .5 — on every mockup ever transcribed. One
+   * that sets its rows in a serif at 17px and paints the +/- in the page's
+   * accent could not say so, because there was nowhere to say it.
+   *
+   * `row` is the clickable question, `body` the answer, `icon` the +/- mark.
+   */
+  accordionStyle: parts(["row", "body", "icon"] as const),
   ...styled,
 });
 

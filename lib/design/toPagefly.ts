@@ -2669,6 +2669,10 @@ function accordionOf(
      own selectors — `& .pf-header-item-wrapper` and `& .pf-accordion-body`.
      Styling the header node's `&` instead is valid CSS that reaches nothing,
      which is why the imported rows carried none of the mockup's spacing. */
+  const part = (name: "row" | "body" | "icon"): string => {
+    const declared = node.accordionStyle?.[name];
+    return declared ? ` ${declarations(declared)}` : "";
+  };
   const shell = filling(sd);
   const withParts: StyleData = shell && {
     ...shell,
@@ -2676,11 +2680,16 @@ function accordionOf(
       ...shell.all,
       /* No border here. The row wrapper above carries it, and both drawing one
          is what put two rules under every header on the live page. */
+      /* The numbers are a FALLBACK, and were the whole treatment until this
+         node had parts: a mockup setting its rows in a serif at 17px with the
+         mark in the page's accent had nowhere to say it, and got these. The
+         design's own declarations are appended, so they win. */
       "& .pf-header-item-wrapper":
-        `padding: 18px 0; font-size: 16px; font-weight: 600; ${inkRule(opts, sd)}`,
+        `padding: 18px 0; font-size: 16px; font-weight: 600; ${inkRule(opts, sd)}${part("row")}`,
       "& .pf-accordion-body":
-        `padding-bottom: 18px; line-height: 1.6; opacity: .72; ${inkRule(opts, sd)}`,
-      "& .pf-accordion-icon": `font-size: 18px; opacity: .5; ${inkRule(opts, sd)}`,
+        `padding-bottom: 18px; line-height: 1.6; opacity: .72; ${inkRule(opts, sd)}${part("body")}`,
+      "& .pf-accordion-icon":
+        `font-size: 18px; opacity: .5; ${inkRule(opts, sd)}${part("icon")}`,
     },
   };
 

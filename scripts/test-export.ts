@@ -1610,7 +1610,68 @@ async function main(): Promise<void> {
   }
 
 
-  console.log("\nfour spec bars stacked in a col");
+    console.log("\nan accordion's own look");
+
+  {
+    /* ==========================================================================
+       THE ONLY COMPOSITE WITH NO PARTS AT ALL.
+
+       An accordion's rows carried this file's numbers and nothing else: 18px of
+       padding, 16px at weight 600, a body at 1.6 and .72 opacity, an 18px icon
+       at .5. Every mockup got those. The one that exposed it sets its rows in a
+       serif at 17px with 20px of padding and paints the +/- in the page's
+       accent red — none of which could be said, because there was nowhere to
+       say it.
+
+       Every other composite on the page has had parts for months: `mediaStyle`,
+       `swatchStyle`, `tabStyle`, `compareStyle`. This one was simply missed.
+       ========================================================================== */
+    const acc = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "accordion",
+              items: [{ q: "Can I wash it?", a: "Cold hand wash." }],
+              accordionStyle: {
+                row: { fontFamily: "Gelasio, serif", fontSize: "17px", padding: "20px 0" },
+                body: { fontSize: "15px", lineHeight: "1.64" },
+                icon: { color: "#8A1C1C", fontSize: "16px" },
+              },
+            },
+          ],
+          "faq-accordion",
+        ),
+      ],
+    }, "acc");
+    const el = acc.items.find((i) => i.type === "Accordion3")!;
+    const row = acc.cssOf(el.id, "all", "& .pf-header-item-wrapper");
+    const body = acc.cssOf(el.id, "all", "& .pf-accordion-body");
+    const icon = acc.cssOf(el.id, "all", "& .pf-accordion-icon");
+    check(/font-size:\s*17px/.test(row) && /Gelasio/.test(row), "the row takes the mockup's type", row.slice(-70));
+    check(/padding:\s*20px 0/.test(row), "and its spacing", row.slice(-70));
+    check(/font-size:\s*15px/.test(body), "the answer takes the mockup's size", body.slice(-60));
+    check(/#8A1C1C/.test(icon), "and the mark wears the accent the mockup paints it", icon.slice(-50));
+
+    /* A design that says nothing still gets a readable accordion — the numbers
+       are a fallback, not a house style. */
+    const plainAcc = await open({
+      sections: [
+        section(
+          [{ type: "accordion", items: [{ q: "Can I wash it?", a: "Cold hand wash." }] }],
+          "faq-accordion",
+        ),
+      ],
+    }, "acc");
+    const pEl = plainAcc.items.find((i) => i.type === "Accordion3")!;
+    check(
+      /font-size:\s*16px/.test(plainAcc.cssOf(pEl.id, "all", "& .pf-header-item-wrapper")),
+      "a silent design keeps the fallback",
+      plainAcc.cssOf(pEl.id, "all", "& .pf-header-item-wrapper").slice(0, 50),
+    );
+  }
+
+console.log("\nfour spec bars stacked in a col");
 
   /* The exact shape that shipped wrong: a col holding four cols, each a
      label/value row over a rule. The mockup stacks them because a col stacks;
