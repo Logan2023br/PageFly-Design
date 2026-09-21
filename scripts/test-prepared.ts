@@ -66,6 +66,52 @@ async function main(): Promise<void> {
     order.join(" "),
   );
 
+  console.log("\na click does not wait behind the others");
+
+  /* ---- THE QUEUE IS FOR WORK NOBODY ASKED FOR YET ----------------------
+
+     Serialising the prewarm is right: a deck is four pages and a page is ten
+     bands, so starting them all is forty parallel model calls the moment a
+     build finishes.
+
+     Serialising the CLICK is not. A merchant who opens the fourth page and
+     presses Export waits for the first three to convert before their own
+     begins — three or four minutes of a spinner, for a file that takes one.
+     It looks exactly like a page that never loads, which is what it was
+     reported as.
+
+     So an asked-for conversion starts now. It still joins one already running
+     for the same document, and still never starts a second. */
+  const seen: string[] = [];
+  const jumps = createPreparer<string, string>(async (input) => {
+    seen.push(`start:${input}`);
+    await wait(20);
+    return input;
+  });
+  jumps.start("1", "one");
+  jumps.start("2", "two");
+  jumps.start("3", "three");
+  const asked = jumps.start("4", "four", { now: true });
+  await wait(5);
+  check(
+    seen.includes("start:four"),
+    "the page the merchant asked for begins at once",
+    seen.join(" "),
+  );
+  check(await asked === "four", "and answers with its own file", await asked);
+
+  /* And it still joins rather than duplicating. */
+  let ran = 0;
+  const joined = createPreparer<string, string>(async () => {
+    ran += 1;
+    await wait(20);
+    return "one file";
+  });
+  const warming = joined.start("j", "j");
+  const clicked = joined.start("j", "j", { now: true });
+  check(warming === clicked, "a click during a conversion joins it, not races it");
+  check(await clicked === "one file" && ran === 1, "and the model still ran once", String(ran));
+
   console.log("\nwhat is ready, and what failed");
 
   const slow = createPreparer<string, string>(async () => {

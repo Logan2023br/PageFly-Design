@@ -19,18 +19,29 @@
      everyone who asks.
    · A CLICK DURING THE CONVERSION JOINS IT. Not a second conversion racing the
      first for the same download.
-   · CONVERSIONS RUN ONE AT A TIME. A deck is four pages and a page is ten
-     bands, so starting them all is forty parallel model calls the moment a
-     build finishes — which is also the moment the vendor is least likely to
-     want them.
+   · CONVERSIONS NOBODY ASKED FOR RUN ONE AT A TIME. A deck is four pages and
+     a page is ten bands, so starting them all is forty parallel model calls
+     the moment a build finishes — which is also the moment the vendor is least
+     likely to want them.
+   · BUT AN ASKED-FOR ONE STARTS NOW. Queueing the click too was a bug worth
+     the whole feature: a merchant who opened the fourth page and pressed
+     Export waited for the first three to convert before their own began —
+     minutes of a spinner for a file that takes one, which is indistinguishable
+     from a page that never loads, and was reported as exactly that.
    · A FAILURE IS NOT AN ANSWER. Cached as one, the merchant gets the same
      failure for as long as the tab is open and no way to ask again, while the
      export path has a fallback converter that would have worked.
    ========================================================================== */
 
 export type Preparer<I, T> = {
-  /** Start it, or hand back the one already running (or finished). */
-  start(key: string, input: I): Promise<T>;
+  /**
+   * Start it, or hand back the one already running (or finished).
+   *
+   * `now` is somebody waiting on the answer: it skips the queue rather than
+   * sitting behind work nobody has asked for. It still joins a conversion
+   * already running for the same document.
+   */
+  start(key: string, input: I, opts?: { now?: boolean }): Promise<T>;
   /** True once this key has a finished answer waiting. */
   ready(key: string): boolean;
 };
@@ -44,11 +55,13 @@ export function createPreparer<I, T>(run: (input: I) => Promise<T>): Preparer<I,
   let tail: Promise<unknown> = Promise.resolve();
 
   return {
-    start(key, input) {
+    start(key, input, opts) {
       const running = inFlight.get(key);
       if (running) return running;
 
-      const work = tail.then(() => run(input));
+      /* Somebody is waiting on this one, so it does not join the back of a
+         queue built for work nobody asked for. */
+      const work = opts?.now ? run(input) : tail.then(() => run(input));
       const tracked = work.then(
         (value) => {
           done.add(key);
@@ -61,6 +74,9 @@ export function createPreparer<I, T>(run: (input: I) => Promise<T>): Preparer<I,
         },
       );
       inFlight.set(key, tracked);
+      /* A jumped conversion is still a conversion: the prewarm queue waits
+         behind it rather than running alongside, which is the whole point of
+         having a queue. */
       tail = tracked.catch(() => undefined);
       return tracked;
     },

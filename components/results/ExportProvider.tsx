@@ -261,7 +261,7 @@ export function ExportProvider({ children }: { children: ReactNode }) {
          started it — a page opened straight from the Library, say — this is
          the first ask and behaves exactly as the click always did. */
       const built = await prepared
-        .start(keyForHtml(page.id, html), { page, html })
+        .start(keyForHtml(page.id, html), { page, html }, { now: true })
         .catch(() => null);
       if (built) {
         downloadBlob(built.blob, built.filename);
