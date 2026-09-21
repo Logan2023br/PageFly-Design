@@ -3439,6 +3439,46 @@ async function main(): Promise<void> {
       "and the after label on its right",
       handleAfter,
     );
+  }
+
+  {
+    /* ---- AND A DESIGN THAT DREW NO CAPTIONS GETS NONE -------------------
+
+       The chips are drawn from `beforeLabel`/`afterLabel`, and those used to
+       fall back to the words "Before" and "After" whether or not the mockup
+       had any. Harmless while nothing painted them; the moment they paint, a
+       fallback is two chips appearing on every comparison on every page that
+       never asked for one — this file changing pages it was not pointed at.
+
+       So the fallback is gone from the design side and kept where it always
+       belonged: the alt text, which is an accessibility value and an
+       image-search phrase, not something a visitor reads on the photograph. */
+    const bare = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "beforeAfter",
+              beforeQuery: "room empty",
+              afterQuery: "room furnished",
+            },
+          ],
+          "split",
+        ),
+      ],
+    }, "ba", { images: { "room empty": "https://x/a.jpg", "room furnished": "https://x/b.jpg" } });
+
+    const el = bare.items.find((i) => i.type === "ImageComparison");
+    check(
+      bare.cssOf(el?.id ?? "", "all", "& .pf-ba-handle::before") === "",
+      "a silent design draws no chip over the photograph",
+      bare.cssOf(el?.id ?? "", "all", "& .pf-ba-handle::before"),
+    );
+    check(
+      el?.data?.beforeImageAlt === "Before" && el?.data?.afterImageAlt === "After",
+      "but the alt text still reads as something",
+      `${el?.data?.beforeImageAlt} / ${el?.data?.afterImageAlt}`,
+    );
 
     /* ======================================================================
        AND AT EVERY WIDTH THE NODE HAS A BLOCK FOR.

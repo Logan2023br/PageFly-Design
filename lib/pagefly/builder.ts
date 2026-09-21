@@ -1370,6 +1370,8 @@ function cssQuoted(text: string): string {
  * to one letter per line otherwise.
  */
 function handleLabels(beforeLabel: string, afterLabel: string): Record<string, string> {
+  /* `?? ""` because export also runs over design trees stored before these
+     captions were drawn, and on those the field is simply absent. */
   const chip =
     "position: absolute; top: 14px; z-index: 3; white-space: nowrap;" +
     " font-size: 10px; font-weight: 600; letter-spacing: .2em;" +
@@ -1378,11 +1380,13 @@ function handleLabels(beforeLabel: string, afterLabel: string): Record<string, s
   const out: Record<string, string> = {};
   /* Empty is a caption the design chose not to write — an empty chip is a
      floating dark rectangle over the photograph. */
-  if (beforeLabel.trim()) {
-    out["& .pf-ba-handle::before"] = `content: ${cssQuoted(beforeLabel.trim())}; right: 12px; ${chip}`;
+  const before = (beforeLabel ?? "").trim();
+  const after = (afterLabel ?? "").trim();
+  if (before) {
+    out["& .pf-ba-handle::before"] = `content: ${cssQuoted(before)}; right: 12px; ${chip}`;
   }
-  if (afterLabel.trim()) {
-    out["& .pf-ba-handle::after"] = `content: ${cssQuoted(afterLabel.trim())}; left: 12px; ${chip}`;
+  if (after) {
+    out["& .pf-ba-handle::after"] = `content: ${cssQuoted(after)}; left: 12px; ${chip}`;
   }
   return out;
 }
@@ -1417,8 +1421,13 @@ export function BEFORE_AFTER(
       afterImageUrl: after,
       /* `alt` doubles as the image-search query in PageFly, so the label is the
          better value than a description of the label. */
-      beforeImageAlt: beforeLabel,
-      afterImageAlt: afterLabel,
+      /* THE ALT KEEPS ITS FALLBACK AND THE CHIP DOES NOT. These two words are
+         read by nobody when they are alt text — they are an accessibility
+         value and PageFly's image-search phrase — so an empty one is a loss
+         with no upside. Painted on the photograph they are the opposite: a
+         design that drew no caption must not have two appear on it. */
+      beforeImageAlt: (beforeLabel ?? "").trim() || "Before",
+      afterImageAlt: (afterLabel ?? "").trim() || "After",
       initialPosition: 50,
       handleStyle: "circle",
       direction: "horizontal",

@@ -969,8 +969,13 @@ const beforeAfter = z.object({
   type: z.literal("beforeAfter"),
   beforeQuery: query,
   afterQuery: query,
-  beforeLabel: words(40, "Before"),
-  afterLabel: words(40, "After"),
+  /* NO FALLBACK. These are painted on the photograph now, and a fallback is
+     two chips appearing on every comparison on every page that never drew one
+     — the exporter changing pages it was not pointed at. Empty means the
+     mockup captioned nothing. The alt text keeps its own fallback, in the
+     builder, where being read by nobody makes an empty value a pure loss. */
+  beforeLabel: words(40),
+  afterLabel: words(40),
   ...styled,
 });
 
