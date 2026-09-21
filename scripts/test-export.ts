@@ -361,6 +361,31 @@ async function main(): Promise<void> {
        left showList at its default of false — so the mockup drew thumbnails and
        the imported page had none, whatever CSS the list carried. */
     const listNode = pdp.find((i) => i.type === "MediaList2");
+
+    /* ---- THE STRIP IS A ROW, NOT A COLUMN ------------------------------
+
+       `slidesToShow` is how many thumbnails MediaList2 puts side by side, and
+       it was written ONLY when the design named `mediaThumbs`. A design that
+       did not — most of them — left the field off, and PageFly then shows one
+       at a time: six photographs stacked straight down the left of the page,
+       under a main image the width of the column.
+
+       Nobody drew that. A thumbnail strip is a strip in every mockup this
+       exporter has been pointed at, so the count has a default and the field
+       is how a design says a different one. */
+    const shows = (listNode?.data as Record<string, unknown>)?.slidesToShow as
+      | Record<string, number>
+      | undefined;
+    check(
+      Boolean(shows) && (shows?.all ?? 0) > 1,
+      "the thumbnails stand side by side, not one above the other",
+      JSON.stringify(shows ?? null),
+    );
+    check(
+      (shows?.mobile ?? 0) > 1,
+      "on a phone too, where a column would be the whole screen",
+      String(shows?.mobile),
+    );
     check(
       !/display:\s*flex/.test(JSON.stringify(listNode ?? {})),
       "and not forced visible with CSS",
@@ -3154,12 +3179,29 @@ console.log("\nfour spec bars stacked in a col");
     "the strip is ONE MediaItem2 template, as the editor's own export writes it",
     thumbKids.join(" · "),
   );
-  /* And no `slidesToShow`, for the same reason: the editor writes none. How
-     many thumbnails are visible is the renderer's business, decided from the
-     product's real media, not a count this file can guess. */
+  /* ---- AND IT DOES STATE A COUNT, WHICH IT USED NOT TO -----------------
+
+     This check was the opposite. The reasoning was that `reference/
+     all-elements.pagefly` — PageFly's own export, with a gallery whose
+     `showList` is true and whose `listPosition` is BOTTOM — carries no
+     `slidesToShow` at all, so how many thumbnails are visible must be the
+     renderer's business and not a count this file can guess.
+
+     The storefront disagreed. A live product page came back with its six
+     photographs stacked straight down the left of the column, under a main
+     image, because with no count the renderer shows ONE. The editor's export
+     says what the editor writes; the page says what the renderer does, and
+     only one of those is what a merchant looks at.
+
+     So the count is written. `mediaThumbs` is how a design says a number of
+     its own; five is the strip every mockup measured here approximates. */
+  const count = (thumbs?.data as Record<string, unknown> | undefined)?.slidesToShow as
+    | Record<string, number>
+    | undefined;
   check(
-    (thumbs?.data as Record<string, unknown> | undefined)?.slidesToShow === undefined,
-    "and states no thumbnail count — the product decides that",
+    Boolean(count) && (count?.all ?? 0) > 1,
+    "and states a thumbnail count, or the renderer shows one at a time",
+    JSON.stringify(count ?? null),
   );
 
   const acc = await open(
@@ -3824,8 +3866,8 @@ console.log("\nfour spec bars stacked in a col");
 
   const silentStrip = shot.items.find((i) => i.type === "MediaList2")!;
   check(
-    (silentStrip.data as Record<string, unknown>)?.slidesToShow === undefined,
-    "and a design silent about it writes no count at all, as the reference does",
+    ((silentStrip.data as { slidesToShow?: Record<string, number> })?.slidesToShow?.all ?? 0) > 1,
+    "and a design silent about it still gets a strip, not a column",
     JSON.stringify((silentStrip.data as Record<string, unknown>)?.slidesToShow ?? null),
   );
 

@@ -1728,7 +1728,15 @@ function productBox(
       },
     ),
     MEDIA_LIST(
-      node.mediaThumbs,
+      /* A STRIP IS A STRIP, and the count has to be said for it to be one.
+         `slidesToShow` is how many thumbnails stand side by side, and it was
+         written only when the design named `mediaThumbs` — which most do not.
+         Left off, PageFly shows one at a time: six photographs stacked down
+         the left of the page under a main image, which is not a gallery and is
+         not what any mockup draws. Five is the platform's own strip and the
+         one every mockup measured here approximates; `mediaThumbs` is how a
+         design says a different number. */
+      node.mediaThumbs ?? 5,
       { all: { "&": "gap: 10px; margin-top: 10px;" } },
       {
         all: {
