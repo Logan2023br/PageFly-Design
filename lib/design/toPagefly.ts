@@ -2612,16 +2612,42 @@ function tabsOf(
      accent below marks the bar and the platform's own active styling does the
      rest.
      ========================================================================== */
-  const tabs = node.items.map((t) => ({
-    label: t.label,
-    body: t.children.map((c) => emit(c, "vertical", opts)).filter(Boolean) as PFNode[],
-  }));
-
   /* Same contract as the buy box's: named parts over the defaults. */
   const tab = (name: "bar" | "label" | "labelActive" | "panel") => {
     const declared = node.tabStyle?.[name];
     return declared ? ` ${declarations(declared)}` : "";
   };
+
+  /* ==========================================================================
+     THE PANEL'S SPACING GOES INSIDE THE PANEL, AND THAT IS NOT A PREFERENCE.
+
+     Every panel of a Tabs3 is in the flow at once; shutting one collapses what
+     is inside it and leaves the container standing. And there is no selector
+     here that means "the open one" — `fields.md` describes the active state as
+     a sibling rule against `.pf-tab-radio:checked`, whose id is generated at
+     publish time, so `& .pf-tab3-content-container` is the only handle a file
+     has and it lands on every panel at once.
+
+     Written there, the padding survives the collapse. A merchant clicking the
+     second tab saw its content pushed down by the first panel's leftover
+     padding; the third tab by two panels' worth. It reported no error and it
+     did not show in the file — every panel measured the same height, because
+     each was only ever measured while it was the open one.
+
+     So the container is left alone and each panel gets one block of its own to
+     carry the gap under the bar and whatever the mockup gave the panel. A
+     child collapses when its panel does, which removes the residue by
+     construction instead of by a selector that cannot be written. */
+  const panelCss = "padding-top: 28px;" + tab("panel");
+  const tabs = node.items.map((t) => ({
+    label: t.label,
+    body: [
+      FB(
+        filling({ all: { "&": panelCss } }, "width: 100%;"),
+        t.children.map((c) => emit(c, "vertical", opts)).filter(Boolean) as PFNode[],
+      ),
+    ],
+  }));
 
   return TABS(
     tabs,
@@ -2658,7 +2684,6 @@ function tabsOf(
          knowable, stable, and what its own tab script maintains. */
       '& [data-pf-type="TabsMenu3"] > label[data-pf-tab-active="true"]':
         `opacity: 1; border-bottom-color: ${accent};` + tab("labelActive"),
-      "& .pf-tab3-content-container": "padding-top: 28px;" + tab("panel"),
     }),
   );
 }

@@ -817,6 +817,40 @@ async function main(): Promise<void> {
     const panels = tabs.items.filter((i) => i.type === "TabsContent3");
     check(panels.length === 3, "and one panel per tab", String(panels.length));
 
+    /* ---- THE PANEL'S PADDING RIDES INSIDE THE PANEL ---------------------
+
+       Every panel is in the flow at once. `fields.md` describes the active
+       state as a sibling rule against `.pf-tab-radio:checked` whose id is
+       generated at publish time, so there is NO selector here that means "the
+       open panel" — a rule on `& .pf-tab3-content-container` lands on all
+       three, the two that are shut included.
+
+       PageFly shuts a panel by collapsing what is inside it and leaving the
+       container in the flow. So spacing written on the container survives the
+       shutting: a merchant clicking the second tab got its content pushed down
+       by the first panel's leftover padding, and the third tab by two panels'
+       worth. Visible on the page, invisible in the file — every panel measured
+       the same height, because each was only ever measured while open.
+
+       The cure is to put nothing on the container and give each panel one
+       block of its own to carry the spacing and the mockup's own panel look.
+       That block is a child, so it collapses when its panel does, and the
+       residue is gone by construction rather than by a selector we cannot
+       write. */
+    check(
+      tabs.cssOf(shell?.id ?? "", "all", "& .pf-tab3-content-container") === "",
+      "nothing is written on the container every panel shares",
+      tabs.cssOf(shell?.id ?? "", "all", "& .pf-tab3-content-container") || "(no rule)",
+    );
+    for (const panel of panels) {
+      const inner = tabs.items.find((i) => panel.children.includes(i.id));
+      check(
+        Boolean(inner) && tabs.cssOf(inner?.id ?? "", "all", "&").includes("padding-top: 28px"),
+        "each panel carries its own spacing one level in",
+        tabs.cssOf(inner?.id ?? "", "all", "&").slice(0, 70) || "(no rule)",
+      );
+    }
+
     const texts = tabs.items
       .filter((i) => i.type === "Paragraph4")
       .map((i) => String((i.data as Record<string, unknown>)?.value ?? ""));
