@@ -50,6 +50,8 @@ const STATED: [string, string][] = [
   ["fade-up", "the reveal names, without which `anim` cannot be written"],
   ["float-shadow", "the hover names, same"],
   ["custom", "the escape hatch for anything the platform does not have"],
+  ["delayMs", "the mockup's own delay, to the millisecond"],
+  ["easing", "the mockup's own timing function"],
   ["showCompareAt", "the struck-through was-price on a card"],
   ["atcLabel", "the card's own button"],
   ["compareLabelAt", "corner or handle for a comparison's captions"],

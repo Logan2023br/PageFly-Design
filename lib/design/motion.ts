@@ -63,6 +63,60 @@ export function motionClasses(a: Anim): string[] {
   return out;
 }
 
+/**
+ * Does the design state the motion's own numbers?
+ *
+ * `fade-up` says WHAT; these say how far, how long, and on what curve. A
+ * mockup states all of them and this file used to decide all of them.
+ */
+export function hasExactMotion(a: Anim): boolean {
+  return Boolean(a && (a.ms !== undefined || a.delayMs !== undefined || a.distance !== undefined || a.easing));
+}
+
+/** A class naming this exact motion, so two nodes with the same one share a rule. */
+export function exactClass(a: Anim): string {
+  const key = `${a?.ms ?? ""}-${a?.delayMs ?? ""}-${a?.distance ?? ""}-${a?.easing ?? ""}`;
+  return `pfd-m-${key.replace(/[^a-zA-Z0-9]+/g, "").slice(0, 24) || "0"}`;
+}
+
+/**
+ * The override rules for one exact motion.
+ *
+ * WRITTEN AGAINST THE NODE'S OWN CLASS so it outranks the shared one, and the
+ * transform carries `:not(.pfd-revealed)`. Without that the start position and
+ * the reset that clears it are both three classes deep, order decides, and the
+ * later rule — this one — wins even after the element has arrived: it would
+ * animate to its own start position and stop there.
+ */
+export function exactCss(cls: string, a: Anim): string {
+  if (!a) return "";
+  const timing: string[] = [];
+  if (a.ms !== undefined) timing.push(`transition-duration:${a.ms}ms`);
+  if (a.easing) timing.push(`transition-timing-function:${a.easing}`);
+  if (a.delayMs !== undefined) timing.push(`transition-delay:${a.delayMs}ms`);
+
+  const out: string[] = [];
+  if (timing.length) out.push(`.pfd-motion-ready .${cls}{${timing.join(";")};}`);
+
+  /* Only the reveal the design actually stated — a distance written onto every
+     kind would put a pixel value inside a `scale()`. */
+  const d = a.distance;
+  if (d !== undefined && a.reveal) {
+    const shape: Record<string, string> = {
+      "fade-up": `translateY(${d}px)`,
+      "slide-left": `translateX(-${d}px)`,
+      "slide-right": `translateX(${d}px)`,
+    };
+    const t = shape[a.reveal];
+    if (t) {
+      out.push(
+        `.pfd-motion-ready .${cls}.pfd-reveal-${a.reveal}:not(.pfd-revealed){transform:${t};}`,
+      );
+    }
+  }
+  return out.join("\n");
+}
+
 export function hasMotion(a: Anim): boolean {
   return Boolean(a?.hover || a?.reveal);
 }

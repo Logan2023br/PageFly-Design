@@ -1674,6 +1674,64 @@ async function main(): Promise<void> {
       moving.customJS.slice(0, 60) || "(no JS)",
     );
 
+    /* ======================================================================
+       AND THE NUMBERS, WHICH USED TO BE OURS.
+
+       `fade-up` said WHAT the motion is and this file said how far and how
+       long: 28px over .7s on a curve of its own, against a mockup's 18px over
+       520ms on another. Same family, visibly different page — and the mockup
+       states every one of those numbers in the stylesheet it sends.
+
+       Stated, they override. The rule is written against the node's own class
+       so it beats the shared one, and `:not(.pfd-revealed)` keeps it from
+       fighting the reset that clears the transform when the element arrives —
+       without it the element would animate to its start position and stop
+       there.
+       ====================================================================== */
+    const exact = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "heading",
+              level: 2,
+              text: "Fourteen hours later",
+              anim: {
+                reveal: "fade-up",
+                ms: 520,
+                delayMs: 90,
+                distance: 18,
+                easing: "cubic-bezier(.16,1,.3,1)",
+              },
+            },
+          ],
+          "wear-test",
+        ),
+      ],
+    }, "motion");
+    const exactCls = exact.items
+      .flatMap((i) => String((i.data as { classGlobalStyling?: string })?.classGlobalStyling ?? "").split(/\s+/))
+      .find((c) => c.startsWith("pfd-m-"));
+    check(Boolean(exactCls), "a node with stated numbers wears a rule of its own", exactCls ?? "(none)");
+    const rule = exact.customCSS.split("\n").filter((l) => exactCls && l.includes(exactCls)).join("\n");
+    check(/transition-duration:\s*520ms/.test(rule), "the mockup's duration, not ours", rule.slice(0, 90));
+    check(/transition-delay:\s*90ms/.test(rule), "the mockup's delay, to the millisecond");
+    check(/cubic-bezier\(\.16,1,\.3,1\)/.test(rule), "and its own curve");
+    check(/translateY\(18px\)/.test(rule), "and the distance it actually travels");
+    check(
+      rule.includes(":not(.pfd-revealed)"),
+      "the start state stops applying once the element has arrived",
+      rule.slice(-80),
+    );
+
+    /* A design that states no numbers keeps ours — the exact rule is an
+       override, not a replacement, and a mockup that says nothing about
+       timing should not be given a rule with blanks in it. */
+    check(
+      !moving.customCSS.includes("pfd-m-"),
+      "a design that states no numbers gets no override",
+    );
+
     /* A page with no motion ships no observer — the script costs the storefront
        something, and a page that reveals nothing should not pay it. */
     const still = await open({

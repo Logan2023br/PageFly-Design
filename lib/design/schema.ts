@@ -336,14 +336,49 @@ const anim = loose().transform((v): Anim => {
     : undefined;
   const n = numberish(o.delay);
   const delay = n === null ? undefined : Math.min(6, Math.max(0, Math.round(n)));
+  /* ======================================================================
+     THE NUMBERS, WHICH USED TO BE OURS.
+
+     `fade-up` says WHAT the motion is; how far and how long were this file's
+     to decide — 28px over .7s on a curve of its own. A mockup states every one
+     of those, in the stylesheet it sends, and the result was the same family
+     of motion and a visibly different page.
+
+     All four are optional and each overrides on its own: a design that states
+     only a duration keeps our distance. Clamped rather than refused, because a
+     stray 9,000ms is a page that looks broken for nine seconds and a stray
+     `easing` is one declaration.
+     ====================================================================== */
+  const num = (v: unknown, lo: number, hi: number): number | undefined => {
+    const parsed = numberish(v);
+    return parsed === null ? undefined : Math.min(hi, Math.max(lo, Math.round(parsed)));
+  };
+  const ms = num(o.ms, 0, 4000);
+  const delayMs = num(o.delayMs, 0, 4000);
+  const distance = num(o.distance, 0, 400);
+  /* A timing function is a short expression, not a stylesheet. Anything with a
+     brace or a semicolon in it is not one, and would break out of the
+     declaration it lands in. */
+  const raw = typeof o.easing === "string" ? o.easing.trim() : "";
+  const easing = raw && raw.length <= 60 && !/[{};]/.test(raw) ? raw : undefined;
+
   /* Nothing recognised is no motion, not an empty motion object — the renderer
      and the exporter both branch on the property being absent. */
   if (!hover && !reveal && delay === undefined) return undefined;
-  return { hover, reveal, delay };
+  return { hover, reveal, delay, ms, delayMs, distance, easing };
 });
 
 export type Anim =
-  | { hover?: Hover; reveal?: Reveal; delay?: number }
+  | {
+      hover?: Hover;
+      reveal?: Reveal;
+      delay?: number;
+      /** the mockup's own duration, delay, distance and curve */
+      ms?: number;
+      delayMs?: number;
+      distance?: number;
+      easing?: string;
+    }
   | undefined;
 
 /**

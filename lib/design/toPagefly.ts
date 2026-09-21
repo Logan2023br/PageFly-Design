@@ -44,6 +44,9 @@ import {
   HOVER_NATIVE_TYPES,
   MOTION_CSS,
   MOTION_JS,
+  exactClass,
+  exactCss,
+  hasExactMotion,
   hasMotion,
   hoverClass,
   motionClasses,
@@ -912,7 +915,7 @@ export type EmitOptions = {
 
 function emit(node: DesignNode, parent: ParentDir, opts: EmitOptions): PFNode | null {
   const built = emitNode(node, parent, opts);
-  return built && hasMotion(node.anim) ? withMotion(built, node.anim) : built;
+  return built && hasMotion(node.anim) ? withMotion(built, node.anim, opts) : built;
 }
 
 /**
@@ -927,8 +930,27 @@ function emit(node: DesignNode, parent: ParentDir, opts: EmitOptions): PFNode | 
  *
  * Reveal is always the class: PageFly has nothing that fires on scroll.
  */
-function withMotion(n: PFNode, anim: Anim): PFNode {
+function withMotion(n: PFNode, anim: Anim, opts: EmitOptions): PFNode {
   const classes = motionClasses(anim);
+
+  /* THE MOCKUP'S OWN NUMBERS, when it states them. The shared classes say what
+     the motion is; these say how far, how long and on what curve, and without
+     them a 520ms 18px fade imported as a .7s 28px one — the same family of
+     motion and a visibly different page.
+
+     The rule is keyed by its values, so two nodes moving identically share one
+     — a page of twelve staggered reveals writes three rules, not twelve. */
+  if (hasExactMotion(anim)) {
+    const cls = exactClass(anim);
+    const css = exactCss(cls, anim);
+    if (css) {
+      classes.push(cls);
+      const blocks = opts.customBlocks;
+      if (blocks && !blocks.some((b) => b.className === cls)) {
+        blocks.push({ className: cls, html: "", css, js: "" });
+      }
+    }
+  }
 
   if (anim?.hover && HOVER_NATIVE_TYPES.has(n.type)) {
     n.data.animationHover = anim.hover;
