@@ -1340,7 +1340,54 @@ const BEFORE_AFTER_PARTS: Record<string, string> = {
  * no `aspect-ratio` at all and hugs its content, which is the same failure by
  * a shorter route.
  */
-function beforeAfterStyles(styleData: StyleData): StyleData {
+/**
+ * A string safe to sit inside a CSS `content: '…'`.
+ *
+ * The label is merchant copy — an apostrophe in `Kate's` would close the quote
+ * and the rest of the rule after it becomes garbage the browser drops, taking
+ * the label with it. A backslash has to go first or it escapes the escape.
+ */
+function cssQuoted(text: string): string {
+  return `'${text.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+}
+
+/**
+ * The two captions, hung on the handle.
+ *
+ * THEY USED TO BE ALT TEXT AND NOTHING ELSE. `beforeImageAlt`/`afterImageAlt`
+ * are what PageFly searches images with; it never paints them. So a comparison
+ * captioned `6PM` and `9PM` — the two words the whole element is about —
+ * imported with no captions at all, and the file looked correct because the
+ * values were in it.
+ *
+ * `fields.md` gives this element no text field to put them in: `labelVisible`
+ * is documented as a legacy flag with nothing to show. Drawing them is ours.
+ * The handle is where the mockup hangs them — its `.ba-handle` spans the full
+ * height with one caption to each side — and `::before`/`::after` sit beside
+ * `.pf-ba-handle-circle` rather than replacing it, so the grip still draws.
+ *
+ * `white-space: nowrap` because a two-word caption on a 4px-wide handle wraps
+ * to one letter per line otherwise.
+ */
+function handleLabels(beforeLabel: string, afterLabel: string): Record<string, string> {
+  const chip =
+    "position: absolute; top: 14px; z-index: 3; white-space: nowrap;" +
+    " font-size: 10px; font-weight: 600; letter-spacing: .2em;" +
+    " text-transform: uppercase; color: #FBFAF7;" +
+    " background: rgba(18,16,12,.72); padding: 5px 8px; border-radius: 2px;";
+  const out: Record<string, string> = {};
+  /* Empty is a caption the design chose not to write — an empty chip is a
+     floating dark rectangle over the photograph. */
+  if (beforeLabel.trim()) {
+    out["& .pf-ba-handle::before"] = `content: ${cssQuoted(beforeLabel.trim())}; right: 12px; ${chip}`;
+  }
+  if (afterLabel.trim()) {
+    out["& .pf-ba-handle::after"] = `content: ${cssQuoted(afterLabel.trim())}; left: 12px; ${chip}`;
+  }
+  return out;
+}
+
+function beforeAfterStyles(styleData: StyleData, labels: Record<string, string>): StyleData {
   const devices = new Set<string>(["all", ...Object.keys(styleData ?? {})]);
   const out: Record<string, Record<string, string>> = {};
   for (const d of devices) {
@@ -1352,7 +1399,7 @@ function beforeAfterStyles(styleData: StyleData): StyleData {
   }
   /* The children are the same at every width, so they ride on `all` alone —
      repeating them four times would be four copies of one fact. */
-  out.all = { ...out.all, ...BEFORE_AFTER_PARTS, "&": out.all["&"] };
+  out.all = { ...out.all, ...BEFORE_AFTER_PARTS, ...labels, "&": out.all["&"] };
   return out;
 }
 
@@ -1392,7 +1439,7 @@ export function BEFORE_AFTER(
        replacing it, or a background, a radius or a border set on the node would
        vanish with it. The child selectors are width-independent and only need
        saying once. */
-    beforeAfterStyles(styleData),
+    beforeAfterStyles(styleData, handleLabels(beforeLabel, afterLabel)),
     [],
   );
 }

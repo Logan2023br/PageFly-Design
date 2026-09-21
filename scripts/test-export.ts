@@ -3239,6 +3239,34 @@ async function main(): Promise<void> {
       "and the content box is the full square",
     );
 
+    /* ---- THE LABELS WERE CARRIED AND NEVER DRAWN -----------------------
+
+       `beforeLabel`/`afterLabel` reached the element as `beforeImageAlt` and
+       `afterImageAlt` — alt text, which PageFly uses as its image-search query
+       and never paints. So a mockup captioning its two halves `6PM` and `9PM`
+       imported as an unlabelled slider: the two words the comparison is ABOUT
+       were the two the page lost, and nothing reported it because the values
+       were present in the file all along.
+
+       `fields.md` lists no text field for them — `labelVisible` is documented
+       as a legacy flag with nothing to show. They are ours to draw, and the
+       handle is where the mockup hangs them: its own `.ba-handle` carries both
+       captions, one to each side. */
+    const handleBefore = ba.cssOf(el?.id ?? "", "all", "& .pf-ba-handle::before");
+    const handleAfter = ba.cssOf(el?.id ?? "", "all", "& .pf-ba-handle::after");
+    check(/content:\s*'Before'/.test(handleBefore), "the before label is drawn", handleBefore || "(no rule)");
+    check(/content:\s*'After'/.test(handleAfter), "and the after label too", handleAfter || "(no rule)");
+    check(
+      /position:\s*absolute/.test(handleBefore) && /right:/.test(handleBefore),
+      "the before label hangs on the handle's left, as the mockup draws it",
+      handleBefore,
+    );
+    check(
+      /position:\s*absolute/.test(handleAfter) && /left:/.test(handleAfter),
+      "and the after label on its right",
+      handleAfter,
+    );
+
     /* ======================================================================
        AND AT EVERY WIDTH THE NODE HAS A BLOCK FOR.
 
