@@ -681,6 +681,18 @@ const product = z.object({
   mediaControls: choice(["over", "below"] as const, "over"),
 
   /**
+   * The shape drawn inside the gallery's arrow buttons.
+   *
+   * PageFly draws one: `chevron`, two 1px bars meeting at a point. Half the
+   * mockups that style their arrows draw a long arrow instead — `←` and `→`,
+   * shaft and all — and no field of the element can ask for one, so styling the
+   * buttons got their colour and plate right and left the shape wrong.
+   *
+   * Declared, never inferred: silence keeps the platform's chevron.
+   */
+  mediaArrow: choice(["chevron", "arrow"] as const, "chevron"),
+
+  /**
    * How many thumbnails the strip shows at once, when the mockup is specific.
    *
    * Absent means absent: PageFly shows five and the file says nothing, which is
@@ -1140,6 +1152,7 @@ export type DesignNode =
       gallery: boolean;
       galleryEdge: "bottom" | "left" | "right" | "top";
       mediaControls: "over" | "below";
+      mediaArrow: "chevron" | "arrow";
       mediaThumbs?: number;
       mediaRatio: number;
       mediaHover: "magnifier" | "none";

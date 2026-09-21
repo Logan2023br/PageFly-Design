@@ -2454,6 +2454,66 @@ async function main(): Promise<void> {
      two arrows pointing the same way — which is worse than the position it
      fixed, and looks deliberate.
      ========================================================================== */
+  /* ==========================================================================
+     THE GLYPH ITSELF, WHICH IS A CHEVRON AND SOMETIMES SHOULD NOT BE.
+
+     PageFly draws one shape: two 1px bars meeting at a point. Half the mockups
+     that style their arrows draw a long arrow instead — `←` and `→`, shaft and
+     all — and no field of the element can ask for one, so colouring the bars
+     got the colour right and the shape still wrong.
+
+     The rotation is the catch. PageFly points the prev chevron left by turning
+     the whole BUTTON 180°, bundled with the offset that holds it in place. A
+     text arrow inside a button turned upside down is an arrow pointing the
+     wrong way, so asking for arrows has to undo the rotation and keep the
+     offset — which differs between the two placements.
+     ========================================================================== */
+  const glyph = await open(
+    {
+      sections: [
+        section(
+          [
+            {
+              type: "product",
+              title: "Overshirt",
+              price: "$480",
+              atcText: "Add",
+              gallery: true,
+              mediaArrow: "arrow",
+              children: [],
+            },
+          ],
+          "product-detail-gallery",
+        ),
+      ],
+    },
+    "probe",
+    { accent: "#8A1C1C" },
+  );
+  const gMain = glyph.items.find((i) => i.type === "MediaMain3")!;
+  const gPrev = glyph.cssOf(gMain.id, "all", "& .pf-slider-prev::before");
+  const gNext = glyph.cssOf(gMain.id, "all", "& .pf-slider-next::before");
+  /* The CSS escape, not the character: the stylesheet travels through JSON and
+     a zip, and an ASCII-only rule cannot be mangled by either. */
+  check(gPrev.includes(String.raw`\2190`), "prev draws a left arrow, not a chevron", gPrev.slice(0, 60));
+  check(gNext.includes(String.raw`\2192`), "and next a right one", gNext.slice(0, 60));
+  check(
+    /display:\s*none/.test(glyph.cssOf(gMain.id, "all", "& .pf-slider-prev::after")),
+    "the chevron's second bar is gone, or it sits across the arrow",
+    glyph.cssOf(gMain.id, "all", "& .pf-slider-prev::after"),
+  );
+  check(
+    !/rotate/.test(glyph.cssOf(gMain.id, "all", "& .pf-slider-prev")),
+    "and the button is not turned upside down under it",
+    glyph.cssOf(gMain.id, "all", "& .pf-slider-prev").slice(-60),
+  );
+  /* Silence keeps PageFly's own chevron — this is a choice, not a default. */
+  check(
+    shot.cssOf(main.id, "all", "& .pf-slider-prev::before").includes("currentColor"),
+    "a design that says nothing keeps the platform's chevron, coloured",
+    shot.cssOf(main.id, "all", "& .pf-slider-prev::before"),
+  );
+
   const below = await open(
     {
       sections: [

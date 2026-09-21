@@ -1523,6 +1523,11 @@ function productBox(
      than the placement, and one that looks deliberate. The rotation is kept
      and only the offset is replaced. */
   const below = node.mediaControls === "below";
+  /* Declared here rather than beside the glyph rules below, because the arrow
+     placement a few lines down has to know about it too: a text arrow carries
+     its own direction and must not be stood on its head by the rotation
+     PageFly uses to point the chevron. */
+  const wantsArrow = node.mediaArrow === "arrow";
   const BAND = 58;
   /* The dots' own rule is `left: 50%; transform: translate(-50%, 50%)` — the
      vertical half-shift is what hangs them over the photograph's edge, so it
@@ -1534,16 +1539,58 @@ function productBox(
           " transform: translateX(-50%) !important;",
       }
     : {};
-  const arrowPlace = (side: "prev" | "next"): string =>
-    below
-      ? ` top: auto !important; bottom: 0 !important;` +
-        (side === "prev"
-          ? " left: 0 !important; right: auto !important; transform: rotate(180deg) !important;"
-          : " right: 0 !important; left: auto !important; transform: none !important;")
-      : "";
+  /* `rotate(180deg)` is how PageFly points the prev chevron left, so it stays
+     for a chevron and goes for an arrow — which carries its own direction and
+     would be stood on its head by it. In the platform's own placement the
+     offset is `translateY(-100%)`, and an arrow needs that offset WITHOUT the
+     rotation bundled into it. */
+  const prevTurn = wantsArrow ? "none" : "rotate(180deg)";
+  const arrowPlace = (side: "prev" | "next"): string => {
+    if (!below) {
+      return wantsArrow && side === "prev"
+        ? " transform: translateY(-100%) !important;"
+        : "";
+    }
+    return (
+      ` top: auto !important; bottom: 0 !important;` +
+      (side === "prev"
+        ? ` left: 0 !important; right: auto !important; transform: ${prevTurn} !important;`
+        : " right: 0 !important; left: auto !important; transform: none !important;")
+    );
+  };
   /* The shared look, written once and given to each arrow by name. It used to
      be one comma key; PageFly keeps only what precedes the first comma, and
      the two arrows now need different `transform`s anyway. */
+  /* ======================================================================
+     THE GLYPH INSIDE THE BUTTON.
+
+     PageFly draws one shape — two 1px bars meeting at a point — and paints it
+     `#fff` on its own dark circle. Colouring it is all most galleries need.
+
+     A mockup that draws a long arrow instead, shaft and all, needs the bars
+     replaced. The rotation is the catch: PageFly points the prev chevron left
+     by turning the whole BUTTON 180°, in the same declaration as the offset
+     that holds it in place. A text arrow inside a button turned upside down
+     points the wrong way, so the rotation has to go and the offset has to stay
+     — and the offset differs between the two placements. */
+  const GLYPH: Record<string, string> = { prev: "\\2190", next: "\\2192" };
+  const glyphRules: Record<string, string> = {};
+  for (const side of ["prev", "next"] as const) {
+    if (wantsArrow) {
+      glyphRules[`& .pf-slider-${side}::before`] =
+        `content: "${GLYPH[side]}" !important; position: static !important;` +
+        " background: none !important; width: auto !important; height: auto !important;" +
+        " transform: none !important; font-size: 15px; line-height: 1;";
+      /* The second bar is the other half of the chevron. Left in, it lies
+         across the arrow as a stray tick. */
+      glyphRules[`& .pf-slider-${side}::after`] = "display: none !important;";
+    } else {
+      for (const half of ["before", "after"]) {
+        glyphRules[`& .pf-slider-${side}::${half}`] = "background: currentColor !important;";
+      }
+    }
+  }
+
   const arrowLook =
     "width: 44px; height: 44px; border-radius: 999px; background: rgba(255,255,255,.92);" +
     ` border: 1px solid ${opts.border ?? "rgba(0,0,0,.10)"}; cursor: pointer;` +
@@ -1597,14 +1644,7 @@ function productBox(
              already carries — the band's ink, or whatever the design wrote on
              the `nav` part — decides the chevron too, and the two can never
              disagree. */
-          ...Object.fromEntries(
-            ["prev", "next"].flatMap((side) =>
-              ["before", "after"].map((half) => [
-                `& .pf-slider-${side}::${half}`,
-                "background: currentColor !important;",
-              ]),
-            ),
-          ),
+          ...glyphRules,
           ...navPlace,
           "& .pf-slider-nav button":
             "width: 28px; height: 2px; border-radius: 0; border: 0; padding: 0;" +
