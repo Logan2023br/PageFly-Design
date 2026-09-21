@@ -1654,7 +1654,31 @@ function productBox(
             "background: #FFFFFF;" + shot("dotActive"),
         },
       },
-      { nav: "nav-style-1", pagination: counter ? "none" : "pagination-style-1" },
+      /* ==================================================================
+         CONTROLS THE MOCKUP NEVER DREW.
+
+         These two were constants — an arrow and a row of dots on every
+         gallery this file has ever exported. The mockup that exposed it
+         draws a still plate with three crops under it: nothing to page
+         with, and the import arrived wearing both.
+
+         A gallery's controls are not ours to decide. The design already
+         says whether it has them, in the only way it can: by styling them.
+         Styling the arrows, asking for them below the frame, or asking for
+         a long arrow instead of a chevron are each the design saying the
+         arrows exist. Silence says they do not.
+
+         Dots read the same way, from their own parts — and a declared
+         counter still switches them off, because `01 / 06` and a row of
+         dashes are two answers to one question. */
+      {
+        nav:
+          node.mediaStyle?.nav || below || wantsArrow ? "nav-style-1" : "none",
+        pagination:
+          counter || !(node.mediaStyle?.dot || node.mediaStyle?.dotActive)
+            ? "none"
+            : "pagination-style-1",
+      },
     ),
     MEDIA_LIST(
       node.mediaThumbs,

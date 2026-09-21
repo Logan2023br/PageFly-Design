@@ -2518,6 +2518,71 @@ async function main(): Promise<void> {
      fixed, and looks deliberate.
      ========================================================================== */
   /* ==========================================================================
+     CONTROLS THE MOCKUP NEVER DREW.
+
+     `navStyle` and `paginationStyle` were written as constants — an arrow and a
+     row of dots on every gallery this file has ever exported. The mockup that
+     exposed it draws a still plate and three crops under it: no arrows, no
+     dots, nothing to page with. The import arrived wearing both.
+
+     A gallery's controls are not ours to decide. The design already says
+     whether it has them, in the only way it can: by styling them. A mockup
+     that draws arrows states `mediaStyle.nav`, or asks for them below the
+     frame, or asks for a long arrow instead of a chevron — any of those is the
+     design saying the arrows exist. Silence is the design saying they do not.
+     ========================================================================== */
+  const bareGallery = await open(
+    {
+      sections: [
+        section(
+          [{ type: "product", title: "Overshirt", price: "$480", atcText: "Add", gallery: true, children: [] }],
+          "product-detail-gallery",
+        ),
+      ],
+    },
+    "probe",
+  );
+  const pMain = bareGallery.items.find((i) => i.type === "MediaMain3")!;
+  check(pMain.data?.navStyle === "none", "a gallery the mockup gave no arrows gets none", String(pMain.data?.navStyle));
+  check(
+    pMain.data?.paginationStyle === "none",
+    "and no dots either",
+    String(pMain.data?.paginationStyle),
+  );
+  const styledNav = await open(
+    {
+      sections: [
+        section(
+          [
+            {
+              type: "product",
+              title: "Overshirt",
+              price: "$480",
+              atcText: "Add",
+              gallery: true,
+              mediaStyle: { nav: { background: "#F4F1E8" }, dot: { background: "#CCC" } },
+              children: [],
+            },
+          ],
+          "product-detail-gallery",
+        ),
+      ],
+    },
+    "probe",
+  );
+  const sMain = styledNav.items.find((i) => i.type === "MediaMain3")!;
+  check(
+    sMain.data?.navStyle !== "none",
+    "while a mockup that styles its arrows keeps them",
+    String(sMain.data?.navStyle),
+  );
+  check(
+    sMain.data?.paginationStyle !== "none",
+    "and one that styles its dots keeps those",
+    String(sMain.data?.paginationStyle),
+  );
+
+  /* ==========================================================================
      THE GLYPH ITSELF, WHICH IS A CHEVRON AND SOMETIMES SHOULD NOT BE.
 
      PageFly draws one shape: two 1px bars meeting at a point. Half the mockups
@@ -2604,6 +2669,11 @@ async function main(): Promise<void> {
   const bPrev = below.cssOf(bMain.id, "all", "& .pf-slider-prev");
   const bNext = below.cssOf(bMain.id, "all", "& .pf-slider-next");
   const bNav = below.cssOf(bMain.id, "all", "& .pf-slider-nav");
+  check(
+    bMain.data?.navStyle !== "none",
+    "asking for the controls below the frame is asking to have them",
+    String(bMain.data?.navStyle),
+  );
   check(/padding-bottom:\s*\d+px/.test(bRoot), "the frame reserves a band under the photograph", bRoot.slice(0, 90));
   check(/bottom:\s*0/.test(bPrev) && /left:\s*0/.test(bPrev), "prev sits at the band's left edge", bPrev.slice(0, 90));
   check(/bottom:\s*0/.test(bNext) && /right:\s*0/.test(bNext), "next at its right edge", bNext.slice(0, 90));
@@ -2781,9 +2851,15 @@ async function main(): Promise<void> {
     !captioned.customCSS.includes("pfd-slide-count"),
     "a caption does not drag the page-number badge along with it",
   );
+  /* THIS TEST USED TO ASSERT THE BUG. It read "a design that never mentions a
+     counter keeps the dashes" — true of the old constant, and the constant was
+     the defect: every gallery ever exported wore dashes whether or not its
+     mockup drew any. Silence about the dots is now silence, and a design that
+     wants them says so by styling them, which is the only thing a design can
+     do. The counter still switches them off where they exist. */
   check(
-    main.data?.paginationStyle === "pagination-style-1",
-    "a design that never mentions a counter keeps the dashes",
+    main.data?.paginationStyle === "none",
+    "a design that styles no dots gets none, counter or not",
     String(main.data?.paginationStyle),
   );
 
