@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { EV, track } from "@/lib/analytics";
 import { CATEGORY_BY_ID, PAGE_BY_ID, type CategoryId } from "@/lib/pageCatalog";
 import { useStore, useVisiblePages } from "@/lib/store";
@@ -226,7 +226,22 @@ export function ResultsScreen({
      page the merchant has filtered out is still owed the credit. */
   const allPages = useStore((s) => s.pages);
   const rebuilding = useStore((s) => s.rebuilding);
-  const { error, clearError } = useExport();
+  const { error, clearError, prepare } = useExport();
+
+  /* THE FILE STARTS BUILDING NOW, not on the Export click.
+
+     Converting an HTML mockup is a model call per band — about a minute — and
+     it used to run when the merchant asked for the file, after they had
+     already waited once for the page itself. Started here it runs while they
+     are reading, and the click usually has nothing left to wait for.
+
+     Every render is fine: a document already converting or converted is not
+     converted again. The whole deck rather than the filtered view, because a
+     merchant who filters to one category and then clears the filter should not
+     find the other pages have been sitting idle. */
+  useEffect(() => {
+    prepare(allPages);
+  }, [allPages, prepare]);
 
   return (
     <motion.div

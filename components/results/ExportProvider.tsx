@@ -14,6 +14,7 @@ import { captureNode, downloadDataUrl, nextPaint, slugify } from "@/lib/png";
 import { downloadBlob } from "@/lib/pagefly/builder";
 import { announceExport } from "@/lib/pagefly/install";
 import { fileStem, pageFromBreakpoints, type Rendered } from "@/lib/pagefly/fromDom";
+import { createPreparer, keyForHtml } from "@/lib/pagefly/prepared";
 import { designTreeSchema, type DesignTree } from "@/lib/design/schema";
 import { pageflyFromTree } from "@/lib/design/toPagefly";
 import { MockupPage } from "../mockup/MockupPage";
@@ -37,6 +38,12 @@ type ExportState = {
   exportPagefly: (page: PageMockup) => Promise<void>;
   /** one .pagefly per page, downloaded in sequence */
   exportPageflyAll: (pages: PageMockup[]) => Promise<void>;
+  /**
+   * Start converting these pages now, so the Export click has nothing to wait
+   * for. Safe to call on every render: a page already converting or converted
+   * is not converted again.
+   */
+  prepare: (pages: PageMockup[]) => void;
   clearError: () => void;
 };
 
@@ -74,10 +81,12 @@ export function useExportOptional(): ExportState | null {
  * waited for a build should get a file, not an apology, even on the day the
  * vendor is down.
  */
+type Built = { blob: Blob; filename: string };
+
 async function pageflyFromHtmlViaSkill(
   page: PageMockup,
   html: string,
-): Promise<{ blob: Blob; filename: string } | null> {
+): Promise<Built | null> {
   const name = fileStem(page);
   try {
     const res = await fetch("/api/pagefly/from-html", {
@@ -108,6 +117,27 @@ async function pageflyFromHtmlViaSkill(
 }
 
 const EXPORT_WIDTH = 1440;
+
+/* ==========================================================================
+   THE FILE IS BUILT WHILE THE MERCHANT IS STILL READING THE MOCKUP.
+
+   One conversion per document, started when the page appears and collected by
+   the click — see `lib/pagefly/prepared.ts` for the four rules it keeps and
+   why each of them is a bug if a component tries to keep it instead.
+
+   Module scope rather than a ref: the results screen unmounts when a merchant
+   opens the preview overlay and mounts again when they close it, and work
+   thrown away on the way through is a minute the merchant pays for twice.
+   ========================================================================== */
+const prepared = createPreparer<{ page: PageMockup; html: string }, Built | null>(
+  ({ page, html }) => pageflyFromHtmlViaSkill(page, html),
+);
+
+/** The document a page will be converted from, when it has one. */
+function htmlOf(page: PageMockup): string | null {
+  const html = page.design?.html;
+  return typeof html === "string" && html.trim() !== "" ? html : null;
+}
 
 /* Every breakpoint the mockup supports, mapped to the keys PageFly styles
    against. All four are mounted at once rather than one at a time: the layout
@@ -211,8 +241,8 @@ export function ExportProvider({ children }: { children: ReactNode }) {
        there is nothing there to read but an iframe — the document has its own
        stylesheet and its own media queries, so it has to be laid out as a
        document, at each width, before anything can be measured off it. */
-    const html = page.design?.html;
-    if (typeof html === "string" && html.trim() !== "") {
+    const html = htmlOf(page);
+    if (html !== null) {
       /* TWO CONVERTERS, AND THE SKILL ONE IS ON.
 
          `lib/pagefly/fromHtml.ts` lays the document out in four hidden frames
@@ -225,7 +255,14 @@ export function ExportProvider({ children }: { children: ReactNode }) {
          model that already wrote the page, and lets it choose the elements. The
          measuring converter is not deleted and nothing about it has changed;
          set `PAGEFLY_FROM_HTML=measure` to go back to it. */
-      const built = await pageflyFromHtmlViaSkill(page, html);
+      /* COLLECTED, NOT STARTED. If `prepare` has already run this document the
+         file is here; if it is still running, this joins that one rather than
+         racing a second conversion for the same download; and if nothing
+         started it — a page opened straight from the Library, say — this is
+         the first ask and behaves exactly as the click always did. */
+      const built = await prepared
+        .start(keyForHtml(page.id, html), { page, html })
+        .catch(() => null);
       if (built) {
         downloadBlob(built.blob, built.filename);
         announceExport();
@@ -343,6 +380,17 @@ export function ExportProvider({ children }: { children: ReactNode }) {
     [capture],
   );
 
+  /* Fire and forget: the promise is the preparer's to hold, and a failure here
+     is not the merchant's problem yet — the export click falls back to the
+     measuring converter, which is what it did before any of this existed. */
+  const prepare = useCallback((pages: PageMockup[]) => {
+    for (const page of pages) {
+      const html = htmlOf(page);
+      if (html === null) continue;
+      void prepared.start(keyForHtml(page.id, html), { page, html }).catch(() => undefined);
+    }
+  }, []);
+
   const value = useMemo<ExportState>(
     () => ({
       exporting,
@@ -352,6 +400,7 @@ export function ExportProvider({ children }: { children: ReactNode }) {
       exportAll,
       exportPagefly,
       exportPageflyAll,
+      prepare,
       clearError: () => setError(null),
     }),
     [
@@ -362,6 +411,7 @@ export function ExportProvider({ children }: { children: ReactNode }) {
       exportAll,
       exportPagefly,
       exportPageflyAll,
+      prepare,
     ],
   );
 
