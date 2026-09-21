@@ -220,6 +220,69 @@ async function main(): Promise<void> {
   });
   check(split.filter((i) => i.type === "ContentList2").length === 0, "a 42/58 split stays a FlexBlock");
 
+  /* ==========================================================================
+     A WIDTH WRITTEN AS A SHORTHAND IS STILL A WIDTH.
+
+     The rule was already right — a row whose children state their own width is
+     a row of sized columns, not a grid of repeating cards — and it read only
+     `css.width` and `css.flexBasis`. A stylesheet says it the third way:
+
+         .s2-col{flex:0 0 25%;max-width:25%}
+
+     Neither key present, so four columns were read as four cards and exported
+     as a ContentList2. Then the width applied INSIDE the cell the list had
+     already sized: `slidesToShow:4` made each cell a quarter of the row, and
+     `flex:0 0 25%` took a quarter of THAT. Six per cent of the row, and the
+     band came back with one character per line.
+     ========================================================================== */
+  const sized = await build({
+    sections: [
+      section(
+        [
+          {
+            type: "row",
+            children: [1, 2, 3, 4].map((n) => ({
+              type: "col",
+              css: { flex: "0 0 25%", maxWidth: "25%" },
+              children: [{ type: "text", text: `Column ${n} of a row that states its own widths` }],
+            })),
+          },
+        ],
+        "four-terms",
+      ),
+    ],
+  });
+  check(
+    sized.filter((i) => i.type === "ContentList2").length === 0,
+    "four columns that state `flex: 0 0 25%` stay a row",
+    `${sized.filter((i) => i.type === "ContentList2").length} list(s)`,
+  );
+
+  /* `flex: 1 1 0` states no width — it says "share what is there equally",
+     which is exactly what a grid of cards does. It must still list. */
+  const shared = await build({
+    sections: [
+      section(
+        [
+          {
+            type: "row",
+            children: [1, 2, 3].map((n) => ({
+              type: "col",
+              css: { flex: "1 1 0" },
+              children: [{ type: "text", text: `Card ${n}` }],
+            })),
+          },
+        ],
+        "three-cards",
+      ),
+    ],
+  });
+  check(
+    shared.filter((i) => i.type === "ContentList2").length === 1,
+    "but `flex: 1 1 0` is not a width, and three of those still list",
+    `${shared.filter((i) => i.type === "ContentList2").length} list(s)`,
+  );
+
   /* Three cards, but one holds a product. ContentList2 gives its children no
      product context — every card would read "Please select a product". */
   const withProduct = await build({

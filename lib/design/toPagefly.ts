@@ -2245,10 +2245,44 @@ function becomesCardList(node: Extract<DesignNode, { type: "row" | "col" }>): bo
   if (!children.every((c) => c.type === shape)) return false;
 
   for (const c of children) {
-    if (c.css?.width !== undefined || c.css?.flexBasis !== undefined) return false;
+    if (statesAWidth(c.css)) return false;
     if (walkNode(c).some((n) => NOT_IN_A_CARD.has(n.type))) return false;
   }
   return true;
+}
+
+/**
+ * Does this child say how wide it is?
+ *
+ * A ROW WHOSE CHILDREN STATE THEIR OWN WIDTHS IS A ROW OF SIZED COLUMNS, not a
+ * grid of repeating cards — a rule this file already had, reading two keys. A
+ * stylesheet says it a third way, and this is the one that shipped broken:
+ *
+ *     .s2-col{flex:0 0 25%;max-width:25%}
+ *
+ * Neither `width` nor `flexBasis` present, so four columns read as four cards
+ * and became a ContentList2. The width then applied INSIDE the cell the list
+ * had already sized — `slidesToShow: 4` made each cell a quarter of the row and
+ * `flex: 0 0 25%` took a quarter of that. Six per cent of the row, and the band
+ * came back one character per line.
+ *
+ * THE BASIS IS WHAT COUNTS, not the shorthand's presence. `flex: 1 1 0` states
+ * no width at all — it says "share what is there equally", which is what a grid
+ * of cards does and how half of them are written. Disqualifying on the property
+ * would have stopped every real card grid from listing.
+ */
+function statesAWidth(css: Css | undefined): boolean {
+  if (!css) return false;
+  if (css.width !== undefined || css.flexBasis !== undefined) return true;
+  if (css.maxWidth !== undefined) return true;
+  const short = css.flex;
+  if (short === undefined) return false;
+  /* `grow shrink basis`, and the basis is the last word. A one- or two-value
+     shorthand has no basis to read. */
+  const parts = String(short).trim().split(/\s+/);
+  if (parts.length < 3) return false;
+  const basis = parts[2];
+  return !/^0(?:[a-z%]*)$/i.test(basis) && basis !== "auto";
 }
 
 function cardList(
