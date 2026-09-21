@@ -981,6 +981,35 @@ const beforeAfter = z.object({
   type: z.literal("beforeAfter"),
   beforeQuery: query,
   afterQuery: query,
+  /**
+   * Where the two captions hang.
+   *
+   * Two mockups, two arrangements: one hangs them on the drag handle so they
+   * travel with it, the other pins them to the frame's bottom corners where
+   * they never move. `position`, `top` and `bottom` are banned from a node's
+   * css — they are how a node escapes its section — so the design cannot say
+   * this in CSS and says it here.
+   *
+   * `corner` is the default because it is the arrangement that holds still: a
+   * caption following the handle can be dragged off its own photograph.
+   */
+  compareLabelAt: choice(["corner", "handle"] as const, "corner"),
+  /**
+   * How the captions and the grip look.
+   *
+   * `label` is one caption chip; `knob` is the grip in the middle of the
+   * handle, which PageFly draws as a plain round dot and mockups draw as
+   * anything — a square plate, a bordered circle, a tinted pill.
+   */
+  compareStyle: parts(["label", "knob"] as const),
+  /**
+   * The character drawn inside the grip — `↔` is the usual one.
+   *
+   * Its own field because a glyph has nowhere to live in the CSS the schema
+   * allows, and because a grip with no mark in it reads as a bug rather than a
+   * handle.
+   */
+  knobGlyph: words(4),
   /* NO FALLBACK. These are painted on the photograph now, and a fallback is
      two chips appearing on every comparison on every page that never drew one
      — the exporter changing pages it was not pointed at. Empty means the

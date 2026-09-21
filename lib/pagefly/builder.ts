@@ -1369,24 +1369,56 @@ function cssQuoted(text: string): string {
  * `white-space: nowrap` because a two-word caption on a 4px-wide handle wraps
  * to one letter per line otherwise.
  */
-function handleLabels(beforeLabel: string, afterLabel: string): Record<string, string> {
+function handleLabels(
+  beforeLabel: string,
+  afterLabel: string,
+  /** `corner` pins them to the frame; `handle` hangs them on the grip. */
+  at: "corner" | "handle",
+  /** the mockup's own chip styling, appended so it wins */
+  look: string,
+  glyph: string,
+  knobLook: string,
+): Record<string, string> {
   /* `?? ""` because export also runs over design trees stored before these
      captions were drawn, and on those the field is simply absent. */
   const chip =
-    "position: absolute; top: 14px; z-index: 3; white-space: nowrap;" +
+    "position: absolute; z-index: 3; white-space: nowrap;" +
     " font-size: 10px; font-weight: 600; letter-spacing: .2em;" +
     " text-transform: uppercase; color: #FBFAF7;" +
     " background: rgba(18,16,12,.72); padding: 5px 8px; border-radius: 2px;";
+  /* WHERE THEY HANG WAS PICKED HERE, AND IS NOT OURS TO PICK. Two mockups, two
+     arrangements: one hangs the captions on the drag handle so they travel with
+     it, the other pins them to the frame's bottom corners where they never
+     move. On the handle they sit either side of a 4px bar and are pushed
+     outward; in the corner they are pinned to the frame itself. */
+  const place =
+    at === "handle"
+      ? { host: "& .pf-ba-handle", before: "top: 14px; right: 12px;", after: "top: 14px; left: 12px;" }
+      : { host: "& .pf-ba-content", before: "bottom: 14px; left: 14px;", after: "bottom: 14px; right: 14px;" };
+
   const out: Record<string, string> = {};
   /* Empty is a caption the design chose not to write — an empty chip is a
      floating dark rectangle over the photograph. */
   const before = (beforeLabel ?? "").trim();
   const after = (afterLabel ?? "").trim();
   if (before) {
-    out["& .pf-ba-handle::before"] = `content: ${cssQuoted(before)}; right: 12px; ${chip}`;
+    out[`${place.host}::before`] = `content: ${cssQuoted(before)}; ${place.before} ${chip}${look}`;
   }
   if (after) {
-    out["& .pf-ba-handle::after"] = `content: ${cssQuoted(after)}; left: 12px; ${chip}`;
+    out[`${place.host}::after`] = `content: ${cssQuoted(after)}; ${place.after} ${chip}${look}`;
+  }
+  /* THE GRIP. PageFly draws a plain round dot and documents the element for
+     styling; a mockup draws whatever it draws, and usually puts a mark in it.
+     The mark goes on the dot's own ::after so it sits INSIDE rather than
+     replacing the shape the design asked for. Escaped to a CSS code point for
+     the same reason the arrow glyph is: the rule travels through JSON and a
+     zip, and an ASCII-only one cannot be mangled by either. */
+  if (knobLook) out["& .pf-ba-handle-circle"] = knobLook.trim();
+  const mark = (glyph ?? "").trim();
+  if (mark) {
+    out["& .pf-ba-handle-circle::after"] =
+      `content: "${[...mark].map((c) => "\\" + c.codePointAt(0)!.toString(16)).join("")}";` +
+      " line-height: 1; font-size: 13px;";
   }
   return out;
 }
@@ -1413,6 +1445,7 @@ export function BEFORE_AFTER(
   beforeLabel: string,
   afterLabel: string,
   styleData: StyleData,
+  look: { at?: "corner" | "handle"; label?: string; knob?: string; glyph?: string } = {},
 ) {
   return node(
     "ImageComparison",
@@ -1448,7 +1481,17 @@ export function BEFORE_AFTER(
        replacing it, or a background, a radius or a border set on the node would
        vanish with it. The child selectors are width-independent and only need
        saying once. */
-    beforeAfterStyles(styleData, handleLabels(beforeLabel, afterLabel)),
+    beforeAfterStyles(
+      styleData,
+      handleLabels(
+        beforeLabel,
+        afterLabel,
+        look.at ?? "corner",
+        look.label ? ` ${look.label}` : "",
+        look.glyph ?? "",
+        look.knob ?? "",
+      ),
+    ),
     [],
   );
 }

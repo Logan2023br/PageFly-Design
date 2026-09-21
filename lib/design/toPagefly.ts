@@ -1203,6 +1203,12 @@ function emitNode(
         node.beforeLabel,
         node.afterLabel,
         filling(sd),
+        {
+          at: node.compareLabelAt === "handle" ? "handle" : "corner",
+          ...(node.compareStyle?.label ? { label: declarations(node.compareStyle.label) } : {}),
+          ...(node.compareStyle?.knob ? { knob: declarations(node.compareStyle.knob) } : {}),
+          ...(node.knobGlyph ? { glyph: node.knobGlyph } : {}),
+        },
       );
 
     case "marquee": {

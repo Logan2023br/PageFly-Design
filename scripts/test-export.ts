@@ -3731,19 +3731,86 @@ async function main(): Promise<void> {
        as a legacy flag with nothing to show. They are ours to draw, and the
        handle is where the mockup hangs them: its own `.ba-handle` carries both
        captions, one to each side. */
-    const handleBefore = ba.cssOf(el?.id ?? "", "all", "& .pf-ba-handle::before");
-    const handleAfter = ba.cssOf(el?.id ?? "", "all", "& .pf-ba-handle::after");
-    check(/content:\s*'Before'/.test(handleBefore), "the before label is drawn", handleBefore || "(no rule)");
-    check(/content:\s*'After'/.test(handleAfter), "and the after label too", handleAfter || "(no rule)");
+    /* WHERE THEY HANG IS NOT OURS TO PICK, and pinning them to the handle was
+       picking. Two mockups, two arrangements: one hangs its captions on the
+       drag handle so they travel with it; the other pins them to the frame's
+       bottom corners, where they never move. `position`, `top` and `bottom`
+       are banned from a node's css — they let a node escape its section — so
+       the design cannot say it in CSS and says it in a field instead.
+
+       The corner is the default because it is the arrangement that holds
+       still: a caption that follows the handle can be dragged off its own
+       photograph. */
+    const cornerBefore = ba.cssOf(el?.id ?? "", "all", "& .pf-ba-content::before");
+    const cornerAfter = ba.cssOf(el?.id ?? "", "all", "& .pf-ba-content::after");
+    check(/content:\s*'Before'/.test(cornerBefore), "the before label is drawn", cornerBefore || "(no rule)");
+    check(/content:\s*'After'/.test(cornerAfter), "and the after label too", cornerAfter || "(no rule)");
     check(
-      /position:\s*absolute/.test(handleBefore) && /right:/.test(handleBefore),
-      "the before label hangs on the handle's left, as the mockup draws it",
-      handleBefore,
+      /bottom:/.test(cornerBefore) && /left:/.test(cornerBefore),
+      "the before label sits in the frame's bottom-left corner",
+      cornerBefore,
     );
     check(
-      /position:\s*absolute/.test(handleAfter) && /left:/.test(handleAfter),
-      "and the after label on its right",
-      handleAfter,
+      /bottom:/.test(cornerAfter) && /right:/.test(cornerAfter),
+      "and the after label in the bottom-right",
+      cornerAfter,
+    );
+    check(
+      ba.cssOf(el?.id ?? "", "all", "& .pf-ba-handle::before") === "",
+      "and neither is left on the handle as well",
+      ba.cssOf(el?.id ?? "", "all", "& .pf-ba-handle::before"),
+    );
+  }
+
+  {
+    /* The other arrangement, stated. */
+    const onHandle = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "beforeAfter",
+              beforeQuery: "six pm",
+              afterQuery: "nine pm",
+              beforeLabel: "6PM",
+              afterLabel: "9PM",
+              compareLabelAt: "handle",
+              compareStyle: { label: { background: "rgba(18,16,12,.72)", letterSpacing: ".2em" } },
+              knobGlyph: "\u2194",
+              compareStyle2: undefined,
+            },
+          ],
+          "split",
+        ),
+      ],
+    }, "ba", { images: { "six pm": "https://x/a.jpg", "nine pm": "https://x/b.jpg" } });
+    const h = onHandle.items.find((i) => i.type === "ImageComparison");
+    check(
+      /content:\s*'6PM'/.test(onHandle.cssOf(h?.id ?? "", "all", "& .pf-ba-handle::before")),
+      "a design that hangs its captions on the handle gets them there",
+      onHandle.cssOf(h?.id ?? "", "all", "& .pf-ba-handle::before").slice(0, 60) || "(no rule)",
+    );
+    check(
+      onHandle.cssOf(h?.id ?? "", "all", "& .pf-ba-content::before") === "",
+      "and not in the corner as well",
+      onHandle.cssOf(h?.id ?? "", "all", "& .pf-ba-content::before"),
+    );
+    check(
+      onHandle.cssOf(h?.id ?? "", "all", "& .pf-ba-handle::before").includes(".2em"),
+      "wearing the type the mockup gave the chip",
+      onHandle.cssOf(h?.id ?? "", "all", "& .pf-ba-handle::before").slice(-60),
+    );
+
+    /* THE GRIP IS AN ICON THE MOCKUP DRAWS. PageFly's is a plain round dot;
+       this one is a 44px square with a two-headed arrow in it. The element
+       documents `& .pf-ba-handle-circle` as a styleable part, so the look is
+       the design's to state — and the glyph inside it has nowhere to live in
+       CSS the schema allows, so it is its own field. */
+    const knob = onHandle.cssOf(h?.id ?? "", "all", "& .pf-ba-handle-circle::after");
+    check(
+      knob.includes(String.raw`\2194`),
+      "the knob carries the glyph the mockup draws in it",
+      knob || "(no rule)",
     );
   }
 
@@ -3776,9 +3843,9 @@ async function main(): Promise<void> {
 
     const el = bare.items.find((i) => i.type === "ImageComparison");
     check(
-      bare.cssOf(el?.id ?? "", "all", "& .pf-ba-handle::before") === "",
+      bare.cssOf(el?.id ?? "", "all", "& .pf-ba-content::before") === "",
       "a silent design draws no chip over the photograph",
-      bare.cssOf(el?.id ?? "", "all", "& .pf-ba-handle::before"),
+      bare.cssOf(el?.id ?? "", "all", "& .pf-ba-content::before"),
     );
     check(
       el?.data?.beforeImageAlt === "Before" && el?.data?.afterImageAlt === "After",
