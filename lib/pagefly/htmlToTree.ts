@@ -461,6 +461,30 @@ export const ASK = [
   "  looks. That is why the drawing travels as css and never as markup.",
 ].join("\n");
 
+/**
+ * One line of what the model actually said, for a band that produced nothing.
+ *
+ * The reason a real page came back with no buy box was
+ *
+ *   not a section: the section itself: Invalid input: expected object,
+ *   received null
+ *
+ * which is Zod reporting that it was handed nothing — true, and an account of
+ * this file rather than of the failure. Whatever the model wrote had already
+ * been dropped on the floor the moment it failed to parse, so nobody has ever
+ * seen it.
+ *
+ * A line of it separates an apology from a fenced block from a brace that
+ * never closed, and those are three different bugs with three different fixes.
+ * Collapsed to one line because it goes in a log, and cut because a band's
+ * answer can be forty thousand tokens long.
+ */
+export function snippetOf(text: string, max = 120): string {
+  const flat = (text ?? "").replace(/\s+/g, " ").trim();
+  if (!flat) return "(empty)";
+  return flat.length > max ? `${flat.slice(0, max)}…` : flat;
+}
+
 function firstObject(text: string): unknown {
   const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
   const body = (fenced ? fenced[1] : text).trim();
@@ -670,7 +694,12 @@ export async function pageflyFromHtmlLive(
             index,
             reason: answer.truncated
               ? `ran out of output budget at ${answer.usage.output} tokens`
-              : `not a section: ${whyNotASection(raw) ?? checked.error.issues[0]?.message ?? "unknown"}`,
+              /* WHAT IT SAID, when what it said was not a section. Without
+                 this the line reports that the parser received nothing, which
+                 is an account of this file rather than of the failure. */
+              : raw == null || typeof raw !== "object"
+                ? `no section in the answer — it said: ${snippetOf(answer.text)}`
+                : `not a section: ${whyNotASection(raw) ?? checked.error.issues[0]?.message ?? "unknown"}`,
           });
           return null;
         }
