@@ -657,6 +657,20 @@ const product = z.object({
   galleryEdge: choice(["bottom", "left", "right", "top"] as const, "bottom"),
 
   /**
+   * Where the gallery's arrows and dots sit.
+   *
+   * `over` is PageFly's own arrangement and the platform's only one: both
+   * arrows pinned halfway down the photograph, the dots floating over its lower
+   * edge. Plenty of mockups draw that. The other arrangement mockups draw puts
+   * the controls in a strip UNDER the frame — prev at the far left, dots
+   * centred, next at the far right — and no field of the element can say so, so
+   * until this existed every export got `over` whatever the mockup showed.
+   *
+   * Declared, never inferred: a design silent about it keeps the platform's.
+   */
+  mediaControls: choice(["over", "below"] as const, "over"),
+
+  /**
    * How many thumbnails the strip shows at once, when the mockup is specific.
    *
    * Absent means absent: PageFly shows five and the file says nothing, which is
@@ -1089,6 +1103,7 @@ export type DesignNode =
       >;
       gallery: boolean;
       galleryEdge: "bottom" | "left" | "right" | "top";
+      mediaControls: "over" | "below";
       mediaThumbs?: number;
       mediaRatio: number;
       mediaHover: "magnifier" | "none";

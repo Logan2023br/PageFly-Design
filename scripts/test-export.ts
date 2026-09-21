@@ -2365,6 +2365,65 @@ async function main(): Promise<void> {
   );
 
   /* ==========================================================================
+     AND WHERE THE CONTROLS SIT, which no field could say.
+
+     PageFly pins both arrows halfway down the photograph and floats the dots
+     over its lower edge. That is one of two arrangements mockups use; the
+     other puts them in a strip UNDER the frame — prev at the far left, dots
+     centred, next at the far right — and until now every export got the first
+     one whatever the mockup drew. The element has no setting for it, so the
+     page states it and these rules carry it.
+
+     `transform` is the trap. PageFly draws one chevron and turns the prev
+     arrow round with `rotate(180deg)`, bundled into the same declaration as
+     the vertical offset. Clearing the whole transform to move the arrow leaves
+     two arrows pointing the same way — which is worse than the position it
+     fixed, and looks deliberate.
+     ========================================================================== */
+  const below = await open(
+    {
+      sections: [
+        section(
+          [
+            {
+              type: "product",
+              title: "Overshirt",
+              price: "$480",
+              atcText: "Add",
+              gallery: true,
+              mediaControls: "below",
+              children: [],
+            },
+          ],
+          "product-detail-gallery",
+        ),
+      ],
+    },
+    "probe",
+    { accent: "#8A1C1C" },
+  );
+  const bMain = below.items.find((i) => i.type === "MediaMain3")!;
+  const bRoot = below.cssOf(bMain.id);
+  const bPrev = below.cssOf(bMain.id, "all", "& .pf-slider-prev");
+  const bNext = below.cssOf(bMain.id, "all", "& .pf-slider-next");
+  const bNav = below.cssOf(bMain.id, "all", "& .pf-slider-nav");
+  check(/padding-bottom:\s*\d+px/.test(bRoot), "the frame reserves a band under the photograph", bRoot.slice(0, 90));
+  check(/bottom:\s*0/.test(bPrev) && /left:\s*0/.test(bPrev), "prev sits at the band's left edge", bPrev.slice(0, 90));
+  check(/bottom:\s*0/.test(bNext) && /right:\s*0/.test(bNext), "next at its right edge", bNext.slice(0, 90));
+  check(/rotate\(180deg\)/.test(bPrev), "and prev still points left", bPrev.slice(0, 90));
+  check(!/rotate\(180deg\)/.test(bNext), "while next points right", bNext.slice(0, 90));
+  check(/bottom:/.test(bNav) && /translateX\(-50%\)/.test(bNav), "the dots sit centred in the band", bNav || "(no rule)");
+
+  /* A gallery that says nothing keeps PageFly's arrangement — the field is a
+     choice the design makes, never a default this file imposes. */
+  const over = below.items.length && shot.cssOf(main.id);
+  check(
+    !/padding-bottom:\s*\d+px/.test(String(over)),
+    "a silent design keeps the controls over the photograph",
+    String(over).slice(0, 80),
+  );
+
+  /* ==========================================================================
      AND THE OTHER HALF OF A GALLERY'S NAVIGATION: HOW IT SAYS WHERE YOU ARE.
 
      `paginationStyle` has four settings and every one of them is dots or

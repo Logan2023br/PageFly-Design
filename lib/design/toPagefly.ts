@@ -1452,11 +1452,63 @@ function productBox(
     });
   }
 
+  /* ======================================================================
+     WHERE THE CONTROLS SIT, which the element has no field for.
+
+     PageFly pins both arrows halfway down the photograph and floats the dots
+     over its lower edge. That is one of the two arrangements mockups use; the
+     other puts them in a strip UNDER the frame — prev far left, dots centred,
+     next far right — and every export got the first one whatever the mockup
+     drew, because nothing in the tree could say otherwise.
+
+     The band is reserved with `padding-bottom` on the frame itself rather than
+     by wrapping the gallery in another block: PageFly's markup puts the arrows
+     and the dots INSIDE the slider, so a sibling strip would be an empty one
+     with the real controls still over the photograph. Every `.__pf` element is
+     `border-box`, so the padding comes out of the aspect box and the frame
+     keeps the proportion the design asked for.
+
+     `transform` is the trap here. PageFly draws ONE chevron and turns the prev
+     arrow round with `rotate(180deg)`, bundled into the same declaration as
+     the vertical offset it also has to be rid of. Clearing the whole transform
+     to move the arrow leaves two arrows pointing the same way — a worse bug
+     than the placement, and one that looks deliberate. The rotation is kept
+     and only the offset is replaced. */
+  const below = node.mediaControls === "below";
+  const BAND = 58;
+  /* The dots' own rule is `left: 50%; transform: translate(-50%, 50%)` — the
+     vertical half-shift is what hangs them over the photograph's edge, so it
+     goes and the horizontal centring stays. */
+  const navPlace: Record<string, string> = below
+    ? {
+        "& .pf-slider-nav":
+          "top: auto !important; bottom: 20px !important;" +
+          " transform: translateX(-50%) !important;",
+      }
+    : {};
+  const arrowPlace = (side: "prev" | "next"): string =>
+    below
+      ? ` top: auto !important; bottom: 0 !important;` +
+        (side === "prev"
+          ? " left: 0 !important; right: auto !important; transform: rotate(180deg) !important;"
+          : " right: 0 !important; left: auto !important; transform: none !important;")
+      : "";
+  /* The shared look, written once and given to each arrow by name. It used to
+     be one comma key; PageFly keeps only what precedes the first comma, and
+     the two arrows now need different `transform`s anyway. */
+  const arrowLook =
+    "width: 44px; height: 44px; border-radius: 999px; background: rgba(255,255,255,.92);" +
+    ` border: 1px solid ${opts.border ?? "rgba(0,0,0,.10)"}; cursor: pointer;` +
+    " display: flex; align-items: center; justify-content: center;" +
+    shot("nav");
+
   const media = PRODUCT_MEDIA(
     MEDIA_MAIN(
       {
         all: {
-          "&": `width: 100%; aspect-ratio: 1 / ${ratio}; overflow: hidden; ${mediaRadius}`,
+          "&":
+            `width: 100%; aspect-ratio: 1 / ${ratio}; overflow: hidden; ${mediaRadius}` +
+            (below ? ` padding-bottom: ${BAND}px;` : ""),
           /* ==================================================================
              THE PHOTOGRAPH FILLS THE FRAME, and until now it did not.
 
@@ -1476,11 +1528,9 @@ function productBox(
           "& .pf-slide-main-media": "height: 100%;",
           "& .pf-slide-main-media img":
             "width: 100% !important; height: 100% !important; object-fit: cover !important;",
-          "& .pf-slider-prev, & .pf-slider-next":
-            "width: 44px; height: 44px; border-radius: 999px; background: rgba(255,255,255,.92);" +
-            ` border: 1px solid ${opts.border ?? "rgba(0,0,0,.10)"}; cursor: pointer;` +
-            " display: flex; align-items: center; justify-content: center;" +
-            shot("nav"),
+          "& .pf-slider-prev": arrowLook + arrowPlace("prev"),
+          "& .pf-slider-next": arrowLook + arrowPlace("next"),
+          ...navPlace,
           "& .pf-slider-nav button":
             "width: 28px; height: 2px; border-radius: 0; border: 0; padding: 0;" +
             " background: rgba(255,255,255,.55); cursor: pointer;" +
