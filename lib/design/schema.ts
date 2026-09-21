@@ -109,6 +109,28 @@ const css = loose().transform((value): Css | undefined => {
   return Object.keys(out).length ? out : undefined;
 });
 
+/**
+ * The same parser, for a `:hover` state, where `transform` is allowed.
+ *
+ * `transform` is banned from a node's `css` because it is how a node escapes
+ * its section and lands somewhere the mockup never showed it. Inside a `:hover`
+ * it escapes nothing — the element is back where it was the moment the cursor
+ * leaves — and a hover that cannot move anything is most of the hovers a
+ * mockup draws. The positioning ban stays; this is the one hole in it, and it
+ * is the width of a single pseudo-class.
+ */
+const HOVER_ALLOWED_BAN = new Set([...BANNED].filter((k) => k !== "transform"));
+const hoverCss = loose().transform((value): Css | undefined => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const out: Css = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (HOVER_ALLOWED_BAN.has(k)) continue;
+    if (typeof v === "string" && v !== "" && !/[{};]/.test(v)) out[k] = v;
+    else if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
+  }
+  return Object.keys(out).length ? out : undefined;
+});
+
 /** A number out of whatever was written — `"3"` and `3` both read as 3. */
 function numberish(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -361,11 +383,15 @@ const anim = loose().transform((v): Anim => {
      declaration it lands in. */
   const raw = typeof o.easing === "string" ? o.easing.trim() : "";
   const easing = raw && raw.length <= 60 && !/[{};]/.test(raw) ? raw : undefined;
+  /* The `:hover` state itself, copied off the mockup. Stated, the element
+     takes a rule of its own and PageFly's `animationHover` is left alone —
+     both at once stack two transforms and it travels twice as far. */
+  const onHover = hoverCss.parse(o.hoverCss);
 
   /* Nothing recognised is no motion, not an empty motion object — the renderer
      and the exporter both branch on the property being absent. */
   if (!hover && !reveal && delay === undefined) return undefined;
-  return { hover, reveal, delay, ms, delayMs, distance, easing };
+  return { hover, reveal, delay, ms, delayMs, distance, easing, hoverCss: onHover };
 });
 
 export type Anim =
@@ -378,6 +404,8 @@ export type Anim =
       delayMs?: number;
       distance?: number;
       easing?: string;
+      /** the mockup's own `:hover` declarations, verbatim */
+      hoverCss?: Css;
     }
   | undefined;
 

@@ -1724,6 +1724,75 @@ async function main(): Promise<void> {
       rule.slice(-80),
     );
 
+    /* ======================================================================
+       AND THE HOVER, WHICH THE PLATFORM'S OWN FIELD CANNOT SAY.
+
+       `animationHover` gives PageFly's float, on PageFly's curve, over
+       PageFly's distance, and the merchant can edit it in the panel. That is
+       the right trade until a mockup states its own — `translateY(-2px)` over
+       `240ms ease-out`, or a shadow this page's palette actually uses — at
+       which point the canned one is simply the wrong motion.
+
+       Stated, the element takes a rule of its own and PageFly's field is NOT
+       set. Both at once would stack two transforms and the thing would travel
+       twice as far, which is the same trap the canned class already avoids.
+
+       `transform` is banned from a node's `css` because it is how a node
+       escapes its section. Inside a `:hover` it escapes nothing — the element
+       is back where it was the moment the cursor leaves — so this one field
+       allows it and keeps the positioning ban.
+       ====================================================================== */
+    const hoverExact = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "button",
+              text: "Add to bag",
+              anim: {
+                hover: "float-shadow",
+                ms: 240,
+                easing: "ease-out",
+                hoverCss: {
+                  transform: "translateY(-2px)",
+                  boxShadow: "0 26px 60px rgba(18,16,12,.55)",
+                },
+              },
+            },
+          ],
+          "wear-test",
+        ),
+      ],
+    }, "motion");
+    const hBtn = hoverExact.items.find((i) => i.type === "Button2")!;
+    const hCls = String((hBtn.data as { classGlobalStyling?: string })?.classGlobalStyling ?? "");
+    const hRule = hoverExact.customCSS.split("\n").filter((l) => l.includes("pfd-m-")).join("\n");
+    check(hCls.includes("pfd-m-"), "the element carries the class in its HTML class attribute", hCls);
+    check(
+      /:hover\{[^}]*translateY\(-2px\)/.test(hRule),
+      "and the mockup's own transform, not PageFly's float",
+      hRule.slice(0, 110),
+    );
+    check(
+      /rgba\(18,16,12,\.55\)/.test(hRule),
+      "with the shadow the mockup actually draws",
+    );
+    check(
+      /transition:[^;}]*240ms[^;}]*ease-out/.test(hRule),
+      "on the mockup's own duration and curve",
+      hRule.slice(0, 110),
+    );
+    check(
+      hBtn.data?.animationHover === undefined || hBtn.data?.animationHover === "",
+      "PageFly's own field is left unset, or the element moves twice",
+      String(hBtn.data?.animationHover),
+    );
+    check(
+      !hCls.includes("pfd-hover-"),
+      "and the canned class too, for the same reason",
+      hCls,
+    );
+
     /* A design that states no numbers keeps ours — the exact rule is an
        override, not a replacement, and a mockup that says nothing about
        timing should not be given a rule with blanks in it. */

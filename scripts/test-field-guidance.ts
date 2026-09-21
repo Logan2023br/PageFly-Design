@@ -52,6 +52,7 @@ const STATED: [string, string][] = [
   ["custom", "the escape hatch for anything the platform does not have"],
   ["delayMs", "the mockup's own delay, to the millisecond"],
   ["easing", "the mockup's own timing function"],
+  ["hoverCss", "the mockup's own :hover declarations, when the six names miss"],
   ["showCompareAt", "the struck-through was-price on a card"],
   ["atcLabel", "the card's own button"],
   ["compareLabelAt", "corner or handle for a comparison's captions"],

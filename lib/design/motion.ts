@@ -70,13 +70,38 @@ export function motionClasses(a: Anim): string[] {
  * mockup states all of them and this file used to decide all of them.
  */
 export function hasExactMotion(a: Anim): boolean {
-  return Boolean(a && (a.ms !== undefined || a.delayMs !== undefined || a.distance !== undefined || a.easing));
+  return Boolean(
+    a &&
+      (a.ms !== undefined ||
+        a.delayMs !== undefined ||
+        a.distance !== undefined ||
+        a.easing ||
+        a.hoverCss),
+  );
+}
+
+/**
+ * Does the design state the hover itself, rather than name one of the six?
+ *
+ * When it does, the element takes a rule of its own and PageFly's
+ * `animationHover` is left alone — both at once stack two transforms and the
+ * thing travels twice as far.
+ */
+export function hasExactHover(a: Anim): boolean {
+  return Boolean(a?.hoverCss);
 }
 
 /** A class naming this exact motion, so two nodes with the same one share a rule. */
 export function exactClass(a: Anim): string {
-  const key = `${a?.ms ?? ""}-${a?.delayMs ?? ""}-${a?.distance ?? ""}-${a?.easing ?? ""}`;
-  return `pfd-m-${key.replace(/[^a-zA-Z0-9]+/g, "").slice(0, 24) || "0"}`;
+  const key =
+    `${a?.ms ?? ""}-${a?.delayMs ?? ""}-${a?.distance ?? ""}-${a?.easing ?? ""}` +
+    /* The hover belongs in the key too, or two elements that share a duration
+       and differ in what they do on hover would share one rule and one of them
+       would get the other's motion. */
+    `-${a?.hoverCss ? JSON.stringify(a.hoverCss) : ""}`;
+  let h = 0;
+  for (const c of key) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return `pfd-m-${key.replace(/[^a-zA-Z0-9]+/g, "").slice(0, 18) || "0"}${a?.hoverCss ? h.toString(36) : ""}`;
 }
 
 /**
@@ -114,7 +139,34 @@ export function exactCss(cls: string, a: Anim): string {
       );
     }
   }
+  /* ======================================================================
+     THE HOVER THE MOCKUP ACTUALLY DRAWS.
+
+     `animationHover` gives PageFly's float, on PageFly's curve, over PageFly's
+     distance, and the merchant can edit it in the panel — the right trade
+     until a mockup states its own, at which point the canned one is the wrong
+     motion. Written here, the transition covers `transform` and `box-shadow`
+     because those are what a hover changes; anything else the design declared
+     rides along on `all` being absent by simply being set on both states.
+     ====================================================================== */
+  if (a.hoverCss) {
+    const ms = a.ms ?? 250;
+    const ease = a.easing ?? "ease";
+    out.push(`.${cls}{transition:transform ${ms}ms ${ease},box-shadow ${ms}ms ${ease};}`);
+    out.push(`.${cls}:hover{${declarationsOf(a.hoverCss)}}`);
+    out.push(
+      `@media (prefers-reduced-motion: reduce){.${cls}{transition:none;}.${cls}:hover{transform:none;}}`,
+    );
+  }
+
   return out.join("\n");
+}
+
+/** `{boxShadow: "…"}` → `box-shadow: …;` — the same shape `toPagefly` writes. */
+function declarationsOf(css: Record<string, string | number>): string {
+  return Object.entries(css)
+    .map(([k, v]) => `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}:${v};`)
+    .join("");
 }
 
 export function hasMotion(a: Anim): boolean {

@@ -46,6 +46,7 @@ import {
   MOTION_JS,
   exactClass,
   exactCss,
+  hasExactHover,
   hasExactMotion,
   hasMotion,
   hoverClass,
@@ -952,7 +953,15 @@ function withMotion(n: PFNode, anim: Anim, opts: EmitOptions): PFNode {
     }
   }
 
-  if (anim?.hover && HOVER_NATIVE_TYPES.has(n.type)) {
+  /* A STATED HOVER REPLACES BOTH OF THE CANNED ROUTES. The exact rule below
+     carries the mockup's own transform; PageFly's field and our class each
+     carry another, and any two of the three at once make the element travel
+     twice as far. */
+  if (hasExactHover(anim)) {
+    const ours = hoverClass(anim);
+    const i = ours ? classes.indexOf(ours) : -1;
+    if (i >= 0) classes.splice(i, 1);
+  } else if (anim?.hover && HOVER_NATIVE_TYPES.has(n.type)) {
     n.data.animationHover = anim.hover;
     /* Dropping our class here matters. Left on, the element would carry
        PageFly's transform and ours at once and travel twice as far. */
