@@ -1536,6 +1536,9 @@ function productBox(
     "width: 44px; height: 44px; border-radius: 999px; background: rgba(255,255,255,.92);" +
     ` border: 1px solid ${opts.border ?? "rgba(0,0,0,.10)"}; cursor: pointer;` +
     " display: flex; align-items: center; justify-content: center;" +
+    /* Before the design's own `nav` rules, so a stated colour still wins — and
+       after it there would be no ink at all for the chevron to inherit. */
+    ` ${inkRule(opts)}` +
     shot("nav");
 
   const media = PRODUCT_MEDIA(
@@ -1566,6 +1569,30 @@ function productBox(
             "width: 100% !important; height: 100% !important; object-fit: cover !important;",
           "& .pf-slider-prev": arrowLook + arrowPlace("prev"),
           "& .pf-slider-next": arrowLook + arrowPlace("next"),
+          /* ==================================================================
+             THE GLYPH, WHICH IS WHITE AND HAS NO SETTING.
+
+             PageFly draws the arrow as two 1px bars on the button's own
+             ::before and ::after, both `background:#fff` — right on its stock
+             dark circle, invisible the moment the button takes a pale plate.
+             The imported gallery showed two empty bordered squares.
+
+             It hid behind the comma key for as long as that lasted: only
+             `prev` took our plate, `next` kept PageFly's dark circle, and the
+             pair read as a mismatched style rather than a missing glyph.
+
+             `currentColor` rather than a literal, so the one `color` the plate
+             already carries — the band's ink, or whatever the design wrote on
+             the `nav` part — decides the chevron too, and the two can never
+             disagree. */
+          ...Object.fromEntries(
+            ["prev", "next"].flatMap((side) =>
+              ["before", "after"].map((half) => [
+                `& .pf-slider-${side}::${half}`,
+                "background: currentColor !important;",
+              ]),
+            ),
+          ),
           ...navPlace,
           "& .pf-slider-nav button":
             "width: 28px; height: 2px; border-radius: 0; border: 0; padding: 0;" +

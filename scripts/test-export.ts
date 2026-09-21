@@ -2411,6 +2411,24 @@ async function main(): Promise<void> {
       `and the slider's ${side} arrow is styled at all`,
       slider.slice(0, 56) || "(no rule — PageFly kept only what preceded the comma)",
     );
+    /* ---- AND THE CHEVRON INSIDE IT IS VISIBLE ------------------------
+
+       PageFly draws the arrow glyph as two 1px bars on the button's own
+       ::before and ::after, both `background:#fff`. Our plate is near-white.
+       White on white is an empty bordered square, which is what the imported
+       gallery showed once BOTH arrows started taking our plate — before the
+       comma key was split only `prev` did, and `next` kept PageFly's dark
+       circle, so one arrow was visible and the bug read as a mismatched pair.
+
+       The glyph has no styleable part, so it is coloured here. */
+    for (const half of ["before", "after"]) {
+      const bar = shot.cssOf(main.id, "all", `& .pf-slider-${side}::${half}`);
+      check(
+        /background:/.test(bar) && !/#fff|255,\s*255,\s*255/.test(bar),
+        `the ${side} arrow's ${half} bar is not white on a white plate`,
+        bar || "(no rule — the glyph keeps PageFly's #fff)",
+      );
+    }
   }
 
   const commaKeys = shot.selectorsOf().filter((k) => k.includes(","));
