@@ -655,6 +655,55 @@ async function main(): Promise<void> {
   }
 
   {
+    /* ---- A FILL ON AN ICON CAN ONLY DRAW A BOX --------------------------
+
+       A mockup draws its accordion mark as two hairlines in pseudo-elements:
+
+         .acc-mark::before,.acc-mark::after{content:"";background:currentColor;
+                                            width:11px;height:1px}
+         .acc-mark::after{transform:rotate(90deg)}
+
+       which is a plus that becomes a minus — exactly what PageFly's own
+       `.pfa-plus`/`.pfa-minus` already draw. But the design has ONE css object
+       for the mark, and the nearest thing in that stylesheet to copy is the
+       bars' own `background: currentColor`. Copied onto PageFly's `<svg>`, a
+       background is not a hairline: it is a filled square the width of the
+       icon, and a FAQ came back as a column of black squares.
+
+       `fields.md` types this part as size and colour, and a fill was never one
+       of them. So a fill is dropped here rather than argued about — the guard
+       holds whatever the model writes, and the guidance explains why. */
+    const squares = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "accordion",
+              items: [{ q: "How do I choose a size?", a: "Start with the length grades." }],
+              accordionStyle: {
+                icon: { background: "currentColor", width: "11px", height: "11px", color: "#12100C" },
+              },
+            },
+          ],
+          "faq-accordion",
+        ),
+      ],
+    }, "faq");
+    const acc = squares.items.find((i) => i.type === "Accordion3");
+    const icon = squares.cssOf(acc?.id ?? "", "all", "& .pf-accordion-icon");
+    check(
+      !/(^|[;\s])background(-color)?\s*:/.test(icon),
+      "a fill written on the toggle mark is dropped, not drawn as a square",
+      icon || "(no rule)",
+    );
+    check(
+      icon.includes("#12100C"),
+      "and the colour the mockup gave it is kept",
+      icon || "(no rule)",
+    );
+  }
+
+  {
     /* ---- AND THE COLUMN COUNT AT EVERY WIDTH IS THE MOCKUP'S -------------
 
        `slidesToShow` was `{ tablet: min(2, columns), mobile: 1 }` on every list

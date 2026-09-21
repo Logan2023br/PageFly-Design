@@ -2859,7 +2859,30 @@ function accordionOf(
      which is why the imported rows carried none of the mockup's spacing. */
   const part = (name: "row" | "body" | "icon"): string => {
     const declared = node.accordionStyle?.[name];
-    return declared ? ` ${declarations(declared)}` : "";
+    if (!declared) return "";
+    /* A FILL ON THE MARK CAN ONLY DRAW A BOX.
+
+       Mockups draw the toggle as two hairlines in pseudo-elements — a plus
+       that rotates into a minus, which is what PageFly's own `.pfa-plus` and
+       `.pfa-minus` already are. The design has one css object for it, and the
+       nearest thing in such a stylesheet to copy is the bars' own
+       `background: currentColor`. On PageFly's `<svg>` that is not a hairline:
+       it is a filled square the width of the icon, and a FAQ came back as a
+       column of black squares.
+
+       `fields.md` types this part as size and colour. A fill was never one of
+       them, so it goes — here rather than in the prompt alone, because the
+       guidance can be followed imperfectly and this cannot be seen until the
+       page is live. */
+    const clean =
+      name === "icon"
+        ? Object.fromEntries(
+            Object.entries(declared).filter(
+              ([k]) => k !== "background" && k !== "backgroundColor" && k !== "backgroundImage",
+            ),
+          )
+        : declared;
+    return Object.keys(clean).length ? ` ${declarations(clean as typeof declared)}` : "";
   };
   const shell = filling(sd);
   const withParts: StyleData = shell && {

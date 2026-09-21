@@ -143,9 +143,17 @@ async function main(): Promise<void> {
       ["ASK", ask],
       ["the spec", system],
     ] as [string, string][]) {
-      const at = text.indexOf(field);
-      const window = at < 0 ? "" : text.slice(Math.max(0, at - 700), at + 700);
-      check(near.test(window), `${label} tells \`${field}\` what a drawn mark is`, why);
+      /* EVERY mention, not the first. A field named in two places — the one
+         that explains it and a later one that refers back — made this pass or
+         fail on which paragraph happened to come first in the file. */
+      let ok = false;
+      for (let at = text.indexOf(field); at >= 0; at = text.indexOf(field, at + 1)) {
+        if (near.test(text.slice(Math.max(0, at - 700), at + 700))) {
+          ok = true;
+          break;
+        }
+      }
+      check(ok, `${label} tells \`${field}\` what a drawn mark is`, why);
     }
   }
 
