@@ -4193,6 +4193,78 @@ console.log("\nfour spec bars stacked in a col");
   }
 
   {
+    /* ---- AND A MARK NO CHARACTER COMES CLOSE TO IS COPIED, NOT NAMED ----
+
+       `knobGlyph` takes a character, and a character is a guess. The mockup
+       that prompted all of this draws its grip as two inline `<svg>` triangles:
+
+         <path d="M9.5 5.5 4 12l5.5 6.5z"/>     a solid triangle pointing left
+         <path d="M14.5 5.5 20 12l-5.5 6.5z"/>  its mirror, pointing right
+
+       There is no character for that pair. `\2194` is a thin two-headed arrow
+       and reads nothing like it; the model, told only about characters, wrote
+       nothing at all and the grip shipped empty.
+
+       SO THE SHAPE ITSELF TRAVELS. A straight-sided path in a known viewBox is
+       a `clip-path: polygon()` with the same corners, and percentages make it
+       independent of the box it lands in — the design reads `d` and `viewBox`,
+       both of which are in the markup it was handed, and writes the polygon.
+       No character, no approximation, and — the reason it is CSS and not a
+       script — NO `<`, which would refuse the whole page's customJS.
+
+       The two marks ride on the grip's own ::before and ::after, so the plate
+       the design asked for still draws underneath them. */
+    const drawn = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "beforeAfter",
+              beforeQuery: "new knit",
+              afterQuery: "washed knit",
+              compareStyle: {
+                knob: { width: "46px", height: "46px", background: "rgba(251,250,247,.95)" },
+                mark: { clipPath: "polygon(100% 0, 0 50%, 100% 100%)" },
+                markTwo: { clipPath: "polygon(0 0, 100% 50%, 0 100%)" },
+              },
+            },
+          ],
+          "split",
+        ),
+      ],
+    }, "ba", { images: { "new knit": "https://x/a.jpg", "washed knit": "https://x/b.jpg" } });
+    const d = drawn.items.find((i) => i.type === "ImageComparison");
+    const one = drawn.cssOf(d?.id ?? "", "all", "& .pf-ba-handle-circle::before");
+    const two = drawn.cssOf(d?.id ?? "", "all", "& .pf-ba-handle-circle::after");
+    check(
+      one.includes("polygon(100% 0, 0 50%, 100% 100%)"),
+      "the mockup's left triangle is copied onto the grip",
+      one || "(no rule)",
+    );
+    check(
+      two.includes("polygon(0 0, 100% 50%, 0 100%)"),
+      "and its mirror onto the other half",
+      two || "(no rule)",
+    );
+    check(
+      /content:\s*("|')("|')/.test(one) && /content:\s*("|')("|')/.test(two),
+      "each with the `content` a pseudo-element needs to exist at all",
+      `${one.slice(0, 40)} | ${two.slice(0, 40)}`,
+    );
+    check(
+      !one.includes("<") && !two.includes("<"),
+      "and no `<` anywhere, which would refuse the page's whole script",
+      `${one} | ${two}`,
+    );
+    const host = drawn.cssOf(d?.id ?? "", "all", "& .pf-ba-handle-circle");
+    check(
+      /display:\s*flex/.test(host) && /align-items:\s*center/.test(host),
+      "the grip centres them itself, so the design states the shape and nothing else",
+      host || "(no rule)",
+    );
+  }
+
+  {
     /* ---- AND A DESIGN THAT DREW NO CAPTIONS GETS NONE -------------------
 
        The chips are drawn from `beforeLabel`/`afterLabel`, and those used to

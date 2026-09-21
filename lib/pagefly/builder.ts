@@ -1392,6 +1392,8 @@ function handleLabels(
   look: string,
   glyph: string,
   knobLook: string,
+  /** shapes the mockup DRAWS in the grip, when no character comes close */
+  marks: { one?: string; two?: string },
 ): Record<string, string> {
   /* `?? ""` because export also runs over design trees stored before these
      captions were drawn, and on those the field is simply absent. */
@@ -1427,13 +1429,28 @@ function handleLabels(
      replacing the shape the design asked for. Escaped to a CSS code point for
      the same reason the arrow glyph is: the rule travels through JSON and a
      zip, and an ASCII-only one cannot be mangled by either. */
-  if (knobLook) out["& .pf-ba-handle-circle"] = knobLook.trim();
+  const one = (marks?.one ?? "").trim();
+  const two = (marks?.two ?? "").trim();
+  const drawn = Boolean(one || two);
+  /* A DRAWN MARK NEEDS THE GRIP TO BE A ROW, and only then. Two shapes on
+     ::before and ::after are laid out by their host, so a grip carrying them
+     centres them; a grip carrying a character, or nothing, is left exactly as
+     it was, because this runs over every comparison ever exported. The
+     design's own rules come after, so a stated `display` still wins. */
+  const base = drawn ? "display: flex; align-items: center; justify-content: center;" : "";
+  if (knobLook || base) out["& .pf-ba-handle-circle"] = `${base} ${knobLook.trim()}`.trim();
   const mark = (glyph ?? "").trim();
   if (mark) {
     out["& .pf-ba-handle-circle::after"] =
       `content: "${[...mark].map((c) => "\\" + c.codePointAt(0)!.toString(16)).join("")}";` +
       " line-height: 1; font-size: 13px;";
   }
+  /* AFTER THE GLYPH, so a design that states both gets the drawing it drew
+     rather than the character it also guessed at. `content` is what makes a
+     pseudo-element exist at all; the shape, the size and the colour are the
+     design's, read off the mockup's own path. */
+  if (one) out["& .pf-ba-handle-circle::before"] = `content: ""; display: block; ${one}`;
+  if (two) out["& .pf-ba-handle-circle::after"] = `content: ""; display: block; ${two}`;
   return out;
 }
 
@@ -1459,7 +1476,15 @@ export function BEFORE_AFTER(
   beforeLabel: string,
   afterLabel: string,
   styleData: StyleData,
-  look: { at?: "corner" | "handle"; label?: string; knob?: string; glyph?: string } = {},
+  look: {
+    at?: "corner" | "handle";
+    label?: string;
+    knob?: string;
+    glyph?: string;
+    /** the mockup's own drawing, when its grip holds shapes and not a character */
+    mark?: string;
+    markTwo?: string;
+  } = {},
 ) {
   return node(
     "ImageComparison",
@@ -1504,6 +1529,7 @@ export function BEFORE_AFTER(
         look.label ? ` ${look.label}` : "",
         look.glyph ?? "",
         look.knob ?? "",
+        { one: look.mark, two: look.markTwo },
       ),
     ),
     [],

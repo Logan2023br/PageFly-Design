@@ -58,6 +58,7 @@ const STATED: [string, string][] = [
   ["compareLabelAt", "corner or handle for a comparison's captions"],
   ["compareStyle", "how those captions and the grip look"],
   ["knobGlyph", "the character inside the grip"],
+  ["markTwo", "the grip's mark COPIED as a shape, for the mockups that draw one"],
   ["accordionStyle", "how an accordion's rows, answers and mark look"],
   ["tabStyle", "how a tab bar and its panels look"],
   ["swatchStyle", "how the variant chips and size tiles look"],
@@ -104,6 +105,35 @@ async function main(): Promise<void> {
   console.log("\nfields the live design path can be told about");
   for (const [field, why] of STATED) {
     check(system.includes(field), `the spec names \`${field}\``, system.includes(field) ? "" : why);
+  }
+
+  /* ---- AND ONE LIST FOR GUIDANCE THAT STOPS SHORT --------------------
+
+     Naming a field is not the same as telling the model it applies. The grip's
+     mark arrived as `knobGlyph`, "the character inside the grip" — and the
+     mockup that prompted it draws that grip as two inline `<svg>` triangles,
+     not as a character at all. Worse, the arrow guidance a few lines up said to
+     leave `mediaArrow` out for "arrows drawn as an SVG you cannot name", so the
+     model had already been taught that an SVG shape is something to give up on.
+     It read the markup, found no character, and wrote nothing; the grip shipped
+     empty.
+
+     A field the model is told to skip is as dead as a field it was never told
+     about. So wherever a mark can be drawn rather than typed, the guidance has
+     to say so where the model is reading. */
+  console.log("\nguidance that must reach past the field's name");
+  for (const [field, near, why] of [
+    ["markTwo", /svg/i, "the mark is usually drawn as an svg shape, not typed"],
+    ["markTwo", /polygon/i, "and a straight-sided path becomes a clip-path polygon"],
+  ] as [string, RegExp, string][]) {
+    for (const [label, text] of [
+      ["ASK", ask],
+      ["the spec", system],
+    ] as [string, string][]) {
+      const at = text.indexOf(field);
+      const window = at < 0 ? "" : text.slice(Math.max(0, at - 700), at + 700);
+      check(near.test(window), `${label} tells \`${field}\` what a drawn mark is`, why);
+    }
   }
 
   console.log(bad === 0 ? "\nPASS" : `\nFAIL — ${bad} problems`);

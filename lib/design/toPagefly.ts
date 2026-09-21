@@ -1239,6 +1239,14 @@ function emitNode(
           ...(node.compareStyle?.label ? { label: declarations(node.compareStyle.label) } : {}),
           ...(node.compareStyle?.knob ? { knob: declarations(node.compareStyle.knob) } : {}),
           ...(node.knobGlyph ? { glyph: node.knobGlyph } : {}),
+          /* THE GRIP'S MARK, COPIED RATHER THAN NAMED. A mockup draws it as an
+             inline svg, and `knobGlyph` can only hold a character — which for
+             two solid triangles is a guess that reads nothing like them. These
+             two carry the drawing itself. */
+          ...(node.compareStyle?.mark ? { mark: declarations(node.compareStyle.mark) } : {}),
+          ...(node.compareStyle?.markTwo
+            ? { markTwo: declarations(node.compareStyle.markTwo) }
+            : {}),
         },
       );
 

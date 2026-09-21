@@ -1071,7 +1071,7 @@ const beforeAfter = z.object({
    * handle, which PageFly draws as a plain round dot and mockups draw as
    * anything — a square plate, a bordered circle, a tinted pill.
    */
-  compareStyle: parts(["label", "knob"] as const),
+  compareStyle: parts(["label", "knob", "mark", "markTwo"] as const),
   /**
    * The character drawn inside the grip — `↔` is the usual one.
    *
