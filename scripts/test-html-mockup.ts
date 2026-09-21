@@ -79,9 +79,25 @@ const OURS = ["# Node vocabulary", "# The ban list", "What you return", "Design 
 async function main(): Promise<void> {
   const { __designPromptsForTest, htmlMockupEnabled } = await import("../lib/ai/designServer");
 
-  console.log("the normal path, which must not move");
+  /* ---- ON IN THE SOURCE, IN EVERY ENVIRONMENT -------------------------
+
+     It used to be `MOCKUP_HTML=1` in the environment, and the deployment is
+     not the laptop: a flag nobody sets is a flag that is off, so production
+     could be building a different kind of page from the one being worked on
+     all day and nothing anywhere would say so. That has happened once already
+     in this project — `DESIGN_PROVIDER` was an env var the deployment never
+     set, and every Opus result came from a laptop while production quietly ran
+     something cheaper.
+
+     So the value is in the source and an operator cannot forget it. `=off` is
+     the rollback, and it is the only way this is ever false. */
+  console.log("the mode, pinned");
   delete process.env.MOCKUP_HTML;
-  check(htmlMockupEnabled() === false, "html mode is off by default");
+  check(htmlMockupEnabled() === true, "on with nothing set, because the source says so");
+  process.env.MOCKUP_HTML = "off";
+  check(htmlMockupEnabled() === false, "and off only when explicitly rolled back");
+
+  console.log("\nthe json path, which must not move");
   const json = await __designPromptsForTest(BASE as never);
   check(json.system.length > 10_000, "system carries the skills", `${json.system.length} chars`);
   check(json.user.trimEnd().endsWith("Return the JSON object now."), "and the user prompt asks for JSON");

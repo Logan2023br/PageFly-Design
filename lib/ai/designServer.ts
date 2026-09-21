@@ -612,17 +612,33 @@ function orderLines(order: Order, bg: string, ink: string): string[] {
    HTML or in JSON, and the experiment is about design freedom, not about
    guessing a wire format.
 
-   It is off unless `MOCKUP_HTML` is set, and it is read per call rather than at
-   module load so a test can turn it on and off in one process.
+   ON IN THE SOURCE, AND AN OPERATOR CANNOT FORGET IT.
 
-   WHAT IT COSTS, stated because the mode is easy to leave on by accident: the
-   answer is HTML, so there is no tree — and no tree means no audit against
-   Opus's spec, no image resolution, and no `.pagefly`. The page can be looked
-   at and nothing else.
+   It used to be off unless `MOCKUP_HTML` was set in the environment, and the
+   deployment is not the laptop: a flag nobody sets is a flag that is off, so
+   production could be building a different kind of page from the one being
+   worked on all day with nothing anywhere saying so. Exactly that has happened
+   in this project once — `DESIGN_PROVIDER` was an env var the deployment never
+   set, every Opus result in the design work came from a laptop, and nobody
+   knew until `/api/health` started reporting it.
+
+   So the value is reviewed, in the history, and the same in every environment.
+   `MOCKUP_HTML=off` is the rollback and the only way this is ever false; it is
+   still read per call rather than at module load, so a test can flip it inside
+   one process.
+
+   WHAT IT COSTS. The answer is HTML, so there is no tree — and no tree means
+   no audit against Opus's spec and no image resolution; the model writes its
+   own picture choices into the document.
+
+   IT NO LONGER COSTS THE `.pagefly`, and that sentence stood here after it
+   stopped being true. `lib/pagefly/htmlToTree.ts` hands the document back to a
+   model with the element vocabulary and gets a tree, so an HTML page exports
+   like any other — at one model call per band, which the design path does not
+   pay.
    ========================================================================== */
 export function htmlMockupEnabled(): boolean {
-  const v = process.env.MOCKUP_HTML;
-  return v === "1" || v === "true";
+  return process.env.MOCKUP_HTML !== "off";
 }
 
 /* The whole system half, and it says two things.
