@@ -1234,6 +1234,17 @@ export function COUNTDOWN(
   endsAt: string,
   units: string[],
   labels: boolean,
+  /**
+   * The `:` between the columns.
+   *
+   * THIS USED TO BE `!labels`, which is a coupling nothing supports.
+   * `fields.md` types `showColon` and `label` as separate booleans and defaults
+   * `showColon` to true, and a countdown is ordinarily drawn with both — the
+   * figures separated AND named. Derived from `labels`, the one arrangement the
+   * mockups actually use was the one arrangement that could not be expressed,
+   * and the imported timer ran its four numbers together into one long figure.
+   */
+  separator: boolean,
   styleData: StyleData,
   /** typography for the figures, and for the unit names under them — see below */
   numberStyle: StyleData = null,
@@ -1256,7 +1267,7 @@ export function COUNTDOWN(
          the sale is on — the merchant edits both or neither. */
       hideIfInactive: false,
       styleCountDown: "basic",
-      showColon: !labels,
+      showColon: separator,
       label: { on: labels, reverse: false },
       timeData,
       targetStyle: "CountDown",

@@ -985,6 +985,17 @@ const countdown = z.object({
     .default(["d", "h", "m", "s"]),
   /** the unit names under the numbers — off for a bare 47:12:08 */
   labels: flag(true),
+  /**
+   * The `:` between the unit columns.
+   *
+   * INDEPENDENT OF `labels`, and it used to be wired as their opposite —
+   * colons only when the names were off. `fields.md` types the two as separate
+   * booleans and defaults this one to true, and the ordinary way a countdown is
+   * drawn uses both: `14 : 03 : 27 : 09` over DAYS HRS MIN SEC. Coupled, that
+   * page imported as `14 03 27 09` — four numbers with nothing between them,
+   * which reads as one long figure.
+   */
+  separator: flag(true),
   /** one line above the timer, when the timer needs saying */
   caption: words(80),
   ...styled,
@@ -1143,6 +1154,7 @@ export type DesignNode =
       endsAt: string;
       units: ("w" | "d" | "h" | "m" | "s")[];
       labels: boolean;
+      separator: boolean;
       caption: string;
       css?: Css;
       mobile?: Css;

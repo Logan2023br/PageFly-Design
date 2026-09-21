@@ -1373,6 +1373,15 @@ async function main(): Promise<void> {
     );
     check(time?.h?.text === "hours", "and each carries its name");
 
+    /* SEPARATORS ARE NOT THE OPPOSITE OF LABELS, and this element was wired as
+       though they were: `showColon: !labels`. `fields.md` types the two as
+       independent booleans and defaults `showColon` to true, so a mockup that
+       draws `14 : 03 : 27 : 09` over DAYS HRS MIN SEC — both at once, which is
+       the ordinary way a countdown is drawn — could not be expressed. What
+       imported instead was `14 03 27 09`: four numbers with nothing between
+       them, which reads as one long figure. */
+    check(d.showColon === true, "colons and labels both, as the design asked", String(d.showColon));
+
     /* The caption is a sibling: CountDown contains only its number and label
        slots, and a paragraph inside them is one the element does not know it has. */
     const caption = cd.items.find((i) => i.type === "Paragraph4");
@@ -1451,6 +1460,33 @@ async function main(): Promise<void> {
       /text-align:\s*center/.test(numCss) && /text-align:\s*center/.test(labCss),
       "a one-digit `5` stays centred under a five-letter `hours`",
       `${numCss} || ${labCss}`,
+    );
+  }
+
+  {
+    /* The other arrangement, so the field is a real choice and not a constant
+       wearing a name. A design that runs the figures together says so. */
+    const bare = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "countdown",
+              endsAt: "2026-11-24T23:59:00.000Z",
+              units: ["h", "m", "s"],
+              labels: true,
+              separator: false,
+            },
+          ],
+          "cta-band-full",
+        ),
+      ],
+    });
+    const t = bare.items.find((i) => i.type === "CountDown");
+    check(
+      (t?.data as Record<string, unknown> | undefined)?.showColon === false,
+      "a design that draws no separators gets none",
+      String((t?.data as Record<string, unknown> | undefined)?.showColon),
     );
   }
 

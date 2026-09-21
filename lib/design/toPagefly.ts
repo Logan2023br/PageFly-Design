@@ -1232,7 +1232,12 @@ function emitNode(
          `text-align: center` for the same reason the mockup centres its column:
          a one-digit figure under a five-letter name is otherwise left-aligned
          against it. */
-      const timer = COUNTDOWN(node.endsAt, node.units, node.labels, sd, {
+      /* `!== false`, not the field itself: export runs over design trees that
+         were stored before this field existed, and on those it is absent. The
+         platform's own default for `showColon` is true, so absent must read as
+         true — reading it raw shipped `showColon: undefined` and PageFly chose
+         for itself. */
+      const timer = COUNTDOWN(node.endsAt, node.units, node.labels, node.separator !== false, sd, {
         all: {
           "&":
             "font-size: 44px; font-weight: 700; line-height: 1;" +
