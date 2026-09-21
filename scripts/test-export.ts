@@ -337,7 +337,21 @@ async function main(): Promise<void> {
   if (media) {
     const showList = media.data?.showList as Record<string, boolean> | undefined;
     check(showList?.all === true, "the thumbnail strip is ON as a SETTING", String(showList?.all));
-    check(showList?.mobile === false, "and off on a phone", String(showList?.mobile));
+    /* ---- AND ON A PHONE ONLY IF THE MOCKUP HIDES IT --------------------
+
+       `mobile: false` was written here whatever the design said, with a note
+       about six 50px squares competing with the price. The mockup this was
+       measured against hides nothing: `.g-thumbs` is a three-column grid and
+       appears in no media query at all, so its strip is there at 375px exactly
+       as it is at 1440px. Ours vanished.
+
+       The strip is the mockup's to keep. `galleryPhone` is how a design that
+       really does drop it on a phone says so. */
+    check(
+      showList?.mobile === true,
+      "and kept on a phone, because this mockup keeps it",
+      String(showList?.mobile),
+    );
     check(media.data?.listPosition === "LEFT", "the edge the design asked for", String(media.data?.listPosition));
     check(
       media.data?.clickAction === "SHOW_FULLSCREEN",
@@ -637,6 +651,79 @@ async function main(): Promise<void> {
       card.cssOf(list?.id ?? "", "all", "& .pf-r-dg").includes("gap: 30px"),
       "and the grid wrapper agrees with it",
       card.cssOf(list?.id ?? "", "all", "& .pf-r-dg").slice(-40) || "(no rule)",
+    );
+  }
+
+  {
+    /* ---- AND THE COLUMN COUNT AT EVERY WIDTH IS THE MOCKUP'S -------------
+
+       `slidesToShow` was `{ tablet: min(2, columns), mobile: 1 }` on every list
+       this file builds. Two and one are reasonable numbers and they were nobody
+       else's decision to make: the mockup measured against goes four across,
+       then two at 1080, then two at 900, then a horizontal scroller at 760.
+
+       The phone gap was `"16px"` flat for the same reason. */
+    const wide = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "productList",
+              columns: 4,
+              columnsTablet: 3,
+              columnsPhone: 2,
+              cardGap: 30,
+              cardGapPhone: 12,
+              limit: 8,
+              source: "store",
+              listLayout: "grid",
+              query: "silk slip",
+            },
+          ],
+          "collection-grid-4up",
+        ),
+      ],
+    }, "cols");
+    const l = wide.items.find((i) => i.type === "ProductList2");
+    const show = (l?.data as Record<string, unknown>)?.slidesToShow as Record<string, number>;
+    const gaps = (l?.data as Record<string, unknown>)?.spacing as Record<string, string>;
+    check(show?.all === 4 && show?.laptop === 4, "desktop and laptop take the mockup's count", JSON.stringify(show));
+    check(show?.tablet === 3, "so does the tablet, instead of a flat two", String(show?.tablet));
+    check(show?.mobile === 2, "and the phone, instead of a flat one", String(show?.mobile));
+    check(gaps?.mobile === "12px", "and the phone gap is the mockup's too", String(gaps?.mobile));
+  }
+
+  {
+    /* ---- THE TAB BAR ON A NARROW SCREEN ---------------------------------
+
+       `tabMenuLayout` was `{ tablet: "scroll", mobile: "scroll" }`, which turns
+       a wrapped bar into a horizontal scroller on every narrow screen whatever
+       the mockup does. This mockup wraps: `.tablist { flex-wrap: wrap }` with
+       no media query changing it. */
+    const bar = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "tabs",
+              open: 0,
+              tabBar: "wrap",
+              items: [
+                { label: "One", children: [{ type: "text", text: "a" }] },
+                { label: "Two", children: [{ type: "text", text: "b" }] },
+              ],
+            },
+          ],
+          "split",
+        ),
+      ],
+    }, "bar");
+    const shell2 = bar.items.find((i) => i.type === "Tabs3");
+    const menu = (shell2?.data as Record<string, unknown>)?.tabMenuLayout as Record<string, string>;
+    check(
+      menu?.tablet === "wrap" && menu?.mobile === "wrap",
+      "a bar the mockup wraps keeps wrapping on narrow screens",
+      JSON.stringify(menu),
     );
   }
 

@@ -432,6 +432,17 @@ function parts<T extends readonly string[]>(names: T) {
 const styled = {
   /** desktop, and the base every other breakpoint inherits from */
   css,
+  /**
+   * Only the properties that differ between 768px and 1024px.
+   *
+   * OPTIONAL, and worth writing only when the mockup really has a breakpoint
+   * there. The two middle widths are computed from the ends, which is right for
+   * a quantity and wrong for a decision: a design that goes two-across at 900
+   * and one-across at 760 is making two decisions, and without this it could
+   * state the second and not the first — so tablet took the phone's answer and
+   * a 900px screen got a phone layout.
+   */
+  tablet: css,
   /** only the properties that differ on phones */
   mobile: css,
   /** hover and scroll motion; see the note above */
@@ -728,6 +739,16 @@ const product = z.object({
   gallery: flag(false),
   /** where the strip sits relative to the main image */
   galleryEdge: choice(["bottom", "left", "right", "top"] as const, "bottom"),
+  /**
+   * Whether that strip survives on a phone.
+   *
+   * ON, because a mockup that draws a strip usually draws it at every width —
+   * the one measured against puts `.g-thumbs` in no media query at all. This
+   * used to be forced off, so three photographs the design had drawn vanished
+   * on the screen most shoppers use. Say false only when the mockup really
+   * hides the strip below its phone breakpoint.
+   */
+  galleryPhone: flag(true),
 
   /**
    * Where the gallery's arrows and dots sit.
@@ -914,6 +935,18 @@ const productList = z.object({
   cardRatio: words(12),
   /** the gap between cards, in px, as the mockup's grid sets it */
   cardGap: whole(0, 80, 24),
+  /** and on a phone, when the mockup's own media query narrows it */
+  cardGapPhone: whole(0, 80, 16),
+  /**
+   * How many cards stand side by side at the two narrow widths.
+   *
+   * PageFly's tablet is 768-1024 and its phone is 767 and under. Both were
+   * decided here — two and one, on every list ever built — so a mockup going
+   * four across, then two at 1080 and two at 900, arrived with numbers it never
+   * wrote.
+   */
+  columnsTablet: whole(1, 4, 2),
+  columnsPhone: whole(1, 4, 1),
   /**
    * Whether the card's photograph pages.
    *
@@ -1330,6 +1363,7 @@ export type DesignNode =
       >;
       gallery: boolean;
       galleryEdge: "bottom" | "left" | "right" | "top";
+      galleryPhone: boolean;
       mediaControls: "over" | "below";
       mediaArrow: "chevron" | "arrow";
       mediaThumbs?: number;
@@ -1344,6 +1378,7 @@ export type DesignNode =
       children: DesignNode[];
       query: string;
       css?: Css;
+      tablet?: Css;
       mobile?: Css;
       anim?: Anim;
     }
@@ -1360,6 +1395,7 @@ export type DesignNode =
       scrim: "left" | "bottom" | "full" | "none";
       align: "bottom-left" | "center" | "top-left";
       css?: Css;
+      tablet?: Css;
       mobile?: Css;
       anim?: Anim;
       children: DesignNode[];
@@ -1368,6 +1404,7 @@ export type DesignNode =
       type: "marquee";
       speed: number;
       css?: Css;
+      tablet?: Css;
       mobile?: Css;
       anim?: Anim;
       children: DesignNode[];
@@ -1377,6 +1414,7 @@ export type DesignNode =
       edge: "bottom" | "top";
       mobileOnly: boolean;
       css?: Css;
+      tablet?: Css;
       mobile?: Css;
       anim?: Anim;
       children: DesignNode[];
@@ -1388,6 +1426,7 @@ export type DesignNode =
       perView: number;
       autoplay: boolean;
       css?: Css;
+      tablet?: Css;
       mobile?: Css;
       anim?: Anim;
       slides: DesignNode[];
@@ -1400,6 +1439,7 @@ export type DesignNode =
       separator: boolean;
       caption: string;
       css?: Css;
+      tablet?: Css;
       mobile?: Css;
       anim?: Anim;
     }
@@ -1408,8 +1448,10 @@ export type DesignNode =
       open: number;
       /** per-part declaration sets laid over the exporter's own; see `parts` */
       tabStyle?: Partial<Record<"bar" | "label" | "labelActive" | "panel", Css>>;
+      tabBar: "scroll" | "wrap";
       items: { label: string; children: DesignNode[] }[];
       css?: Css;
+      tablet?: Css;
       mobile?: Css;
       anim?: Anim;
     }
@@ -1473,6 +1515,14 @@ const node: z.ZodType<DesignNode> = z.lazy(() =>
        * publish time and is not knowable from here.
        */
       tabStyle: parts(["bar", "label", "labelActive", "panel"] as const),
+      /**
+       * What the tab bar does when it runs out of room.
+       *
+       * `scroll` was written here for every narrow width whatever the mockup
+       * did — a bar whose `.tablist` is `flex-wrap: wrap` with no media query
+       * touching it wraps at every size and came back as a scroller.
+       */
+      tabBar: choice(["scroll", "wrap"] as const, "scroll"),
       ...styled,
       items: list(
         z.object({ label: saying(40), children: list(node, 16) }),

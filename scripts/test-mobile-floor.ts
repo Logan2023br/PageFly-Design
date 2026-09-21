@@ -31,6 +31,66 @@ async function main(): Promise<void> {
   const at = (node: N, device: "all" | "laptop" | "tablet" | "mobile" = "mobile") =>
     styleAt(node as never, device) as Record<string, string>;
 
+  console.log("\nthe middle breakpoint the design can now write");
+
+  /* ---- THE MOCKUP HAS A BREAKPOINT WE COULD NOT HEAR ---------------------
+
+     PageFly styles against four widths — all ≥1200, laptop 1025–1199, tablet
+     768–1024, mobile ≤767 — and the design could write two of them. The two
+     in the middle were interpolated from the ends, which is right for a
+     quantity and wrong for a decision: a mockup that goes two-across at 900px
+     and one-across at 760px had nowhere to say the first, so tablet took the
+     phone's answer and a 900px screen got the phone's layout.
+
+     The mockup measured against does exactly that, twice:
+
+       @media (max-width:900px){ .usp { flex:1 1 50% } }    two across
+       @media (max-width:760px){ .usp { flex:1 1 auto } }   one
+
+     So `tablet` is a block of its own. Written, it IS the tablet — no blending
+     against a phone that disagrees with it — and laptop interpolates toward it
+     rather than past it. Left out, everything behaves exactly as before. */
+  const threeWay: N = {
+    type: "col",
+    css: { flexBasis: "25%", padding: "110px 56px" },
+    tablet: { flexBasis: "50%" },
+    mobile: { flexBasis: "100%", padding: "56px 18px" },
+  };
+  check(at(threeWay, "tablet").flexBasis === "50%", "tablet takes what the design wrote for it",
+    String(at(threeWay, "tablet").flexBasis));
+  check(at(threeWay, "mobile").flexBasis === "100%", "the phone still takes the phone's",
+    String(at(threeWay, "mobile").flexBasis));
+  check(at(threeWay, "all").flexBasis === "25%", "and desktop is untouched",
+    String(at(threeWay, "all").flexBasis));
+  /* A quantity still blends — but toward the tablet that was stated, not past
+     it to the phone. Desktop 110px and tablet's absent padding means laptop
+     leans on the phone as before; with tablet stated it leans on tablet. */
+  const spaced: N = {
+    type: "col",
+    css: { padding: "100px" },
+    tablet: { padding: "96px" },
+    mobile: { padding: "0px" },
+  };
+  const laptopPad = parseFloat(String(at(spaced, "laptop").padding));
+  check(
+    /* Blending desktop against the PHONE puts laptop at 75px, a quarter of the
+       way to a value the design never meant it to approach. Against the tablet
+       it stated, laptop barely moves — which is what a design saying "96 here,
+       0 only on a phone" is asking for. */
+    laptopPad > 90,
+    "laptop leans on the tablet the design stated, not past it to the phone",
+    `${String(at(spaced, "laptop").padding)} (blending to the phone gives 75px)`,
+  );
+
+  /* A design that writes no tablet is untouched: the phone's structural value
+     still lands at tablet, which is what every stored tree relies on. */
+  const twoWay: N = { type: "col", css: { flexBasis: "25%" }, mobile: { flexBasis: "100%" } };
+  check(
+    at(twoWay, "tablet").flexBasis === "100%",
+    "a design that wrote no tablet behaves exactly as before",
+    String(at(twoWay, "tablet").flexBasis),
+  );
+
   console.log("\na flex row stacks — the case that already worked");
 
   const flexRow: N = { type: "row", css: { gap: "72px" }, children: kids(2) };

@@ -157,7 +157,15 @@ export function FB(
 export function CONTENT_LIST(
   cards: PFNode[],
   styleData: StyleData,
-  opts: { columns?: number; gap?: number; layout?: "grid" | "slideshow" } = {},
+  opts: {
+    columns?: number;
+    gap?: number;
+    layout?: "grid" | "slideshow";
+    /** what the mockup shows at 768-1024 and below 768, when it says */
+    columnsTablet?: number;
+    columnsPhone?: number;
+    gapPhone?: number;
+  } = {},
 ) {
   const columns = Math.min(6, Math.max(1, opts.columns ?? cards.length));
   const layout = opts.layout ?? "grid";
@@ -166,14 +174,18 @@ export function CONTENT_LIST(
     "ContentList2",
     {
       listLayout: { all: layout, laptop: layout, tablet: layout, mobile: layout },
+      /* THE NARROW COUNTS ARE THE DESIGN'S. Two and one were written here for
+         every list this file builds — reasonable numbers, and nobody else's
+         decision to make. A mockup that goes four across, then two at 1080 and
+         two at 900, said so in its own media queries. */
       slidesToShow: {
         all: columns,
         laptop: columns,
-        tablet: Math.min(2, columns),
-        mobile: 1,
+        tablet: opts.columnsTablet ?? Math.min(2, columns),
+        mobile: opts.columnsPhone ?? 1,
       },
       slidesToScroll: { all: 1, laptop: 1, tablet: 1, mobile: 1 },
-      spacing: { all: gap, laptop: gap, tablet: gap, mobile: "16px" },
+      spacing: { all: gap, laptop: gap, tablet: gap, mobile: `${opts.gapPhone ?? 16}px` },
       maxHeight: true,
       stretch: true,
       navStyle: "none",
@@ -365,6 +377,8 @@ export function PRODUCT_MEDIA(
     size?: string;
     /** what the main photograph does under a cursor */
     hover?: "MAGNIFIER" | "NONE";
+    /** whether the strip survives on a phone; the mockup's call, not ours */
+    phone?: boolean;
   } = {
     show: false,
   },
@@ -378,9 +392,14 @@ export function PRODUCT_MEDIA(
         all: gallery.show,
         laptop: gallery.show,
         tablet: gallery.show,
-        /* Off on a phone whichever way the desktop went: a thumbnail strip on a
-           375px screen is six 50px squares competing with the price. */
-        mobile: false,
+        /* ON A PHONE, WHATEVER THE MOCKUP SAYS. This was `false` outright, with
+           a note arguing that six 50px squares compete with the price on a
+           375px screen. That is a real opinion about some galleries and it was
+           applied to all of them: the mockup measured against keeps its strip
+           at every width — `.g-thumbs` is a three-column grid and appears in no
+           media query — so a shopper on a phone lost three photographs the
+           design had drawn for them. */
+        mobile: gallery.show && (gallery.phone ?? true),
       },
       listPosition: gallery.edge ?? "BOTTOM",
 
@@ -896,6 +915,8 @@ export function TABS(
   tabs: { label: string; body: PFNode[] }[],
   open: number,
   styleData: StyleData,
+  /** what the bar does when it runs out of room; the mockup's call */
+  narrowBar: "wrap" | "scroll" = "scroll",
 ) {
   const active = Math.min(Math.max(0, open), Math.max(0, tabs.length - 1));
   return node(
@@ -923,7 +944,11 @@ export function TABS(
          `icon` is the chevron `DropdownButton` draws, and `targetStyle` is how
          the element finds its own style bucket. Both PageFly exports of the
          same page carry all three. */
-      tabMenuLayout: { all: "wrap", laptop: "wrap", tablet: "scroll", mobile: "scroll" },
+      /* THE NARROW BEHAVIOUR IS THE MOCKUP'S. `scroll` on both narrow widths
+         was written here whatever the bar does: a mockup whose `.tablist` is
+         `flex-wrap: wrap` with no media query touching it wraps at every width,
+         and came back as a horizontal scroller on half of them. */
+      tabMenuLayout: { all: "wrap", laptop: "wrap", tablet: narrowBar, mobile: narrowBar },
       icon: "angle-down",
       targetStyle: "Tabs3",
     },
@@ -1095,6 +1120,10 @@ export function PRODUCT_LIST(
      */
     source?: "all" | "auto";
     layout?: "grid" | "slideshow";
+    /** what the mockup shows at 768-1024 and below 768, when it says */
+    columnsTablet?: number;
+    columnsPhone?: number;
+    gapPhone?: number;
   } = {},
 ) {
   const columns = Math.min(4, Math.max(1, opts.columns ?? 3));
@@ -1108,13 +1137,19 @@ export function PRODUCT_LIST(
       /* Per breakpoint, and the platform default is `slideshow` — so a list
          emitted without this field is a carousel nobody asked for. */
       listLayout: { all: layout, laptop: layout, tablet: layout, mobile: layout },
+      /* The mockup's own counts at the two narrow widths; see CONTENT_LIST. */
       slidesToShow: {
         all: columns,
         laptop: columns,
-        tablet: Math.min(2, columns),
-        mobile: 1,
+        tablet: opts.columnsTablet ?? Math.min(2, columns),
+        mobile: opts.columnsPhone ?? 1,
       },
-      spacing: { all: `${opts.gap ?? 24}px` },
+      spacing: {
+        all: `${opts.gap ?? 24}px`,
+        laptop: `${opts.gap ?? 24}px`,
+        tablet: `${opts.gap ?? 24}px`,
+        mobile: `${opts.gapPhone ?? 16}px`,
+      },
       /* BOTH DEFAULT TO A VISIBLE CONTROL, and a grid has nowhere to page to.
          Left unsaid, the platform draws `nav-style-1` — a round dark arrow —
          over the first and last card, and `pagination-style-1` dots under a
@@ -1719,7 +1754,14 @@ export function FORM(
  */
 export function SLIDESHOW(
   slides: PFNode[],
-  opts: { perView: number; autoplay: boolean; gutter?: number },
+  opts: {
+    perView: number;
+    autoplay: boolean;
+    gutter?: number;
+    perTablet?: number;
+    perPhone?: number;
+    gapPhone?: number;
+  },
   styleData: StyleData,
 ) {
   const per = Math.max(1, Math.min(4, opts.perView));
@@ -1737,10 +1779,16 @@ export function SLIDESHOW(
       /* Per breakpoint, and a phone shows one whatever the desktop shows —
          three testimonials side by side on a 390px screen is three unreadable
          columns. */
-      slidesToShow: { all: per, laptop: per, tablet: Math.min(2, per), mobile: 1 },
+      slidesToShow: {
+        all: per,
+        laptop: per,
+        tablet: opts.perTablet ?? Math.min(2, per),
+        mobile: opts.perPhone ?? 1,
+      },
       slidesToScroll: { all: 1, laptop: 1, tablet: 1, mobile: 1 },
-      /* A phone gets a tighter gap for the same reason it gets one slide. */
-      gutter: { all: gap, laptop: gap, tablet: gap, mobile: Math.min(gap, 16) },
+      /* A phone gets a tighter gap for the same reason it gets one slide —
+         unless the mockup states a number of its own. */
+      gutter: { all: gap, laptop: gap, tablet: gap, mobile: opts.gapPhone ?? Math.min(gap, 16) },
       displayPartialItems: { all: false, laptop: false, tablet: false, mobile: false },
       maxHeight: true,
       navStyle: "none",

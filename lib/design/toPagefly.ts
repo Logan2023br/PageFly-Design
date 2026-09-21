@@ -1772,6 +1772,10 @@ function productBox(
       /* A setting, not something to build — and the one a shopper reaches for
          on a product page. */
       hover: node.mediaHover === "magnifier" ? "MAGNIFIER" : "NONE",
+      /* `!== false` because export also runs over trees stored before this
+         field existed, and on those the strip should keep behaving as the
+         mockup drew it rather than as the old constant did. */
+      phone: node.galleryPhone !== false,
     },
     /* A CHILD of the media element, shown by its own flag. A badge drawn on top
        needs `position:absolute`, which is banned, and `fields.md` says a
@@ -2360,6 +2364,9 @@ function productGrid(
     source: node.source === "collection" ? "auto" : "all",
     layout: node.listLayout,
     gap: node.cardGap,
+    columnsTablet: node.columnsTablet,
+    columnsPhone: node.columnsPhone,
+    gapPhone: node.cardGapPhone,
   });
 }
 
@@ -2801,6 +2808,7 @@ function tabsOf(
       '& [data-pf-type="TabsMenu3"] > label[data-pf-tab-active="true"]':
         `opacity: 1; border-bottom-color: ${accent};` + tab("labelActive"),
     }),
+    node.tabBar === "wrap" ? "wrap" : "scroll",
   );
 }
 
