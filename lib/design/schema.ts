@@ -716,8 +716,15 @@ const product = z.object({
    * `magnifier` is the one a shopper reaches for on a product page and it is a
    * SETTING, not something to build — PageFly ships it. `none` is right for a
    * page whose photography is editorial rather than forensic.
+   *
+   * IT DEFAULTED TO THE MAGNIFIER, AND THAT WAS THE HARDCODING WEARING A
+   * FIELD. `fields.md` types the platform's own default as NONE; every mockup
+   * that draws a still photograph got a lens anyway, which draws a pale
+   * rectangle over the picture under the cursor and appears in no design. A
+   * mockup that wants one says so — it is visible in the markup, as a zoom
+   * wrapper or a scale on hover — and a mockup that says nothing gets nothing.
    */
-  mediaHover: choice(["magnifier", "none"] as const, "magnifier"),
+  mediaHover: choice(["magnifier", "none"] as const, "none"),
 
   /* ==========================================================================
      FOUR THINGS PAGEFLY ALREADY HAS, and the buy box was shipping without.

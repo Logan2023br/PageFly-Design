@@ -2543,6 +2543,44 @@ async function main(): Promise<void> {
     "probe",
   );
   const pMain = bareGallery.items.find((i) => i.type === "MediaMain3")!;
+  /* ---- AND THE MAGNIFIER, WHICH NOBODY ASKED FOR --------------------
+
+     `fields.md` types MediaMain3's `hoverAction` as NONE | MAGNIFIER | HOVER,
+     runtime 0-2, DEFAULT NONE. This file wrote 1 — MAGNIFIER — on every
+     gallery it has ever exported, copied from one editor export that happened
+     to have the lens switched on. So every imported product page zoomed under
+     the cursor, drawing a pale rectangle over the photograph that no mockup
+     draws and no design asked for.
+
+     The design already has the field: `mediaHover`, which ProductMedia3 has
+     always honoured. Only this element ignored it. */
+  check(pMain.data?.hoverAction === 0, "no magnifier the design did not ask for", String(pMain.data?.hoverAction));
+  const zoomed = await open(
+    {
+      sections: [
+        section(
+          [
+            {
+              type: "product",
+              title: "Overshirt",
+              price: "$480",
+              atcText: "Add",
+              gallery: true,
+              mediaHover: "magnifier",
+              children: [],
+            },
+          ],
+          "product-detail-gallery",
+        ),
+      ],
+    },
+    "probe",
+  );
+  check(
+    (zoomed.items.find((i) => i.type === "MediaMain3")!).data?.hoverAction === 1,
+    "and one the design does ask for",
+    String((zoomed.items.find((i) => i.type === "MediaMain3")!).data?.hoverAction),
+  );
   check(pMain.data?.navStyle === "none", "a gallery the mockup gave no arrows gets none", String(pMain.data?.navStyle));
   check(
     pMain.data?.paginationStyle === "none",

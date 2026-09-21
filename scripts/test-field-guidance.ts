@@ -45,6 +45,7 @@ const STATED: [string, string][] = [
   ["mediaArrow", "a chevron or a long arrow"],
   ["caption", "the line a gallery writes over the photograph"],
   ["mediaThumbs", "how many thumbnails the strip shows"],
+  ["mediaHover", "whether the main photograph zooms under the cursor"],
   ["showCompareAt", "the struck-through was-price on a card"],
   ["atcLabel", "the card's own button"],
   ["compareLabelAt", "corner or handle for a comparison's captions"],

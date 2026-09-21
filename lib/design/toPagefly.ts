@@ -1678,6 +1678,7 @@ function productBox(
          counter still switches them off, because `01 / 06` and a row of
          dashes are two answers to one question. */
       {
+        hover: node.mediaHover === "magnifier",
         nav:
           node.mediaStyle?.nav || below || wantsArrow ? "nav-style-1" : "none",
         pagination:

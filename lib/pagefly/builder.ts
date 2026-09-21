@@ -440,7 +440,12 @@ export function PRODUCT_MEDIA(
  */
 export function MEDIA_MAIN(
   styleData: StyleData,
-  look: { nav?: "none" | "nav-style-1"; pagination?: "none" | "pagination-style-1" } = {},
+  look: {
+    nav?: "none" | "nav-style-1";
+    pagination?: "none" | "pagination-style-1";
+    /** the magnifier, when the design asked for one */
+    hover?: boolean;
+  } = {},
 ) {
   return node(
     "MediaMain3",
@@ -450,10 +455,19 @@ export function MEDIA_MAIN(
       paginationStyle: look.pagination ?? "none",
       /* Numbers here, strings on ProductMedia3 — the two elements encode the
          same two settings differently, and this is the editor's own encoding
-         for each. Copied, not reasoned about. */
+         for each. Copied, not reasoned about.
+
+         AND ONE OF THEM WAS COPIED TOO FAR. `fields.md` types `hoverAction` as
+         NONE | MAGNIFIER | HOVER, runtime 0-2, DEFAULT NONE. This was 1 —
+         MAGNIFIER — taken from an export that happened to have the lens on, and
+         written on every gallery since. Every imported product page zoomed
+         under the cursor and drew a pale rectangle over the photograph that no
+         mockup draws. The design has always been able to say: `mediaHover` is
+         the field, and ProductMedia3 has always honoured it. Only this element
+         did not. */
       onHover: 0,
       clickAction: 2,
-      hoverAction: 1,
+      hoverAction: look.hover ? 1 : 0,
       slidesToShow: { all: 1, laptop: 1, tablet: 1, mobile: 1 },
       slidesToScroll: { all: 1, laptop: 1, tablet: 1, mobile: 1 },
       loading: "eager",
