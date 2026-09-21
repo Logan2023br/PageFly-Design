@@ -73,6 +73,8 @@ const STATED: [string, string][] = [
   ["knobGlyph", "the character inside the grip"],
   ["markTwo", "the grip's mark COPIED as a shape, for the mockups that draw one"],
   ["accordionStyle", "how an accordion's rows, answers and mark look"],
+  ["rowOpen", "the accent a mockup puts on the question that is open"],
+  ["rowHover", "and the one it puts on a row under the cursor"],
   ["tabStyle", "how a tab bar and its panels look"],
   ["swatchStyle", "how the variant chips and size tiles look"],
   ["mediaStyle", "how the gallery's own controls look"],

@@ -1324,7 +1324,15 @@ const accordion = z.object({
    *
    * `row` is the clickable question, `body` the answer, `icon` the +/- mark.
    */
-  accordionStyle: parts(["row", "body", "icon"] as const),
+  /**
+   * How the rows, the answers and the mark look — and which row is OPEN.
+   *
+   * `rowOpen` and `rowHover` are the two a mockup almost always states and
+   * neither had anywhere to go: `.acc-item.is-open .acc-btn{color:#8A1C1C}` is
+   * the only visual answer to "which question am I reading", and it came back
+   * the same colour as the six rows that are shut.
+   */
+  accordionStyle: parts(["row", "rowOpen", "rowHover", "body", "icon"] as const),
   ...styled,
 });
 

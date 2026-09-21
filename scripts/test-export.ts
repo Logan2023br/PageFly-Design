@@ -655,6 +655,73 @@ async function main(): Promise<void> {
   }
 
   {
+    /* ---- THE ROW THAT IS OPEN, AND THE ROOM A CLOSED ONE KEEPS ----------
+
+       The mockup:
+
+         .acc-btn{padding:16px 0}
+         .acc-btn:hover{color:#8A1C1C}
+         .acc-item.is-open .acc-btn{color:#8A1C1C}
+         .acc-panel-inner p{padding:0 0 20px}
+
+       Two of those had nowhere to go. `accordionStyle` carried `row`, `body`
+       and `icon`, so the row that is OPEN — the one the mockup marks in its
+       accent, and the only visual answer to "which question am I reading" —
+       came back the same colour as the six that are shut. So did the hover.
+
+       PageFly marks the open header itself with `data-active="true"`, which is
+       knowable and stable and is what its own script maintains; the tab bar
+       already uses the same trick for the chosen label.
+
+       AND THE CLOSED ROWS WERE TOO TALL. `padding-bottom` was written on `&
+       .pf-accordion-body` — the container, which stays in the flow when the
+       row is shut, exactly as a tab panel does. Seven shut rows carried
+       seven paddings for bodies nobody could see. The answer text already
+       carries its own padding one level in, which is where the mockup puts
+       it too. */
+    const faq = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "accordion",
+              items: [
+                { q: "How do I care for it?", a: "Hand wash cool or dry clean." },
+                { q: "Will my size come back?", a: "Tell us and we will write." },
+              ],
+              accordionStyle: {
+                row: { padding: "16px 0", fontSize: "11px" },
+                rowOpen: { color: "#8A1C1C" },
+                rowHover: { color: "#8A1C1C" },
+              },
+            },
+          ],
+          "faq-accordion",
+        ),
+      ],
+    }, "faq2");
+    const a2 = faq.items.find((i) => i.type === "Accordion3");
+    const openRow = faq.cssOf(a2?.id ?? "", "all", '& .pf-header-item-wrapper[data-active="true"]');
+    check(
+      openRow.includes("#8A1C1C"),
+      "the row that is open wears the accent the mockup gave it",
+      openRow || "(no rule)",
+    );
+    const hover = faq.cssOf(a2?.id ?? "", "all", "& .pf-header-item-wrapper:hover");
+    check(
+      hover.includes("#8A1C1C"),
+      "and so does a row under the cursor",
+      hover || "(no rule)",
+    );
+    const body = faq.cssOf(a2?.id ?? "", "all", "& .pf-accordion-body");
+    check(
+      !/padding/.test(body),
+      "a shut row keeps no padding for a body nobody can see",
+      body || "(no rule)",
+    );
+  }
+
+  {
     /* ---- A FILL ON AN ICON CAN ONLY DRAW A BOX --------------------------
 
        A mockup draws its accordion mark as two hairlines in pseudo-elements:

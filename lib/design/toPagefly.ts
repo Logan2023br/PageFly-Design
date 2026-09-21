@@ -2857,7 +2857,7 @@ function accordionOf(
      own selectors — `& .pf-header-item-wrapper` and `& .pf-accordion-body`.
      Styling the header node's `&` instead is valid CSS that reaches nothing,
      which is why the imported rows carried none of the mockup's spacing. */
-  const part = (name: "row" | "body" | "icon"): string => {
+  const part = (name: "row" | "rowOpen" | "rowHover" | "body" | "icon"): string => {
     const declared = node.accordionStyle?.[name];
     if (!declared) return "";
     /* A FILL ON THE MARK CAN ONLY DRAW A BOX.
@@ -2897,10 +2897,32 @@ function accordionOf(
          design's own declarations are appended, so they win. */
       "& .pf-header-item-wrapper":
         `padding: 18px 0; font-size: 16px; font-weight: 600; ${inkRule(opts, sd)}${part("row")}`,
+      /* THE ROW THAT IS OPEN. PageFly's own script marks the header with
+         `data-active="true"` — knowable, stable, and the same hook the tab bar
+         uses for its chosen label. Without it the open question is the same
+         colour as the shut ones, which is the one thing a mockup's accent on
+         that row exists to say. */
+      ...(node.accordionStyle?.rowOpen
+        ? { '& .pf-header-item-wrapper[data-active="true"]': declarations(node.accordionStyle.rowOpen) }
+        : {}),
+      ...(node.accordionStyle?.rowHover
+        ? { "& .pf-header-item-wrapper:hover": declarations(node.accordionStyle.rowHover) }
+        : {}),
+      /* NO PADDING ON THE BODY CONTAINER. It stays in the flow when the row is
+         shut — the same thing a tab panel does — so a padding written here is
+         room every closed row keeps for an answer nobody can see. Seven
+         questions, seven dead bands. The answer text carries its own padding
+         one level in, which is where the mockup puts it too. */
       "& .pf-accordion-body":
-        `padding-bottom: 18px; line-height: 1.6; opacity: .72; ${inkRule(opts, sd)}${part("body")}`,
-      "& .pf-accordion-icon":
-        `font-size: 18px; opacity: .5; ${inkRule(opts, sd)}${part("icon")}`,
+        `line-height: 1.6; opacity: .72; ${inkRule(opts, sd)}${part("body")}`,
+      /* THE DIMMING IS A FALLBACK AND HAS TO BEHAVE LIKE ONE. `opacity: .5`
+         is a reasonable look for a mark nobody described; on a mark the mockup
+         DID describe it is this file overruling it, and a design stating the
+         mark's colour has no reason to think it must also state `opacity: 1`
+         to get the colour it asked for. */
+      "& .pf-accordion-icon": node.accordionStyle?.icon
+        ? `font-size: 18px; ${inkRule(opts, sd)}${part("icon")}`
+        : `font-size: 18px; opacity: .5; ${inkRule(opts, sd)}`,
     },
   };
 
