@@ -49,6 +49,7 @@ const STATED: [string, string][] = [
   ["anim", "reveal on scroll, its delay, and the hover — the whole motion layer"],
   ["fade-up", "the reveal names, without which `anim` cannot be written"],
   ["float-shadow", "the hover names, same"],
+  ["custom", "the escape hatch for anything the platform does not have"],
   ["showCompareAt", "the struck-through was-price on a card"],
   ["atcLabel", "the card's own button"],
   ["compareLabelAt", "corner or handle for a comparison's captions"],
@@ -77,6 +78,23 @@ async function main(): Promise<void> {
 
   console.log("\nfields the html path can be told about");
   for (const [field, why] of STATED) {
+    check(ask.includes(field), `ASK names \`${field}\``, ask.includes(field) ? "" : why);
+  }
+
+  /* ---- AND ONE LIST THAT IS HONESTLY HTML-ONLY -----------------------
+
+     The two paths do not ask for the same thing. The html path TRANSCRIBES: it
+     writes the custom block's own markup, stylesheet and script, because the
+     mockup already contains them. The design path DESCRIBES: it names `custom`
+     and says what the thing does, and a later stage builds it. So the keys a
+     custom block is written with belong in one prompt and not the other, and
+     demanding them in both would be demanding the design path do a job it does
+     not have. */
+  console.log("\nkeys only the transcribing path writes");
+  for (const [field, why] of [
+    ["stylesheet", "a custom block's own CSS"],
+    ["root", "the element its script is handed"],
+  ] as [string, string][]) {
     check(ask.includes(field), `ASK names \`${field}\``, ask.includes(field) ? "" : why);
   }
 

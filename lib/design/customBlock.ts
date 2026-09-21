@@ -187,6 +187,22 @@ function guardPrelude(report: string): string {
  */
 export function wrapJs(raw: string, className: string): string {
   if (!raw.trim()) return "";
+  /* ONE `<` COSTS THE WHOLE PAGE'S SCRIPT, NOT ONE BLOCK'S.
+
+     PageFly's custom-code validator refuses a customJS file outright if it
+     holds a single `<`, and it decodes percent-encoding before it looks. Every
+     script written in this repository is built around that — the gallery
+     counter pads with `("0"+n).slice(-2)` rather than a comparison for exactly
+     this reason.
+
+     A block's script is not written here. `if (i < n)` is one keystroke away
+     for whoever does write it, and left alone it would take the counter, the
+     caption and every other block's script down with it: a page-wide failure
+     caused by one block.
+
+     So the block loses its own script and nothing else. Its markup and its
+     stylesheet still ship, which is most of what a decorative block is. */
+  if (raw.includes("<")) return "";
   return [
     `(function(){try{`,
     guardPrelude(""),

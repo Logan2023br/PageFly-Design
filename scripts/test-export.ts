@@ -1686,6 +1686,82 @@ async function main(): Promise<void> {
     );
   }
 
+  console.log("\na custom block's script");
+
+  {
+    /* ==========================================================================
+       ONE `<` COSTS THE WHOLE PAGE'S SCRIPT, NOT ONE BLOCK'S.
+
+       PageFly's custom-code validator refuses a customJS file outright if it
+       contains a single `<`, and it decodes percent-encoding before it looks.
+       Every script this file writes itself is built around that — the counter
+       pads with `("0"+n).slice(-2)` rather than a comparison for exactly this
+       reason.
+
+       A block's script is not written by this file. The moment the model is
+       told it may write one, `if (i < n)` becomes one keystroke away, and it
+       would take down the counter, the caption and every other block's script
+       with it — a page-wide failure caused by one block.
+
+       So the block loses its own script and nothing else. The markup and the
+       stylesheet still ship, which is most of what a decorative block is.
+       ========================================================================== */
+    const poisoned = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "custom",
+              label: "a wave",
+              html: "<div class=\"wave\"></div>",
+              stylesheet: ".wave{height:40px;background:#eee}",
+              js: "for (var i = 0; i < 4; i++) { root.style.opacity = 1; }",
+            },
+            { type: "product", title: "Overshirt", price: "$480", atcText: "Add", gallery: true, mediaStyle: { counter: { color: "#fff" } }, children: [] },
+          ],
+          "wear-test",
+        ),
+      ],
+    }, "custom");
+    check(
+      !poisoned.customJS.includes("<"),
+      "a `<` in a block's script never reaches the file",
+      poisoned.customJS.slice(0, 80),
+    );
+    check(
+      poisoned.customJS.includes("pfd-slide-count"),
+      "and the page's other scripts survive it",
+      poisoned.customJS.length ? "" : "(the whole file was lost)",
+    );
+    check(
+      poisoned.customCSS.includes(".wave"),
+      "the block keeps its stylesheet, which is most of a decorative block",
+    );
+
+    /* A clean script is untouched. */
+    const fine = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "custom",
+              label: "a wave",
+              html: "<div class=\"wave\"></div>",
+              stylesheet: ".wave{height:40px}",
+              js: "root.style.opacity = 1;",
+            },
+          ],
+          "wear-test",
+        ),
+      ],
+    }, "custom");
+    check(
+      fine.customJS.includes("root.style.opacity"),
+      "a script with no `<` ships as written",
+      fine.customJS.slice(-60),
+    );
+  }
+
   console.log("\nan accordion's own look");
 
   {
