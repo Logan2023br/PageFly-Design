@@ -793,6 +793,24 @@ const productList = z.object({
   source: choice(["store", "collection"] as const, "store"),
   /** a grid, or a carousel when the row would otherwise run off the page */
   listLayout: choice(["grid", "slideshow"] as const, "grid"),
+  /**
+   * The struck-through was-price beside the price.
+   *
+   * OFF unless the mockup draws one, and that is not timidity. PageFly's second
+   * price slot falls back to the price itself when a product carries no
+   * compare-at, so a card turned on for a catalogue that is not discounted
+   * reads `$188.00 $188.00` with the second struck through — on every tile.
+   * The mockup saying a card is a sale card is the only safe signal.
+   */
+  showCompareAt: flag(false),
+  /**
+   * The card's button, in the mockup's own words — `Quick add`.
+   *
+   * Empty means the mockup drew none. A real ProductATC2 inside the card, not
+   * a link: the card repeats over the shop's products and the button has to
+   * add whichever one it landed on.
+   */
+  atcLabel: words(24),
   /** search phrase for the placeholder photo the mockup shows */
   query,
   ...styled,

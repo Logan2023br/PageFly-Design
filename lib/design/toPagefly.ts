@@ -2013,8 +2013,36 @@ function productGrid(
         PRODUCT_PRICE(
           { all: { "&": "display: flex !important; gap: 8px; align-items: baseline;" } },
           { all: { "&": `font-size: 15px; ${inkRule(opts)}` } },
-          { all: { "&": "display: none !important;" } },
+          /* THE SECOND SLOT IS HIDDEN UNLESS THE DESIGN ASKS, and that is not
+             timidity. PageFly falls back to the price itself when a product
+             carries no compare-at, so a card with this shown over a catalogue
+             that is not discounted reads `$188.00 $188.00`, the second struck
+             through, on every tile. A mockup drawing a was-price is the only
+             signal that the row is a sale row. */
+          node.showCompareAt
+            ? { all: { "&": `font-size: 14px; opacity: .55; text-decoration: line-through; ${inkRule(opts)}` } }
+            : { all: { "&": "display: none !important;" } },
         ),
+        /* A real ProductATC2, not a link: the card repeats over the shop's
+           products and the button has to add whichever one it landed on. Inside
+           the card's own block, which is where the PDP already puts its. */
+        ...(node.atcLabel?.trim()
+          ? [
+              PRODUCT_ATC(
+                {
+                  all: {
+                    "&":
+                      "width: 100% !important; margin-top: 6px; padding: 14px 12px;" +
+                      " font-size: 11px; font-weight: 600; letter-spacing: .18em;" +
+                      " text-transform: uppercase; text-align: center; cursor: pointer;" +
+                      ` background: transparent; border: 1px solid ${opts.border ?? "rgba(0,0,0,.22)"};` +
+                      ` ${inkRule(opts)}`,
+                  },
+                },
+                node.atcLabel.trim(),
+              ),
+            ]
+          : []),
       ],
     ),
     "display: flex; flex-direction: column; gap: 12px; width: 100%;",

@@ -351,6 +351,20 @@ async function main(): Promise<void> {
     );
     const layout = plist.data?.listLayout as Record<string, string> | undefined;
     check(layout?.all === "grid", "a grid, not the platform's slideshow default", layout?.all);
+    /* THE CARD IS WHAT THE MOCKUP DREW, and it used to be three things only.
+       A mockup's card commonly carries a struck-through was-price and a quick
+       add button; the exporter emitted image, name, price, hid the compare-at
+       outright and had no way to say either. What imported was a thinner card
+       than the one drawn, on the section of the page whose whole job is to
+       sell a second item.
+
+       Neither is on by default. A compare-at shown on a product that is not
+       discounted repeats the price struck through, and a button drawn where
+       the mockup has none is a button the design did not ask for. */
+    check(
+      grid.filter((i) => i.type === "ProductATC2").length === 0,
+      "a card with no button drawn gets none",
+    );
     /* A GRID HAS NOWHERE TO PAGE TO, and the platform draws the controls anyway.
        `navStyle` and `paginationStyle` both default to a visible style, so a
        grid emitted without them arrives with a round arrow floating over the
@@ -363,6 +377,48 @@ async function main(): Promise<void> {
       "and no pagination dots under it",
       String(plist.data?.paginationStyle),
     );
+  }
+
+  {
+    const rich = await build({
+      sections: [
+        section(
+          [
+            {
+              type: "productList",
+              columns: 3,
+              limit: 3,
+              source: "store",
+              listLayout: "grid",
+              query: "silk slip",
+              showCompareAt: true,
+              atcLabel: "Quick add",
+            },
+          ],
+          "collection-grid-3up",
+        ),
+      ],
+    });
+    const atc = rich.find((i) => i.type === "ProductATC2");
+    check(Boolean(atc), "a card that draws a button gets a real ProductATC2");
+    check(atc?.data?.text === "Quick add", "wearing the mockup's own words", String(atc?.data?.text));
+    /* Inside the card, or it adds nothing: an ATC outside a ProductBox has no
+       product to add. */
+    const box = rich.find((i) => i.type === "ProductBox");
+    const inBox = (id: string): boolean => {
+      const seen = new Set<string>();
+      const walk = (n: string): boolean => {
+        if (n === id) return true;
+        if (seen.has(n)) return false;
+        seen.add(n);
+        return (rich.find((i) => i.id === n)?.children ?? []).some(walk);
+      };
+      return (box?.children ?? []).some(walk);
+    };
+    check(Boolean(atc && inBox(atc.id)), "and it sits inside the card, where a product to add exists");
+
+    const prices = rich.filter((i) => i.type === "ProductPrice2Item");
+    check(prices.length === 2, "both price slots are emitted", `${prices.length}`);
   }
 
   /* A home page's featured row is store-wide, not a collection. */
