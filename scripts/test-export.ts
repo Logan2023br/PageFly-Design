@@ -2595,6 +2595,55 @@ async function main(): Promise<void> {
     captioned.customCSS.includes(".22em"),
     "and wears the type the design gave it",
   );
+  const capLine = captioned.customCSS.split("\n").find((l) => l.includes("pfd-slide-caption")) ?? "";
+  check(
+    /background:\s*rgba\(18,16,12,\.55\)/.test(capLine),
+    "a design that said nothing about legibility gets a plate to sit on",
+    capLine.slice(0, 70),
+  );
+
+  /* ---- UNLESS THE DESIGN ALREADY SOLVED IT ---------------------------
+
+     The mockup's own caption is white uppercase over the photograph with a
+     `text-shadow` and no plate at all — that IS its legibility treatment. Our
+     default plate lands on top of it and the import gains a dark chip the
+     mockup does not have. A design that states a shadow, or a background of
+     its own, has answered the question this default exists to answer. */
+  const shadowed = await open(
+    {
+      sections: [
+        section(
+          [
+            {
+              type: "product",
+              title: "Overshirt",
+              price: "$480",
+              atcText: "Add",
+              gallery: true,
+              mediaStyle: {
+                caption: { color: "#FBFAF7", textShadow: "0 1px 8px rgba(18,16,12,.6)" },
+              },
+              children: [],
+            },
+          ],
+          "product-detail-gallery",
+        ),
+      ],
+    },
+    "probe",
+    { accent: "#8A1C1C" },
+  );
+  const shadowLine = shadowed.customCSS.split("\n").find((l) => l.includes("pfd-slide-caption")) ?? "";
+  check(
+    !/background:\s*rgba\(18,16,12,\.55\)/.test(shadowLine),
+    "a caption with its own shadow keeps the photograph behind it",
+    shadowLine.slice(0, 90),
+  );
+  check(
+    shadowLine.includes("text-shadow"),
+    "and keeps the shadow it asked for",
+    shadowLine.slice(0, 90),
+  );
   check(
     captioned.customJS.includes("pfd-slide-caption"),
     "with a script that keeps it in step with the slide",

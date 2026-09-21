@@ -681,12 +681,24 @@ function marqueeCss(cls: string, speed: number): string {
    JS there, so in the editor the corner is simply empty.
    ========================================================================== */
 function galleryBadgeCss(cls: string, style: Css | undefined): string {
+  /* THE PLATE IS A FALLBACK, NOT A HOUSE STYLE.
+
+     White words over a photograph need something to stay legible against, and
+     absent any instruction a dark plate is the safe answer. But it is an
+     ANSWER, and a design that already gave one — a `text-shadow`, or a
+     background of its own — does not want a second. The mockup this was built
+     from captions its slides in white uppercase with a soft shadow and no
+     plate at all; imported, the caption gained a dark chip the mockup never
+     draws, and the plate was the reason. */
+  const own = style ? declarations(style) : "";
+  const solved = /(^|[;\s])(background|text-shadow)\s*:/.test(own);
   return [
     "#__pf [data-pf-type=MediaMain3]{position:relative;}",
     `.${cls}{position:absolute;left:14px;bottom:14px;z-index:4;` +
       "pointer-events:none;font-size:11px;font-weight:600;letter-spacing:.2em;" +
-      "line-height:1;padding:7px 12px;background:rgba(18,16,12,.55);color:#fff;" +
-      (style ? declarations(style) : "") +
+      "line-height:1;padding:7px 12px;color:#fff;" +
+      (solved ? "" : "background:rgba(18,16,12,.55);") +
+      own +
       "}",
   ].join("\n");
 }
