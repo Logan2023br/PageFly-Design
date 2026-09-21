@@ -120,6 +120,21 @@ const css = loose().transform((value): Css | undefined => {
  * is the width of a single pseudo-class.
  */
 const HOVER_ALLOWED_BAN = new Set([...BANNED].filter((k) => k !== "transform"));
+
+/**
+ * The same parser with the turn left in — see `parts`. Nothing else about the
+ * ban changes: a mark still cannot be positioned, floated or given a z-index.
+ */
+const turnable = loose().transform((value): Css | undefined => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const out: Css = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (HOVER_ALLOWED_BAN.has(k)) continue;
+    if (typeof v === "string" && v !== "") out[k] = v;
+    else if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
+  }
+  return Object.keys(out).length ? out : undefined;
+});
 const hoverCss = loose().transform((value): Css | undefined => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const out: Css = {};
@@ -416,13 +431,24 @@ export type Anim =
  * costs itself and a malformed value costs one declaration. An empty result is
  * `undefined`, not `{}`: the exporter branches on the property being absent.
  */
-function parts<T extends readonly string[]>(names: T) {
+/**
+ * Parts, and the few of them that may be TURNED.
+ *
+ * `transform` is banned everywhere in this file because a node that can
+ * translate can leave the section it was put in, and one did. A mark drawn
+ * into a 40px grip cannot: it is a pseudo-element with no layout of its own.
+ *
+ * And it needs the turn. The mockups draw these marks as squares with two of
+ * their four borders, rotated forty-five degrees — that rotation IS the
+ * chevron. Stripped, it arrives as an L-shaped corner, which is what shipped.
+ */
+function parts<T extends readonly string[]>(names: T, mayTurn: readonly string[] = []) {
   return loose().transform((value): Partial<Record<T[number], Css>> | undefined => {
     if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
     const o = value as Record<string, unknown>;
     const out: Partial<Record<T[number], Css>> = {};
     for (const name of names) {
-      const declared = css.parse(o[name]);
+      const declared = (mayTurn.includes(name) ? turnable : css).parse(o[name]);
       if (declared) out[name as T[number]] = declared;
     }
     return Object.keys(out).length ? out : undefined;
@@ -982,18 +1008,23 @@ const productList = z.object({
    * all. Every value here was a constant in the exporter, so four mockups
    * produced four identical cards.
    */
-  cardStyle: parts([
-    "image",
-    "title",
-    "price",
-    "compareAt",
-    "atc",
-    "atcHover",
-    "badge",
-    "note",
-    "nav",
-    "navMark",
-  ] as const),
+  cardStyle: parts(
+    [
+      "image",
+      "title",
+      "price",
+      "compareAt",
+      "atc",
+      "atcHover",
+      "badge",
+      "note",
+      "nav",
+      "navMark",
+    ] as const,
+    /* Same reason as the comparison's: an arrow drawn as a turned square is a
+       chevron, and without the turn it is a corner. */
+    ["navMark"],
+  ),
   /** search phrase for the placeholder photo the mockup shows */
   query,
   ...styled,
@@ -1172,7 +1203,7 @@ const beforeAfter = z.object({
    * handle, which PageFly draws as a plain round dot and mockups draw as
    * anything — a square plate, a bordered circle, a tinted pill.
    */
-  compareStyle: parts(["label", "knob", "mark", "markTwo"] as const),
+  compareStyle: parts(["label", "knob", "mark", "markTwo"] as const, ["mark", "markTwo"]),
   /**
    * The character drawn inside the grip — `↔` is the usual one.
    *

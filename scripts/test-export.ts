@@ -4672,6 +4672,111 @@ console.log("\nfour spec bars stacked in a col");
 
        The two marks ride on the grip's own ::before and ::after, so the plate
        the design asked for still draws underneath them. */
+    /* ---- A CHEVRON IS A SQUARE THAT WAS TURNED -------------------------
+
+       The mockup's grip mark is not a chevron glyph; it is a square with two
+       of its four borders, turned forty-five degrees:
+
+         .ba-handle::before{width:12px;height:12px;
+                            transform:translate(-50%,-50%) rotate(45deg);
+                            border-top:1px solid #FBFAF7;
+                            border-right:1px solid #FBFAF7}
+
+       `transform` is BANNED on every part in this file, and for a good reason
+       — a node that can translate can leave the section it was put in. A
+       pseudo-element inside a 40px grip cannot. Stripped, the turn goes and
+       the mark lands as an L-shaped corner, which is what a merchant saw.
+
+       Only the mark parts keep it. Everything else still cannot move. */
+    const turned = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "beforeAfter",
+              beforeQuery: "new knit",
+              afterQuery: "washed knit",
+              compareStyle: {
+                mark: {
+                  width: "12px",
+                  height: "12px",
+                  transform: "rotate(45deg)",
+                  borderTop: "1px solid #FBFAF7",
+                  borderRight: "1px solid #FBFAF7",
+                },
+              },
+            },
+          ],
+          "split",
+        ),
+      ],
+    }, "turn");
+    /* THROUGH THE SCHEMA, because `open()` hands the exporter a tree Zod has
+       never seen. Every rule about what a design may say lives in the schema,
+       so an assertion that skips it proves the exporter would carry a value
+       the model is never allowed to send — which is exactly what the first
+       version of this test did, and it passed while the page was broken. */
+    const { designTreeSchema } = await import("../lib/design/schema");
+    const parsedTurn = designTreeSchema.safeParse({
+      motionPlan: "",
+      sections: [
+        {
+          type: "section",
+          role: "wash",
+          children: [
+            {
+              type: "beforeAfter",
+              beforeQuery: "a",
+              afterQuery: "b",
+              compareStyle: { mark: { width: "12px", transform: "rotate(45deg)" } },
+            },
+          ],
+        },
+      ],
+    });
+    const keptMark = parsedTurn.success
+      ? JSON.stringify(
+          (parsedTurn.data.sections[0].children[0] as never as {
+            compareStyle?: { mark?: Record<string, string> };
+          }).compareStyle?.mark ?? {},
+        )
+      : "(did not parse)";
+    check(
+      keptMark.includes("rotate(45deg)"),
+      "the schema lets a mark keep the turn that makes it a chevron",
+      keptMark,
+    );
+
+    const t2 = turned.items.find((i) => i.type === "ImageComparison");
+    const turnedMark = turned.cssOf(t2?.id ?? "", "all", "& .pf-ba-handle-circle::before");
+    check(
+      /rotate\(45deg\)/.test(turnedMark),
+      "a mark the mockup turned arrives turned",
+      turnedMark || "(no rule)",
+    );
+    check(
+      /border-top/.test(turnedMark),
+      "with the two borders that make it a chevron",
+      turnedMark || "(no rule)",
+    );
+    /* And the ban still holds where it was holding before — also through the
+       schema, which is the only place it has ever held. */
+    const parsedBan = designTreeSchema.safeParse({
+      motionPlan: "",
+      sections: [
+        {
+          type: "section",
+          role: "band",
+          children: [{ type: "text", text: "hi", css: { transform: "translateX(400px)" } }],
+        },
+      ],
+    });
+    check(
+      parsedBan.success && !JSON.stringify(parsedBan.data).includes("translateX(400px)"),
+      "and an ordinary node still cannot move itself",
+      parsedBan.success ? JSON.stringify(parsedBan.data.sections[0].children[0]) : "(did not parse)",
+    );
+
     const drawn = await open({
       sections: [
         section(
