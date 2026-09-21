@@ -2477,6 +2477,64 @@ async function main(): Promise<void> {
     counted.customCSS.includes("rgba(18,16,12,.62)"),
     "the counter wears the colours the design gave it",
   );
+
+  /* ==========================================================================
+     AND THE OTHER THING GALLERIES WRITE OVER THE PHOTOGRAPH: A CAPTION.
+
+     `04 — STRAP AND HEM DETAIL`, low in the corner, changing with the slide.
+     PageFly has no such element and no field that would make one, so a mockup
+     drawing it imported as a bare photograph — the one line on the frame that
+     said what the visitor was looking at, gone, with nothing to report.
+
+     The number is ours to count. The words are the merchant's: Shopify's media
+     alt text is the field a shop fills in to describe a photograph, and it is
+     what the slide carries. A photo with none gets the number alone rather
+     than a dangling dash.
+     ========================================================================== */
+  const captioned = await open(
+    {
+      sections: [
+        section(
+          [
+            {
+              type: "product",
+              title: "Overshirt",
+              price: "$480",
+              atcText: "Add",
+              gallery: true,
+              mediaStyle: { caption: { color: "#FBFAF7", letterSpacing: ".22em" } },
+              children: [],
+            },
+          ],
+          "product-detail-gallery",
+        ),
+      ],
+    },
+    "probe",
+    { accent: "#8A1C1C" },
+  );
+  check(
+    captioned.customCSS.includes("pfd-slide-caption"),
+    "the caption is written, because the element has no such setting",
+  );
+  check(
+    captioned.customCSS.includes(".22em"),
+    "and wears the type the design gave it",
+  );
+  check(
+    captioned.customJS.includes("pfd-slide-caption"),
+    "with a script that keeps it in step with the slide",
+  );
+  check(
+    !captioned.customJS.includes("<"),
+    "which carries no `<` either — one refuses the whole file",
+  );
+  /* The counter is a different badge in a different corner; declaring one must
+     not switch the other on. */
+  check(
+    !captioned.customCSS.includes("pfd-slide-count"),
+    "a caption does not drag the page-number badge along with it",
+  );
   check(
     main.data?.paginationStyle === "pagination-style-1",
     "a design that never mentions a counter keeps the dashes",

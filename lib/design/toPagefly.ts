@@ -680,10 +680,10 @@ function marqueeCss(cls: string, speed: number): string {
    Runs on preview and live, NOT in the editor canvas — PageFly runs no custom
    JS there, so in the editor the corner is simply empty.
    ========================================================================== */
-function galleryCountCss(style: Css | undefined): string {
+function galleryBadgeCss(cls: string, style: Css | undefined): string {
   return [
     "#__pf [data-pf-type=MediaMain3]{position:relative;}",
-    ".pfd-slide-count{position:absolute;left:14px;bottom:14px;z-index:4;" +
+    `.${cls}{position:absolute;left:14px;bottom:14px;z-index:4;` +
       "pointer-events:none;font-size:11px;font-weight:600;letter-spacing:.2em;" +
       "line-height:1;padding:7px 12px;background:rgba(18,16,12,.55);color:#fff;" +
       (style ? declarations(style) : "") +
@@ -691,10 +691,33 @@ function galleryCountCss(style: Css | undefined): string {
   ].join("\n");
 }
 
-/** NO `<` ANYWHERE — see `counterJs` for why one character refuses the whole
-    file. Hence `("0"+n).slice(-2)` for the pad and an unquoted attribute
-    selector, neither of which needs one. */
-function galleryCountJs(): string {
+/**
+ * The badge, and the one line that decides which badge it is.
+ *
+ * TWO THINGS GALLERIES WRITE OVER THE PHOTOGRAPH, one machine. A page number
+ * (`04 / 06`) and a caption (`04 — Strap and hem detail`) are the same object
+ * by every mechanical measure — a span appended beside the slider, kept in step
+ * with the active slide — and differ only in what they say. Written twice they
+ * would drift twice.
+ *
+ * The caption's WORDS are the merchant's, not ours to invent: Shopify's media
+ * alt text is the field a shop fills in to describe a photograph, and it is
+ * what the slide carries. A photo with none gets the number alone rather than
+ * a dangling dash.
+ *
+ * NO `<` ANYWHERE — see `counterJs` for why one character refuses the whole
+ * file. Hence `("0"+n).slice(-2)` for the pad and an unquoted attribute
+ * selector, neither of which needs one.
+ */
+function galleryBadgeJs(cls: string, kind: "count" | "caption"): string {
+  const say =
+    kind === "count"
+      ? 'badge.textContent=pad(at+1)+" / "+pad(slides.length);'
+      : [
+          'var img=slides[at].querySelector("img");',
+          'var alt=img?(img.getAttribute("alt")||""):"";',
+          'badge.textContent=alt?pad(at+1)+" \u2014 "+alt:pad(at+1);',
+        ].join("\n      ");
   return `
 var host=document.querySelector("#__pf [data-pf-type=MediaMain3]");
 if(host){
@@ -702,7 +725,7 @@ if(host){
   if(slider){
     var box=slider.parentElement||host;
     var badge=document.createElement("span");
-    badge.className="pfd-slide-count";
+    badge.className="${cls}";
     box.appendChild(badge);
     var pad=function(n){return ("0"+n).slice(-2);};
     var sync=function(){
@@ -712,7 +735,7 @@ if(host){
       slides.forEach(function(s,n){
         if(s.getAttribute("data-active")==="true"||s.classList.contains("is-current"))at=n;
       });
-      badge.textContent=pad(at+1)+" / "+pad(slides.length);
+      ${say}
     };
     sync();
     var tick=0;
@@ -1447,8 +1470,21 @@ function productBox(
     opts.customBlocks?.push({
       className: "pfd-slide-count",
       html: "",
-      css: galleryCountCss(counter),
-      js: galleryCountJs(),
+      css: galleryBadgeCss("pfd-slide-count", counter),
+      js: galleryBadgeJs("pfd-slide-count", "count"),
+    });
+  }
+
+  /* The caption is the counter's sibling, not its rival: `04 — Strap and hem
+     detail` low in the corner says what the frame is showing, and a gallery can
+     want that AND the dots. So declaring it switches nothing off. */
+  const slideCaption = node.mediaStyle?.caption;
+  if (slideCaption) {
+    opts.customBlocks?.push({
+      className: "pfd-slide-caption",
+      html: "",
+      css: galleryBadgeCss("pfd-slide-caption", slideCaption),
+      js: galleryBadgeJs("pfd-slide-caption", "caption"),
     });
   }
 

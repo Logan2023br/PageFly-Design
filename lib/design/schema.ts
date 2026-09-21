@@ -633,6 +633,16 @@ const product = z.object({
        badge is written instead. Left out, the dashes stay.
        ================================================================== */
     "counter",
+    /* `caption` IS NOT ONE EITHER, and it is the counter's sibling rather than
+       its rival: `04 — Strap and hem detail` low in a corner says what the
+       frame is showing, and a gallery can want that AND the dots. So declaring
+       it switches nothing off.
+
+       The number is counted here; the words are the merchant's. Shopify's
+       media alt text is the field a shop fills in to describe a photograph,
+       and it is what the slide carries — a photo with none gets the number
+       alone rather than a dangling dash. */
+    "caption",
     /* The strip's own tiles. `aspectRatio` above all: the default is a square,
        so a mockup whose thumbnails are landscape had every photograph in the
        strip cropped to a shape it was never composed for. `thumbSelected` is
@@ -1099,7 +1109,10 @@ export type DesignNode =
       >;
       /** the gallery's arrows and pagination; see `parts` */
       mediaStyle?: Partial<
-        Record<"nav" | "dot" | "dotActive" | "counter" | "thumb" | "thumbSelected", Css>
+        Record<
+          "nav" | "dot" | "dotActive" | "counter" | "caption" | "thumb" | "thumbSelected",
+          Css
+        >
       >;
       gallery: boolean;
       galleryEdge: "bottom" | "left" | "right" | "top";
