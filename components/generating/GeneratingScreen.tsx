@@ -50,8 +50,25 @@ function statusLine(done: number, total: number): string {
 
    THE RULE THIS KEEPS BREAKING: when a stage is added to the build, come back
    here. The number is not a guess to be left alone, it is a measurement with a
-   shelf life. */
-const SECONDS_PER_ROUND = 900;
+   shelf life.
+
+   MEASURED AGAIN, 26 single-page builds off the dev database:
+
+     p25 393s · p50 432s · p75 569s · p90 702s
+
+   So 900 was generous — only 8% of builds ran past it. 300 is the number
+   asked for, and it is BELOW the median: 88% of those builds ran longer, and
+   the screen will say "about 5m" over a build that usually takes seven. It is
+   a promise rather than a measurement, and it is the same shape as the two
+   failures above.
+
+   What keeps that from becoming those failures is the bar rather than this
+   number: it is never a countdown, it cannot reach the end early, and its
+   opening fifth now moves on the clock, so a merchant four minutes into a
+   seven-minute build sees a bar that has been climbing the whole time rather
+   than a number that has run out. If this is ever reported as "it said five
+   minutes", the honest fix is 430, not a bigger bar. */
+const SECONDS_PER_ROUND = 300;
 const AT_ONCE = 4;
 
 function estimate(total: number): number {
@@ -111,6 +128,33 @@ export function buildFraction(
   );
 
   return Math.max(0, Math.min(1, (settled + inFlight) / total));
+}
+
+/* ==========================================================================
+   THE FIRST FIFTH IS TIME, THE REST IS WORK.
+
+   A build is one model call, then another, then a third, and nothing lands for
+   three or four minutes. `buildFraction` is honestly zero for all of it, and a
+   bar that sits at zero that long is a bar a merchant reads as broken — the
+   two things they can do about it, reload or start again, are both worse than
+   waiting, and one of them costs a page of their allowance.
+
+   So the opening fifth is drawn from the clock. It climbs to 20% over the
+   first seconds and stops there; the work fills the remaining four fifths. The
+   bar is then never ahead of the truth by more than that fifth, never goes
+   backwards, and cannot reach the end early — which is the failure every
+   number on this screen has had at least once.
+   ========================================================================== */
+const LEAD = 0.2;
+const LEAD_SECONDS = 12;
+
+export function displayFraction(raw: number, elapsedSeconds: number): number {
+  const real = Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 0;
+  const secs = Number.isFinite(elapsedSeconds) ? Math.max(0, elapsedSeconds) : 0;
+  const lead = Math.min(LEAD, (secs / LEAD_SECONDS) * LEAD);
+  /* The work's own share starts where the lead ends, so a page that lands
+     while the lead is still climbing cannot pull the bar backwards. */
+  return Math.max(lead, real === 0 ? 0 : LEAD + (1 - LEAD) * real);
 }
 
 /**
@@ -176,7 +220,7 @@ export function GeneratingScreen() {
   const total = plan.length;
   const settled = pages.length + failures.length;
 
-  const raw = buildFraction(settled, total, progress);
+  const raw = displayFraction(buildFraction(settled, total, progress), elapsed);
   const shown = useSmoothed(raw, !reduced);
   const pct = Math.round(shown * 100);
 

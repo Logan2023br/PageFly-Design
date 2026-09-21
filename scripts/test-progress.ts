@@ -24,7 +24,9 @@ function check(ok: boolean, label: string, detail: string | null = null): void {
 }
 
 async function main(): Promise<void> {
-  const { buildFraction } = await import("@/components/generating/GeneratingScreen");
+  const { buildFraction, displayFraction } = await import(
+    "@/components/generating/GeneratingScreen"
+  );
   const pct = (s: number, t: number, p: Record<string, number> = {}) =>
     Math.round(buildFraction(s, t, p) * 100);
 
@@ -79,6 +81,54 @@ async function main(): Promise<void> {
   >;
   check(Number.isFinite(buildFraction(1, 4, junk)), "the answer is a number", String(buildFraction(1, 4, junk)));
   check(pct(1, 4, junk) === 25, "and counts only what actually landed", String(pct(1, 4, junk)));
+  /* ======================================================================
+     THE FIRST FIFTH IS TIME, THE REST IS WORK.
+
+     A build is one model call, then another, then a third; nothing lands for
+     three or four minutes and `buildFraction` is honestly 0 for all of it. A
+     bar that sits at zero that long is a bar a merchant reads as broken — and
+     the two things they can do about it, reload or start again, are both worse
+     than waiting.
+
+     So the first fifth is drawn from the clock: it climbs to 20% over the
+     opening seconds and stops there, and real progress fills the remaining
+     four fifths. The bar is then never AHEAD of the work by more than that
+     fifth, never goes backwards, and never reaches the end early — which is
+     the failure every number on this screen has had at least once.
+     ====================================================================== */
+  console.log("\nthe opening fifth");
+
+  const d = (raw: number, sec: number) => Math.round(displayFraction(raw, sec) * 100);
+
+  check(d(0, 0) === 0, "nothing has happened and nothing is shown", String(d(0, 0)));
+  check(d(0, 2) > 0, "a second or two in, the bar has moved", String(d(0, 2)));
+  check(d(0, 12) === 20, "the opening fifth is filled by the clock alone", String(d(0, 12)));
+  check(d(0, 600) === 20, "and stops there, however long the wait", String(d(0, 600)));
+
+  check(d(0.5, 600) === 60, "half the work done reads as sixty", String(d(0.5, 600)));
+  check(d(1, 600) === 100, "and all of it as a hundred", String(d(1, 600)));
+  check(d(1, 0) === 100, "a build that finishes at once is finished", String(d(1, 0)));
+
+  /* Monotonic in both, because a bar that goes backwards reads as work lost. */
+  let last = -1;
+  let climbs = true;
+  for (let sec = 0; sec <= 60; sec += 3) {
+    const v = displayFraction(0, sec);
+    if (v < last) climbs = false;
+    last = v;
+  }
+  check(climbs, "it only ever climbs as the clock runs");
+
+  last = -1;
+  climbs = true;
+  for (let r = 0; r <= 1.0001; r += 0.05) {
+    const v = displayFraction(Math.min(1, r), 600);
+    if (v < last) climbs = false;
+    last = v;
+  }
+  check(climbs, "and only ever climbs as the work lands");
+  check(displayFraction(2, 600) <= 1, "and never runs past the end", String(displayFraction(2, 600)));
+
 
   console.log(failures === 0 ? "\nall good\n" : `\n${failures} failure(s)\n`);
   process.exit(failures === 0 ? 0 : 1);
