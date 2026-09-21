@@ -1757,8 +1757,25 @@ function productBox(
               " appearance: none; cursor: pointer; width: 100%;" +
               part("dropdown"),
 
-            /* colour dots */
-            "& .pf-vs-color label":
+            /* ==============================================================
+               COLOUR DOTS — AND `>` IS LOAD-BEARING.
+
+               PageFly wraps a label swatch twice, and the OUTER wrapper carries
+               the colour classes whichever kind it is:
+
+                 div.pf-vs-color.pf-vs-square      colour: label is a child
+                   input + label
+                 div.pf-vs-color.pf-vs-square      size: SAME classes
+                   div.pf-vs-label
+                     input + label                 label is a grandchild
+
+               Written as a descendant, the round 30px chip rule below also
+               matched every size box. Both rules are two classes deep, so
+               specificity ties and source order decides — the square rule is
+               written last, won, and the mockup's square size boxes imported
+               as pills.
+               ============================================================== */
+            "& .pf-vs-color > label":
               `width: 28px; height: 28px; border-radius: 999px; border: 1px solid ${rule};` +
               " cursor: pointer; transition: box-shadow .15s ease;" +
               part("dot"),
@@ -1775,7 +1792,7 @@ function productBox(
                pushes it below centre — which is what "the size sits low" was.
                Centring both axes makes the tile the same height whatever is in
                it, which a size grid needs anyway. */
-            "& .pf-vs-label label":
+            "& .pf-vs-label > label":
               `min-width: 48px; padding: 10px 14px; border: 1px solid ${rule};` +
               " display: flex; align-items: center; justify-content: center;" +
               ` text-align: center; cursor: pointer; font-size: 14px; ${inkRule(opts)}` +
@@ -1794,7 +1811,7 @@ function productBox(
             /* image / square swatches */
             /* A square swatch is a dot that is not round, so it takes the same
                amendment — a mockup stating 54px squares means both. */
-            "& .pf-vs-square label":
+            "& .pf-vs-square > label":
               `border: 1px solid ${rule}; cursor: pointer;` +
               (r ? ` border-radius: ${r}px;` : "") +
               part("dot"),

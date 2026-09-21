@@ -2838,6 +2838,46 @@ async function main(): Promise<void> {
   const tile = chosen.cssOf(sw.id, "all", '& .pf-vs-label > input[type="radio"]:checked + label');
   check(tile.includes("#C6A667"), "a chosen size tile takes the accent", tile.slice(0, 60));
 
+  /* ==========================================================================
+     A SIZE BOX IS INSIDE A COLOUR WRAPPER, so a descendant selector reaches it.
+
+     PageFly wraps a label swatch twice and the outer wrapper carries the
+     colour classes:
+
+         div.pf-vs-color.pf-vs-square          ← colour swatch: label is a CHILD
+           input + label
+
+         div.pf-vs-color.pf-vs-square          ← size swatch: SAME classes
+           div.pf-vs-label
+             input + label                      ← label is a GRANDCHILD
+
+     Written as `& .pf-vs-square label`, the round 30px colour-chip rule
+     therefore also matched every size box. Both rules are two classes deep, so
+     specificity ties and source order decides: the square rule is written last
+     and won, and the mockup's square size boxes imported as pills.
+
+     `>` says what was always meant — the label this swatch owns, not one
+     nested inside it.
+     ========================================================================== */
+  for (const kind of ["color", "square"]) {
+    check(
+      chosen.cssOf(sw.id, "all", `& .pf-vs-${kind} label`) === "",
+      `no descendant rule for .pf-vs-${kind} — it would reach into a size box`,
+      chosen.cssOf(sw.id, "all", `& .pf-vs-${kind} label`).slice(0, 60),
+    );
+    check(
+      chosen.cssOf(sw.id, "all", `& .pf-vs-${kind} > label`) !== "",
+      `.pf-vs-${kind} styles the label it owns`,
+      chosen.cssOf(sw.id, "all", `& .pf-vs-${kind} > label`).slice(0, 60) || "(no rule)",
+    );
+  }
+  check(
+    chosen.cssOf(sw.id, "all", "& .pf-vs-label label") === "" &&
+      chosen.cssOf(sw.id, "all", "& .pf-vs-label > label") !== "",
+    "and the size box is styled through its own wrapper, by child too",
+    chosen.cssOf(sw.id, "all", "& .pf-vs-label > label").slice(0, 60) || "(no rule)",
+  );
+
   const soldOut = chosen.cssOf(sw.id, "all", '& .pf-vs-label > input[type="radio"]:disabled + label');
   check(
     soldOut.includes("line-through"),
