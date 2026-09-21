@@ -2913,8 +2913,33 @@ function accordionOf(
          room every closed row keeps for an answer nobody can see. Seven
          questions, seven dead bands. The answer text carries its own padding
          one level in, which is where the mockup puts it too. */
-      "& .pf-accordion-body":
-        `line-height: 1.6; opacity: .72; ${inkRule(opts, sd)}${part("body")}`,
+      /* THE MARK HAS TO FOLLOW THE ROW, AND ITS OWN SCRIPT DID NOT.
+
+         PageFly renders both glyphs on every header and hides one; which one
+         is its script's business, and on a live page every header read
+         `data-active="false"` — the open row included. `<details>` opens
+         natively whether or not that script runs, so the answer appeared and
+         the mark stayed a plus. A plus drawn over a minus is a plus, and a
+         reader had no way to tell an open question from a shut one.
+
+         `details[open]` is the native state and cannot disagree with what is
+         on the screen. It is the only state here that can be relied on. */
+      "& .pfa-minus": "display: none !important;",
+      "& details[open] .pfa-plus": "display: none !important;",
+      "& details[open] .pfa-minus": "display: inline-block !important;",
+      /* AND THE ROOM A SHUT ROW KEEPS. Four elements stand between the answer
+         and the row, and a shut one keeps whatever padding any of them has —
+         the tab panels' bug, one element over and two levels deeper. The
+         answer's own padding rides on the paragraph, which collapses with it. */
+      "& .pf-accordion-body": `padding: 0; ${inkRule(opts, sd)}`,
+      "& .pf-accordion-display-content": "padding: 0; margin: 0;",
+      /* THE DESIGN'S OWN ANSWER STYLING GOES ONE LEVEL FURTHER IN, and that is
+         not tidiness. A padding written on either wrapper above is room a shut
+         row keeps; written here it collapses with the answer it belongs to. A
+         design telling us how its answers are set should not have to know
+         which of four wrappers survives a close. */
+      '& [data-pf-type="Accordion3.Flex.Content"]':
+        `line-height: 1.6; opacity: .72;${part("body")}`,
       /* THE DIMMING IS A FALLBACK AND HAS TO BEHAVE LIKE ONE. `opacity: .5`
          is a reasonable look for a mark nobody described; on a mark the mockup
          DID describe it is this file overruling it, and a design stating the

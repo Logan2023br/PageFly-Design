@@ -655,6 +655,61 @@ async function main(): Promise<void> {
   }
 
   {
+    /* ---- THE MARK NEVER BECAME A MINUS ----------------------------------
+
+       PageFly renders BOTH glyphs on every row and hides one:
+
+         <svg class="pf-accordion-icon pfa-plus  pfa-arrow">…</svg>
+         <svg class="pf-accordion-icon pfa-minus pfa-arrow">…</svg>
+
+       Which one shows is its own script's business, and on a live page every
+       header read `data-active="false"` — including the row that was open.
+       `<details>` opens natively whether or not that script runs, so the
+       answer appeared and the mark did not change: a plus drawn over a minus
+       is a plus, and a reader had no way to tell an open question from a shut
+       one.
+
+       `details[open]` is the native state and cannot be out of step with what
+       is on the screen, so the swap is written against it. It is also the only
+       state this file can be sure of.
+
+       AND THE BODY'S WRAPPERS KEEP THEIR ROOM. Four elements stand between the
+       answer and the row — Content.Wrapper, Content, display-content,
+       Flex.Content — and a shut row keeps whatever padding any of them has,
+       the same way the tab panels did. The answer's own padding is on the
+       paragraph, which collapses with it. */
+    const marks = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "accordion",
+              items: [{ q: "How do I care for it?", a: "Hand wash cool." }],
+            },
+          ],
+          "faq-accordion",
+        ),
+      ],
+    }, "faq3");
+    const a3 = marks.items.find((i) => i.type === "Accordion3");
+    const shut = marks.cssOf(a3?.id ?? "", "all", "& .pfa-minus");
+    const openPlus = marks.cssOf(a3?.id ?? "", "all", "& details[open] .pfa-plus");
+    const openMinus = marks.cssOf(a3?.id ?? "", "all", "& details[open] .pfa-minus");
+    check(/display:\s*none/.test(shut), "the minus is hidden while the row is shut", shut || "(no rule)");
+    check(/display:\s*none/.test(openPlus), "the plus goes when the row opens", openPlus || "(no rule)");
+    check(
+      /display:\s*(inline-)?block/.test(openMinus),
+      "and the minus takes its place",
+      openMinus || "(no rule)",
+    );
+
+    const body2 = marks.cssOf(a3?.id ?? "", "all", "& .pf-accordion-body");
+    const inner = marks.cssOf(a3?.id ?? "", "all", "& .pf-accordion-display-content");
+    check(/padding:\s*0/.test(body2), "the answer's panel keeps no room of its own", body2 || "(no rule)");
+    check(/padding:\s*0/.test(inner), "nor the wrapper inside it", inner || "(no rule)");
+  }
+
+  {
     /* ---- THE ROW THAT IS OPEN, AND THE ROOM A CLOSED ONE KEEPS ----------
 
        The mockup:
@@ -715,9 +770,17 @@ async function main(): Promise<void> {
     );
     const body = faq.cssOf(a2?.id ?? "", "all", "& .pf-accordion-body");
     check(
-      !/padding/.test(body),
-      "a shut row keeps no padding for a body nobody can see",
+      /padding:\s*0/.test(body) && !/padding[^:]*:\s*[1-9]/.test(body),
+      "a shut row keeps no room for a body nobody can see",
       body || "(no rule)",
+    );
+    /* And the design's own answer styling is one level further in, where it
+       collapses with the row rather than propping it open. */
+    const answer = faq.cssOf(a2?.id ?? "", "all", '& [data-pf-type="Accordion3.Flex.Content"]');
+    check(
+      answer.includes("line-height"),
+      "the answer is styled where it collapses with the row",
+      answer || "(no rule)",
     );
   }
 
@@ -2318,7 +2381,9 @@ async function main(): Promise<void> {
     }, "acc");
     const el = acc.items.find((i) => i.type === "Accordion3")!;
     const row = acc.cssOf(el.id, "all", "& .pf-header-item-wrapper");
-    const body = acc.cssOf(el.id, "all", "& .pf-accordion-body");
+    /* The answer is styled one level in, on the block that collapses with the
+       row — see the note in `accordionOf`. The panel above it holds no room. */
+    const body = acc.cssOf(el.id, "all", '& [data-pf-type="Accordion3.Flex.Content"]');
     const icon = acc.cssOf(el.id, "all", "& .pf-accordion-icon");
     check(/font-size:\s*17px/.test(row) && /Gelasio/.test(row), "the row takes the mockup's type", row.slice(-70));
     check(/padding:\s*20px 0/.test(row), "and its spacing", row.slice(-70));
