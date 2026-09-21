@@ -465,6 +465,28 @@ function specLines(node: SpecNode, depth: number): string[] {
  */
 function orderLines(order: Order, bg: string, ink: string): string[] {
   return [
+    /* FIRST, BECAUSE IT IS WHY THE REST IS THERE.
+
+       Everything below this is a WHAT — a pattern id, a band's padding, a node
+       and its numbers — and a model handed only furniture can place every
+       piece correctly and still build a page nobody looks at twice. The
+       direction is the argument the designing model made, in its own words,
+       and it is the one thing here that could not have been written as a
+       value.
+
+       Absent on a page whose spec carried none, and then this block is not
+       there at all: an order without a direction produces the bytes it
+       produced before this existed. */
+    ...(order.direction
+      ? [
+          `THE DIRECTION — what this page is for, from the model that designed`,
+          `it. Everything below serves this. Where the two seem to disagree,`,
+          `this is the one that knows why.`,
+          ``,
+          ...order.direction.split("\n").map((line) => `  ${line}`),
+          ``,
+        ]
+      : []),
     `THE ORDER — build exactly these sections, in this order, one section each.`,
     `Copy the pattern id into the section's "pattern" field verbatim.`,
     /* Gated on the BACKGROUNDS, not on the specs. It sat inside the spec

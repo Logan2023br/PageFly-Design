@@ -265,6 +265,17 @@ export type Order = {
    * it, and a page without one is the page as it was before this existed.
    */
   style?: PageStyle | null;
+  /**
+   * WHY this page is these sections, in the design model's own words.
+   *
+   * On the Order for the same reason `style` is: one per page. Everything else
+   * that reaches stage 3 is a WHAT — a node, a number, a pattern id — and a
+   * list of furniture is not an argument. This is the part that cannot be said
+   * in values, which is exactly why it is prose and why it is short.
+   *
+   * Optional. A page without one is the page as it was before this existed.
+   */
+  direction?: string | null;
   vertical: string;
   archetype: "A" | "B" | "C" | "D" | "E" | "F" | "G";
   sections: OrderSection[];

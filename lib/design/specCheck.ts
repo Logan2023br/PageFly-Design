@@ -367,6 +367,28 @@ export function vetBand(raw: unknown, drops?: Map<string, number>): BandStyle | 
   return { ...(css ? { css } : {}), ...(mobile ? { mobile } : {}), ...(bg ? { bg } : {}) };
 }
 
+/**
+ * The page's own argument, kept as the model wrote it.
+ *
+ * Everything else this file checks is a value against a closed set. This one is
+ * prose and cannot be checked that way: what it says is exactly the part no
+ * schema can hold. So the only questions asked of it are whether it is a string
+ * with something in it, and whether it is short enough to travel.
+ *
+ * 1,200 CHARACTERS. Long enough for four or five sentences — what the page type
+ * has to do, the moves that make this one worth remembering, what moves and
+ * where, and what it leaves out. Short enough that a model which decides to
+ * write an essay instead of a page cannot push the bands out of stage 3's
+ * prompt. Cut rather than refused, because half a direction still says more
+ * than none.
+ */
+export function vetDirection(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const said = raw.trim();
+  if (!said) return null;
+  return said.length > 1200 ? said.slice(0, 1200).trimEnd() : said;
+}
+
 export function vetSpec(raw: unknown, pageType?: string): SectionSpec | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const list = (raw as Record<string, unknown>).nodes;

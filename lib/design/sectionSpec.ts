@@ -15,7 +15,7 @@ import type {
 } from "./plan";
 import { marketById } from "../briefOptions";
 import { marketLines } from "./marketLines";
-import { beginDropTally, dropTally, vetPageStyle, vetBand, vetSpec } from "./specCheck";
+import { beginDropTally, dropTally, vetDirection, vetPageStyle, vetBand, vetSpec } from "./specCheck";
 import { THE_STANDARD } from "./standard";
 
 /* ==========================================================================
@@ -178,6 +178,14 @@ export type SpecOutcome = {
    * shared defaults and nothing else.
    */
   pageStyle?: PageStyle;
+  /**
+   * Why this page is these sections, in the design model's own words.
+   *
+   * Undefined when the answer carried none, and then stage 3's prompt says
+   * nothing about it — the page it builds is the page it built before this
+   * existed.
+   */
+  direction?: string;
   usage: Usage;
   /**
    * Declarations the design model asked for and the checker refused, by name.
@@ -487,6 +495,38 @@ function systemPrompt(ask: SpecAsk): string {
     ``,
     `SAY EACH SHARED THING ONCE. The palette, the type scale and the motion`,
     `curve are the same in band one and band nine; repeating them nine times`,
+    `START WITH "direction", AND WRITE IT BEFORE YOU CHOOSE A SINGLE SECTION.`,
+    `Four or five sentences, prose, and the only prose in your answer. It is`,
+    `handed verbatim to the model that builds this page, which otherwise`,
+    `receives a list of furniture and no argument — it can place every element`,
+    `you name correctly and still produce a page nobody looks at twice.`,
+    ``,
+    `  WHAT A PAGE OF THIS TYPE HAS TO DO. A product page has to make the`,
+    `  thing believable before the price is read. A home page has to say what`,
+    `  kind of store this is in one screen and give a reason to go deeper. A`,
+    `  collection page is a shopping instrument first. They are not the same`,
+    `  page with different words in it, and a spec that would suit any of them`,
+    `  suits none.`,
+    ``,
+    `  THE TWO OR THREE MOVES that make THIS one worth remembering, and why`,
+    `  they belong to THIS store — its material, its proof, the thing only it`,
+    `  can say. Name them. "A wash-test comparison, because a photograph`,
+    `  cannot prove a knit survives forty washes" is a move; "a hero and some`,
+    `  trust badges" is a template.`,
+    ``,
+    `  WHAT MOVES, AND WHERE. Motion is a tool with one use here: making a`,
+    `  page feel considered as it is read. Say what animates, at what moment,`,
+    `  and why there rather than somewhere else. A page where everything`,
+    `  moves has said nothing.`,
+    ``,
+    `  WHAT YOU ARE LEAVING OUT, and this is the hard half. Name the section`,
+    `  or the element this page type usually carries that you have decided`,
+    `  against, and why it earns nothing here. A page is made by what it`,
+    `  refuses as much as by what it holds.`,
+    ``,
+    `Then the numbers. "direction" is the only place English is wanted;`,
+    `everything after it is values.`,
+    ``,
     `buys nothing and is billed every time. Open your answer with "pageStyle":`,
     ``,
     `  "pageStyle": {`,
@@ -644,9 +684,9 @@ function systemPrompt(ask: SpecAsk): string {
              and the exporter at all; `role` is one of seven because the audit
              and the stage-3 prompt read it. None of them says what to design —
              they are the shape an answer has to arrive in. */
-          `ANSWER SHAPE. One object — "pageStyle" once, then "sections" in the`,
-          `order they appear on the page. No prose:`,
-          `{"pageStyle":{"type":{...},"treatments":{...},"motion":"..."},`,
+          `ANSWER SHAPE. One object — "direction" once, "pageStyle" once, then`,
+          `"sections" in the order they appear on the page:`,
+          `{"direction":"...", "pageStyle":{"type":{...},"treatments":{...},"motion":"..."},`,
           ` "sections":[{"name":"the-workshop-at-scale",`,
           `   "role":"media","signature":true,"dark":false,"padding":"statement",`,
           `   "band":{"css":{"backgroundImage":"linear-gradient(180deg,#FFF,#FBF3F5)",`,
@@ -657,9 +697,9 @@ function systemPrompt(ask: SpecAsk): string {
           `   is here","nodes":[`,
         ]
       : [
-          `ANSWER SHAPE. One object — "pageStyle" once, then "bands" keyed by the band`,
-          `numbers below. No prose:`,
-          `{"pageStyle":{"type":{...},"treatments":{...},"motion":"..."},`,
+          `ANSWER SHAPE. One object — "direction" once, "pageStyle" once, then`,
+          `"bands" keyed by the band numbers below:`,
+          `{"direction":"...", "pageStyle":{"type":{...},"treatments":{...},"motion":"..."},`,
           ` "bands":{"1":{"nodes":[`,
         ]),
     `{"el":"row","gap":48,"css":{"maxWidth":"1240px","padding":"0 56px",`,
@@ -994,6 +1034,7 @@ export async function planSpecs(ask: SpecAsk, signal?: AbortSignal): Promise<Spe
 
     beginDropTally();
     const pageStyle = vetPageStyle(parsed.pageStyle);
+    const direction = vetDirection((parsed as { direction?: unknown }).direction);
     const specs = new Map<number, SectionSpec>();
     const sections: OrderSection[] = [];
     let dropped = 0;
@@ -1075,12 +1116,17 @@ export async function planSpecs(ask: SpecAsk, signal?: AbortSignal): Promise<Spe
       motionIds: [],
       sections,
       ...(pageStyle ? { style: pageStyle } : {}),
+      /* FREE MODE'S ORDER IS WHAT STAGE 3 IS GIVEN, so the direction has to
+         ride on it here. The banded path returns it on the outcome instead and
+         the runner attaches it, the same way `style` travels. */
+      ...(direction ? { direction } : {}),
     };
 
     return {
       specs,
       order,
       pageStyle,
+      ...(direction ? { direction } : {}),
       usage,
       reason: null,
       model: modelName("design"),
@@ -1111,6 +1157,7 @@ export async function planSpecs(ask: SpecAsk, signal?: AbortSignal): Promise<Spe
      log line below can say what the design model asked for and did not get. */
   beginDropTally();
   const pageStyle = vetPageStyle(parsed.pageStyle);
+  const direction = vetDirection((parsed as { direction?: unknown }).direction);
   const specs = new Map<number, SectionSpec>();
   let dropped = 0;
 
@@ -1131,5 +1178,14 @@ export async function planSpecs(ask: SpecAsk, signal?: AbortSignal): Promise<Spe
     specs.set(i, spec);
   }
 
-  return { specs, pageStyle, usage, reason: null, model: modelName("design"), dropped, refused: dropTally() };
+  return {
+    specs,
+    pageStyle,
+    ...(direction ? { direction } : {}),
+    usage,
+    reason: null,
+    model: modelName("design"),
+    dropped,
+    refused: dropTally(),
+  };
 }

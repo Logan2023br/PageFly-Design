@@ -455,6 +455,9 @@ async function run(
       }
       /* One per page, so it lands on the order rather than on every band. */
       if (outcome.pageStyle) order.style = outcome.pageStyle;
+      /* The argument that produced those bands, travelling with them. Stage 3
+         is otherwise handed furniture and no reason for it. */
+      if (outcome.direction) order.direction = outcome.direction;
 
       /* `dropped` is the number that says "prompt bug" rather than "model had a
          bad day" — a band whose answer failed vetting named something outside
