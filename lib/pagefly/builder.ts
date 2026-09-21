@@ -1438,6 +1438,8 @@ function handleLabels(
   knobLook: string,
   /** shapes the mockup DRAWS in the grip, when no character comes close */
   marks: { one?: string; two?: string },
+  /** the line between the two photographs */
+  bar: string,
 ): Record<string, string> {
   /* `?? ""` because export also runs over design trees stored before these
      captions were drawn, and on those the field is simply absent. */
@@ -1493,6 +1495,18 @@ function handleLabels(
      rather than the character it also guessed at. `content` is what makes a
      pseudo-element exist at all; the shape, the size and the colour are the
      design's, read off the mockup's own path. */
+  /* THE SEAM, AND SILENCE MEANS NONE.
+
+     PageFly's own is four pixels wide in its own colour. A mockup draws a
+     one-pixel line, or draws none — and four pixels of a colour the design
+     never chose, down the middle of a photograph, is the more visible of the
+     two mistakes. So a design that says nothing gets nothing, the same way a
+     gallery that mentions no arrows gets none.
+
+     The handle is not the drag target: the content around it carries
+     `cursor: col-resize` and the pointer handling, so a zero-width line costs
+     the visitor no way to drag. */
+  out["& .pf-ba-handle"] = bar.trim() || "width: 0;";
   if (one) out["& .pf-ba-handle-circle::before"] = `content: ""; display: block; ${one}`;
   if (two) out["& .pf-ba-handle-circle::after"] = `content: ""; display: block; ${two}`;
   return out;
@@ -1523,6 +1537,8 @@ export function BEFORE_AFTER(
   look: {
     at?: "corner" | "handle";
     label?: string;
+    /** the line between the two photographs — the mockup's width and colour */
+    bar?: string;
     knob?: string;
     glyph?: string;
     /** the mockup's own drawing, when its grip holds shapes and not a character */
@@ -1574,6 +1590,7 @@ export function BEFORE_AFTER(
         look.glyph ?? "",
         look.knob ?? "",
         { one: look.mark, two: look.markTwo },
+        look.bar ?? "",
       ),
     ),
     [],

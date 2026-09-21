@@ -1237,6 +1237,7 @@ function emitNode(
         {
           at: node.compareLabelAt === "handle" ? "handle" : "corner",
           ...(node.compareStyle?.label ? { label: declarations(node.compareStyle.label) } : {}),
+          ...(node.compareStyle?.bar ? { bar: declarations(node.compareStyle.bar) } : {}),
           ...(node.compareStyle?.knob ? { knob: declarations(node.compareStyle.knob) } : {}),
           ...(node.knobGlyph ? { glyph: node.knobGlyph } : {}),
           /* THE GRIP'S MARK, COPIED RATHER THAN NAMED. A mockup draws it as an

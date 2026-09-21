@@ -1203,7 +1203,16 @@ const beforeAfter = z.object({
    * handle, which PageFly draws as a plain round dot and mockups draw as
    * anything — a square plate, a bordered circle, a tinted pill.
    */
-  compareStyle: parts(["label", "knob", "mark", "markTwo"] as const, ["mark", "markTwo"]),
+  /**
+   * `bar` is the LINE between the two photographs, and it had no field.
+   *
+   * PageFly draws it four pixels wide in its own colour; mockups draw a seam —
+   * `width:1px;background:rgba(251,250,247,.9)` on the handle. Left unsaid it
+   * is now ZERO rather than four: a line the design never mentioned is a line
+   * the design did not draw, and four pixels of somebody else's colour down
+   * the middle of a photograph is the more visible of the two mistakes.
+   */
+  compareStyle: parts(["bar", "label", "knob", "mark", "markTwo"] as const, ["mark", "markTwo"]),
   /**
    * The character drawn inside the grip — `↔` is the usual one.
    *

@@ -140,6 +140,13 @@ async function main(): Promise<void> {
   for (const [field, near, why] of [
     ["markTwo", /svg/i, "the mark is usually drawn as an svg shape, not typed"],
     ["markTwo", /polygon/i, "and a straight-sided path becomes a clip-path polygon"],
+    /* `bar` on its own is worthless as a probe — a tab bar is also a bar. What
+       has to be present is the SEAM being named where a comparison is
+       described, so the probe is the thing only that paragraph would say. */
+    /* `\s+` and not a space: these prompts are arrays of lines joined with
+       newlines, so any phrase long enough to be worth probing for is a phrase
+       that will sometimes be split across two of them. */
+    ["compareStyle", /line between the two\s+photographs/i, "the seam between the two photographs"],
   ] as [string, RegExp, string][]) {
     for (const [label, text] of [
       ["ASK", ask],

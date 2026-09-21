@@ -4651,6 +4651,66 @@ console.log("\nfour spec bars stacked in a col");
   }
 
   {
+    /* ---- THE LINE BETWEEN THE TWO PHOTOGRAPHS ---------------------------
+
+       PageFly draws the divider four pixels wide in its own colour. The
+       mockup measured against draws it at one:
+
+         .ba-handle{width:1px;background:rgba(251,250,247,.9)}
+
+       Four against one is visible on the page — a bar rather than a seam, in
+       a colour the design never chose — and `compareStyle` had `label`,
+       `knob`, `mark` and `markTwo` and no way to say it. A design whose
+       comparison draws NO line at all says `width: 0`, which is equally
+       unsayable today. */
+    const seam = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "beforeAfter",
+              beforeQuery: "new knit",
+              afterQuery: "washed knit",
+              compareStyle: { bar: { width: "1px", background: "rgba(251,250,247,.9)" } },
+            },
+          ],
+          "split",
+        ),
+      ],
+    }, "seam");
+    const s2 = seam.items.find((i) => i.type === "ImageComparison");
+    const bar = seam.cssOf(s2?.id ?? "", "all", "& .pf-ba-handle");
+    check(/width:\s*1px/.test(bar), "the seam is the width the mockup drew", bar || "(no rule)");
+    check(
+      bar.includes("rgba(251,250,247,.9)"),
+      "in the colour the mockup drew it",
+      bar || "(no rule)",
+    );
+
+    /* ---- AND NO SEAM AT ALL UNTIL ONE IS ASKED FOR --------------------
+
+       Four pixels of somebody else's colour down the middle of a photograph
+       is the more visible of the two mistakes, so silence is zero rather than
+       four. A comparison that draws a line says so; one that says nothing
+       drew nothing. */
+    const silent = await open({
+      sections: [
+        section(
+          [{ type: "beforeAfter", beforeQuery: "new knit", afterQuery: "washed knit" }],
+          "split",
+        ),
+      ],
+    }, "seam0");
+    const s3 = silent.items.find((i) => i.type === "ImageComparison");
+    const none = silent.cssOf(s3?.id ?? "", "all", "& .pf-ba-handle");
+    check(
+      /width:\s*0/.test(none),
+      "a comparison that mentions no line gets none, not PageFly's four pixels",
+      none || "(no rule)",
+    );
+  }
+
+  {
     /* ---- AND A MARK NO CHARACTER COMES CLOSE TO IS COPIED, NOT NAMED ----
 
        `knobGlyph` takes a character, and a character is a guess. The mockup
