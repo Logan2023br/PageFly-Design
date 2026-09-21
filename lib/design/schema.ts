@@ -893,6 +893,74 @@ const productList = z.object({
    * add whichever one it landed on.
    */
   atcLabel: words(24),
+  /**
+   * WHERE the button sits, because two mockups put it in two places.
+   *
+   * `meta` is under the price, in the flow, always visible. `image` is the
+   * habit this mockup has: pinned inside the photograph, near its lower edge,
+   * and — with `atcReveal: "hover"` — invisible until the card is pointed at.
+   * Neither is sayable in `css`: the positioning properties are stripped, and
+   * the reveal is a rule on the CARD that reaches the button.
+   */
+  atcAt: choice(["meta", "image"] as const, "meta"),
+  atcReveal: choice(["always", "hover"] as const, "always"),
+  /**
+   * The photograph's shape, as an `aspect-ratio` — `1 / 1.25`, `4 / 5`.
+   *
+   * Empty means a square, which is PageFly's safe product default and was this
+   * file's hardcoded answer for every mockup ever imported. A grid of tall
+   * cards arrived cropped square and nobody could say otherwise.
+   */
+  cardRatio: words(12),
+  /** the gap between cards, in px, as the mockup's grid sets it */
+  cardGap: whole(0, 80, 24),
+  /**
+   * Whether the card's photograph pages.
+   *
+   * OFF, and that is the mockup's answer almost every time: a card draws ONE
+   * photograph and has nothing to page to. PageFly's default is a visible
+   * arrow, so every card exported before this wore a control over a picture
+   * that does not move.
+   */
+  cardArrow: flag(false),
+  /**
+   * The chip over the card's photograph — "New", "Last pieces", "-33%".
+   *
+   * PageFly has one built in: `showBadge` on the media plus a corner. A badge
+   * drawn as a node of its own is dropped on import, so this is the field that
+   * reaches it. Empty means the mockup drew none.
+   */
+  badge: words(20),
+  badgeCorner: choice(
+    ["TOP_LEFT", "TOP_RIGHT", "BOTTOM_LEFT", "BOTTOM_RIGHT"] as const,
+    "TOP_LEFT",
+  ),
+  /**
+   * The line the mockup writes under the price — a rating, a review count, a
+   * colour count.
+   *
+   * IT IS THE SAME ON EVERY CARD, because the card is one template stamped over
+   * the shop's products. Write it only when the mockup draws one, and write
+   * what the mockup says.
+   */
+  cardNote: words(60),
+  /**
+   * How the card LOOKS, part by part — the thing this node could not say at
+   * all. Every value here was a constant in the exporter, so four mockups
+   * produced four identical cards.
+   */
+  cardStyle: parts([
+    "image",
+    "title",
+    "price",
+    "compareAt",
+    "atc",
+    "atcHover",
+    "badge",
+    "note",
+    "nav",
+    "navMark",
+  ] as const),
   /** search phrase for the placeholder photo the mockup shows */
   query,
   ...styled,

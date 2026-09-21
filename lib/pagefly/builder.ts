@@ -323,11 +323,20 @@ export function CUSTOM_HTML(code: string, styleData?: StyleData, cls?: string) {
 /** Renders a <form action="/cart/add">, so layout styling has to target
     `& > form` — styling `&` leaves the form at its own default width, which is
     the single easiest way to make an imported product page look wrong. */
-export function PRODUCT_BOX(media: PFNode, info: PFNode, css: string) {
+export function PRODUCT_BOX(
+  media: PFNode,
+  info: PFNode,
+  css: string,
+  /* Rules that belong to the CARD rather than to anything inside it — a
+     quick-add that appears when the card is pointed at is `.pcard:hover .qadd`
+     in the mockup, and the card is this element. The slots are fixed at
+     ProductMedia3 + FlexBlock, so there is no wrapper to hang them on. */
+  parts: Record<string, string> = {},
+) {
   return node(
     "ProductBox",
     {},
-    { all: { "&": "width: 100%;", "& > form": css } },
+    { all: { "&": "width: 100%;", "& > form": css, ...parts } },
     [media, info],
   );
 }

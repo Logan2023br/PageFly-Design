@@ -2138,32 +2138,144 @@ function productGrid(
   sd: StyleData,
   opts: EmitOptions,
 ): PFNode {
-  const card = PRODUCT_BOX(
-    PRODUCT_MEDIA(
-      MEDIA_MAIN({ all: { "&": "width: 100%; aspect-ratio: 1 / 1;" } }),
-      /* No thumbnail strip on a grid card — the gallery belongs on the product
-         page, and on a card it is noise under every tile. */
-      /* No CSS hiding it: a card's `showList` is false, which is the default
-         PRODUCT_MEDIA applies, so the list is not rendered at all. Hiding a
-         rendered list with `display:none` left it in the editor's tree as an
-         element a merchant could turn back on and get a broken card. */
-      MEDIA_LIST(undefined, null, null),
-      /* SHAPE THE PHOTO, or the grid arrives ragged.
-         `aspect-ratio` on the root gives every card the same box; `object-fit`
-         on the `img` is what makes the photograph fill it. `fields.md` names
-         that selector for exactly this and says a square is the safe product
-         default. Without the img rule the box was square and the picture inside
-         it was whatever shape the merchant uploaded, so one card came in tall
-         and two came in short — which is what a real store's mixed photography
-         looks like the moment it is not placeholder art. */
-      {
-        all: {
-          "&": "width: 100%; aspect-ratio: 1 / 1;",
-          "& .pf-media-wrapper img":
-            "width: 100% !important; height: 100% !important; object-fit: cover !important;",
-        },
+  /* Named parts over the defaults, the same contract the buy box and the tab
+     bar use. Everything below that reads `cs(...)` used to be a constant. */
+  const cs = (name: "image" | "title" | "price" | "compareAt" | "atc" | "atcHover"
+    | "badge" | "note" | "nav" | "navMark") => {
+    const declared = node.cardStyle?.[name];
+    return declared ? ` ${declarations(declared)}` : "";
+  };
+
+  /* THE SHAPE OF THE PHOTOGRAPH WAS NOT OURS TO PICK. `1 / 1` was written here
+     for every mockup ever imported; a grid of 4:5 cards arrived cropped square
+     and the design had no way to say otherwise. */
+  const ratio = (node.cardRatio ?? "").trim() || "1 / 1";
+
+  /* A CARD DRAWS ONE PHOTOGRAPH AND HAS NOTHING TO PAGE TO. PageFly's default
+     is a visible arrow over it, and `MEDIA_MAIN` was called with no `look` at
+     all — so every card ever exported wore a control the mockup does not
+     draw, on a picture that does not move. */
+  const nav: "none" | "nav-style-1" = node.cardArrow ? "nav-style-1" : "none";
+  const navRules: Record<string, string> = {};
+  if (node.cardArrow) {
+    /* Two spellings of the same pair: the renderer has shipped both, and a
+       rule against the one it is not using is valid CSS reaching nothing. */
+    const arrows = "& .pf-slider-prev, & .pf-slider-next, & .splide__arrow--prev, & .splide__arrow--next";
+    if (node.cardStyle?.nav) navRules[arrows] = declarations(node.cardStyle.nav);
+    /* The mark inside, copied off the mockup's own path rather than named —
+       the same machinery the comparison's grip uses, and for the same reason:
+       there is no character for an arbitrary drawing, and markup cannot travel
+       in a script. */
+    if (node.cardStyle?.navMark) {
+      navRules["& .pf-slider-prev::before, & .splide__arrow--prev::before"] =
+        `content: ""; display: block; ${declarations(node.cardStyle.navMark)}`;
+      navRules["& .pf-slider-next::before, & .splide__arrow--next::before"] =
+        `content: ""; display: block; ${declarations(node.cardStyle.navMark)} transform: scaleX(-1);`;
+      navRules["& .pf-slider-prev::after, & .pf-slider-next::after"] = "display: none !important;";
+    }
+  }
+
+  const photo = PRODUCT_MEDIA(
+    MEDIA_MAIN({ all: { "&": `width: 100%; aspect-ratio: ${ratio};` } }, { nav }),
+    /* No thumbnail strip on a grid card — the gallery belongs on the product
+       page, and on a card it is noise under every tile.
+
+       No CSS hiding it: a card's `showList` is false, which is the default
+       PRODUCT_MEDIA applies, so the list is not rendered at all. Hiding a
+       rendered list with `display:none` left it in the editor's tree as an
+       element a merchant could turn back on and get a broken card. */
+    MEDIA_LIST(undefined, null, null),
+    /* SHAPE THE PHOTO, or the grid arrives ragged. `aspect-ratio` on the root
+       gives every card the same box; `object-fit` on the `img` is what makes
+       the photograph fill it. `fields.md` names that selector for exactly
+       this. Without the img rule the box was square and the picture inside it
+       was whatever shape the merchant uploaded, so one card came in tall and
+       two came in short — which is what a real store's mixed photography looks
+       like the moment it is not placeholder art. */
+    {
+      all: {
+        "&": `width: 100%; aspect-ratio: ${ratio};` + cs("image"),
+        "& .pf-media-wrapper img":
+          "width: 100% !important; height: 100% !important; object-fit: cover !important;",
+        ...navRules,
       },
-    ),
+    },
+    { show: false },
+    /* PAGEFLY'S OWN BADGE, which is the only one that survives import —
+       `fields.md` says a separate badge node is dropped, and a hand-placed one
+       would need `position:absolute` anyway. The corner is a setting, not CSS.
+       The colour is the mockup's: a chip that says "Last pieces" in the page
+       accent is a different claim from one drawn in the mockup's own red. */
+    (node.badge ?? "").trim()
+      ? {
+          node: PRODUCT_BADGE(node.badge.trim(), {
+            all: {
+              "&":
+                "padding: 5px 10px; border-radius: 4px; font-size: 11px;" +
+                " font-weight: 700; letter-spacing: .08em; text-transform: uppercase;" +
+                ` background-color: ${opts.accent ?? "#111114"}; color: #ffffff;` +
+                cs("badge"),
+            },
+          }),
+          corner: node.badgeCorner ?? "TOP_LEFT",
+        }
+      : undefined,
+  );
+
+  /* THE BUTTON, built once and placed by the mockup rather than by this file.
+     A real ProductATC2 and not a link: the card repeats over the shop's
+     products and the button has to add whichever one it landed on. */
+  const overImage = node.atcAt === "image" && Boolean(node.atcLabel?.trim());
+  const atcNode = node.atcLabel?.trim()
+    ? PRODUCT_ATC(
+        {
+          all: {
+            "&":
+              (overImage ? "" : "width: 100% !important; margin-top: 6px;") +
+              " padding: 14px 12px; font-size: 11px; font-weight: 600;" +
+              " letter-spacing: .18em; text-transform: uppercase; text-align: center;" +
+              " cursor: pointer; background: transparent;" +
+              ` border: 1px solid ${opts.border ?? "rgba(0,0,0,.22)"};` +
+              ` ${inkRule(opts)}` +
+              cs("atc"),
+            ...(node.cardStyle?.atcHover
+              ? { "&:hover": declarations(node.cardStyle.atcHover) }
+              : {}),
+          },
+        },
+        node.atcLabel.trim(),
+      )
+    : null;
+
+  /* PINNED INSIDE THE PHOTOGRAPH, AND THERE IS NOWHERE TO PIN IT.
+
+     A ProductBox takes exactly two slots — the media and one FlexBlock — so a
+     wrapper around the photograph is rejected on import, and the media element
+     itself holds no button. The button therefore stays in the meta block and is
+     lifted out of it: absolutely placed against that block, its bottom edge one
+     block-height plus the card's own gap above the block's bottom, which lands
+     it inside the photograph exactly as the mockup draws it.
+
+     The reveal is a rule on the CARD, because `.pcard:hover .qadd` is what the
+     mockup writes — the whole card is the trigger, not the button. */
+  const CARD_GAP = 12;
+  const overlayParts: Record<string, string> = overImage
+    ? {
+        '& [data-pf-type="ProductATC2"]':
+          `position: absolute; left: 12px; right: 12px; bottom: calc(100% + ${CARD_GAP}px);` +
+          " width: auto; z-index: 2;" +
+          (node.atcReveal === "hover"
+            ? " opacity: 0; transform: translateY(8px);" +
+              " transition: opacity .24s ease-out, transform .24s ease-out;"
+            : ""),
+        ...(node.atcReveal === "hover"
+          ? { '&:hover [data-pf-type="ProductATC2"]': "opacity: 1; transform: none;" }
+          : {}),
+      }
+    : {};
+
+  const card = PRODUCT_BOX(
+    photo,
     FB(
       {
         all: {
@@ -2171,14 +2283,18 @@ function productGrid(
             "display: flex !important; flex-direction: column !important;" +
             " gap: 6px !important; width: 100% !important;" +
             " --pf-flex-layout-width: fill; --pf-flex-layout-height: hug;" +
-            " --pf-flex-layout-direction: vertical;",
+            " --pf-flex-layout-direction: vertical;" +
+            /* The box the lifted button is measured against. */
+            (overImage ? " position: relative;" : ""),
         },
       },
       [
-        PRODUCT_TITLE({ all: { "&": `font-size: 16px; font-weight: 600; ${inkRule(opts)}` } }),
+        PRODUCT_TITLE({
+          all: { "&": `font-size: 16px; font-weight: 600; ${inkRule(opts)}` + cs("title") },
+        }),
         PRODUCT_PRICE(
           { all: { "&": "display: flex !important; gap: 8px; align-items: baseline;" } },
-          { all: { "&": `font-size: 15px; ${inkRule(opts)}` } },
+          { all: { "&": `font-size: 15px; ${inkRule(opts)}` + cs("price") } },
           /* THE SECOND SLOT IS HIDDEN UNLESS THE DESIGN ASKS, and that is not
              timidity. PageFly falls back to the price itself when a product
              carries no compare-at, so a card with this shown over a catalogue
@@ -2186,32 +2302,31 @@ function productGrid(
              through, on every tile. A mockup drawing a was-price is the only
              signal that the row is a sale row. */
           node.showCompareAt
-            ? { all: { "&": `font-size: 14px; opacity: .55; text-decoration: line-through; ${inkRule(opts)}` } }
+            ? {
+                all: {
+                  "&":
+                    `font-size: 14px; opacity: .55; text-decoration: line-through; ${inkRule(opts)}` +
+                    cs("compareAt"),
+                },
+              }
             : { all: { "&": "display: none !important;" } },
         ),
-        /* A real ProductATC2, not a link: the card repeats over the shop's
-           products and the button has to add whichever one it landed on. Inside
-           the card's own block, which is where the PDP already puts its. */
-        ...(node.atcLabel?.trim()
+        /* THE LINE THE MOCKUP WRITES UNDER THE PRICE. It is the same on every
+           card, because the card is one template stamped over the catalogue —
+           which is why it is written only when the mockup draws one, in the
+           mockup's own words, and never invented here. */
+        ...((node.cardNote ?? "").trim()
           ? [
-              PRODUCT_ATC(
-                {
-                  all: {
-                    "&":
-                      "width: 100% !important; margin-top: 6px; padding: 14px 12px;" +
-                      " font-size: 11px; font-weight: 600; letter-spacing: .18em;" +
-                      " text-transform: uppercase; text-align: center; cursor: pointer;" +
-                      ` background: transparent; border: 1px solid ${opts.border ?? "rgba(0,0,0,.22)"};` +
-                      ` ${inkRule(opts)}`,
-                  },
-                },
-                node.atcLabel.trim(),
-              ),
+              P4(node.cardNote.trim(), {
+                all: { "&": `font-size: 13px; opacity: .6; ${inkRule(opts)}` + cs("note") },
+              }),
             ]
           : []),
+        ...(atcNode ? [atcNode] : []),
       ],
     ),
-    "display: flex; flex-direction: column; gap: 12px; width: 100%;",
+    `display: flex; flex-direction: column; gap: ${CARD_GAP}px; width: 100%;`,
+    overlayParts,
   );
 
   /* `&` on ProductList2 takes spacing only — the grid itself is
@@ -2233,7 +2348,7 @@ function productGrid(
             ...shell.all,
             "& .pf-r-dg":
               `display: grid !important; grid-template-columns: repeat(${node.columns}, minmax(0, 1fr)) !important;` +
-              " gap: 24px !important; width: 100% !important; align-items: start !important;",
+              ` gap: ${node.cardGap ?? 24}px !important; width: 100% !important; align-items: start !important;`,
           },
         };
 
@@ -2244,6 +2359,7 @@ function productGrid(
        source, the grid looks right and lists the wrong products. */
     source: node.source === "collection" ? "auto" : "all",
     layout: node.listLayout,
+    gap: node.cardGap,
   });
 }
 

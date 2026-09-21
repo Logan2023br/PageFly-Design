@@ -484,6 +484,162 @@ async function main(): Promise<void> {
     check(prices.length === 2, "both price slots are emitted", `${prices.length}`);
   }
 
+  {
+    /* ======================================================================
+       THE CARD IS THE MOCKUP'S, NOT THIS FILE'S.
+
+       A `productList` could say how many columns and what the button said, and
+       nothing else. Every other thing about the card — the photograph's shape,
+       whether it pages, the chip in its corner, where the button sits and what
+       it looks like — was written here as a constant, so four mockups produced
+       four identical cards and the one in front of the model produced none of
+       its own.
+
+       What the mockup that prompted this draws, and what each of these asks:
+
+         .pcard-img img { aspect-ratio: 1/1.25 }      not the square we forced
+         no slider in a card                          we shipped nav arrows
+         .u-chipLabel.sale { background:#8A1C1C }     PageFly has showBadge
+         .qadd { position:absolute; bottom:12px;      we put it under the price
+                 opacity:0 } .pcard:hover .qadd       and always visible
+         .pcard-note { 4.8 · 316 reviews }            we dropped the line
+         .plist { gap:30px }                          we wrote 24px
+
+       Every one of them now travels on the node. `polygon(` and `#8A1C1C`
+       appear nowhere in lib/ — the values below are this mockup's, and the next
+       one's will be different.
+       ====================================================================== */
+    const card = await open({
+      sections: [
+        section(
+          [
+            {
+              type: "productList",
+              columns: 4,
+              limit: 4,
+              source: "store",
+              listLayout: "grid",
+              query: "silk slip",
+              atcLabel: "Quick add",
+              atcAt: "image",
+              atcReveal: "hover",
+              cardRatio: "1 / 1.25",
+              cardGap: 30,
+              cardArrow: false,
+              badge: "Last pieces",
+              badgeCorner: "TOP_LEFT",
+              cardNote: "4.8 · 316 reviews",
+              cardStyle: {
+                image: { borderRadius: "3px" },
+                title: { fontSize: "17px", lineHeight: "1.25" },
+                price: { color: "#8A1C1C", fontSize: "13.5px" },
+                badge: { background: "#8A1C1C", color: "#FBFAF7" },
+                note: { fontSize: "12px", opacity: ".5" },
+                atc: { background: "rgba(251,250,247,.94)", borderRadius: "2px" },
+                atcHover: { background: "#12100C", color: "#FBFAF7" },
+              },
+            },
+          ],
+          "collection-grid-4up",
+        ),
+      ],
+    }, "plist");
+
+    const media = card.items.find((i) => i.type === "ProductMedia3");
+    const list = card.items.find((i) => i.type === "ProductList2");
+    const main = card.items.find((i) => i.type === "MediaMain3");
+    const badge = card.items.find((i) => i.type === "ProductBadge");
+    const atc = card.items.find((i) => i.type === "ProductATC2");
+
+    /* 1 — the photograph's shape */
+    check(
+      card.cssOf(media?.id ?? "", "all", "&").includes("aspect-ratio: 1 / 1.25"),
+      "the photo takes the ratio the mockup drew, not a square",
+      card.cssOf(media?.id ?? "", "all", "&").slice(0, 60),
+    );
+
+    /* 2 — a card with one photograph has nothing to page to */
+    check(
+      String(main?.data?.navStyle) === "none",
+      "a card the mockup gave no slider gets no arrows",
+      String(main?.data?.navStyle),
+    );
+
+    /* 3 — PageFly's own badge, switched on and dressed */
+    check(Boolean(badge), "the chip the mockup drew becomes PageFly's own badge");
+    check(
+      media?.data?.showBadge === true && String(media?.data?.badgePosition) === "TOP_LEFT",
+      "shown by the flag that shows it, in the corner it was drawn in",
+      `${String(media?.data?.showBadge)} / ${String(media?.data?.badgePosition)}`,
+    );
+    check(
+      String((badge?.data as Record<string, unknown>)?.text ?? "") === "Last pieces",
+      "in the mockup's words",
+      String((badge?.data as Record<string, unknown>)?.text ?? ""),
+    );
+    check(
+      card.cssOf(badge?.id ?? "", "all", "&").includes("#8A1C1C"),
+      "and the mockup's own colour, not the page accent",
+      card.cssOf(badge?.id ?? "", "all", "&").slice(0, 60),
+    );
+
+    /* 4 — the button sits where the mockup put it, and hides until hover */
+    /* THE CARD IS THE ProductBox. A ProductBox takes exactly two slots, so
+       there is no wrapper to hang these on — and the mockup agrees: it writes
+       `.pcard:hover .qadd`, which is the whole card as the trigger. */
+    const frameId = card.items.find((i) => i.type === "ProductBox")?.id ?? "";
+    const over = card.cssOf(frameId, "all", '& [data-pf-type="ProductATC2"]');
+    check(
+      /position:\s*absolute/.test(over) && /bottom:/.test(over),
+      "the quick-add sits over the photograph, as it is drawn",
+      over.slice(0, 70) || "(no rule)",
+    );
+    check(
+      /opacity:\s*0/.test(over),
+      "hidden at rest",
+      over.slice(0, 70) || "(no rule)",
+    );
+    check(
+      /opacity:\s*1/.test(card.cssOf(frameId, "all", '&:hover [data-pf-type="ProductATC2"]')),
+      "and revealed when the card is hovered",
+      card.cssOf(frameId, "all", '&:hover [data-pf-type="ProductATC2"]') || "(no rule)",
+    );
+    check(
+      card.cssOf(atc?.id ?? "", "all", "&").includes("rgba(251,250,247,.94)"),
+      "wearing the fill the mockup gave it",
+      card.cssOf(atc?.id ?? "", "all", "&").slice(0, 70),
+    );
+    check(
+      card.cssOf(atc?.id ?? "", "all", "&:hover").includes("#12100C"),
+      "and its own hover, copied rather than guessed",
+      card.cssOf(atc?.id ?? "", "all", "&:hover") || "(no rule)",
+    );
+
+    /* 5 — the line under the price the mockup writes */
+    const note = card.items.find(
+      (i) => i.type === "Paragraph4" && String((i.data as Record<string, unknown>)?.value ?? "").includes("316 reviews"),
+    );
+    check(Boolean(note), "the line the mockup writes under the price arrives");
+    check(
+      card.cssOf(note?.id ?? "", "all", "&").includes("12px"),
+      "wearing its own type",
+      card.cssOf(note?.id ?? "", "all", "&").slice(0, 60),
+    );
+
+    /* 6 — the gap between cards is the mockup's */
+    check(
+      String((list?.data as Record<string, unknown>)?.spacing ?? "").includes("30px") ||
+        JSON.stringify(list?.data ?? {}).includes("30px"),
+      "the grid takes the mockup's own gap",
+      JSON.stringify((list?.data as Record<string, unknown>)?.spacing ?? {}),
+    );
+    check(
+      card.cssOf(list?.id ?? "", "all", "& .pf-r-dg").includes("gap: 30px"),
+      "and the grid wrapper agrees with it",
+      card.cssOf(list?.id ?? "", "all", "& .pf-r-dg").slice(-40) || "(no rule)",
+    );
+  }
+
   /* A home page's featured row is store-wide, not a collection. */
   const featured = await build({
     sections: [
