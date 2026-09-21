@@ -230,7 +230,14 @@ async function main(): Promise<void> {
        The page failed and every symptom pointed at the build model. */
     const before = process.env.USE_SECTION_SPEC;
     try {
+      /* ON IN THE SOURCE NOW, so the rollback is what this exercises. The
+         property being tested has not changed — free mode is not gated by a
+         flag that means "also ask a second model" — but the way to turn the
+         flag off has: an unset variable is no longer off. */
       delete process.env.USE_SECTION_SPEC;
+      const { sectionSpecEnabled } = await import("../lib/design/sectionSpec");
+      check(sectionSpecEnabled() === true, "the spec stage is on with nothing set");
+      process.env.USE_SECTION_SPEC = "off";
       const { planSpecs } = await import("../lib/design/sectionSpec");
       const ask = {
         pageType: "about", sell: "Knitwear", storeType: "d2c", market: null,

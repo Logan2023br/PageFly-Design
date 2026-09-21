@@ -45,8 +45,21 @@ import { THE_STANDARD } from "./standard";
    has no such problem, so layout is numbers and type is intent.
    ========================================================================== */
 
+/* ==========================================================================
+   ON IN THE SOURCE, AND AN OPERATOR CANNOT FORGET IT.
+
+   It used to be off unless the environment said otherwise, and the deployment
+   is not the laptop: a flag nobody sets is a flag that is off, so production
+   could be running a shorter pipeline than the one being worked on all day
+   with nothing anywhere saying so. That has happened here — `DESIGN_PROVIDER`
+   was an env var the deployment never set, every Opus result in the design
+   work came from a laptop, and nobody knew until `/api/health` reported it.
+
+   `=off` is the rollback and the only way this is ever false. Still read per
+   call rather than at module load, so a test can flip it in one process.
+   ========================================================================== */
 export function sectionSpecEnabled(): boolean {
-  return process.env.USE_SECTION_SPEC === "true";
+  return process.env.USE_SECTION_SPEC !== "off";
 }
 
 /**

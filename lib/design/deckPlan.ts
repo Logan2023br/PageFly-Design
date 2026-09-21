@@ -58,9 +58,27 @@ import {
    Three deciders, one seam.
    ========================================================================== */
 
-/** Off unless asked for. Unset, a build runs exactly as it did before. */
+/* ==========================================================================
+   ON IN THE SOURCE, AND AN OPERATOR CANNOT FORGET IT.
+
+   It used to be off unless the environment said otherwise, and the deployment
+   is not the laptop: a flag nobody sets is a flag that is off, so production
+   could be running a shorter pipeline than the one being worked on all day
+   with nothing anywhere saying so. That has happened here — `DESIGN_PROVIDER`
+   was an env var the deployment never set, every Opus result in the design
+   work came from a laptop, and nobody knew until `/api/health` reported it.
+
+   `=off` is the rollback and the only way this is ever false. Still read per
+   call rather than at module load, so a test can flip it in one process.
+
+   WHAT IT TURNS OFF, so the rollback is a decision rather than a shrug: stage 1
+   stops running and `decideStructure` chooses the bands from rules instead. A
+   build still completes — nothing here can cost a page — but no model has
+   looked at the deck as a whole, and four pages of one deck stop being four
+   different pages.
+   ========================================================================== */
 export function deckPlanEnabled(): boolean {
-  return process.env.USE_DECK_PLAN === "true";
+  return process.env.USE_DECK_PLAN !== "off";
 }
 
 /**
