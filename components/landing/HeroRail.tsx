@@ -61,8 +61,23 @@ export function HeroRail({ pages }: { pages: PageMockup[] }) {
           its box overflows in BOTH directions, pushing the first card off to
           the left where no amount of scrolling reaches it. `safe` centres while
           it fits and falls back to the start when it does not.
+
+          `pb-3` AND `pfd-scroll-thin`, BOTH FOR THE SAME REASON. A scrollbar in
+          a horizontal strip is drawn along the bottom of the box, and with 4px
+          of padding under the cards the platform's full-size bar was painted
+          straight across them — a grey rail cutting the bottom off all five.
+          The helper takes it down to 6px and the padding gives it somewhere to
+          sit that is not on top of the artwork.
+
+          AND IT SHOULD NOT BE SCROLLING ON A DESKTOP AT ALL. Five 200px cards
+          with four 16px gaps is 1,064px; at `lg:px-[120px]` the strip had
+          viewport − 240 to fit that in, so anything narrower than about 1,300px
+          — a 1,280px laptop, most windows that are not maximised — overflowed by
+          a hair and drew a scrollbar for it. `lg:px-8` moves that threshold to
+          about 1,130px, which is under the breakpoint's own 1,024 plus the
+          cards.
           ==================================================================== */}
-      <div className="-mx-5 mt-12 flex w-full items-end gap-4 overflow-x-auto px-5 pb-1 [justify-content:safe_center] sm:-mx-8 sm:px-8 lg:-mx-[120px] lg:px-[120px]">
+      <div className="pfd-scroll-thin -mx-5 mt-12 flex w-full items-end gap-4 overflow-x-auto px-5 pb-3 [justify-content:safe_center] sm:-mx-8 sm:px-8 lg:-mx-[120px] lg:px-8">
         {five.map(([page, at]) => (
           <figure
             key={`${page.id}-${at}`}
