@@ -1,17 +1,19 @@
 import { Pool } from "pg";
 import type {
-  JobRecord,
-  TrainingImage,
-  TrainingSection,
-  TrainingSectionSummary,
-  TrainingSummary,
-  PhotoRecord,
   AdminStats,
+  CountryCount,
+  GeoFilter,
+  JobRecord,
+  PhotoRecord,
   Repo,
   RunPageRecord,
   RunRecord,
   StoreRecord,
   StoreSummary,
+  TrainingImage,
+  TrainingSection,
+  TrainingSectionSummary,
+  TrainingSummary,
 } from "./types";
 import { REGISTER_USER_TYPE } from "./types";
 
@@ -44,6 +46,63 @@ function getPool(url: string): Pool {
 
 /** The map key for "no store". A domain can never contain a space, so this
     cannot collide with one — and unlike a NUL it survives grep and an editor. */
+/* ==========================================================================
+   THE COUNTRY PREDICATE, WRITTEN ONCE.
+
+   Six queries narrow by country and they have to narrow IDENTICALLY, or a tile
+   disagrees with the strip above it and neither can be trusted. So the clause
+   and its parameters are built here and spliced in.
+
+   `unknown` IS A VALUE. It means `country is null` — the rows the resolver
+   could not place — and it is pickable in both directions, because "how much of
+   this is unplaced" and "show me everything we could place" are both real
+   questions.
+
+   EXCLUDING KEEPS NULLS unless `unknown` is one of the exclusions. Excluding
+   Vietnam means everywhere that is not Vietnam, and a row we could not place is
+   not known to be Vietnamese; dropping it would silently also drop every
+   visitor the resolver missed.
+   ========================================================================== */
+function geoClause(geo: GeoFilter, nextParam: number): { sql: string; params: unknown[] } {
+  if (!geo) return { sql: "", params: [] };
+
+  const parts: string[] = [];
+  const params: unknown[] = [];
+  let n = nextParam;
+
+  const split = (list: string[]) => ({
+    codes: list.filter((c) => c !== "unknown"),
+    unknown: list.includes("unknown"),
+  });
+
+  if (geo.only && geo.only.length > 0) {
+    const { codes, unknown } = split(geo.only);
+    const or: string[] = [];
+    if (codes.length > 0) {
+      or.push(`country = any($${n}::text[])`);
+      params.push(codes);
+      n += 1;
+    }
+    if (unknown) or.push("country is null");
+    /* An `only` that names nothing at all matches nothing, rather than silently
+       becoming "everything" — a filter that quietly stops filtering is worse
+       than an empty screen. */
+    parts.push(or.length > 0 ? `(${or.join(" or ")})` : "false");
+  }
+
+  if (geo.except && geo.except.length > 0) {
+    const { codes, unknown } = split(geo.except);
+    if (codes.length > 0) {
+      parts.push(`(country is null or country <> all($${n}::text[]))`);
+      params.push(codes);
+      n += 1;
+    }
+    if (unknown) parts.push("country is not null");
+  }
+
+  return { sql: parts.length > 0 ? ` and ${parts.join(" and ")}` : "", params };
+}
+
 const NO_STORE = "(no store)";
 
 const DDL = `
@@ -146,6 +205,13 @@ create table if not exists events (
   created_at timestamptz not null default now()
 );
 create index if not exists events_created on events (created_at desc);
+/* Resolved from the address at capture time; the address itself is never
+   written -- see lib/geo.ts. Nullable because "we could not place it" is a
+   normal answer and a row with no country still counts everywhere else.
+   (No backticks in here: this whole block is one template literal, and one
+   would end it -- which is exactly how this line first broke the file.) */
+alter table events add column if not exists country text;
+create index if not exists events_country on events (country);
 
 /* Reference screenshots, filed by industry. The image is a data URL, so rows
    are large by the standards of this schema — a few hundred KB — which is why
@@ -975,20 +1041,50 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
          round trip each would make analytics the slowest thing on the page. */
       const values: unknown[] = [];
       const rows = events.map((e, i) => {
-        const at = i * 6;
-        values.push(e.id, e.name, JSON.stringify(e.props ?? {}), e.visitorId, e.domain, e.createdAt);
-        return `($${at + 1},$${at + 2},$${at + 3},$${at + 4},$${at + 5},$${at + 6})`;
+        const at = i * 7;
+        values.push(
+          e.id,
+          e.name,
+          JSON.stringify(e.props ?? {}),
+          e.visitorId,
+          e.domain,
+          e.country,
+          e.createdAt,
+        );
+        return `($${at + 1},$${at + 2},$${at + 3},$${at + 4},$${at + 5},$${at + 6},$${at + 7})`;
       });
       await db.query(
-        `insert into events (id,name,props,visitor_id,domain,created_at)
+        `insert into events (id,name,props,visitor_id,domain,country,created_at)
          values ${rows.join(",")}
          on conflict (id) do nothing`,
         values,
       );
     },
 
-    async countEvents(from, to) {
+    async countriesSeen(from, to) {
       await ready();
+      /* NOT NARROWED BY THE CURRENT FILTER — it is the list the filter is
+         chosen from, so narrowing it would leave one chip and no way back. */
+      const { rows } = await db.query(
+        `select country,
+                count(*)::int                   as n,
+                count(distinct visitor_id)::int as v
+           from events
+          where created_at >= $1 and created_at < $2
+          group by country
+          order by n desc`,
+        [from, to],
+      );
+      return rows.map((r) => ({
+        country: (r.country as string | null) ?? null,
+        events: Number(r.n),
+        visitors: Number(r.v),
+      }));
+    },
+
+    async countEvents(from, to, geo = null) {
+      await ready();
+      const where = geoClause(geo, 3);
       /* Grouped by name AND the whole props bag, so `design_cta_clicked` comes
          back split by location without this query knowing what a location is.
          Counting distinct visitors as well as rows, because a funnel asks how
@@ -999,10 +1095,10 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
                 count(distinct visitor_id)::int as v,
                 count(distinct domain)::int     as d
            from events
-          where created_at >= $1 and created_at < $2
+          where created_at >= $1 and created_at < $2${where.sql}
           group by name, props
           order by n desc`,
-        [from, to],
+        [from, to, ...where.params],
       );
       return rows.map((r) => ({
         name: String(r.name),
@@ -1015,16 +1111,17 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       }));
     },
 
-    async countEventTotals(from, to) {
+    async countEventTotals(from, to, geo = null) {
       await ready();
+      const where = geoClause(geo, 3);
       const { rows } = await db.query(
         `select name, count(*)::int as n,
                 count(distinct visitor_id)::int as v,
                 count(distinct domain)::int     as d
            from events
-          where created_at >= $1 and created_at < $2
+          where created_at >= $1 and created_at < $2${where.sql}
           group by name`,
-        [from, to],
+        [from, to, ...where.params],
       );
       return rows.map((r) => ({
         name: String(r.name),
@@ -1034,8 +1131,9 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       }));
     },
 
-    async countEventsByDay(from, to, offsetMinutes) {
+    async countEventsByDay(from, to, offsetMinutes, geo = null) {
       await ready();
+      const where = geoClause(geo, 4);
       /* THE SHIFT HAPPENS BEFORE THE TRUNCATION, and that ordering is the whole
          point: `date_trunc` on a UTC timestamp cuts the day at UTC midnight,
          which for a reader at +7 puts their morning on yesterday. Adding the
@@ -1053,10 +1151,10 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
                 count(*)::int                   as n,
                 count(distinct visitor_id)::int as v
            from events
-          where created_at >= $1 and created_at < $2
+          where created_at >= $1 and created_at < $2${where.sql}
           group by 1
           order by 1`,
-        [from, to, String(offsetMinutes)],
+        [from, to, String(offsetMinutes), ...where.params],
       );
       return rows.map((r) => ({
         date: String(r.day),
@@ -1065,8 +1163,9 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       }));
     },
 
-    async recentEvents(name, from, to, propKey = null, part = null, limit = 200) {
+    async recentEvents(name, from, to, propKey = null, part = null, limit = 200, geo = null) {
       await ready();
+      const where = geoClause(geo, 7);
       /* ORDERED AND CAPPED IN THE DATABASE. Fetching the window and slicing it
          here would read every row of a busy event to keep the last two hundred,
          and — worse — `limit` without `order by` returns an arbitrary slice, so
@@ -1078,13 +1177,13 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
          does not own, and only the VALUE arrives from a query string — bound,
          never interpolated. */
       const { rows } = await db.query(
-        `select id, props, visitor_id, domain, created_at
+        `select id, props, visitor_id, domain, country, created_at
            from events
           where name = $1 and created_at >= $2 and created_at < $3
-            and ($5::text is null or props->>$4 = $5)
+            and ($5::text is null or props->>$4 = $5)${where.sql}
           order by created_at desc
           limit $6`,
-        [name, from, to, propKey, part, Math.min(1000, Math.max(1, limit))],
+        [name, from, to, propKey, part, Math.min(1000, Math.max(1, limit)), ...where.params],
       );
 
       return rows.map((r) => ({
@@ -1092,12 +1191,14 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
         at: new Date(r.created_at as string).toISOString(),
         domain: (r.domain as string | null) ?? null,
         visitorId: String(r.visitor_id),
+        country: (r.country as string | null) ?? null,
         props: (r.props ?? {}) as Record<string, unknown>,
       }));
     },
 
-    async eventsByStore(name, from, to, propKey, groupProp = null, part = null) {
+    async eventsByStore(name, from, to, propKey, groupProp = null, part = null, geo = null) {
       await ready();
+      const where = geoClause(geo, 7);
       /* GROUPED BY DOMAIN AND BY THE PARAMETER AT ONCE, then folded into one
          row per store here. Two queries would be one round trip more and would
          have to agree with each other about the window; one grouping cannot
@@ -1118,9 +1219,9 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
                 max(created_at)                 as last_at
            from events
           where name = $1 and created_at >= $2 and created_at < $3
-            and ($6::text is null or props->>$4 = $6)
+            and ($6::text is null or props->>$4 = $6)${where.sql}
           group by 1, props->>$4`,
-        [name, from, to, propKey, groupProp, part],
+        [name, from, to, propKey, groupProp, part, ...where.params],
       );
 
       type Acc = {

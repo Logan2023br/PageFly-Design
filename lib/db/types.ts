@@ -491,7 +491,7 @@ export type Repo = {
 
   /* ---- analytics ---- */
   recordEvents(events: EventRecord[]): Promise<void>;
-  countEvents(from: string, to: string): Promise<EventCount[]>;
+  countEvents(from: string, to: string, geo?: GeoFilter): Promise<EventCount[]>;
   /**
    * The same window, grouped by NAME ALONE.
    *
@@ -501,7 +501,7 @@ export type Repo = {
    * largest group is a FLOOR and the sum is a ceiling, and neither is the
    * answer. Only the database can intersect them.
    */
-  countEventTotals(from: string, to: string): Promise<EventTotal[]>;
+  countEventTotals(from: string, to: string, geo?: GeoFilter): Promise<EventTotal[]>;
   /**
    * The same window, split into days.
    *
@@ -520,6 +520,7 @@ export type Repo = {
     from: string,
     to: string,
     offsetMinutes: number,
+    geo?: GeoFilter,
   ): Promise<DayCount[]>;
   /**
    * One event name, opened up: who did it, how often, and to what.
@@ -559,6 +560,7 @@ export type Repo = {
      * comes from a query string, and it is bound, never interpolated.
      */
     part?: string | null,
+    geo?: GeoFilter,
   ): Promise<EventByStore[]>;
 
   /**
@@ -577,7 +579,17 @@ export type Repo = {
     propKey?: string | null,
     part?: string | null,
     limit?: number,
+    geo?: GeoFilter,
   ): Promise<EventHit[]>;
+
+  /**
+   * Every country that appears in this window, busiest first.
+   *
+   * NOT FILTERED BY `geo`, deliberately: it is the list the filter is chosen
+   * FROM, so narrowing it to the current choice would leave one chip on screen
+   * and no way back to the others.
+   */
+  countriesSeen(from: string, to: string): Promise<CountryCount[]>;
 
   /* ---- admin ---- */
   listStoreSummaries(): Promise<StoreSummary[]>;
@@ -616,6 +628,15 @@ export type EventRecord = {
   visitorId: string;
   /** the signed-in store, when there is one */
   domain: string | null;
+  /**
+   * Two letters, or null.
+   *
+   * RESOLVED FROM THE ADDRESS AND THE ADDRESS IS NOT KEPT — see `lib/geo.ts`.
+   * Null is a normal value: a request from a private network, a proxy that
+   * strips the address, or a resolver that was down at the moment. Those rows
+   * still count everywhere except the country breakdown.
+   */
+  country: string | null;
   createdAt: string;
 };
 
@@ -664,8 +685,44 @@ export type EventHit = {
   /** the store, when the session knew one */
   domain: string | null;
   visitorId: string;
+  /** two letters, or null when it could not be placed — see `EventRecord` */
+  country: string | null;
   /** everything the call site sent — which button, which section, which page */
   props: Record<string, unknown>;
+};
+
+/* ==========================================================================
+   NARROWING EVERY NUMBER ON THE SCREEN TO A PLACE.
+
+   TWO DIRECTIONS, BECAUSE THE TWO QUESTIONS ARE DIFFERENT. `only` answers "how
+   does this look in Vietnam"; `except` answers "how does this look with US
+   OUT" — which on a product whose own team sits in one country is the more
+   honest read of whether strangers are using it, and cannot be got by picking
+   countries one at a time.
+
+   `unknown` IS A PLACE YOU CAN PICK. Some rows have no country — a private
+   network, a stripped header, a resolver that was down. Left unpickable they
+   are a silent remainder that makes the parts not add up to the whole; named,
+   "how much of this is unplaced" is a question with an answer.
+
+   EXCLUDING KEEPS THE UNPLACED. Excluding Vietnam means "everywhere that is
+   not Vietnam", and a row we could not place is not known to be Vietnamese —
+   dropping it would quietly also exclude every visitor the resolver missed.
+   Excluding `unknown` explicitly is how you get rid of them.
+   ========================================================================== */
+export type GeoFilter = {
+  /** show only these — two-letter codes, or `unknown` */
+  only?: string[];
+  /** show everything but these */
+  except?: string[];
+} | null;
+
+/** One country in a window, for the row of chips the filter is picked from. */
+export type CountryCount = {
+  /** two letters, or null for the rows that could not be placed */
+  country: string | null;
+  events: number;
+  visitors: number;
 };
 
 /** One day of events, in the reader's own timezone. */

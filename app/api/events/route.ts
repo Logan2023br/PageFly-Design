@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { countryOf } from "@/lib/geo";
 import { getRepo } from "@/lib/db";
 import { readStoreSession } from "@/lib/session";
 
@@ -91,6 +92,20 @@ export async function POST(request: Request) {
     .then((s) => s?.domain ?? null)
     .catch(() => null);
 
+  /* ==========================================================================
+     WHERE FROM, RESOLVED ONCE FOR THE WHOLE BATCH.
+
+     One request is one browser at one moment, so every event in it came from
+     the same place — asking per event would be the same answer a dozen times.
+
+     THE ADDRESS IS NOT KEPT. `countryOf` reads it, returns two letters, and
+     nothing below this line has it — see `lib/geo.ts`, which is written around
+     that rule. Awaited rather than fired off, because a row written now with no
+     country cannot be given one later; it is bounded at 800ms and answers null
+     rather than throwing, so the worst case is the batch is stamped unplaced.
+     ========================================================================== */
+  const country = await countryOf(request).catch(() => null);
+
   const now = new Date();
   const rows = parsed.events.map((e) => {
     /* The browser's clock is allowed to be wrong, but not by enough to move an
@@ -106,6 +121,7 @@ export async function POST(request: Request) {
       props: cleanProps(e.props),
       visitorId: e.visitorId,
       domain,
+      country,
       createdAt: at.toISOString(),
     };
   });

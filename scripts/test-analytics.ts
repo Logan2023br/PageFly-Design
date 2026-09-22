@@ -241,6 +241,7 @@ async function main(): Promise<void> {
         props: { scope: "one" },
         visitorId: "one-and-the-same-browser",
         domain,
+        country: null,
         createdAt: new Date().toISOString(),
       })),
     ),
@@ -262,6 +263,7 @@ async function main(): Promise<void> {
       props: {},
       visitorId: "a-stranger",
       domain: null,
+      country: null,
       createdAt: new Date().toISOString(),
     },
   ]);
@@ -293,6 +295,7 @@ async function main(): Promise<void> {
       props: { surface },
       visitorId,
       domain: null,
+      country: null,
       createdAt: new Date().toISOString(),
     });
 
@@ -355,6 +358,7 @@ async function main(): Promise<void> {
         props,
         visitorId: "someone-pressing",
         domain: null,
+        country: null,
         createdAt: new Date().toISOString(),
       }));
 
@@ -441,12 +445,12 @@ async function main(): Promise<void> {
     const at = (day: number) => `2024-03-${String(day).padStart(2, "0")}T10:00:00.000Z`;
     await repo.recordEvents([
       /* Two stores, four presses, three page types between them. */
-      { id: "d1-aaaaaaaa", name: "design_page_exported", props: { page_type: "home" }, visitorId: "v1", domain: "alpha.myshopify.com", createdAt: at(1) },
-      { id: "d2-aaaaaaaa", name: "design_page_exported", props: { page_type: "home" }, visitorId: "v1", domain: "alpha.myshopify.com", createdAt: at(3) },
-      { id: "d3-aaaaaaaa", name: "design_page_exported", props: { page_type: "product" }, visitorId: "v1", domain: "alpha.myshopify.com", createdAt: at(2) },
-      { id: "d4-aaaaaaaa", name: "design_page_exported", props: { page_type: "about" }, visitorId: "v9", domain: "beta.myshopify.com", createdAt: at(5) },
+      { id: "d1-aaaaaaaa", name: "design_page_exported", props: { page_type: "home" }, visitorId: "v1", domain: "alpha.myshopify.com", country: null, createdAt: at(1) },
+      { id: "d2-aaaaaaaa", name: "design_page_exported", props: { page_type: "home" }, visitorId: "v1", domain: "alpha.myshopify.com", country: null, createdAt: at(3) },
+      { id: "d3-aaaaaaaa", name: "design_page_exported", props: { page_type: "product" }, visitorId: "v1", domain: "alpha.myshopify.com", country: null, createdAt: at(2) },
+      { id: "d4-aaaaaaaa", name: "design_page_exported", props: { page_type: "about" }, visitorId: "v9", domain: "beta.myshopify.com", country: null, createdAt: at(5) },
       /* A different event entirely — must not leak into the rows above. */
-      { id: "d5-aaaaaaaa", name: "design_page_preview", props: { page_type: "home" }, visitorId: "v1", domain: "alpha.myshopify.com", createdAt: at(4) },
+      { id: "d5-aaaaaaaa", name: "design_page_preview", props: { page_type: "home" }, visitorId: "v1", domain: "alpha.myshopify.com", country: null, createdAt: at(4) },
     ]);
 
     const rows = await repo.eventsByStore("design_page_exported", WINDOW[0], WINDOW[1], "page_type");
@@ -508,6 +512,7 @@ async function main(): Promise<void> {
       props: { surface },
       visitorId: v,
       domain,
+      country: null,
       createdAt: at(day),
     });
     await repo.recordEvents([
@@ -584,6 +589,7 @@ async function main(): Promise<void> {
       props: { result: "not_registered", domain: d },
       visitorId: v,
       domain: null,
+      country: null,
       createdAt: at(day),
     });
     await repo.recordEvents([
@@ -596,6 +602,7 @@ async function main(): Promise<void> {
         props: { result: "success", domain: "welcome.myshopify.com" },
         visitorId: "v-c",
         domain: null,
+        country: null,
         createdAt: at(4),
       },
     ]);
@@ -651,10 +658,10 @@ async function main(): Promise<void> {
     await repo.recordEvents([
       /* 23:30 UTC on the 9th is 06:30 on the 10th at UTC+7. Which day this
          lands on is the whole question. */
-      { id: "day1-aaaa", name: "design_landing_viewed", props: {}, visitorId: "d1", domain: null, createdAt: "2025-05-09T23:30:00.000Z" },
-      { id: "day2-aaaa", name: "design_landing_viewed", props: {}, visitorId: "d2", domain: null, createdAt: "2025-05-10T04:00:00.000Z" },
-      { id: "day3-aaaa", name: "design_landing_viewed", props: {}, visitorId: "d2", domain: null, createdAt: "2025-05-10T05:00:00.000Z" },
-      { id: "day4-aaaa", name: "design_landing_viewed", props: {}, visitorId: "d3", domain: null, createdAt: "2025-05-11T09:00:00.000Z" },
+      { id: "day1-aaaa", name: "design_landing_viewed", props: {}, visitorId: "d1", domain: null, country: null, createdAt: "2025-05-09T23:30:00.000Z" },
+      { id: "day2-aaaa", name: "design_landing_viewed", props: {}, visitorId: "d2", domain: null, country: null, createdAt: "2025-05-10T04:00:00.000Z" },
+      { id: "day3-aaaa", name: "design_landing_viewed", props: {}, visitorId: "d2", domain: null, country: null, createdAt: "2025-05-10T05:00:00.000Z" },
+      { id: "day4-aaaa", name: "design_landing_viewed", props: {}, visitorId: "d3", domain: null, country: null, createdAt: "2025-05-11T09:00:00.000Z" },
     ]);
 
     const from = "2025-05-01T00:00:00.000Z";

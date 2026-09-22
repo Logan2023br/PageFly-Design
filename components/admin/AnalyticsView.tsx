@@ -12,7 +12,9 @@ import type {
 import { compareViews, type Change, type Comparison } from "@/lib/analytics/compare";
 import type { IconName } from "@/lib/icons";
 import { CountUp, Icon, Panel } from "../ui";
-import { StatTile, TileGroup, TileRow } from "./StatTile";
+import { countryLabel } from "@/lib/countries";
+import type { CountryCount } from "@/lib/db/types";
+import { StatTile, TileGeo, TileGroup, TileRow } from "./StatTile";
 import { DayStrip } from "./DayStrip";
 
 /* ==========================================================================
@@ -85,6 +87,23 @@ export function AnalyticsView() {
   const [previous, setPrevious] = useState<View | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  /* ==========================================================================
+     WHERE THE NUMBERS COME FROM, AS A PLACE.
+
+     TWO LISTS RATHER THAN ONE, because the two questions are different and
+     neither can be built from the other. `only` is "how does this look in
+     Vietnam"; `except` is "how does this look with our own country OUT" —
+     which on a product whose team all sit in one place is the honest read of
+     whether strangers are using it, and cannot be got by picking countries one
+     at a time.
+
+     The list of countries to pick FROM is separate again, and unfiltered: the
+     server sends every country in the window regardless of what is selected,
+     or picking one would leave a single chip and no way back.
+     ========================================================================== */
+  const [only, setOnly] = useState<string[]>([]);
+  const [except, setExcept] = useState<string[]>([]);
+  const [countries, setCountries] = useState<CountryCount[]>([]);
 
   useEffect(() => {
     let live = true;
@@ -106,7 +125,9 @@ export function AnalyticsView() {
         const tz = -new Date().getTimezoneOffset();
         const res = await fetch(
           `/api/admin/analytics?days=${days}&tz=${tz}` +
-            `${day ? `&day=${day}` : ""}${compare ? "&compare=1" : ""}`,
+            `${day ? `&day=${day}` : ""}${compare ? "&compare=1" : ""}` +
+            `${only.length > 0 ? `&country=${only.join(",")}` : ""}` +
+            `${except.length > 0 ? `&exclude=${except.join(",")}` : ""}`,
           { cache: "no-store" },
         );
         const body = (await res.json()) as AnalyticsResponse;
@@ -114,6 +135,7 @@ export function AnalyticsView() {
         if (body.ok) {
           setView(body.view);
           setPrevious(body.previous ?? null);
+          setCountries(body.countries);
           setAt(new Date());
         } else setError(body.error);
       } catch {
@@ -126,7 +148,11 @@ export function AnalyticsView() {
     return () => {
       live = false;
     };
-  }, [days, day, tick, compare]);
+    /* Joined rather than passed as arrays: a new array every render would
+       re-fetch on every render, which on a screen that also polls is a request
+       loop. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days, day, tick, compare, only.join(), except.join()]);
 
   /* ==========================================================================
      ASKED AGAIN EVERY THIRTY SECONDS, AND ONLY WHILE THE TAB IS VISIBLE.
@@ -156,6 +182,11 @@ export function AnalyticsView() {
   }, []);
 
   return (
+    /* ONE PROVIDER AROUND THE WHOLE SCREEN, so every tile — including any added
+       later, anywhere in here — opens onto the same countries it counted. See
+       the note on `TileGeo`: threading two more props through seven call sites
+       is seven chances to miss one, and the miss is invisible. */
+    <TileGeo only={only} except={except}>
     <div className="grid gap-4">
       {/* Filters in one row above the charts, which is where somebody looks
           for them — and the only control here, because a date range is the
@@ -223,6 +254,88 @@ export function AnalyticsView() {
           </button>
         </div>
       </div>
+
+      {/* ====================================================================
+          WHERE, UNDER WHEN.
+
+          Its own row rather than squeezed beside the range buttons: there can
+          be a dozen countries and a row that wraps to three lines inside a
+          control bar breaks the bar. It sits directly under the range because
+          the two narrow the same numbers and are read together — "thirty days,
+          Vietnam" is one sentence.
+
+          A CHIP IS A THREE-WAY CONTROL, not a checkbox. Press once to see only
+          that country, again to exclude it, again to clear — because "show me
+          Vietnam" and "show me everything except Vietnam" are both things
+          people want and a checkbox can only express the first. The state is
+          written on the chip so nobody has to remember which press they are on.
+          ==================================================================== */}
+      {countries.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => {
+              setOnly([]);
+              setExcept([]);
+            }}
+            className={`rounded-pf-pill border px-2.5 py-1 text-[12px] font-semibold transition-colors ${
+              only.length === 0 && except.length === 0
+                ? "border-pf-primary bg-pf-primary/15 text-pf-primary-hi"
+                : "border-pf-border text-pf-muted hover:text-pf-text"
+            }`}
+          >
+            All countries
+          </button>
+
+          {countries.map((c) => {
+            const key = c.country ?? "unknown";
+            const picked = only.includes(key);
+            const banned = except.includes(key);
+            return (
+              <button
+                key={key}
+                type="button"
+                title={`${c.events} events · ${c.visitors} browsers`}
+                onClick={() => {
+                  /* only → except → clear. Each press moves the chip one step
+                     and never leaves it in both lists, which would be a filter
+                     that contradicts itself. */
+                  if (picked) {
+                    setOnly((l) => l.filter((x) => x !== key));
+                    setExcept((l) => [...l, key]);
+                  } else if (banned) {
+                    setExcept((l) => l.filter((x) => x !== key));
+                  } else {
+                    setExcept((l) => l.filter((x) => x !== key));
+                    setOnly((l) => [...l, key]);
+                  }
+                }}
+                className={`flex items-center gap-1.5 rounded-pf-pill border px-2.5 py-1 text-[12px] font-medium transition-colors ${
+                  picked
+                    ? "border-pf-primary bg-pf-primary/15 text-pf-primary-hi"
+                    : banned
+                      ? "border-pf-danger/50 bg-pf-danger/10 text-pf-danger line-through"
+                      : "border-pf-border text-pf-muted hover:text-pf-text"
+                }`}
+              >
+                {banned && <Icon name="Minus" size={11} />}
+                {countryLabel(c.country)}
+                <span className="tabular-nums opacity-60">{c.visitors}</span>
+              </button>
+            );
+          })}
+
+          {(only.length > 0 || except.length > 0) && (
+            <span className="ml-1 text-[11.5px] text-pf-faint">
+              {only.length > 0
+                ? `only ${only.map((c) => countryLabel(c === "unknown" ? null : c)).join(", ")}`
+                : `everything except ${except
+                    .map((c) => countryLabel(c === "unknown" ? null : c))
+                    .join(", ")}`}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* UNDER THE RANGE, ABOVE EVERYTHING ELSE. It belongs to the window the
           buttons chose, and everything below it is what it selects — so it sits
@@ -328,6 +441,7 @@ export function AnalyticsView() {
         </>
       )}
     </div>
+    </TileGeo>
   );
 }
 

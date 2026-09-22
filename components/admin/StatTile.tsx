@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useState } from "react";
+import { createContext, useContext, useState } from "react";
 import type { IconName } from "@/lib/icons";
 import { DETAIL_OF } from "@/lib/analytics/detail";
 import { CountUp, Icon, Panel } from "../ui";
@@ -29,6 +29,44 @@ import { TileDetail } from "./TileDetail";
    the footnote states, never a different one.
    ========================================================================== */
 
+/* ==========================================================================
+   THE COUNTRY FILTER, HANDED DOWN RATHER THAN THREADED THROUGH.
+
+   Seven call sites pass `days` and `day` to a tile, some of them two components
+   deep, and adding two more props to each is seven chances to miss one — where
+   the miss is invisible: the tile still opens, it just shows every country's
+   presses under a heading that says Vietnam. A number that is wrong in a way
+   nothing on the screen contradicts is the worst kind on an analytics screen.
+
+   So the filter arrives by context, set once around the whole view. A tile that
+   is rendered somewhere nobody thought about gets the right filter by default
+   instead of the wrong one.
+   ========================================================================== */
+const GeoContext = createContext<{ only: string[]; except: string[] }>({
+  only: [],
+  except: [],
+});
+
+export function TileGeo({
+  only,
+  except,
+  children,
+}: {
+  only: string[];
+  except: string[];
+  children: React.ReactNode;
+}) {
+  /* A fresh object each render would remount every open panel on every poll —
+     the key `StatTile` builds is made of these. Joined to a string so the
+     identity follows the VALUE rather than the array. */
+  const value = { only, except };
+  return (
+    <GeoContext.Provider key={`${only.join()}|${except.join()}`} value={value}>
+      {children}
+    </GeoContext.Provider>
+  );
+}
+
 export function StatTile({
   icon,
   label,
@@ -42,6 +80,8 @@ export function StatTile({
   part,
   days,
   day,
+  only,
+  except,
 }: {
   icon: IconName;
   label: string;
@@ -51,6 +91,10 @@ export function StatTile({
       scale with this tile — a lone bar at some arbitrary length is decoration
       that reads as data. */
   ratio?: number;
+  /** The country filter the whole screen is under, so the panel a tile opens
+      shows the same presses the tile counted. */
+  only?: string[];
+  except?: string[];
   /** `danger` for a figure that is the problem rather than the result — a
       drop-off, a failure count. Applied to the bar and the footnote, never to
       the figure: the number itself is not bad news, what it measures is. */
@@ -90,6 +134,11 @@ export function StatTile({
 }) {
   const [over, setOver] = useState(false);
   const [open, setOpen] = useState(false);
+  /* Props win when given, context otherwise — so a tile rendered outside the
+     provider still works and one inside it never has to be told. */
+  const geo = useContext(GeoContext);
+  const geoOnly = only ?? geo.only;
+  const geoExcept = except ?? geo.except;
   const canOpen = Boolean(event && DETAIL_OF[event]);
   const [what, ...rest] = (hint ?? "").split("\n");
 
@@ -192,11 +241,17 @@ export function StatTile({
     </div>
     {open && event && (
       <TileDetail
-        key={`${event}-${part ?? "all"}-${days ?? 30}-${day ?? "all"}`}
+        /* REMOUNTED when any of these change — the panel fetches on mount and
+           does not re-fetch, so the key is what makes a filter change reach an
+           already-open one. The country filter is in it for the same reason the
+           day is. */
+        key={`${event}-${part ?? "all"}-${days ?? 30}-${day ?? "all"}-${geoOnly.join()}-${geoExcept.join()}`}
         event={event}
         part={part}
         days={days ?? 30}
         day={day}
+        only={geoOnly}
+        except={geoExcept}
       />
     )}
     </>

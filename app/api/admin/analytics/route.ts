@@ -1,7 +1,13 @@
 import { getRepo } from "@/lib/db";
 import { EV } from "@/lib/analytics";
 import { readAdminSession } from "@/lib/session";
-import type { DayCount, EventCount, EventTotal } from "@/lib/db/types";
+import type {
+  CountryCount,
+  DayCount,
+  EventCount,
+  EventTotal,
+  GeoFilter,
+} from "@/lib/db/types";
 
 /* ==========================================================================
    GET /api/admin/analytics?days=30
@@ -161,6 +167,17 @@ export type AnalyticsResponse =
        * should not pay for two more queries on a screen that polls.
        */
       previous?: AnalyticsView;
+      /**
+       * Every country in the strip's range, busiest first — the chips.
+       *
+       * ON THE ENVELOPE, NOT IN `view`. It is deliberately NOT narrowed by the
+       * filter the view was built with, so it cannot live beside numbers that
+       * are: a reader who picked Vietnam must still see the other chips, or
+       * there is no way back to them.
+       */
+      countries: CountryCount[];
+      /** what the numbers in `view` were narrowed by, echoed back */
+      geo: { only: string[]; except: string[] };
     }
   | { ok: false; error: string };
 
@@ -440,27 +457,62 @@ export async function GET(request: Request) {
   const stripTo = new Date();
   const stripFrom = new Date(stripTo.getTime() - days * 24 * 60 * 60 * 1000);
 
+  /* ==========================================================================
+     THE COUNTRY FILTER, OFF THE QUERY STRING.
+
+         ?country=VN,SG      only those
+         ?exclude=VN         everything but
+
+     BOTH ARE LISTS and `unknown` is a member of either — the rows the resolver
+     could not place. `lib/db/types.ts` carries the long note on why excluding a
+     country must KEEP the unplaced rows and why picking one must drop them.
+
+     Bounded before it reaches a query: two-letter codes or the word `unknown`,
+     at most twenty of them. The value is bound as a parameter either way, so
+     this is a sanity limit rather than the thing keeping SQL safe.
+     ========================================================================== */
+  const codes = (raw: string | null): string[] =>
+    (raw ?? "")
+      .split(",")
+      .map((c) => c.trim().toUpperCase())
+      .map((c) => (c === "UNKNOWN" ? "unknown" : c))
+      .filter((c) => c === "unknown" || /^[A-Z]{2}$/.test(c))
+      .slice(0, 20);
+
+  const only = codes(url.searchParams.get("country"));
+  const except = codes(url.searchParams.get("exclude"));
+  const geo: GeoFilter =
+    only.length > 0 || except.length > 0
+      ? { ...(only.length > 0 ? { only } : {}), ...(except.length > 0 ? { except } : {}) }
+      : null;
+
   let rows: EventCount[];
   let totals: EventTotal[];
   let daily: DayCount[] = [];
   let prevRows: EventCount[] = [];
   let prevTotals: EventTotal[] = [];
+  let countries: CountryCount[] = [];
   try {
     /* Two shapes of the same window: grouped by name and parameters for the
        breakdowns, and by name alone for the distinct counts, which cannot be
        derived from the first. */
-    [rows, totals, daily] = await Promise.all([
-      getRepo().countEvents(from.toISOString(), to.toISOString()),
-      getRepo().countEventTotals(from.toISOString(), to.toISOString()),
+    [rows, totals, daily, countries] = await Promise.all([
+      getRepo().countEvents(from.toISOString(), to.toISOString(), geo),
+      getRepo().countEventTotals(from.toISOString(), to.toISOString(), geo),
       /* Over the STRIP's range, not the window's — see `stripFrom`. */
-      getRepo().countEventsByDay(stripFrom.toISOString(), stripTo.toISOString(), tz),
+      getRepo().countEventsByDay(stripFrom.toISOString(), stripTo.toISOString(), tz, geo),
+      /* UNFILTERED, on purpose: this is the list the filter is picked from, so
+         narrowing it to the current pick would leave one chip and no way back
+         to the others. Over the strip's range so the chips cover the same span
+         the day picker does. */
+      getRepo().countriesSeen(stripFrom.toISOString(), stripTo.toISOString()),
     ]);
     /* Only when asked. Two more queries on every load would be paid by every
        reader who never presses Compare, and this screen already polls. */
     if (compare)
       [prevRows, prevTotals] = await Promise.all([
-        getRepo().countEvents(prevFrom.toISOString(), prevTo.toISOString()),
-        getRepo().countEventTotals(prevFrom.toISOString(), prevTo.toISOString()),
+        getRepo().countEvents(prevFrom.toISOString(), prevTo.toISOString(), geo),
+        getRepo().countEventTotals(prevFrom.toISOString(), prevTo.toISOString(), geo),
       ]);
   } catch (err) {
     return Response.json(
@@ -480,9 +532,12 @@ export async function GET(request: Request) {
      reuse it by heuristic. The symptom would be the worst kind on this screen:
      somebody reloads to see whether a number moved, sees the same figure, and
      concludes nothing happened. */
-  return Response.json({ ok: true, view, previous } satisfies AnalyticsResponse, {
-    headers: { "cache-control": "no-store, max-age=0" },
-  });
+  return Response.json(
+    { ok: true, view, previous, countries, geo: { only, except } } satisfies AnalyticsResponse,
+    {
+      headers: { "cache-control": "no-store, max-age=0" },
+    },
+  );
 }
 
 

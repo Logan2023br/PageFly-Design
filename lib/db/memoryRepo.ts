@@ -2,12 +2,10 @@ import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { buildStats } from "./postgresRepo";
 import { REGISTER_USER_TYPE, reviewOnlyStore } from "./types";
 import type {
+  CountryCount,
   EventRecord,
+  GeoFilter,
   JobRecord,
-  TrainingItem,
-  TrainingSection,
-  TrainingSectionSummary,
-  TrainingSummary,
   PhotoRecord,
   Repo,
   ReviewRecord,
@@ -15,6 +13,10 @@ import type {
   RunRecord,
   StoreRecord,
   StoreSummary,
+  TrainingItem,
+  TrainingSection,
+  TrainingSectionSummary,
+  TrainingSummary,
 } from "./types";
 
 /* ==========================================================================
@@ -45,6 +47,20 @@ type Shape = {
   trainingSections: TrainingSection[];
   events: EventRecord[];
 };
+
+/* The same rule as `geoClause` in the postgres repo, in the other language —
+   see the long note there. Two implementations of one filter is one more than
+   is comfortable, but the alternative is SQL in a driver that has no database:
+   what has to match is the BEHAVIOUR, and `test-geo-filter.ts` asserts that it
+   does by running the same cases through both. */
+function geoAllows(country: string | null, geo: GeoFilter): boolean {
+  if (!geo) return true;
+  const key = country ?? "unknown";
+
+  if (geo.only && geo.only.length > 0 && !geo.only.includes(key)) return false;
+  if (geo.except && geo.except.length > 0 && geo.except.includes(key)) return false;
+  return true;
+}
 
 const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], photos: [], jobs: [], training: [], trainingSections: [], events: [] };
 
@@ -534,7 +550,24 @@ export function createMemoryRepo(file: string): Repo {
       flush();
     },
 
-    async countEvents(from, to) {
+    async countriesSeen(from, to) {
+      sync();
+      /* Not narrowed by the current filter — see the postgres note. */
+      const by = new Map<string | null, { events: number; visitors: Set<string> }>();
+      for (const e of data.events) {
+        if (e.createdAt < from || e.createdAt >= to) continue;
+        const key = e.country ?? null;
+        const hit = by.get(key) ?? { events: 0, visitors: new Set<string>() };
+        hit.events++;
+        hit.visitors.add(e.visitorId);
+        by.set(key, hit);
+      }
+      return [...by.entries()]
+        .map(([country, b]) => ({ country, events: b.events, visitors: b.visitors.size }))
+        .sort((a, b) => b.events - a.events);
+    },
+
+    async countEvents(from, to, geo = null) {
       sync();
       const buckets = new Map<
         string,
@@ -549,6 +582,7 @@ export function createMemoryRepo(file: string): Repo {
 
       for (const e of data.events) {
         if (e.createdAt < from || e.createdAt >= to) continue;
+        if (!geoAllows(e.country ?? null, geo)) continue;
         /* The same grouping the SQL does: name plus the whole props bag, so a
            parameter this code has never heard of still splits the counts. */
         const key = `${e.name}\u0000${JSON.stringify(e.props ?? {})}`;
@@ -580,12 +614,13 @@ export function createMemoryRepo(file: string): Repo {
         .sort((a, b) => b.count - a.count);
     },
 
-    async countEventTotals(from, to) {
+    async countEventTotals(from, to, geo = null) {
       sync();
       const by = new Map<string, { count: number; visitors: Set<string>; stores: Set<string> }>();
 
       for (const e of data.events) {
         if (e.createdAt < from || e.createdAt >= to) continue;
+        if (!geoAllows(e.country ?? null, geo)) continue;
         const hit = by.get(e.name) ?? { count: 0, visitors: new Set<string>(), stores: new Set<string>() };
         hit.count++;
         hit.visitors.add(e.visitorId);
@@ -601,12 +636,13 @@ export function createMemoryRepo(file: string): Repo {
       }));
     },
 
-    async countEventsByDay(from, to, offsetMinutes) {
+    async countEventsByDay(from, to, offsetMinutes, geo = null) {
       sync();
       const by = new Map<string, { events: number; visitors: Set<string> }>();
 
       for (const e of data.events) {
         if (e.createdAt < from || e.createdAt >= to) continue;
+        if (!geoAllows(e.country ?? null, geo)) continue;
         /* Shifted, then read in UTC — which is the same arithmetic the reader's
            own clock does, without dragging a timezone database in to do it. */
         const shifted = new Date(Date.parse(e.createdAt) + offsetMinutes * 60_000);
@@ -622,12 +658,13 @@ export function createMemoryRepo(file: string): Repo {
         .sort((a, b) => a.date.localeCompare(b.date));
     },
 
-    async recentEvents(name, from, to, propKey = null, part = null, limit = 200) {
+    async recentEvents(name, from, to, propKey = null, part = null, limit = 200, geo = null) {
       sync();
       const hits = [];
       for (const e of data.events) {
         if (e.name !== name) continue;
         if (e.createdAt < from || e.createdAt >= to) continue;
+        if (!geoAllows(e.country ?? null, geo)) continue;
         if (part !== null && propKey) {
           const v = (e.props as Record<string, unknown>)[propKey];
           if (v === undefined || v === null || String(v) !== part) continue;
@@ -637,6 +674,7 @@ export function createMemoryRepo(file: string): Repo {
           at: e.createdAt,
           domain: e.domain ?? null,
           visitorId: e.visitorId,
+          country: e.country ?? null,
           props: (e.props ?? {}) as Record<string, unknown>,
         });
       }
@@ -646,7 +684,7 @@ export function createMemoryRepo(file: string): Repo {
       return hits.slice(0, Math.min(1000, Math.max(1, limit)));
     },
 
-    async eventsByStore(name, from, to, propKey, groupProp = null, part = null) {
+    async eventsByStore(name, from, to, propKey, groupProp = null, part = null, geo = null) {
       sync();
       /* Keyed by the domain as written, with `null` kept as its own key rather
          than folded into the empty string — "signed out" and "a store called
@@ -666,6 +704,7 @@ export function createMemoryRepo(file: string): Repo {
       for (const e of data.events) {
         if (e.name !== name) continue;
         if (e.createdAt < from || e.createdAt >= to) continue;
+        if (!geoAllows(e.country ?? null, geo)) continue;
         /* One slice of the parameter, when the caller asked for one. */
         if (part !== null && propKey) {
           const v = (e.props as Record<string, unknown>)[propKey];

@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import type { DetailResponse, DetailRow } from "@/lib/analytics/detail";
 import type { EventHit } from "@/lib/db/types";
+import { countryName, flagOf } from "@/lib/countries";
 import { Icon, Panel } from "../ui";
 
 /* ==========================================================================
@@ -58,6 +59,8 @@ export function TileDetail({
   part,
   days,
   day,
+  only = [],
+  except = [],
 }: {
   event: string;
   /** One value of the event's parameter — see `StatTile.part`. */
@@ -66,6 +69,11 @@ export function TileDetail({
   /** The day the screen is showing, or null for the whole window. The tile
       above was counted over exactly this range, so the rows must be too. */
   day?: string | null;
+  /** The country filter the tile above was counted under — same reason as
+      `day`: a panel that contradicts the number it opened from is worse than
+      no panel. */
+  only?: string[];
+  except?: string[];
 }) {
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [rows, setRows] = useState<DetailRow[]>([]);
@@ -89,7 +97,9 @@ export function TileDetail({
     fetch(
       `/api/admin/analytics/detail?event=${encodeURIComponent(event)}` +
         `&days=${days}&tz=${tz}${day ? `&day=${day}` : ""}` +
-        (part ? `&part=${encodeURIComponent(part)}` : ""),
+        (part ? `&part=${encodeURIComponent(part)}` : "") +
+        (only.length > 0 ? `&country=${only.join(",")}` : "") +
+        (except.length > 0 ? `&exclude=${except.join(",")}` : ""),
     )
       .then((r) => r.json() as Promise<DetailResponse>)
       .then((body) => {
@@ -115,7 +125,7 @@ export function TileDetail({
     return () => {
       live = false;
     };
-  }, [event, part, days, day]);
+  }, [event, part, days, day, only, except]);
 
   const total = rows.reduce((a, r) => a + r.count, 0);
 
@@ -193,6 +203,7 @@ export function TileDetail({
               <thead className="sticky top-0 bg-pf-bg-deep text-[11px] text-pf-faint">
                 <tr>
                   <th className="w-24 px-4 py-2 font-medium">When</th>
+                  <th className="w-20 px-2 py-2 font-medium">Country</th>
                   <th className="px-2 py-2 font-medium">Who</th>
                   <th className="px-4 py-2 font-medium">What</th>
                 </tr>
@@ -203,6 +214,20 @@ export function TileDetail({
                     <td className="px-4 py-2 tabular-nums text-pf-body">
                       {when(h.at).day}
                       <span className="block text-[10.5px] text-pf-faint">{when(h.at).time}</span>
+                    </td>
+                    {/* THE FLAG AND THE CODE, not one or the other. A flag alone
+                        is unreadable at 11px and ambiguous between a dozen
+                        similar ones; the code alone is a puzzle. Together the
+                        row scans and stays unambiguous. */}
+                    <td className="px-2 py-2 whitespace-nowrap">
+                      {h.country ? (
+                        <span className="text-pf-body" title={countryName(h.country)}>
+                          <span className="mr-1">{flagOf(h.country)}</span>
+                          <span className="font-mono text-[11.5px]">{h.country}</span>
+                        </span>
+                      ) : (
+                        <span className="text-pf-faint">—</span>
+                      )}
                     </td>
                     <td className="px-2 py-2">
                       {h.domain ? (

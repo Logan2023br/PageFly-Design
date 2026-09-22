@@ -1,7 +1,7 @@
 import { readAdminSession } from "@/lib/session";
 import { getRepo } from "@/lib/db";
 import { DETAIL_OF, type DetailRow, type DetailResponse } from "@/lib/analytics/detail";
-import type { EventHit } from "@/lib/db/types";
+import type { EventHit, GeoFilter } from "@/lib/db/types";
 
 /**
  * How many individual presses come back with a tile.
@@ -75,6 +75,25 @@ export async function GET(request: Request) {
      up in a table it does not own — only the VALUE arrives here, bounded and
      bound into the statement, and ignored outright for an event that has no
      parameter to slice. */
+  /* THE SAME FILTER THE TILE WAS COUNTED UNDER. A tile reading 12 while the
+     screen is narrowed to Vietnam that opens onto every country's presses is a
+     panel that contradicts the number it came from. Parsed the same way as in
+     the summary route — see the note there. */
+  const codes = (raw: string | null): string[] =>
+    (raw ?? "")
+      .split(",")
+      .map((c) => c.trim().toUpperCase())
+      .map((c) => (c === "UNKNOWN" ? "unknown" : c))
+      .filter((c) => c === "unknown" || /^[A-Z]{2}$/.test(c))
+      .slice(0, 20);
+
+  const only = codes(url.searchParams.get("country"));
+  const except = codes(url.searchParams.get("exclude"));
+  const geo: GeoFilter =
+    only.length > 0 || except.length > 0
+      ? { ...(only.length > 0 ? { only } : {}), ...(except.length > 0 ? { except } : {}) }
+      : null;
+
   const partParam = url.searchParams.get("part");
   const part =
     spec.propKey && partParam && partParam.length > 0 && partParam.length <= 120
@@ -97,6 +116,7 @@ export async function GET(request: Request) {
         spec.propKey,
         spec.groupProp ?? null,
         part,
+        geo,
       ),
       getRepo().recentEvents(
         event,
@@ -105,6 +125,7 @@ export async function GET(request: Request) {
         spec.propKey,
         part,
         FEED,
+        geo,
       ),
     ]);
   } catch {

@@ -39,6 +39,12 @@ export async function trackServer(
         props,
         visitorId: `store:${domain}`,
         domain,
+        /* NULL, AND IT HAS TO BE. These fire from the build runner, where the
+           only address in sight is our own server's — stamping that would put
+           every completed build in the data centre's country and make the
+           country breakdown a lie about the busiest events in the product.
+           Unplaced is the truthful answer: nobody's browser was involved. */
+        country: null,
         createdAt: new Date().toISOString(),
       },
     ])
