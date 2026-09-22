@@ -325,6 +325,13 @@ const GALLERY_FROM: Record<string, string> = {
 /* The five fixed pages under the hero — see `lib/showcasePages.ts`. Written out
    rather than derived from that list: the labels here name a PAGE TYPE for
    somebody reading a chart, and the ones there are chips on a card. */
+/* The three widths a sample page can be re-read at. */
+const SHOWCASE_FRAMES: Record<string, string> = {
+  desktop: "Desktop",
+  tablet: "Tablet",
+  mobile: "Mobile",
+};
+
 const SHOWCASE_SLUGS: Record<string, string> = {
   home: "Home",
   "product-page": "Product",
@@ -804,6 +811,14 @@ function buildView(
            ================================================================== */
         metric("file", "Sample .pagefly taken", "downloaded one of the five real files", EV.showcaseFileDownloaded, "“Download .pagefly” in the toolbar of an opened page from the rail under the hero", {
           split: slices(rows, EV.showcaseFileDownloaded, "page_type", SHOWCASE_SLUGS),
+          splitKind: "control",
+        }),
+        /* WHICH SCREEN SIZE PEOPLE CHECK, and that it is checked at all. A
+           merchant whose traffic is mostly mobile asks "will this work on a
+           phone" before anything else; every press of Tablet or Mobile here is
+           that question being asked out loud. */
+        metric("frame", "Sample read at another width", "desktop, tablet or mobile", EV.showcaseFrameChanged, "The Desktop / Tablet / Mobile frames in the toolbar of an opened page from the rail under the hero", {
+          split: slices(rows, EV.showcaseFrameChanged, "frame", SHOWCASE_FRAMES),
           splitKind: "control",
         }),
         metric("how_step", "How-it-works picture opened", "looked at a screenshot full size", EV.howStepOpened, "One of the four screenshots in “How it works”, opening the lightbox", {

@@ -261,6 +261,15 @@ export const EV = {
    * build: same action, opposite ends of the funnel.
    */
   showcaseFileDownloaded: "design_showcase_file_downloaded",
+  /**
+   * A sample page re-read at another screen width.
+   *
+   * The question behind the press is "will this work on a phone", which is the
+   * one a merchant whose traffic is mostly mobile asks first — and until the
+   * frames existed the page had no way to answer it or to know it was being
+   * asked.
+   */
+  showcaseFrameChanged: "design_showcase_frame_changed",
 
   signinViewed: "design_signin_viewed",
   signinSubmitted: "design_signin_submitted",
