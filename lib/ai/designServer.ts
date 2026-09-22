@@ -30,7 +30,7 @@ import { audit } from "../design/audit";
 import { elementForPattern } from "../design/elementFor";
 import { imageWants } from "../design/imageWants";
 import { getRepo } from "../db";
-import { sectionPlanLine } from "../design/sectionPlan";
+import { pageTypeBrief, sectionPlanLine } from "../design/sectionPlan";
 import { detectVertical } from "../generate/content";
 import { findVideo, resolvePhotos, stockProvider, urlsOf } from "../images/stock";
 
@@ -743,6 +743,20 @@ async function buildPrompts(
     /* Once, above the bands. See `sharedStyleLines` for why it is not repeated
        inside each of them. */
     ...(order ? sharedStyleLines(order.style) : []),
+    /* WHAT THIS PAGE TYPE IS FOR, when nobody wrote it for this page.
+
+       `direction` is stage 2's answer to the same question, written for THIS
+       page by a model that read the brief — so when there is one, this would
+       be a second answer to a question already answered, and a weaker one.
+
+       When there is not, this is the only thing in the prompt that says what
+       the page is for. Without it a build whose design stage failed gets a
+       brief, a palette and a section count, and a brief that describes a whole
+       store produces the page that brief talks about most — which on a real
+       run was a homepage, for a build that asked for a product page. */
+    ...(order?.direction
+      ? []
+      : [pageTypeBrief(input.pageType), ``].filter((line) => line !== "")),
     ...(order ? orderLines(order, t.bg, t.ink) : [sectionPlanLine(input.pageType, detectVertical(input.sell), Boolean(input.refSections?.length))]),
     ...(order ? [] : [animationLines(input.pageType, detectVertical(input.sell), input.deckSize ?? 1)]),
     ...referenceLines(input.reference, input.refSections),

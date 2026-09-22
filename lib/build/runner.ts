@@ -393,7 +393,22 @@ async function run(
       tokens += outcome.usage.input + outcome.usage.output;
 
       if (outcome.reason || !outcome.order) {
-        console.log(`[build] free design · ${pageType} → no design — ${outcome.reason}`);
+        /* LOUD, BECAUSE THE BUILD DOES NOT STOP. Stage 3 runs anyway on the
+           brief alone — input falls from about 8,400 tokens to 1,500 — and
+           what comes back looks finished. A real run lost the whole design
+           stage to `Anthropic returned 400 · You have reached your specified
+           API usage limits` and returned a good-looking home page for a build
+           that asked for a product page, with nothing in the log at this
+           volume and nothing at all on the merchant's screen.
+
+           The page still ships: half a pipeline beats an apology, and
+           `pageTypeBrief` is what stands in for the missing stage. But a
+           degraded build that reads as a normal one is how a vendor outage
+           becomes a week of "the pages got worse" with no cause anybody can
+           name. */
+        console.error(
+          `[build] DESIGN STAGE LOST · ${pageType} · this page is DeepSeek alone — ${outcome.reason}`,
+        );
         continue;
       }
 

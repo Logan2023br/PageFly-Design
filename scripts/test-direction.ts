@@ -96,6 +96,59 @@ async function main(): Promise<void> {
     without.slice(0, 60),
   );
 
+  /* ======================================================================
+     AND WHEN THE DESIGNING MODEL NEVER ANSWERED.
+
+     A real build: `free design · product → no design — the call failed:
+     Anthropic returned 400 · You have reached your specified API usage
+     limits`. Stage 2 was gone, and the build did not stop — it handed stage 3
+     the brief and nothing else. Input fell from 8,441 tokens to 1,492, which
+     is the whole design stage measured by its absence.
+
+     What came back was a good-looking HOME page, for a build that asked for a
+     product page. Nothing was wrong with the model: the brief described a
+     whole store and leaned hardest on a homepage, `Design this page: Product`
+     was one line against two hundred, and the only other thing said about the
+     page type was how many sections it should have.
+
+     So when no direction arrives — the stage failed, or the model skipped the
+     field — stage 3 is told what a page of this type is FOR. It is the part
+     `direction` would have carried, written once per type instead.
+     ====================================================================== */
+  console.log("\nwhen the designing model never answered");
+
+  const { pageTypeBrief } = await import("../lib/design/sectionPlan");
+
+  const product = pageTypeBrief("product");
+  check(/product/i.test(product), "a product page is told it is a product page", product.slice(0, 60));
+  check(
+    /price|believab|buy/i.test(product),
+    "and what it has to do before the price is read",
+    product.slice(0, 90),
+  );
+  const home = pageTypeBrief("home");
+  check(home !== product, "a home page is told something else entirely");
+  check(
+    /store|deeper|kind of/i.test(home),
+    "about saying what kind of store this is",
+    home.slice(0, 90),
+  );
+  check(pageTypeBrief("collection").length > 0, "and a collection page has its own");
+  check(pageTypeBrief("nonsense-type") === "", "a type nobody wrote gets nothing invented for it");
+
+  /* It is a STAND-IN, so it must not be sent alongside the thing it stands in
+     for — two answers to the same question, one of them written for this page
+     and one written for every page of its kind. */
+  const withDirection = __orderLinesForTest(
+    { ...ORDER, direction: written } as never,
+    "#fff",
+    "#111",
+  ).join("\n");
+  check(
+    !withDirection.includes(pageTypeBrief("product").slice(0, 40)),
+    "and it is not sent when a real direction was written",
+  );
+
   console.log(bad === 0 ? "\nPASS" : `\nFAIL — ${bad} problems`);
   if (bad > 0) process.exitCode = 1;
 }

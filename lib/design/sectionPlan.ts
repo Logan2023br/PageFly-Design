@@ -106,6 +106,80 @@ const BY_VERTICAL: Record<Vertical, keyof typeof ARCHETYPES> = {
  * Returns the whole instruction, ready to drop into the prompt, so the caller
  * never assembles rules it does not own.
  */
+/* ==========================================================================
+   WHAT A PAGE OF THIS TYPE IS FOR, when nobody said it for this one.
+
+   Stage 2 writes a `direction` — what this page has to do, the moves that make
+   it worth remembering, what it leaves out — and it is written for THIS page
+   by a model that read the brief. This is the stand-in for when that never
+   arrived, and it is a stand-in rather than a duplicate: one paragraph per
+   type, the same on every store.
+
+   IT EXISTS BECAUSE OF A REAL BUILD. `free design · product → no design — the
+   call failed: Anthropic returned 400 · You have reached your specified API
+   usage limits`. The design stage was gone and the build did not stop: stage 3
+   got the brief and nothing else, and input fell from 8,441 tokens to 1,492 —
+   the whole design stage measured by its absence.
+
+   What came back was a good-looking HOME page for a build that asked for a
+   product page. The model was not at fault. The brief described a whole store
+   and leaned hardest on its homepage, `Design this page: Product` was one line
+   against two hundred, and the only other thing the prompt said about the page
+   type was how many sections it should have. A count is not a purpose.
+
+   ONLY FOR THE TYPES THAT HAVE ONE. A type nobody has written a line for gets
+   nothing rather than a sentence invented on its behalf — the section count
+   still reaches it, and an empty string is how this says "I have nothing to
+   add" instead of guessing.
+   ========================================================================== */
+const PAGE_PURPOSE: Record<string, string> = {
+  home:
+    "A HOME PAGE has one screen to say what kind of store this is and give a " +
+    "reason to go deeper. It sells the shop, not one product: no buy box, no " +
+    "size chart, no single price. It ends by sending the visitor somewhere.",
+  product:
+    "A PRODUCT PAGE has to make the thing believable before the price is read. " +
+    "It is built around ONE product and it needs the parts that cannot be " +
+    "drawn: the gallery, the price, the variants, the cart button. Everything " +
+    "else on it — the proof, the measurements, the answers — is there to make " +
+    "those four easier to act on. It is not a shop front with a price on it.",
+  collection:
+    "A COLLECTION PAGE is a shopping instrument first. The grid is the page; " +
+    "everything above it earns its room by helping a visitor choose faster. " +
+    "One product in close-up belongs on a product page, not here.",
+  about:
+    "AN ABOUT PAGE is asked one question: why should I trust you. It answers " +
+    "with specifics — who, where, since when, made how — and not with " +
+    "adjectives. It is not a long hero.",
+  contact:
+    "A CONTACT PAGE exists to be used, not read. The form and the hours are " +
+    "the page; anything that delays them is in the way.",
+  faq:
+    "AN FAQ PAGE answers the questions that stop an order. Real ones, in the " +
+    "order they are asked, each answered completely enough that nobody has to " +
+    "write in.",
+  reviews:
+    "A REVIEWS PAGE is evidence. Whole reviews rather than stars, attributed, " +
+    "and unflattering ones left in — a wall of five stars reads as bought.",
+  shipping:
+    "A SHIPPING PAGE is a table of facts: what it costs, how long it takes, " +
+    "where it goes, what happens when it is wrong. Prose is where the facts " +
+    "go to hide.",
+  comparison:
+    "A COMPARISON PAGE sets this against the alternative honestly. A table " +
+    "where every row favours one side is an advertisement, and reads as one.",
+};
+
+/**
+ * One paragraph on what this page type is FOR — see the note above.
+ *
+ * Empty for a type nobody has written one for, which is how it says "nothing
+ * to add" rather than inventing a purpose for a page it does not know.
+ */
+export function pageTypeBrief(pageType: string): string {
+  return PAGE_PURPOSE[pageType] ?? "";
+}
+
 export function sectionPlanLine(
   pageType: string,
   vertical: string,
