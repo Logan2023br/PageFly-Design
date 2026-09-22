@@ -337,7 +337,13 @@ export function LandingScreen() {
           page load, when the session resolves.
           ==================================================================== */}
       <header className="sticky top-0 z-40 border-b border-pf-border bg-[rgba(10,6,22,0.92)] backdrop-blur">
-        <div className="mx-auto flex h-[72px] max-w-[1200px] items-center justify-between gap-6 px-5 sm:px-8 lg:px-[120px]">
+        {/* FULL BLEED, 120px OF SIDE PADDING — not a centred 1200px box. The
+            bands below are content and hold a reading measure; a masthead is
+            chrome and belongs to the window. Capped at 1200 it sat inside the
+            page it was supposed to frame: on a wide monitor the wordmark
+            started a third of the way in while the rule under it ran edge to
+            edge, and the two did not read as one bar. */}
+        <div className="flex h-[72px] items-center justify-between gap-6 px-5 sm:px-8 lg:px-[120px]">
           <Link href="/" className="flex shrink-0 items-center gap-2.5 text-pf-text">
             <Image
               src="/pagefly-icon.png"

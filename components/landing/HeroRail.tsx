@@ -19,17 +19,49 @@ import type { PageMockup } from "@/lib/generate/types";
    ========================================================================== */
 export function HeroRail({ pages }: { pages: PageMockup[] }) {
   const openPreview = useStore((s) => s.openPreview);
-  const five = pages.slice(0, 5);
+
+  /* ======================================================================
+     FIVE DIFFERENT PAGES, NOT THE FIRST FIVE.
+
+     The showcase deck is real output, and real output repeats: the store it
+     comes from has four home pages in it. Taken in order the rail read Home,
+     Collection, Product, Home, Collection — which makes the opposite of the
+     claim above it, that one brief produces a set of DIFFERENT pages.
+
+     Indices stay the ones into `pages`, because the overlay `Showcase` mounts
+     steps through that array — a position in this shortened list would open
+     somebody else's page. It is the same trap the marquee fell into keying
+     cards by `page.id`.
+     ====================================================================== */
+  const five: (readonly [PageMockup, number])[] = [];
+  const taken = new Set<string>();
+  for (const [page, at] of pages.map((p, i) => [p, i] as const)) {
+    const kind = page.pageType ?? page.id;
+    if (taken.has(kind)) continue;
+    taken.add(kind);
+    five.push([page, at]);
+    if (five.length === 5) break;
+  }
   if (five.length === 0) return null;
 
   return (
     <>
       <div className="mt-12 flex w-full items-end justify-center gap-4 overflow-x-auto px-5 pb-1">
-        {five.map((page, at) => (
+        {five.map(([page, at]) => (
           <figure
-            key={page.id}
+            key={`${page.id}-${at}`}
             className="relative m-0 w-[150px] shrink-0 overflow-hidden rounded-pf-md border border-pf-border-hi bg-pf-bg-alt sm:w-[200px]"
           >
+            {/* THE THUMB IS NOT INSIDE THE BUTTON, and that is not a style
+                choice. `MockupThumb` renders the merchant's actual page — which
+                has its own buttons in it, an add-to-cart among them — so a
+                button wrapped round it is a button inside a button, which the
+                HTML parser unnests and React reports. ResultCard solved this
+                first: the thumb is drawn, and the click target is an empty
+                overlay laid across it. */}
+            <span className="block aspect-[3/4]">
+              <MockupThumb page={page} scroll={0} className="size-full" />
+            </span>
             <button
               type="button"
               onClick={() => {
@@ -37,13 +69,9 @@ export function HeroRail({ pages }: { pages: PageMockup[] }) {
                 openPreview(at);
               }}
               aria-label={`Open ${page.label} preview`}
-              className="block w-full cursor-pointer"
-            >
-              <span className="block aspect-[3/4]">
-                <MockupThumb page={page} scroll={0} className="size-full" />
-              </span>
-            </button>
-            <figcaption className="pointer-events-none absolute bottom-2.5 left-2.5 rounded-pf-sm bg-pf-bg/85 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-pf-text">
+              className="absolute inset-0 z-10 cursor-pointer"
+            />
+            <figcaption className="pointer-events-none absolute bottom-2.5 left-2.5 z-20 rounded-pf-sm bg-pf-bg/85 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-pf-text">
               {page.label}
             </figcaption>
           </figure>

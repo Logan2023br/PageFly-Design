@@ -29,7 +29,8 @@ const LINKS: { label: string; href: string }[] = [
 export function LandingFooter() {
   return (
     <footer className="border-t border-pf-border">
-      <div className="mx-auto flex max-w-[1200px] flex-col items-center justify-between gap-5 px-5 py-8 text-[13px] text-pf-faint sm:px-8 lg:h-24 lg:flex-row lg:gap-4 lg:px-[120px] lg:py-0">
+      {/* FULL BLEED, like the masthead it bookends — see the note there. */}
+      <div className="flex flex-col items-center justify-between gap-5 px-5 py-8 text-[13px] text-pf-faint sm:px-8 lg:h-24 lg:flex-row lg:gap-4 lg:px-[120px] lg:py-0">
         <div className="flex items-center gap-2.5">
           <Image
             src="/pagefly-icon.png"
