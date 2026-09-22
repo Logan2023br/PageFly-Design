@@ -138,7 +138,23 @@ const PREFIX: Record<Role, string | null> = {
    something cheaper, which is the failure mode worth keeping.
    ========================================================================== */
 export const DESIGN_PROVIDER = "anthropic";
-export const DESIGN_MODEL = "claude-opus-5";
+/* SONNET, AND THE REASON IS COST WITH THE QUALITY QUESTION STILL OPEN.
+
+   Measured on this pipeline, the design stage is `in 7,523 · out 28,112` per
+   page. That is 8% of a page's tokens and about 91% of its bill, because its
+   output is priced far above DeepSeek's — so this one constant moves the cost
+   of a page more than everything else in the repository put together.
+
+   Sonnet's first run on the same stage came back `12 sections, 11 specced · 0
+   dropped · REFUSED (buy box, page has no product)×1` — the same refusal Opus
+   earns on a home page, nothing dropped, and slightly MORE written. One run is
+   not evidence about design quality, and nobody has compared the pages yet.
+   The counters this build already prints — specced, dropped, refused, audit
+   failures, truncation — are what that comparison should be made of.
+
+   So this is a cost decision taken with the quality question open, and it is
+   one line either way: `claude-opus-5` puts it back. */
+export const DESIGN_MODEL = "claude-sonnet-5";
 
 /** `DESIGN_MODEL` for the design role, `AI_MODEL` for the default one. */
 function roleVar(role: Role, name: "PROVIDER" | "MODEL" | "API_KEY"): string | undefined {
