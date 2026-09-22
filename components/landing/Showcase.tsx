@@ -6,6 +6,7 @@ import { EV, track } from "@/lib/analytics";
 import { useStore } from "@/lib/store";
 import { ResultCard } from "../results/ResultCard";
 import { PreviewOverlay } from "../preview/PreviewOverlay";
+import { useSeen } from "./useSeen";
 import { Marquee } from "./Marquee";
 
 /* ==========================================================================
@@ -28,6 +29,7 @@ import { Marquee } from "./Marquee";
    ========================================================================== */
 
 export function Showcase({ pages }: { pages: PageMockup[] }) {
+  const seen = useSeen<HTMLElement>("showcase");
   const previewIndex = useStore((s) => s.previewIndex);
   const openPreview = useStore((s) => s.openPreview);
   const closePreview = useStore((s) => s.closePreview);
@@ -94,10 +96,16 @@ export function Showcase({ pages }: { pages: PageMockup[] }) {
   );
 
   return (
-    <section className="py-14 sm:py-20">
+    <section ref={seen} className="py-14 sm:py-20">
       <div className="mx-auto mb-8 max-w-3xl px-5 text-center">
-        <h2 className="font-display text-pf-h2 font-semibold text-pf-text">
+        <p className="text-[12.5px] font-semibold uppercase tracking-[0.18em] text-pf-faint">
           Pages it has already built
+        </p>
+        {/* THE CLAIM IS THE MATCH, not the count. Eight good pages prove the
+            model can draw; eight good pages that share a voice and a palette
+            prove the thing this product actually sells. */}
+        <h2 className="mt-3 font-display text-pf-h2 font-semibold text-pf-text">
+          One brief. Every page matches.
         </h2>
         <p className="mt-3 text-pf-body text-pf-muted">
           Real builds, not mockups of mockups. Hover to read one all the way

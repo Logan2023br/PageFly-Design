@@ -185,8 +185,45 @@ export function track(name: string, props: Record<string, unknown> = {}): void {
    shape of, and the list the admin screen reads.
    ------------------------------------------------------------------------ */
 
+/* --------------------------------------------------------------------------
+   THE LANDING PAGE'S SECTIONS, IN THE ORDER THEY APPEAR.
+
+   Exported as data rather than written at each call site so a funnel drawn
+   from it reads top to bottom without anybody having to know the layout, and
+   so a section that stops reporting is a test failure rather than a gap in a
+   chart nobody is watching.
+   -------------------------------------------------------------------------- */
+export const LANDING_SECTIONS = [
+  "hero",
+  "proof",
+  "showcase",
+  "get",
+  "comparison",
+  "how",
+  "live",
+  "faq",
+  "final_cta",
+] as const;
+
+export type LandingSection = (typeof LANDING_SECTIONS)[number];
+
 export const EV = {
   landingViewed: "design_landing_viewed",
+  /**
+   * One landing section reached, once per visit — see `LANDING_SECTIONS`.
+   *
+   * The page used to report that it was viewed and that somebody pressed a
+   * CTA. That answers "how many arrived" and "how many left for the brief",
+   * and nothing between them: a page that loses people reads as one number,
+   * and every argument about which section to cut becomes an argument about
+   * taste. Section by section it is a funnel, and a section nobody scrolls to
+   * is a fact.
+   */
+  landingSection: "design_landing_section",
+  /** one FAQ question opened, with which one */
+  faqOpened: "design_faq_opened",
+  /** a header nav link, which is a scroll rather than a decision */
+  landingNav: "design_landing_nav",
   ctaClicked: "design_cta_clicked",
   galleryOpened: "design_gallery_opened",
 
@@ -241,6 +278,11 @@ export const EV = {
     type error rather than a value that quietly never groups with its siblings. */
 export type Surface =
   | "landing"
+  /* The going-live section, which is the one place on the page where
+     installing is the next thing to do rather than an alternative to reading
+     on. Counted apart from `landing` for exactly that reason: a press there is
+     somebody who has read to the bottom and decided. */
+  | "landing_live"
   | "landing_collections"
   | "building_collections"
   | "results"

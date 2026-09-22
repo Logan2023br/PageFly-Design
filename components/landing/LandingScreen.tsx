@@ -11,9 +11,14 @@ import type { StoreAuthResponse } from "@/app/api/auth/store/route";
 import type { ProvisionResponse } from "@/app/api/auth/provision/route";
 import { GradientWord, Icon } from "../ui";
 import { Aura } from "./Aura";
-import { Counts } from "./Counts";
-import { CollectionsSection } from "../collections/CollectionsSection";
+import { Comparison } from "./Comparison";
+import { Faq } from "./Faq";
+import { GoingLive } from "./GoingLive";
 import { HowItWorks } from "./HowItWorks";
+import { LandingFooter } from "./LandingFooter";
+import { ProofStrip } from "./ProofStrip";
+import { WhatYouGet } from "./WhatYouGet";
+import { useSeen } from "./useSeen";
 import { Showcase } from "./Showcase";
 
 /* ==========================================================================
@@ -57,6 +62,11 @@ export function LandingScreen() {
      A ref, not state: nothing renders it. It is read once inside the click
      handler and cleared when it has been spent, and holding it in state would
      make the page re-render on load for a value no pixel depends on. */
+  /* The hero and the closing ask report like every other section — see
+     `useSeen`. Nine numbers rather than two is the whole point of the
+     rebuild: a page that loses people has to say where. */
+  const heroRef = useSeen<HTMLElement>("hero");
+  const closingRef = useSeen<HTMLElement>("final_cta");
   const linkDomain = useRef<string | null>(null);
   /* An INVITE — a link carrying a signature, which may create the store it
      names. Held beside `linkDomain` rather than replacing it: a plain ?login=
@@ -348,6 +358,28 @@ export function LandingScreen() {
         <InstallPageFlyButton size="sm" surface="topbar_landing" />
         </div>
 
+        {/* THREE ANCHORS, HIDDEN ON NARROW SCREENS. They are not decisions —
+            each one scrolls to a section already on this page — so they are
+            counted under their own name rather than as CTAs. Lumped in with
+            `Design now`, a visitor who read the FAQ would be indistinguishable
+            from one who left for the brief. */}
+        <nav className="hidden items-center gap-7 text-[13.5px] font-medium text-pf-muted lg:flex">
+          {[
+            { label: "Example pages", to: "examples" },
+            { label: "What you get", to: "get" },
+            { label: "FAQ", to: "faq" },
+          ].map((item) => (
+            <a
+              key={item.to}
+              href={`#${item.to}`}
+              onClick={() => track(EV.landingNav, { to: item.to })}
+              className="transition-colors hover:text-pf-text"
+            >
+              {item.label}
+            </a>
+          ))}
+        </nav>
+
         {/* Nothing until the session is known — see `domain` above. */}
         {domain === undefined ? null : domain ? (
           <div className="flex min-w-0 items-center gap-1.5">
@@ -383,14 +415,19 @@ export function LandingScreen() {
         )}
       </header>
 
-      <section className="relative mx-auto max-w-4xl px-5 pb-4 pt-10 text-center sm:pt-16">
+      <section
+        ref={heroRef}
+        className="relative mx-auto max-w-4xl px-5 pb-4 pt-10 text-center sm:pt-16"
+      >
         <h1 className="font-display text-pf-hero font-semibold text-pf-text">
-          See your store as <GradientWord>pages</GradientWord>
+          Describe your store.
+          <br />
+          Get <GradientWord>every page</GradientWord> back.
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-pf-body text-pf-muted">
-          Describe what you sell. Get a home page, a product page and everything
-          around them back as real mockups — then send them straight into the
-          PageFly editor.
+          Home, product, collection, landing, about, contact and blog — designed as
+          one matching set for what you sell, then sent straight into the PageFly
+          editor.
         </p>
 
         <div className="mt-8 flex flex-col items-center gap-3">
@@ -412,9 +449,20 @@ export function LandingScreen() {
             }}
             className="inline-flex items-center gap-2 rounded-pf-md bg-pf-primary px-6 py-3.5 text-[15px] font-semibold text-white shadow-pf-button transition-colors duration-150 hover:bg-pf-primary-hi"
           >
-            Design now
+            Design my pages — free
             <Icon name="Sparkles" size={17} />
           </Link>
+          {/* THE SECOND ACTION IS NOT A SECOND CTA. It goes down this page, to
+              the work, for the visitor who is not ready to decide — and it is
+              tracked as navigation so the CTA number keeps meaning "left for
+              the brief". */}
+          <a
+            href="#examples"
+            onClick={() => track(EV.landingNav, { to: "examples_hero" })}
+            className="text-[13.5px] font-semibold text-pf-muted transition-colors hover:text-pf-text"
+          >
+            See pages it built
+          </a>
           {/* The refusal sits here rather than replacing the line below it: the
               merchant arrived on a link we sent, and "not on the list" is the
               whole answer they need — the invitation to sign in by hand stays,
@@ -430,41 +478,55 @@ export function LandingScreen() {
               {linkError}
             </p>
           )}
-          <span className="text-[12.5px] text-pf-faint">
-            Sign in with your store domain — nothing to install.
-          </span>
+          {/* THREE, BECAUSE THEY ANSWER THREE DIFFERENT REFUSALS — the cost,
+              the account, and the install. One line carrying all of them read
+              as a single hedge. */}
+          <ul className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 text-[12.5px] text-pf-faint">
+            <li>3 pages free</li>
+            <li>No password to set up</li>
+            <li>Just your store domain</li>
+          </ul>
         </div>
       </section>
 
-      <Showcase pages={pages} />
-      <HowItWorks />
-
-      {/* TEMPORARY, AND HERE TO BE LOOKED AT. This section's real home is under
-          the build screen, where a merchant has fifteen minutes and nothing to
-          read — but reaching it there costs a fifteen-minute build every time
-          somebody wants to check a change to it. On the landing page it is one
-          page load.
-
-          Nothing about it is landing-specific, so moving it back is deleting
-          these four lines. */}
-      <div className="mx-auto max-w-6xl px-5">
-        <CollectionsSection surface="landing_collections" />
+      <ProofStrip />
+      {/* THE ANCHOR IS OUT HERE, NOT ON THE SHOWCASE. `Showcase` renders
+          nothing until the previews have been fetched — and nothing at all if
+          that fetch fails — so an id on it is a link in the header that
+          silently goes nowhere for the first second of every visit, and for
+          the whole visit whenever the endpoint is down. A link that does
+          nothing is worse than a section that is still loading. */}
+      <div id="examples" className="scroll-mt-20">
+        <Showcase pages={pages} />
       </div>
+      <WhatYouGet />
+      <Comparison />
+      <HowItWorks />
+      <GoingLive />
+      <Faq />
 
       {/* The counts and the closing ask are ONE band now. Apart, they were two
           quiet sections doing the same job — persuade — separated by a rule
           that belonged to neither, and the wash behind the first had a hard top
           edge cutting across the page. Together they are a single closing
           argument: what it has done, then what you do next. */}
-      <section className="relative px-5 pb-24 pt-16 text-center sm:pt-24">
+      {/* THE FIGURES MOVED TO THE TOP, so this band is the ask alone. Read
+          beside the last button they were a footnote to a decision already
+          made; under the hero they are the reason to keep scrolling. */}
+      <section ref={closingRef} className="relative px-5 pb-24 pt-16 text-center sm:pt-24">
         <Aura variant="horizon" />
-        <Counts />
-        <div className="mx-auto mt-16 max-w-3xl">
+        <div className="mx-auto max-w-3xl">
         <h2 className="font-display text-pf-h2 font-semibold text-pf-text">
-          Your turn
+          Your turn. Four answers, then{" "}
+          <GradientWord>every page</GradientWord> of your store.
         </h2>
+        {/* SEVEN MINUTES, MEASURED. "About two minutes" stood here against 26
+            real single-page builds whose median is 432 seconds — a promise the
+            build cannot keep is the fastest way to make a working build look
+            broken. */}
         <p className="mx-auto mt-3 max-w-lg text-pf-body text-pf-muted">
-          Four answers is all it needs. The first build takes about two minutes.
+          Three pages free. No password, no card, nothing to install — just your
+          store domain. A page takes about seven minutes.
         </p>
         <Link
           href="/design"
@@ -474,15 +536,13 @@ export function LandingScreen() {
           }}
           className="mt-7 inline-flex items-center gap-2 rounded-pf-md bg-pf-primary px-6 py-3.5 text-[15px] font-semibold text-white shadow-pf-button transition-colors duration-150 hover:bg-pf-primary-hi"
         >
-          Design now
+          Design my pages — free
           <Icon name="Sparkles" size={17} />
         </Link>
         </div>
       </section>
 
-      <footer className="border-t border-pf-border px-5 py-8 text-center text-[12.5px] text-pf-faint">
-        PageFly Design
-      </footer>
+      <LandingFooter />
     </main>
   );
 }

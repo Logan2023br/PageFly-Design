@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useSeen } from "./useSeen";
 import { useEffect, useState } from "react";
 import { InstallPageFlyButton } from "../pagefly/InstallPageFly";
 import { Icon } from "../ui";
@@ -68,6 +69,7 @@ const STEPS: Step[] = [
 ];
 
 export function HowItWorks() {
+  const seen = useSeen<HTMLElement>("how");
   const [zoom, setZoom] = useState<Step | null>(null);
 
   /* Escape closes it. A lightbox that traps someone until they find the small
@@ -82,13 +84,21 @@ export function HowItWorks() {
   }, [zoom]);
 
   return (
-    <section className="mx-auto max-w-6xl px-5 py-14 sm:py-20">
+    <section ref={seen} id="how" className="mx-auto max-w-6xl scroll-mt-20 px-5 py-14 sm:py-20">
       <div className="mx-auto mb-10 max-w-2xl text-center">
-        <h2 className="font-display text-pf-h2 font-semibold text-pf-text">
-          Four steps, brief to live page
+        <p className="text-[12.5px] font-semibold uppercase tracking-[0.18em] text-pf-faint">
+          How it works
+        </p>
+        <h2 className="mt-3 font-display text-pf-h2 font-semibold text-pf-text">
+          Four answers in. A full set of pages out.
         </h2>
+        {/* WHICH STEP NEEDS THE APP, SAID HERE. It is the question the whole
+            "nothing to install" promise raises, and leaving it to the fourth
+            tile makes the promise read as a catch. */}
         <p className="mt-3 text-pf-body text-pf-muted">
-          Hover a step to see what to do. Click to open it full size.
+          Steps one to three need nothing installed. Only the last — putting pages
+          live — uses the free PageFly app. Hover a step to see what to do; click
+          to open it full size.
         </p>
       </div>
 
