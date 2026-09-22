@@ -75,13 +75,83 @@ export function Comparison() {
       <div className="mx-auto flex max-w-[1200px] flex-col items-center">
         <SectionHead eyebrow="Why not a template?" title="Three ways to get store pages" />
 
+        {/* ==================================================================
+            ON A PHONE IT IS THREE CARDS, NOT A TABLE YOU DRAG.
+
+            It was one table with `overflow-x-auto`, which is the right answer
+            for a table of numbers and the wrong one here. The whole argument is
+            reading ACROSS a row — "someone else's layout / a blank prompt / a
+            short brief about your store" — and a viewport 375px wide shows one
+            column of a four-column table, so the comparison is the one thing
+            the layout makes impossible. Sideways dragging to compare is not
+            comparing.
+
+            Turned on its side it survives: one card per option, each carrying
+            all four questions with their labels. The rows are the same `ROWS`
+            array read the other way, so the two layouts cannot drift apart.
+            ================================================================== */}
+        <ul className="mt-10 flex w-full flex-col gap-4 md:hidden">
+          {COLUMNS.map((column, i) => (
+            <li
+              key={column}
+              className={
+                "overflow-hidden rounded-pf-lg border " +
+                (i === 2 ? "border-pf-primary-hi/40" : "border-pf-border")
+              }
+            >
+              <div
+                className={
+                  "flex items-center gap-2 border-b px-5 py-3.5 text-[15px] " +
+                  (i === 2
+                    ? `border-pf-primary-hi/40 font-bold text-pf-text ${OURS}`
+                    : "border-pf-border font-semibold text-pf-body/85")
+                }
+              >
+                {i === 2 && (
+                  <Image
+                    src="/pagefly-icon.png"
+                    alt=""
+                    width={18}
+                    height={18}
+                    className="size-[18px] rounded-[5px]"
+                  />
+                )}
+                {column}
+              </div>
+              <dl className={i === 2 ? OURS : ""}>
+                {ROWS.map((row, r) => (
+                  <div
+                    key={row.label}
+                    className={
+                      "px-5 py-3.5 " +
+                      (r === ROWS.length - 1 ? "" : "border-b border-pf-border")
+                    }
+                  >
+                    <dt className="text-[12px] font-semibold uppercase tracking-[0.075em] text-pf-faint">
+                      {row.label}
+                    </dt>
+                    <dd
+                      className={
+                        "mt-1 text-[14.5px] leading-[1.5] " +
+                        (i === 2 ? "text-pf-text" : "text-pf-muted")
+                      }
+                    >
+                      {row.cells[i]}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </li>
+          ))}
+        </ul>
+
         {/* A TABLE, BECAUSE IT IS ONE: four questions asked of three options.
-            Its own scroller so a narrow screen scrolls the comparison rather
-            than the page — the same rule the exporter applies to wide tables.
+            It keeps its own scroller for the band between 768 and about 830px
+            where the four columns are real but do not quite fit.
             `border-separate` with a zero gap, or the rounded corners of the
             frame are painted over by the square corners of the first and last
             cells. */}
-        <div className="mt-10 w-full overflow-x-auto rounded-pf-lg border border-pf-border">
+        <div className="mt-10 hidden w-full overflow-x-auto rounded-pf-lg border border-pf-border md:block">
           <table className="w-full min-w-[760px] border-separate border-spacing-0 text-left">
             <thead>
               <tr>

@@ -46,7 +46,23 @@ export function HeroRail({ pages }: { pages: PageMockup[] }) {
 
   return (
     <>
-      <div className="mt-12 flex w-full items-end justify-center gap-4 overflow-x-auto px-5 pb-1">
+      {/* ====================================================================
+          IT SCROLLS TO THE EDGE OF THE SCREEN, NOT TO THE EDGE OF THE PADDING.
+
+          The hero already has 20px of side padding, and this had its own on top
+          of it — so on a phone the strip was inset 40px and the fifth card was
+          cut off inside a box with a visible gutter beside it, which reads as
+          broken rather than as "scroll me". Pulled back out by the same amount
+          and given the padding back as its own, the cards run under the edge of
+          the screen, which is the only thing that says a row continues.
+
+          `safe center` rather than `center`, and that is the whole reason the
+          keyword exists: a plain `justify-content: center` on a row wider than
+          its box overflows in BOTH directions, pushing the first card off to
+          the left where no amount of scrolling reaches it. `safe` centres while
+          it fits and falls back to the start when it does not.
+          ==================================================================== */}
+      <div className="-mx-5 mt-12 flex w-full items-end gap-4 overflow-x-auto px-5 pb-1 [justify-content:safe_center] sm:-mx-8 sm:px-8 lg:-mx-[120px] lg:px-[120px]">
         {five.map(([page, at]) => (
           <figure
             key={`${page.id}-${at}`}

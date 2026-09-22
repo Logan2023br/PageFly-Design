@@ -166,7 +166,11 @@ export function HowItWorks() {
               </button>
 
               <div className="flex flex-col gap-1.5 px-2.5">
-                <div className="flex items-center justify-between gap-3">
+                {/* WRAPS. The chip is a fixed phrase ("Desktop · tablet ·
+                    mobile") and the title beside it is not — on a phone the
+                    two were squeezing each other rather than one of them
+                    giving way. */}
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
                   <div className="flex items-baseline gap-3">
                     <span className="text-[13px] font-semibold tabular-nums text-pf-faint">
                       {step.n}

@@ -44,6 +44,21 @@ import { Showcase } from "./Showcase";
    cost this page a section rather than the whole render.
    ========================================================================== */
 
+/* ==========================================================================
+   THE FOUR ANCHORS, ONCE.
+
+   The bar renders them and so does the menu behind the button, and the two
+   lists have to be the same list: a nav item added to one and not the other is
+   a section that exists on a laptop and not on a phone, which is the exact bug
+   the menu was added to fix.
+   ========================================================================== */
+const NAV: { label: string; to: string }[] = [
+  { label: "Example pages", to: "examples" },
+  { label: "What you get", to: "get" },
+  { label: "How it works", to: "how" },
+  { label: "FAQ", to: "faq" },
+];
+
 export function LandingScreen() {
   const [pages, setPages] = useState<PageMockup[]>([]);
   /**
@@ -56,6 +71,9 @@ export function LandingScreen() {
    */
   const [domain, setDomain] = useState<string | null | undefined>(undefined);
   const [signingOut, setSigningOut] = useState(false);
+  /* The menu behind the button below `lg`. Closed on every load: a masthead
+     that opens itself is a masthead covering the hero. */
+  const [menu, setMenu] = useState(false);
   /* The store a ?login= link named, held until the merchant presses Design
      now. Null on an ordinary visit, which is almost every visit.
 
@@ -242,6 +260,36 @@ export function LandingScreen() {
     track(EV.landingViewed);
   }, []);
 
+  /* ==========================================================================
+     THE MENU CLOSES ON ESCAPE, AND ON GROWING PAST ITS OWN BREAKPOINT.
+
+     The second one is not hypothetical: the panel is `lg:hidden`, so a phone
+     turned sideways — or a window dragged wider — leaves `menu` true with
+     nothing on screen, and the next press of the button closes what is already
+     invisible instead of opening it. The state has to follow the CSS that hides
+     it, or the button does nothing once in every visit that rotates a device.
+     ========================================================================== */
+  useEffect(() => {
+    if (!menu) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenu(false);
+    };
+    /* 1024px is Tailwind's `lg`. Written out because there is no way to ask
+       Tailwind for it at runtime, and a wrong number here is a bug that only
+       appears at one window width. */
+    const wide = window.matchMedia("(min-width: 1024px)");
+    const onWide = () => {
+      if (wide.matches) setMenu(false);
+    };
+    onWide();
+    window.addEventListener("keydown", onKey);
+    wide.addEventListener("change", onWide);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      wide.removeEventListener("change", onWide);
+    };
+  }, [menu]);
+
   const designNow = async (event: React.MouseEvent) => {
     if (!linkDomain.current || linkSignIn === "trying") return;
 
@@ -343,7 +391,7 @@ export function LandingScreen() {
             page it was supposed to frame: on a wide monitor the wordmark
             started a third of the way in while the rule under it ran edge to
             edge, and the two did not read as one bar. */}
-        <div className="flex h-[72px] items-center justify-between gap-6 px-5 sm:px-8 lg:px-[120px]">
+        <div className="flex h-[72px] items-center justify-between gap-4 px-5 sm:gap-6 sm:px-8 lg:px-[120px]">
           <Link href="/" className="flex shrink-0 items-center gap-2.5 text-pf-text">
             <Image
               src="/pagefly-icon.png"
@@ -358,18 +406,13 @@ export function LandingScreen() {
             </span>
           </Link>
 
-          {/* FOUR ANCHORS, HIDDEN ON NARROW SCREENS. They are not decisions —
-              each one scrolls to a section already on this page — so they are
-              counted under their own name rather than as CTAs. Lumped in with
-              `Design now`, a visitor who read the FAQ would be
-              indistinguishable from one who left for the brief. */}
+          {/* FOUR ANCHORS. They are not decisions — each one scrolls to a
+              section already on this page — so they are counted under their own
+              name rather than as CTAs. Lumped in with `Design now`, a visitor
+              who read the FAQ would be indistinguishable from one who left for
+              the brief. */}
           <nav className="hidden items-center gap-7 text-[14px] font-medium lg:flex">
-            {[
-              { label: "Example pages", to: "examples" },
-              { label: "What you get", to: "get" },
-              { label: "How it works", to: "how" },
-              { label: "FAQ", to: "faq" },
-            ].map((item) => (
+            {NAV.map((item) => (
               <a
                 key={item.to}
                 href={`#${item.to}`}
@@ -385,13 +428,13 @@ export function LandingScreen() {
             {/* A TEXT LINK, NOT A SECOND PURPLE BUTTON. Beside `Design now` in
                 the same fill it offered two equally weighted next steps, and
                 the one this product exists for came second. */}
-            <span className="hidden sm:inline-flex">
+            <span className="hidden lg:inline-flex">
               <InstallPageFlyButton variant="link" surface="topbar_landing" />
             </span>
 
             {/* Nothing until the session is known — see `domain` above. */}
             {domain === undefined ? null : domain ? (
-              <div className="flex min-w-0 items-center gap-1.5">
+              <div className="hidden min-w-0 items-center gap-1.5 lg:flex">
                 {/* The domain is a LINK to the workspace, not a label. Someone
                     who reads their own store name in a header is already
                     reaching for it. */}
@@ -399,7 +442,7 @@ export function LandingScreen() {
                   href="/design"
                   title={domain}
                   onClick={() => track(EV.ctaClicked, { location: "header_store" })}
-                  className="hidden max-w-[200px] truncate text-[14px] font-medium text-pf-body/[.78] transition-colors hover:text-pf-text sm:block"
+                  className="max-w-[200px] truncate text-[14px] font-medium text-pf-body/[.78] transition-colors hover:text-pf-text"
                 >
                   {domain}
                 </Link>
@@ -417,7 +460,7 @@ export function LandingScreen() {
               <Link
                 href="/design"
                 onClick={() => track(EV.ctaClicked, { location: "header_signin" })}
-                className="hidden text-[14px] font-medium text-pf-body/[.78] transition-colors hover:text-pf-text sm:block"
+                className="hidden text-[14px] font-medium text-pf-body/[.78] transition-colors hover:text-pf-text lg:block"
               >
                 Sign in
               </Link>
@@ -434,8 +477,88 @@ export function LandingScreen() {
               Design now
               <Icon name="ArrowRight" size={14} />
             </Link>
+
+            {/* ==============================================================
+                EVERYTHING THE BAR CANNOT HOLD, BEHIND ONE BUTTON.
+
+                The four anchors, Install and Sign in were simply `hidden` below
+                `lg` — which meant that on a phone AND on a tablet the whole
+                page had one control on it, and a visitor who wanted the FAQ
+                had to scroll past five bands to find it. A section nobody can
+                navigate to is a section that only exists for desktop.
+
+                `Design now` stays OUT of the menu and beside it. It is the
+                thing this page is for; putting it one tap further away on the
+                screen size where taps are dearest is exactly backwards.
+                ============================================================== */}
+            <button
+              type="button"
+              onClick={() => setMenu((open) => !open)}
+              aria-expanded={menu}
+              aria-controls="landing-menu"
+              aria-label={menu ? "Close menu" : "Open menu"}
+              className="-mr-1.5 inline-flex size-10 shrink-0 items-center justify-center rounded-pf-md text-pf-body transition-colors hover:bg-pf-card hover:text-pf-text lg:hidden"
+            >
+              <Icon name={menu ? "X" : "Menu"} size={20} />
+            </button>
           </div>
         </div>
+
+        {menu && (
+          <div
+            id="landing-menu"
+            className="border-t border-pf-border bg-[rgba(10,6,22,0.98)] px-5 py-3 sm:px-8 lg:hidden"
+          >
+            <nav className="flex flex-col">
+              {NAV.map((item) => (
+                <a
+                  key={item.to}
+                  href={`#${item.to}`}
+                  onClick={() => {
+                    track(EV.landingNav, { to: item.to, where: "menu" });
+                    setMenu(false);
+                  }}
+                  className="border-b border-pf-border py-3.5 text-[15px] font-medium text-pf-body transition-colors hover:text-pf-text"
+                >
+                  {item.label}
+                </a>
+              ))}
+            </nav>
+
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-3 py-4">
+              <InstallPageFlyButton variant="link" surface="topbar_landing" />
+              {domain === undefined ? null : domain ? (
+                <>
+                  <Link
+                    href="/design"
+                    title={domain}
+                    onClick={() => track(EV.ctaClicked, { location: "header_store" })}
+                    className="max-w-full truncate text-[15px] font-medium text-pf-body transition-colors hover:text-pf-text"
+                  >
+                    {domain}
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => void signOut()}
+                    disabled={signingOut}
+                    className="inline-flex items-center gap-1.5 text-[15px] font-medium text-pf-faint transition-colors hover:text-pf-text disabled:opacity-50"
+                  >
+                    <Icon name="LogOut" size={14} />
+                    {signingOut ? "Signing out…" : "Sign out"}
+                  </button>
+                </>
+              ) : (
+                <Link
+                  href="/design"
+                  onClick={() => track(EV.ctaClicked, { location: "header_signin" })}
+                  className="text-[15px] font-medium text-pf-body transition-colors hover:text-pf-text"
+                >
+                  Sign in
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
       </header>
 
       {/* ====================================================================

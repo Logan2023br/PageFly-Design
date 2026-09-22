@@ -47,7 +47,7 @@ export function ProofStrip() {
                 between two items that are now above each other is a stray
                 mark. */}
             {i > 0 && (
-              <span aria-hidden className="mr-0 hidden h-9 w-px bg-pf-border-hi lg:mr-0 lg:block" />
+              <span aria-hidden className="hidden h-9 w-px bg-pf-border-hi lg:block" />
             )}
             <div className="flex items-baseline gap-2.5 px-5 sm:px-8 lg:px-11">
               {/* `tabular-nums` or the figures jitter sideways against each
