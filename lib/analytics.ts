@@ -220,12 +220,36 @@ export const EV = {
    * is a fact.
    */
   landingSection: "design_landing_section",
-  /** one FAQ question opened, with which one */
-  faqOpened: "design_faq_opened",
+  /* `design_faq_opened` STOOD HERE AND IS GONE. The FAQ is six questions with
+     their answers already visible — there is no open to count, and
+     `test-analytics.ts` fails a name in this list that nothing fires, which is
+     the rule that caught it. Rows already recorded under that name keep it: the
+     name is a string in a row, not a key into this file. Putting the accordion
+     back means putting the constant back with the same spelling. */
   /** a header nav link, which is a scroll rather than a decision */
   landingNav: "design_landing_nav",
   ctaClicked: "design_cta_clicked",
   galleryOpened: "design_gallery_opened",
+  /**
+   * A link OFF this page that is not the brief — the footer, PageFly itself,
+   * the help centre.
+   *
+   * Apart from `ctaClicked` on purpose. Both are somebody leaving, and only one
+   * of them is the thing this page exists to make happen; counted together, a
+   * good week of people reading the help centre would read as a good week of
+   * conversion.
+   */
+  landingLinkClicked: "design_landing_link_clicked",
+  /**
+   * The row of pills above the gallery.
+   *
+   * WHICH example set a visitor asked for is the one piece of intent this page
+   * can read directly — everything else it knows is where they stopped
+   * scrolling.
+   */
+  showcaseFilter: "design_showcase_filter",
+  /** one of the four how-it-works pictures opened full size, with which */
+  howStepOpened: "design_how_step_opened",
 
   signinViewed: "design_signin_viewed",
   signinSubmitted: "design_signin_submitted",

@@ -1,6 +1,6 @@
 "use client";
 
-import { EV, track } from "@/lib/analytics";
+import { SectionHead } from "./SectionHead";
 import { useSeen } from "./useSeen";
 
 /* ==========================================================================
@@ -11,10 +11,18 @@ import { useSeen } from "./useSeen";
    cannot judge, work they think they cannot undo, a theme they think will
    break.
 
-   `<details>` RATHER THAN STATE. It opens without JavaScript, it is keyboard
-   and screen-reader correct without a single aria attribute, and the browser
-   owns the one piece of state involved. The only thing measured is the open,
-   because a question nobody opens is one nobody was worried about.
+   ANSWERS OPEN, NOT AN ACCORDION, and that is the change. `<details>` was the
+   tidier component and the worse page: six closed rows are six questions a
+   visitor now has to decide are worth a click, at the exact moment they are
+   deciding whether this is worth anything at all. Two columns of six short
+   answers is the same height as six closed rows plus the one they opened, and
+   the objection is answered by reading rather than by clicking.
+
+   IT COSTS ONE MEASUREMENT. `design_faq_opened` had nothing left to fire it and
+   was deleted from the vocabulary — see the note where it stood in
+   `lib/analytics.ts`. What remains is the section reaching the viewport at all,
+   and that is the right trade: an open was only ever a proxy for a worry, and
+   an answer nobody has to ask for is the thing the proxy was standing in for.
    ========================================================================== */
 const QUESTIONS: { id: string; q: string; a: string }[] = [
   {
@@ -22,42 +30,42 @@ const QUESTIONS: { id: string; q: string; a: string }[] = [
     q: "Do I need to install anything to start?",
     a:
       "No. Sign in with your store domain and describe your store. The PageFly app is only needed " +
-      "at the last step, when you put a page live.",
+      "at the very end, to bring the pages into your theme.",
   },
   {
     id: "cost",
     q: "What does it cost?",
     a:
-      "Your first three pages are free and no card is needed. After that you keep designing on your " +
-      "PageFly plan.",
+      "Your first three pages are free and no card is needed. After that you keep designing on " +
+      "your PageFly plan.",
   },
   {
     id: "which_pages",
     q: "Which pages can it build?",
     a:
-      "Home, product, collection, landing or sale pages, about, contact and blog articles — designed " +
-      "together as one matching set rather than one at a time.",
+      "Home, product, collection, landing or sale pages, about, contact and blog articles — as one " +
+      "matching set, or one page at a time.",
   },
   {
     id: "how_long",
     q: "How long does a build take?",
     a:
-      "About seven minutes for a page. Keep the tab open or close it — the build carries on either " +
-      "way, and the pages are waiting in your library.",
+      "About seven minutes for a page, longer for a full set. Keep the tab open or close it — the " +
+      "build carries on either way, and the pages are waiting in your library.",
   },
   {
     id: "editable",
     q: "Can I change the pages afterwards?",
     a:
       "Yes. Once imported, every page is a normal PageFly page: edit any text, swap any image, add " +
-      "or remove sections.",
+      "or remove sections, run A/B tests.",
   },
   {
     id: "theme",
     q: "Does it work with my store?",
     a:
-      "Yes, with any theme. The pages live in the PageFly app alongside your theme rather than " +
-      "inside it, so nothing about your current theme has to change.",
+      "Yes — it works with any theme. The pages live in the PageFly app alongside your theme, not " +
+      "inside it, so nothing in your theme is touched.",
   },
 ];
 
@@ -65,39 +73,31 @@ export function Faq() {
   const ref = useSeen<HTMLElement>("faq");
 
   return (
-    <section ref={ref} id="faq" className="relative mx-auto max-w-3xl scroll-mt-20 px-5 py-20 sm:py-24">
-      <p className="text-center text-[12.5px] font-semibold uppercase tracking-[0.18em] text-pf-faint">
-        Questions
-      </p>
-      <h2 className="mt-3 text-center font-display text-pf-h2 font-semibold text-pf-text">
-        Before you press the button
-      </h2>
+    <section
+      ref={ref}
+      id="faq"
+      className="scroll-mt-20 border-t border-pf-border px-5 py-20 sm:px-8 sm:py-24 lg:px-[120px]"
+    >
+      <div className="mx-auto flex max-w-[1200px] flex-col items-center">
+        <SectionHead eyebrow="Questions" title="Before you press the button" />
 
-      <div className="mt-12 border-t border-pf-border">
-        {QUESTIONS.map((item) => (
-          <details
-            key={item.id}
-            className="group border-b border-pf-border"
-            /* Fires on open only. `onToggle` runs for the close as well, and a
-               count that includes closes says how many times a question was
-               touched rather than how many people needed it. */
-            onToggle={(e) => {
-              if (e.currentTarget.open) track(EV.faqOpened, { question: item.id });
-            }}
-          >
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-6 py-5 text-left text-[15px] font-semibold text-pf-text marker:hidden [&::-webkit-details-marker]:hidden">
-              {item.q}
-              {/* Two bars, the upright one turned away when the row opens —
-                  a plus that becomes a minus, drawn rather than typed so it
-                  inherits the row's colour. */}
-              <span className="relative size-3 shrink-0">
-                <span className="absolute left-0 top-1/2 h-px w-3 -translate-y-1/2 bg-pf-muted" />
-                <span className="absolute left-0 top-1/2 h-px w-3 -translate-y-1/2 rotate-90 bg-pf-muted transition-transform duration-200 group-open:rotate-0" />
-              </span>
-            </summary>
-            <p className="pb-6 pr-8 text-[13.5px] leading-relaxed text-pf-muted">{item.a}</p>
-          </details>
-        ))}
+        {/* A RULE PER ITEM, not a box per item. Six bordered cards make six
+            objections look like six features; a hairline above each question is
+            enough to separate them and keeps the band quiet, which is what a
+            band answering worries should be. */}
+        <dl className="mt-10 grid w-full gap-x-12 sm:grid-cols-2">
+          {QUESTIONS.map((item) => (
+            <div
+              key={item.id}
+              className="flex flex-col gap-2 border-t border-pf-border py-[22px]"
+            >
+              <dt className="font-display text-[18px] font-semibold tracking-[-0.011em] text-pf-text">
+                {item.q}
+              </dt>
+              <dd className="text-[15px] leading-[1.55] text-pf-muted">{item.a}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
     </section>
   );

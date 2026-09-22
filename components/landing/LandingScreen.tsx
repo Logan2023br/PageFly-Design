@@ -10,8 +10,8 @@ import { cleanedUrl, inviteParams, loginParam, type Invite } from "@/lib/autoSig
 import type { StoreAuthResponse } from "@/app/api/auth/store/route";
 import type { ProvisionResponse } from "@/app/api/auth/provision/route";
 import { GradientWord, Icon } from "../ui";
-import { Aura } from "./Aura";
 import { Comparison } from "./Comparison";
+import { HeroRail } from "./HeroRail";
 import { Faq } from "./Faq";
 import { GoingLive } from "./GoingLive";
 import { HowItWorks } from "./HowItWorks";
@@ -322,135 +322,158 @@ export function LandingScreen() {
         </div>
       )}
 
-      {/* Behind the masthead as well as the hero — the bloom reads as light
-          coming from off the top of the page, and a header sitting on flat
-          black in front of it would cut the effect in half. */}
-      <Aura variant="sky" />
+      {/* ====================================================================
+          THE MASTHEAD, AND IT IS A BAR NOW RATHER THAN A ROW OF CONTROLS.
 
-      {/* The SHELL width, not the content width. Every signed-in screen puts its
-          masthead in `max-w-[1600px]` with `px-4 sm:px-6` — see `DesignApp`,
-          `LibraryScreen`, `LoginScreen` — and this one was in `max-w-6xl`
-          (1152px) with the page's reading measure. On a wide monitor that put
-          the logo a third of the way in while the same logo on the next screen
-          sat at the edge, so the two headers did not look like one product.
+          72px with a rule under it and its own slightly opaque ground, because
+          the hero's bloom starts immediately below: without the ground the
+          purple wash climbed behind the wordmark and the header stopped
+          reading as a separate surface.
 
-          Only the header moves. The sections below keep their narrower measures,
-          which is what they are for. */}
-      <header className="mx-auto flex w-full max-w-[1600px] items-center justify-between px-4 py-5 sm:px-6">
-        {/* The logo and the install button are ONE GROUP, or `justify-between`
-            spreads three children evenly and puts the button in the middle of
-            the header rather than beside the wordmark. */}
-        <div className="flex items-center gap-3">
-        <Link href="/" className="flex items-center gap-2.5">
-          <Image
-            src="/pagefly-icon.png"
-            alt=""
-            width={28}
-            height={28}
-            className="size-7 rounded-pf-sm"
-            priority
-          />
-          <span className="font-display text-[15px] font-semibold tracking-[-0.02em] text-pf-text">
-            PageFly <span className="text-pf-muted">Design</span>
-          </span>
-        </Link>
+          THREE GROUPS, NOT THREE CHILDREN. `justify-between` spreads whatever
+          it is given evenly, so the logo, the four anchors and the three
+          controls have to be three wrappers or the nav drifts off centre the
+          moment the right-hand group changes width — which it does, on every
+          page load, when the session resolves.
+          ==================================================================== */}
+      <header className="sticky top-0 z-40 border-b border-pf-border bg-[rgba(10,6,22,0.92)] backdrop-blur">
+        <div className="mx-auto flex h-[72px] max-w-[1200px] items-center justify-between gap-6 px-5 sm:px-8 lg:px-[120px]">
+          <Link href="/" className="flex shrink-0 items-center gap-2.5 text-pf-text">
+            <Image
+              src="/pagefly-icon.png"
+              alt=""
+              width={28}
+              height={28}
+              className="size-7 rounded-[7px]"
+              priority
+            />
+            <span className="font-display text-[17px] font-bold tracking-[-0.012em]">
+              PageFly <span className="font-semibold text-pf-muted">Design</span>
+            </span>
+          </Link>
 
-        <InstallPageFlyButton size="sm" surface="topbar_landing" />
-        </div>
+          {/* FOUR ANCHORS, HIDDEN ON NARROW SCREENS. They are not decisions —
+              each one scrolls to a section already on this page — so they are
+              counted under their own name rather than as CTAs. Lumped in with
+              `Design now`, a visitor who read the FAQ would be
+              indistinguishable from one who left for the brief. */}
+          <nav className="hidden items-center gap-7 text-[14px] font-medium lg:flex">
+            {[
+              { label: "Example pages", to: "examples" },
+              { label: "What you get", to: "get" },
+              { label: "How it works", to: "how" },
+              { label: "FAQ", to: "faq" },
+            ].map((item) => (
+              <a
+                key={item.to}
+                href={`#${item.to}`}
+                onClick={() => track(EV.landingNav, { to: item.to })}
+                className="text-pf-body/[.78] transition-colors hover:text-pf-text"
+              >
+                {item.label}
+              </a>
+            ))}
+          </nav>
 
-        {/* THREE ANCHORS, HIDDEN ON NARROW SCREENS. They are not decisions —
-            each one scrolls to a section already on this page — so they are
-            counted under their own name rather than as CTAs. Lumped in with
-            `Design now`, a visitor who read the FAQ would be indistinguishable
-            from one who left for the brief. */}
-        <nav className="hidden items-center gap-7 text-[13.5px] font-medium text-pf-muted lg:flex">
-          {[
-            { label: "Example pages", to: "examples" },
-            { label: "What you get", to: "get" },
-            { label: "FAQ", to: "faq" },
-          ].map((item) => (
-            <a
-              key={item.to}
-              href={`#${item.to}`}
-              onClick={() => track(EV.landingNav, { to: item.to })}
-              className="transition-colors hover:text-pf-text"
-            >
-              {item.label}
-            </a>
-          ))}
-        </nav>
+          <div className="flex min-w-0 shrink-0 items-center gap-4 sm:gap-5">
+            {/* A TEXT LINK, NOT A SECOND PURPLE BUTTON. Beside `Design now` in
+                the same fill it offered two equally weighted next steps, and
+                the one this product exists for came second. */}
+            <span className="hidden sm:inline-flex">
+              <InstallPageFlyButton variant="link" surface="topbar_landing" />
+            </span>
 
-        {/* Nothing until the session is known — see `domain` above. */}
-        {domain === undefined ? null : domain ? (
-          <div className="flex min-w-0 items-center gap-1.5">
-            {/* The domain is a LINK to the workspace, not a label. Someone who
-                reads their own store name in a header is already reaching for
-                it, and "Design now" is a screen further down the page. */}
+            {/* Nothing until the session is known — see `domain` above. */}
+            {domain === undefined ? null : domain ? (
+              <div className="flex min-w-0 items-center gap-1.5">
+                {/* The domain is a LINK to the workspace, not a label. Someone
+                    who reads their own store name in a header is already
+                    reaching for it. */}
+                <Link
+                  href="/design"
+                  title={domain}
+                  onClick={() => track(EV.ctaClicked, { location: "header_store" })}
+                  className="hidden max-w-[200px] truncate text-[14px] font-medium text-pf-body/[.78] transition-colors hover:text-pf-text sm:block"
+                >
+                  {domain}
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => void signOut()}
+                  disabled={signingOut}
+                  className="inline-flex shrink-0 items-center gap-1.5 text-[14px] font-medium text-pf-faint transition-colors hover:text-pf-text disabled:opacity-50"
+                >
+                  <Icon name="LogOut" size={14} />
+                  {signingOut ? "Signing out…" : "Sign out"}
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/design"
+                onClick={() => track(EV.ctaClicked, { location: "header_signin" })}
+                className="hidden text-[14px] font-medium text-pf-body/[.78] transition-colors hover:text-pf-text sm:block"
+              >
+                Sign in
+              </Link>
+            )}
+
             <Link
               href="/design"
-              title={domain}
-              onClick={() => track(EV.ctaClicked, { location: "header_store" })}
-              className="max-w-[200px] truncate rounded-pf-md px-2 py-1.5 text-[13px] text-pf-muted transition-colors hover:text-pf-text sm:max-w-[280px]"
+              onClick={(e) => {
+                track(EV.ctaClicked, { location: "header" });
+                void designNow(e);
+              }}
+              className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-[10px] bg-pf-primary px-[18px] text-[14px] font-semibold text-white transition-colors duration-150 hover:bg-pf-primary-hi"
             >
-              {domain}
+              Design now
+              <Icon name="ArrowRight" size={14} />
             </Link>
-            <button
-              type="button"
-              onClick={() => void signOut()}
-              disabled={signingOut}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-pf-md px-2 py-1.5 text-[12.5px] font-semibold text-pf-faint transition-colors hover:bg-pf-card hover:text-pf-text disabled:opacity-50"
-            >
-              <Icon name="LogOut" size={14} />
-              {signingOut ? "Signing out…" : "Sign out"}
-            </button>
           </div>
-        ) : (
-          <Link
-            href="/design"
-            onClick={() => track(EV.ctaClicked, { location: "header_signin" })}
-            className="rounded-pf-md border border-pf-border px-3.5 py-2 text-[13.5px] font-semibold text-pf-text transition-colors hover:border-pf-border-hi"
-          >
-            Sign in
-          </Link>
-        )}
+        </div>
       </header>
 
+      {/* ====================================================================
+          THE HERO.
+
+          THE BLOOM IS ON THIS SECTION, not a floating element behind the page.
+          It was an absolutely positioned `Aura`, which meant the light and the
+          band it lights were two things that had to be kept the same size by
+          hand — and were not, so the wash ended in a soft horizontal edge part
+          way down the hero. As a background on the section itself it is the
+          hero's own light, and it ends where the hero ends.
+          ==================================================================== */}
       <section
         ref={heroRef}
-        className="relative mx-auto max-w-4xl px-5 pb-4 pt-10 text-center sm:pt-16"
+        id="top"
+        className="flex flex-col items-center px-5 pb-[72px] pt-16 text-center sm:px-8 sm:pt-24 lg:px-[120px]"
+        style={{
+          background:
+            "radial-gradient(ellipse 900px 520px at 50% -120px, rgba(107,47,247,0.28), rgba(10,6,22,0) 70%)",
+        }}
       >
-        <h1 className="font-display text-pf-hero font-semibold text-pf-text">
+        <h1 className="max-w-[980px] font-display text-[clamp(2.5rem,6vw,4.25rem)] font-semibold leading-[1.04] tracking-[-0.032em] text-pf-text">
           Describe your store.
-          <br />
-          Get <GradientWord>every page</GradientWord> back.
+          <span className="block">
+            Get <GradientWord>every page</GradientWord> back.
+          </span>
         </h1>
-        <p className="mx-auto mt-5 max-w-xl text-pf-body text-pf-muted">
+        <p className="mt-[22px] max-w-[700px] text-[18px] leading-relaxed text-pf-body/[.72]">
           Home, product, collection, landing, about, contact and blog — designed as
-          one matching set for what you sell, then sent straight into the PageFly
-          editor.
+          one matching set for what you actually sell, then sent straight into the
+          PageFly editor. Nothing to install to start.
         </p>
 
-        <div className="mt-8 flex flex-col items-center gap-3">
-          {/* The same sparkle the Create button carries at the end of the
-              brief, in the same place on the right. A visitor meets the mark
-              here and presses it again three screens later; two different
-              treatments of one action is two actions as far as anyone can
-              tell. */}
-          {/* FOUR LINKS REACH /design, not two, and they are not the same
-              action: these two are `Design now`, and the pair in the header
-              are `Open` and `Sign in` for somebody who already has an account.
-              Counted under one name without `location`, the CTA number would
-              be inflated by people who were never deciding anything. */}
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3.5">
           <Link
             href="/design"
             onClick={(e) => {
               track(EV.ctaClicked, { location: "hero" });
               void designNow(e);
             }}
-            className="inline-flex items-center gap-2 rounded-pf-md bg-pf-primary px-6 py-3.5 text-[15px] font-semibold text-white shadow-pf-button transition-colors duration-150 hover:bg-pf-primary-hi"
+            className="inline-flex min-h-[52px] items-center gap-2.5 rounded-pf-md bg-pf-primary px-[26px] text-[17px] font-semibold text-white shadow-pf-button transition-colors duration-150 hover:bg-pf-primary-hi"
           >
             Design my pages — free
-            <Icon name="Sparkles" size={17} />
+            <Icon name="ArrowRight" size={16} />
           </Link>
           {/* THE SECOND ACTION IS NOT A SECOND CTA. It goes down this page, to
               the work, for the visitor who is not ready to decide — and it is
@@ -459,34 +482,45 @@ export function LandingScreen() {
           <a
             href="#examples"
             onClick={() => track(EV.landingNav, { to: "examples_hero" })}
-            className="text-[13.5px] font-semibold text-pf-muted transition-colors hover:text-pf-text"
+            className="inline-flex min-h-[52px] items-center gap-2 rounded-pf-md border border-pf-border-hi px-[22px] text-[16px] font-semibold text-pf-body/85 transition-colors duration-150 hover:border-pf-primary-hi hover:text-pf-text"
           >
             See pages it built
+            <Icon name="ArrowDown" size={14} />
           </a>
-          {/* The refusal sits here rather than replacing the line below it: the
-              merchant arrived on a link we sent, and "not on the list" is the
-              whole answer they need — the invitation to sign in by hand stays,
-              because a different store of theirs might be on it. */}
-          {linkSignIn === "refused" && linkError && (
-            <p
-              role="alert"
-              className="flex max-w-[380px] items-start gap-1.5 text-center text-[12.5px] font-semibold text-pf-danger"
-            >
-              <span className="mt-px shrink-0">
-                <Icon name="CircleAlert" size={13} />
-              </span>
-              {linkError}
-            </p>
-          )}
-          {/* THREE, BECAUSE THEY ANSWER THREE DIFFERENT REFUSALS — the cost,
-              the account, and the install. One line carrying all of them read
-              as a single hedge. */}
-          <ul className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 text-[12.5px] text-pf-faint">
-            <li>3 pages free</li>
-            <li>No password to set up</li>
-            <li>Just your store domain</li>
-          </ul>
         </div>
+
+        {/* The refusal sits here rather than replacing the line below it: the
+            merchant arrived on a link we sent, and "not on the list" is the
+            whole answer they need — the invitation to sign in by hand stays,
+            because a different store of theirs might be on it. */}
+        {linkSignIn === "refused" && linkError && (
+          <p
+            role="alert"
+            className="mt-4 flex max-w-[380px] items-start gap-1.5 text-[12.5px] font-semibold text-pf-danger"
+          >
+            <span className="mt-px shrink-0">
+              <Icon name="CircleAlert" size={13} />
+            </span>
+            {linkError}
+          </p>
+        )}
+
+        {/* THREE, BECAUSE THEY ANSWER THREE DIFFERENT REFUSALS — the cost, the
+            account, and the install. One line carrying all of them read as a
+            single hedge. The ticks are violet rather than the success green:
+            nothing has succeeded here, they are marks against a list. */}
+        <ul className="mt-[18px] flex flex-wrap items-center justify-center gap-x-[18px] gap-y-2 text-[13.5px] font-medium text-pf-muted">
+          {["3 pages free", "No password to set up", "Just your store domain"].map((line) => (
+            <li key={line} className="inline-flex items-center gap-1.5">
+              <span className="text-pf-violet">
+                <Icon name="Check" size={14} />
+              </span>
+              {line}
+            </li>
+          ))}
+        </ul>
+
+        <HeroRail pages={pages} />
       </section>
 
       <ProofStrip />
@@ -496,7 +530,7 @@ export function LandingScreen() {
           silently goes nowhere for the first second of every visit, and for
           the whole visit whenever the endpoint is down. A link that does
           nothing is worse than a section that is still loading. */}
-      <div id="examples" className="scroll-mt-20">
+      <div id="examples" className="scroll-mt-[72px]">
         <Showcase pages={pages} />
       </div>
       <WhatYouGet />
@@ -505,26 +539,36 @@ export function LandingScreen() {
       <GoingLive />
       <Faq />
 
-      {/* The counts and the closing ask are ONE band now. Apart, they were two
-          quiet sections doing the same job — persuade — separated by a rule
-          that belonged to neither, and the wash behind the first had a hard top
-          edge cutting across the page. Together they are a single closing
-          argument: what it has done, then what you do next. */}
-      {/* THE FIGURES MOVED TO THE TOP, so this band is the ask alone. Read
-          beside the last button they were a footnote to a decision already
-          made; under the hero they are the reason to keep scrolling. */}
-      <section ref={closingRef} className="relative px-5 pb-24 pt-16 text-center sm:pt-24">
-        <Aura variant="horizon" />
-        <div className="mx-auto max-w-3xl">
-        <h2 className="font-display text-pf-h2 font-semibold text-pf-text">
-          Your turn. Four answers, then{" "}
-          <GradientWord>every page</GradientWord> of your store.
+      {/* ====================================================================
+          THE CLOSING ASK, AND NOTHING ELSE IN IT.
+
+          THE FIGURES MOVED TO THE TOP. Read beside the last button they were a
+          footnote to a decision already made; under the hero they are the
+          reason to keep scrolling.
+
+          The bloom comes up from below the fold this time — the mirror of the
+          hero's, which is what makes the two ends of the page read as one
+          object rather than two pages stuck together.
+          ==================================================================== */}
+      <section
+        ref={closingRef}
+        className="flex min-h-[400px] flex-col items-center justify-center border-t border-pf-border px-5 py-[72px] text-center sm:px-8 lg:px-[120px]"
+        style={{
+          background:
+            "radial-gradient(ellipse 800px 360px at 50% 120%, rgba(107,47,247,0.30), rgba(10,6,22,0) 70%)",
+        }}
+      >
+        <h2 className="font-display text-[clamp(2rem,5vw,3.25rem)] font-semibold leading-[1.06] tracking-[-0.031em] text-pf-text">
+          Your turn. Four answers,
+          <span className="block">
+            then <GradientWord>every page</GradientWord> of your store.
+          </span>
         </h2>
         {/* SEVEN MINUTES, MEASURED. "About two minutes" stood here against 26
             real single-page builds whose median is 432 seconds — a promise the
             build cannot keep is the fastest way to make a working build look
             broken. */}
-        <p className="mx-auto mt-3 max-w-lg text-pf-body text-pf-muted">
+        <p className="mt-[18px] max-w-[560px] text-[17px] leading-relaxed text-pf-muted">
           Three pages free. No password, no card, nothing to install — just your
           store domain. A page takes about seven minutes.
         </p>
@@ -534,12 +578,11 @@ export function LandingScreen() {
             track(EV.ctaClicked, { location: "closing" });
             void designNow(e);
           }}
-          className="mt-7 inline-flex items-center gap-2 rounded-pf-md bg-pf-primary px-6 py-3.5 text-[15px] font-semibold text-white shadow-pf-button transition-colors duration-150 hover:bg-pf-primary-hi"
+          className="mt-7 inline-flex min-h-[52px] items-center gap-2.5 rounded-pf-md bg-pf-primary px-[26px] text-[17px] font-semibold text-white shadow-pf-button transition-colors duration-150 hover:bg-pf-primary-hi"
         >
           Design my pages — free
-          <Icon name="Sparkles" size={17} />
+          <Icon name="ArrowRight" size={16} />
         </Link>
-        </div>
       </section>
 
       <LandingFooter />

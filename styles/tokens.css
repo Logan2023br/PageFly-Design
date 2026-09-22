@@ -26,6 +26,11 @@
   /* ---- violet ramp ---------------------------------------------------- */
   --color-pf-primary: #6b2ff7;
   --color-pf-primary-hi: #9a6bff;
+  /* The eyebrow violet. Lighter than `primary-hi` and used only for the small
+     uppercase label above a section heading and for the check marks beside the
+     hero's three reassurances — the two places a violet has to read as a mark
+     rather than as a surface. */
+  --color-pf-violet: #b79cff;
   --color-pf-primary-lo: #4d1cc4;
 
   /* ---- text on dark --------------------------------------------------- */

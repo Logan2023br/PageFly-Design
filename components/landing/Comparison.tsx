@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+import { SectionHead } from "./SectionHead";
 import { useSeen } from "./useSeen";
 
 /* ==========================================================================
@@ -14,17 +16,29 @@ import { useSeen } from "./useSeen";
    every row flatters one side is an advertisement and reads as one; the
    honest sentences about a template — you own it, it is cheap — are the
    reason the rows about copy and about where it ends up land at all.
+
+   OUR COLUMN IS TINTED RATHER THAN BADGED. A "best" label on your own column
+   is an argument nobody believes; a wash of the brand colour says which column
+   is ours and lets the four sentences in it do the arguing.
    ========================================================================== */
 const COLUMNS = ["A theme template", "An AI website builder", "PageFly Design"] as const;
 
 const ROWS: { label: string; cells: [string, string, string] }[] = [
   {
     label: "You start from",
-    cells: ["Someone else's layout", "A blank prompt", "A short brief about your store and your market"],
+    cells: [
+      "Someone else's layout",
+      "A blank prompt",
+      "A short brief about your store and your market",
+    ],
   },
   {
     label: "Copy and content",
-    cells: ["Placeholder text to replace", "Generic filler", "Written for your products, market and price point"],
+    cells: [
+      "Placeholder text to replace",
+      "Generic filler",
+      "Written for your products, market and price point",
+    ],
   },
   {
     label: "How many pages",
@@ -44,63 +58,92 @@ const ROWS: { label: string; cells: [string, string, string] }[] = [
   },
 ];
 
+/* The wash behind our column. A token would be wrong: this is not a surface
+   any other component has, it is one column of one table saying "this one is
+   us", and inventing `--color-pf-tint` for a single use puts a decision in the
+   palette that belongs in this file. */
+const OURS = "bg-[rgba(107,47,247,0.16)]";
+
 export function Comparison() {
   const ref = useSeen<HTMLElement>("comparison");
 
   return (
-    <section ref={ref} className="relative mx-auto max-w-6xl px-5 py-20 sm:py-24">
-      <p className="text-center text-[12.5px] font-semibold uppercase tracking-[0.18em] text-pf-faint">
-        Why not a template?
-      </p>
-      <h2 className="mt-3 text-center font-display text-pf-h2 font-semibold text-pf-text">
-        Three ways to get store pages
-      </h2>
+    <section
+      ref={ref}
+      className="border-t border-pf-border px-5 py-20 sm:px-8 sm:py-24 lg:px-[120px]"
+    >
+      <div className="mx-auto flex max-w-[1200px] flex-col items-center">
+        <SectionHead eyebrow="Why not a template?" title="Three ways to get store pages" />
 
-      {/* A table, because it is one: four questions asked of three options.
-          Its own scroller so a narrow screen scrolls the comparison instead of
-          the page — see the note on tables in the exporter for the same rule. */}
-      <div className="mt-12 overflow-x-auto">
-        <table className="w-full min-w-[720px] border-collapse text-left">
-          <thead>
-            <tr>
-              <th className="w-[150px] pb-4" />
-              {COLUMNS.map((c, i) => (
-                <th
-                  key={c}
-                  className={
-                    "px-5 pb-4 font-display text-[15px] font-semibold tracking-[-0.01em] " +
-                    /* The third column is ours and says so by weight, not by a
-                       badge: a "best" label on your own column is an argument
-                       nobody believes. */
-                    (i === 2 ? "text-pf-text" : "text-pf-faint")
-                  }
-                >
-                  {c}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {ROWS.map((row) => (
-              <tr key={row.label} className="border-t border-pf-border align-top">
-                <th scope="row" className="py-5 pr-4 text-[12.5px] font-semibold uppercase tracking-[0.12em] text-pf-faint">
-                  {row.label}
-                </th>
-                {row.cells.map((cell, i) => (
-                  <td
-                    key={cell}
+        {/* A TABLE, BECAUSE IT IS ONE: four questions asked of three options.
+            Its own scroller so a narrow screen scrolls the comparison rather
+            than the page — the same rule the exporter applies to wide tables.
+            `border-separate` with a zero gap, or the rounded corners of the
+            frame are painted over by the square corners of the first and last
+            cells. */}
+        <div className="mt-10 w-full overflow-x-auto rounded-pf-lg border border-pf-border">
+          <table className="w-full min-w-[760px] border-separate border-spacing-0 text-left">
+            <thead>
+              <tr>
+                <th className="w-[190px] border-b border-pf-border px-6 py-[18px]" />
+                {COLUMNS.map((c, i) => (
+                  <th
+                    key={c}
                     className={
-                      "px-5 py-5 text-[13.5px] leading-relaxed " +
-                      (i === 2 ? "text-pf-text" : "text-pf-muted")
+                      "border-b border-pf-border px-6 py-[18px] text-[15px] " +
+                      (i === 2
+                        ? `font-bold text-pf-text ${OURS}`
+                        : "font-semibold text-pf-body/85")
                     }
                   >
-                    {cell}
-                  </td>
+                    {i === 2 ? (
+                      <span className="flex items-center gap-2">
+                        <Image
+                          src="/pagefly-icon.png"
+                          alt=""
+                          width={18}
+                          height={18}
+                          className="size-[18px] rounded-[5px]"
+                        />
+                        {c}
+                      </span>
+                    ) : (
+                      c
+                    )}
+                  </th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {ROWS.map((row, r) => {
+                /* The last row keeps no bottom rule: the frame is already
+                   there, and two lines a pixel apart read as a mistake. */
+                const rule = r === ROWS.length - 1 ? "" : "border-b border-pf-border";
+                return (
+                  <tr key={row.label} className="align-top">
+                    <th
+                      scope="row"
+                      className={`px-6 py-5 text-[14px] font-semibold text-pf-body/[.72] ${rule}`}
+                    >
+                      {row.label}
+                    </th>
+                    {row.cells.map((cell, i) => (
+                      <td
+                        key={cell}
+                        className={
+                          `px-6 py-5 text-[14.5px] leading-[1.5] ${rule} ` +
+                          (i === 2 ? `text-pf-text ${OURS}` : "text-pf-muted")
+                        }
+                      >
+                        {cell}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
   );

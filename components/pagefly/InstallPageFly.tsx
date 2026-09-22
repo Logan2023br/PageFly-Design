@@ -23,6 +23,8 @@ export function InstallPageFlyButton({
   size = "md",
   className = "",
   surface,
+  variant = "solid",
+  label = "Install PageFly",
 }: {
   size?: "sm" | "md" | "lg";
   className?: string;
@@ -30,6 +32,22 @@ export function InstallPageFlyButton({
       a wrong answer that never looks wrong — the count would land under some
       other placement and the comparison it exists for would be quietly off. */
   surface: Surface;
+  /* ----------------------------------------------------------------------
+     HOW LOUD, WHICH IS A QUESTION ABOUT THE SENTENCE AROUND IT.
+
+     Purple everywhere was wrong in two different ways at once. In the masthead
+     it sat beside `Design now` in the same fill, so the header offered two
+     equally weighted next steps and the one this product is for came second.
+     In the going-live band it is the only action in sight and does not need to
+     shout, but it does need an outline to read as a control at all.
+
+     So: `solid` where it IS the ask, `ghost` where it is the only action in a
+     quiet band, `link` in the masthead where `Design now` is the ask and this
+     is a thing you might also want.
+     ---------------------------------------------------------------------- */
+  variant?: "solid" | "ghost" | "link";
+  /** The masthead says "Install PageFly"; the going-live band says which plan. */
+  label?: string;
 }) {
   const sizes = {
     sm: "h-8 px-3 text-[12.5px] gap-1.5",
@@ -37,16 +55,27 @@ export function InstallPageFlyButton({
     lg: "h-12 px-6 text-[14.5px] gap-2",
   }[size];
 
+  const skins = {
+    solid:
+      `rounded-pf-md bg-pf-primary font-semibold text-white shadow-pf-button transition-colors duration-150 hover:bg-pf-primary-hi ${sizes}`,
+    ghost:
+      `rounded-pf-md border border-pf-border-hi font-semibold text-pf-body transition-colors duration-150 hover:border-pf-primary-hi hover:text-pf-text ${sizes}`,
+    /* No box at all — a nav item that happens to leave the site. The sizes
+       above are heights and horizontal padding, neither of which a run of text
+       in a header should carry. */
+    link: "font-medium text-pf-muted transition-colors duration-150 hover:text-pf-text gap-1.5 text-[14px]",
+  }[variant];
+
   return (
     <a
       href={PAGEFLY_INSTALL_URL}
       target="_blank"
       rel="noopener noreferrer"
       onClick={() => track(EV.pageflyInstallClicked, { surface })}
-      className={`inline-flex shrink-0 items-center justify-center rounded-pf-md bg-pf-primary font-semibold text-white shadow-pf-button transition-colors duration-150 hover:bg-pf-primary-hi ${sizes} ${className}`}
+      className={`inline-flex shrink-0 items-center justify-center ${skins} ${className}`}
     >
-      Install PageFly
-      <Icon name="ArrowUpRight" size={size === "sm" ? 14 : 16} />
+      {label}
+      <Icon name="ArrowUpRight" size={size === "sm" || variant === "link" ? 14 : 16} />
     </a>
   );
 }

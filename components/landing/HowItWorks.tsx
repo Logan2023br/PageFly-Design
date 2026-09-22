@@ -1,10 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useSeen } from "./useSeen";
 import { useEffect, useState } from "react";
-import { InstallPageFlyButton } from "../pagefly/InstallPageFly";
+import { EV, track } from "@/lib/analytics";
 import { Icon } from "../ui";
+import { SectionHead } from "./SectionHead";
+import { useSeen } from "./useSeen";
 
 /* ==========================================================================
    Four steps, shown rather than described.
@@ -19,13 +20,25 @@ import { Icon } from "../ui";
    trip a beta merchant has to be told: build it, look at it in the Library,
    export it, import the .pagefly into the app. Filling in the brief is step one
    of that, not all of it.
+
+   THE EXPLANATION IS PRINTED, NOT HOVERED. It used to be a tooltip, which put
+   the sentence that tells you what a step IS behind an action only a mouse can
+   take — and then, to avoid covering the screenshot it described, floated it
+   above the card where it overlapped the one above. A paragraph under the
+   picture is readable on a phone, readable with a keyboard, and covers nothing.
+
+   THE CHIP ON THE RIGHT IS THE COST OF THE STEP: how long, on what screens,
+   what it needs. It is the question a merchant has at each step and the one
+   thing a screenshot cannot show.
    ========================================================================== */
 
 type Step = {
   n: string;
   title: string;
-  /** what to do at this step — the tooltip, and the lightbox caption */
-  tip: string;
+  /** what this step costs: a duration, a set of screens, a dependency */
+  chip: string;
+  /** what to do at this step — printed under the picture, and the caption */
+  body: string;
   /** under `public/`, so `next/image` optimises and serves it as webp */
   src: string;
   /** the file's real size, for the lightbox to show it uncropped */
@@ -36,35 +49,47 @@ type Step = {
 const STEPS: Step[] = [
   {
     n: "01",
-    title: "Create pages",
+    title: "Answer four questions",
+    chip: "~2 min",
     src: "/how-it-works/01-create-page.png",
     width: 1600,
     height: 752,
-    tip: "Pick your options in Build Quickly or Build Detail, then press Create pages.",
+    body:
+      "What you sell, where you sell it, your colours, the pages you want. The market sets the " +
+      "language, currency and payment methods on every page.",
   },
   {
     n: "02",
-    title: "View your pages",
+    title: "Get your pages back",
+    chip: "~7 min per page",
     src: "/how-it-works/02-view-pages.png",
     width: 1600,
     height: 783,
-    tip: "Every page you have built is in the Library. Hover one to see its whole layout, and how it responds at each screen size.",
+    body:
+      "Home, product, collection, landing and more — written and laid out for your products, and " +
+      "consistent with each other. Every page you have built stays in the Library.",
   },
   {
     n: "03",
-    title: "Export pages",
+    title: "Preview, then export",
+    chip: "Desktop · tablet · mobile",
     src: "/how-it-works/03-export-page.png",
     width: 1600,
     height: 840,
-    tip: "Hover the top-left corner of a page to export it. The export is one .pagefly file.",
+    body:
+      "Open any page at full size on three screen sizes. Keep the ones you like and export them as " +
+      ".pagefly files — one page or the whole set.",
   },
   {
     n: "04",
-    title: "Import and live page",
+    title: "Import and go live",
+    chip: "Needs the PageFly app",
     src: "/how-it-works/04-import-page.png",
     width: 1600,
     height: 883,
-    tip: "Import the .pagefly file into the PageFly App to see the page.",
+    body:
+      "Import the files into PageFly on your store. Every page opens in the editor as a normal " +
+      "PageFly page — change anything, then publish.",
   },
 ];
 
@@ -84,114 +109,81 @@ export function HowItWorks() {
   }, [zoom]);
 
   return (
-    <section ref={seen} id="how" className="mx-auto max-w-6xl scroll-mt-20 px-5 py-14 sm:py-20">
-      <div className="mx-auto mb-10 max-w-2xl text-center">
-        <p className="text-[12.5px] font-semibold uppercase tracking-[0.18em] text-pf-faint">
-          How it works
-        </p>
-        <h2 className="mt-3 font-display text-pf-h2 font-semibold text-pf-text">
-          Four answers in. A full set of pages out.
-        </h2>
-        {/* WHICH STEP NEEDS THE APP, SAID HERE. It is the question the whole
-            "nothing to install" promise raises, and leaving it to the fourth
-            tile makes the promise read as a catch. */}
-        <p className="mt-3 text-pf-body text-pf-muted">
-          Steps one to three need nothing installed. Only the last — putting pages
-          live — uses the free PageFly app. Hover a step to see what to do; click
-          to open it full size.
-        </p>
-      </div>
+    <section
+      ref={seen}
+      id="how"
+      className="scroll-mt-20 border-t border-pf-border px-5 py-20 sm:px-8 sm:py-24 lg:px-[120px]"
+    >
+      <div className="mx-auto flex max-w-[1200px] flex-col items-center">
+        <SectionHead
+          eyebrow="How it works"
+          title="Four answers in. A full set of pages out."
+          /* WHICH STEP NEEDS THE APP, SAID HERE. It is the question the whole
+             "nothing to install" promise raises, and leaving it to the fourth
+             tile makes the promise read as a catch. */
+          sub="Steps one to three need nothing installed. Only the last step — putting pages live — uses the free PageFly app."
+        />
 
-      {/* Two across, not four. These hold screenshots of a UI, and a quarter of
-          a 1,150px row is 270px — a whole brief screen shrunk past the point
-          where anyone can tell what they are looking at. Two rows of two gives
-          each one about 560px, which is a readable picture of a screen. */}
-      <ol className="grid gap-5 sm:grid-cols-2">
-        {STEPS.map((step, i) => (
-          <li key={step.n} className="group relative">
-            <button
-              type="button"
-              onClick={() => setZoom(step)}
-              className="block w-full overflow-hidden rounded-pf-card border border-pf-border bg-pf-bg-deep text-left transition-colors hover:border-pf-border-hi focus:border-pf-primary-hi focus:outline-none"
+        {/* Two across, not four. These hold screenshots of a UI, and a quarter
+            of a 1,200px row is 282px — a whole brief screen shrunk past the
+            point where anyone can tell what they are looking at. Two rows of
+            two gives each one about 560px, which is a readable picture of a
+            screen. */}
+        <ol className="mt-11 grid w-full gap-8 lg:grid-cols-2">
+          {STEPS.map((step, i) => (
+            <li
+              key={step.n}
+              className="flex flex-col gap-4 rounded-pf-lg border border-pf-border bg-pf-card p-3 pb-[22px] transition-colors hover:border-pf-border-hi"
             >
-              {/* 2:1 — a band rather than a box. These sit two to a row at about
-                  560px, so 16:10 made each one 350px tall and the four of them a
-                  full screen of scrolling before the counts. Every screenshot is
-                  between 1.8:1 and 2.13:1, so `object-top` trims a sliver off
-                  the bottom and never the part that identifies the screen. */}
-              <span className="relative block aspect-[2/1] overflow-hidden bg-pf-bg">
-                <Image
-                  src={step.src}
-                  alt={step.title}
-                  fill
-                  /* Two columns above 640px, one below — so the browser never
-                     fetches a 1,600px copy to paint a 560px card. */
-                  sizes="(max-width: 640px) 100vw, 560px"
-                  className="object-cover object-top"
-                  /* The first two are above the fold on a laptop; the last two
-                     are not, and eagerly loading 2.5MB of screenshots to paint
-                     a hero nobody has scrolled past yet is the whole reason
-                     `loading` exists. */
-                  priority={i < 2}
-                />
-              </span>
-              <span className="flex items-baseline gap-2 px-3.5 py-3">
-                <span className="text-[11px] font-semibold tabular-nums text-pf-faint">
-                  {step.n}
+              <button
+                type="button"
+                onClick={() => {
+                  track(EV.howStepOpened, { step: step.n });
+                  setZoom(step);
+                }}
+                aria-label={`Open ${step.title} full size`}
+                className="block cursor-zoom-in overflow-hidden rounded-[10px] bg-pf-bg-deep focus:outline-none focus-visible:ring-2 focus-visible:ring-pf-primary-hi"
+              >
+                {/* 2:1 — a band rather than a box. Every screenshot is between
+                    1.8:1 and 2.13:1, so `object-top` trims a sliver off the
+                    bottom and never the part that identifies the screen. */}
+                <span className="relative block aspect-[2/1]">
+                  <Image
+                    src={step.src}
+                    alt={step.title}
+                    fill
+                    /* Two columns above 1024px, one below — so the browser never
+                       fetches a 1,600px copy to paint a 560px card. */
+                    sizes="(max-width: 1024px) 100vw, 560px"
+                    className="object-cover object-top"
+                    /* The first two are above the fold on a laptop; the last two
+                       are not, and eagerly loading 2.5MB of screenshots to paint
+                       a hero nobody has scrolled past yet is the whole reason
+                       `loading` exists. */
+                    priority={i < 2}
+                  />
                 </span>
-                <span className="text-[13.5px] font-semibold text-pf-text">
-                  {step.title}
-                </span>
-              </span>
-            </button>
+              </button>
 
-            {/* ABOVE the card, pointing down at it. Inside the card it covered
-                the picture it was describing, which is the one thing a tooltip
-                on an image must not do.
-
-                LEFT-ALIGNED to the card, not centred on it. Centred, the two
-                right-hand tooltips hung out over the page edge on a laptop and
-                the card's own left edge was the only straight line either of
-                them did not share.
-
-                Brand purple rather than the panel colour. Every other floating
-                surface on this page is `bg-pf-bg-deep` with a hairline border,
-                which is right for something you read and wrong for something
-                that appears because you pointed at it — the tooltip has to
-                announce itself, and on a near-black page the only way to do that
-                is to stop being near-black. White text because `pf-body` on
-                purple is a grey on a colour, which is the one contrast pairing
-                this palette does not hold.
-
-                Shown on hover AND on keyboard focus: a tooltip only a mouse can
-                reach is a tooltip half the visitors never see. */}
-            <span
-              role="tooltip"
-              className="pointer-events-none absolute bottom-full left-0 z-20 mb-2.5 w-[min(24rem,92%)] rounded-pf-md border border-pf-primary-hi/60 bg-pf-primary p-3 text-left text-[12.5px] leading-snug text-white opacity-0 shadow-pf-float transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
-            >
-              {step.tip}
-              {/* Two triangles, one a pixel below the other: the back one is
-                  the border colour and the front one the panel, which is how a
-                  CSS arrow keeps a 1px outline on its two visible sides. Moved
-                  off centre with the tooltip — an arrow still pointing at the
-                  middle of a card whose tooltip starts at its left edge points
-                  at nothing. */}
-              <span className="absolute left-7 top-full border-x-[7px] border-t-[7px] border-x-transparent border-t-pf-primary-hi/60" />
-              <span className="absolute left-7 top-full ml-px -mt-px border-x-[6px] border-t-[6px] border-x-transparent border-t-pf-primary" />
-            </span>
-          </li>
-        ))}
-      </ol>
-
-      {/* AFTER the four steps, because step four is where PageFly first
-          appears — the panel above it is literally its import dialog. Offered
-          before that, the button would be asking a visitor to install
-          something for a reason they have not been given yet. */}
-      <div className="mt-8 flex flex-col items-center gap-2">
-        <p className="text-[12.5px] text-pf-muted">
-          Step four needs the PageFly app on your store.
-        </p>
-        <InstallPageFlyButton size="sm" surface="landing" />
+              <div className="flex flex-col gap-1.5 px-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-[13px] font-semibold tabular-nums text-pf-faint">
+                      {step.n}
+                    </span>
+                    <h3 className="font-display text-[22px] font-semibold tracking-[-0.018em] text-pf-text">
+                      {step.title}
+                    </h3>
+                  </div>
+                  <span className="shrink-0 rounded-pf-sm border border-pf-border-hi px-[9px] py-1 text-[12px] font-semibold text-pf-body/[.72]">
+                    {step.chip}
+                  </span>
+                </div>
+                <p className="text-[15px] leading-[1.55] text-pf-muted">{step.body}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
       </div>
 
       {zoom && (
@@ -228,8 +220,7 @@ export function HowItWorks() {
               className="h-auto w-full"
             />
             <p className="border-t border-pf-border px-4 py-3 text-[13px] text-pf-muted">
-              <span className="font-semibold text-pf-text">{zoom.title}</span>{" "}
-              — {zoom.tip}
+              <span className="font-semibold text-pf-text">{zoom.title}</span> — {zoom.body}
             </p>
           </div>
         </div>

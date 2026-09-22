@@ -22,6 +22,8 @@
    · A section that fires no event, or two sections that fire the same one,
      read as a working funnel with a hole in it.
    ========================================================================== */
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { EV, LANDING_SECTIONS } from "../lib/analytics";
 
 let bad = 0;
@@ -67,8 +69,55 @@ for (const want of ["proof", "showcase", "get", "comparison", "how", "live", "fa
 
 console.log("\nevents the new sections need");
 
-for (const key of ["landingSection", "faqOpened", "landingNav"] as const) {
+for (const key of [
+  "landingSection",
+  "landingNav",
+  "landingLinkClicked",
+  "showcaseFilter",
+  "howStepOpened",
+] as const) {
   check(key in EV, `EV.${key} exists`);
+}
+/* And the one that was removed stays removed. `test-analytics.ts` fails any
+   name here that nothing fires; this is the other half of that rule, so the
+   constant cannot creep back without a call site. */
+check(!("faqOpened" in EV), "EV.faqOpened is gone with the accordion");
+
+/* ==========================================================================
+   AND EVERY NAME IN THE LIST IS ACTUALLY WIRED TO A SECTION.
+
+   The checks above prove the vocabulary is well formed. They cannot tell you
+   that anybody says any of it — which is the failure that actually happened:
+   the page was rebuilt to match a new mockup, a section was rewritten from
+   scratch, and its `useSeen(...)` did not come back with it. `LANDING_SECTIONS`
+   still listed the name, the funnel chart still had the step, and the step read
+   zero forever.
+
+   So this reads the source. Crude on purpose: a regex over the landing folder
+   beats importing React components into a script that has no DOM, and the thing
+   being asserted — "the string appears in a useSeen call" — is exactly what the
+   regex can see.
+   ========================================================================== */
+console.log("\nevery section is wired to something that can fire it");
+
+const DIR = join(import.meta.dirname, "..", "components", "landing");
+const source = readdirSync(DIR)
+  .filter((f) => f.endsWith(".tsx") || f.endsWith(".ts"))
+  .map((f) => readFileSync(join(DIR, f), "utf8"))
+  .join("\n");
+
+/* `useSeen<HTMLElement>("hero")` and `useSeen<HTMLDivElement>("proof")` — the
+   type argument varies, the string does not. */
+const wired = new Set(
+  [...source.matchAll(/useSeen<[^>]*>\(\s*"([a-z_]+)"\s*\)/g)].map((m) => m[1]),
+);
+
+for (const section of LANDING_SECTIONS) {
+  check(wired.has(section), `${section} is observed by a component`);
+}
+for (const seen of wired) {
+  const known: readonly string[] = LANDING_SECTIONS;
+  check(known.includes(seen), `${seen} is a name the funnel knows about`);
 }
 
 console.log(bad === 0 ? "\nPASS" : `\nFAIL — ${bad} problems`);
