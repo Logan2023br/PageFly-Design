@@ -322,6 +322,17 @@ const GALLERY_FROM: Record<string, string> = {
   showcase: "Gallery grid",
 };
 
+/* The five fixed pages under the hero — see `lib/showcasePages.ts`. Written out
+   rather than derived from that list: the labels here name a PAGE TYPE for
+   somebody reading a chart, and the ones there are chips on a card. */
+const SHOWCASE_SLUGS: Record<string, string> = {
+  home: "Home",
+  "product-page": "Product",
+  "collection-page": "Collection",
+  "about-us": "About",
+  contact: "Contact",
+};
+
 /* WHERE THE INSTALL BUTTON WAS PRESSED. One button, many placements — see
    `SharedBlock` and the note on `Surface` in `lib/analytics.ts`.
 
@@ -777,6 +788,22 @@ function buildView(
         }),
         metric("filter", "Gallery filter used", "asked to see one kind of page", EV.showcaseFilter, "The row of pills above the gallery grid", {
           split: slices(rows, EV.showcaseFilter, "category", SHOWCASE_FILTERS),
+          splitKind: "control",
+        }),
+        /* ==================================================================
+           THE STRONGEST SIGNAL ON THIS PAGE.
+
+           Somebody who takes the file has stopped asking whether the output is
+           real and started checking it — without an account, which is exactly
+           the visitor the front door exists to convince.
+
+           APART FROM `design_page_exported`, which is a merchant taking their
+           OWN page after a build. Same action at opposite ends of the funnel,
+           and summed they would make the export number look healthy on a week
+           when nobody built anything.
+           ================================================================== */
+        metric("file", "Sample .pagefly taken", "downloaded one of the five real files", EV.showcaseFileDownloaded, "“Download .pagefly” in the toolbar of an opened page from the rail under the hero", {
+          split: slices(rows, EV.showcaseFileDownloaded, "page_type", SHOWCASE_SLUGS),
           splitKind: "control",
         }),
         metric("how_step", "How-it-works picture opened", "looked at a screenshot full size", EV.howStepOpened, "One of the four screenshots in “How it works”, opening the lightbox", {

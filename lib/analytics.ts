@@ -250,6 +250,17 @@ export const EV = {
   showcaseFilter: "design_showcase_filter",
   /** one of the four how-it-works pictures opened full size, with which */
   howStepOpened: "design_how_step_opened",
+  /**
+   * The .pagefly behind one of the five pages under the hero, taken.
+   *
+   * THE STRONGEST SIGNAL THIS PAGE CAN PRODUCE, and it had no name. Somebody
+   * who downloads the file has stopped asking whether the output is real and
+   * started checking — and they did it without an account, which is exactly the
+   * visitor the front door exists to convince. Counted apart from
+   * `design_page_exported`, which is a merchant taking their OWN page after a
+   * build: same action, opposite ends of the funnel.
+   */
+  showcaseFileDownloaded: "design_showcase_file_downloaded",
 
   signinViewed: "design_signin_viewed",
   signinSubmitted: "design_signin_submitted",

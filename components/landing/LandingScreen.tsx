@@ -649,7 +649,7 @@ export function LandingScreen() {
           ))}
         </ul>
 
-        <HeroRail pages={pages} />
+        <HeroRail />
       </section>
 
       <ProofStrip />
