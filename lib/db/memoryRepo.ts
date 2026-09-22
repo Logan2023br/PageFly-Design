@@ -622,6 +622,30 @@ export function createMemoryRepo(file: string): Repo {
         .sort((a, b) => a.date.localeCompare(b.date));
     },
 
+    async recentEvents(name, from, to, propKey = null, part = null, limit = 200) {
+      sync();
+      const hits = [];
+      for (const e of data.events) {
+        if (e.name !== name) continue;
+        if (e.createdAt < from || e.createdAt >= to) continue;
+        if (part !== null && propKey) {
+          const v = (e.props as Record<string, unknown>)[propKey];
+          if (v === undefined || v === null || String(v) !== part) continue;
+        }
+        hits.push({
+          id: e.id,
+          at: e.createdAt,
+          domain: e.domain ?? null,
+          visitorId: e.visitorId,
+          props: (e.props ?? {}) as Record<string, unknown>,
+        });
+      }
+      /* Sorted BEFORE the cap, for the reason the postgres one gives: cutting
+         first keeps an arbitrary slice rather than the newest. */
+      hits.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+      return hits.slice(0, Math.min(1000, Math.max(1, limit)));
+    },
+
     async eventsByStore(name, from, to, propKey, groupProp = null, part = null) {
       sync();
       /* Keyed by the domain as written, with `null` kept as its own key rather

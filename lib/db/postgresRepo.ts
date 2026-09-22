@@ -1065,6 +1065,37 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       }));
     },
 
+    async recentEvents(name, from, to, propKey = null, part = null, limit = 200) {
+      await ready();
+      /* ORDERED AND CAPPED IN THE DATABASE. Fetching the window and slicing it
+         here would read every row of a busy event to keep the last two hundred,
+         and — worse — `limit` without `order by` returns an arbitrary slice, so
+         the "newest first" the screen promises would be a lie on exactly the
+         events busy enough for anyone to care.
+
+         `props->>$4 = $5` is the same one-slice filter `eventsByStore` uses:
+         the KEY comes from `lib/analytics/detail`, a table this query's caller
+         does not own, and only the VALUE arrives from a query string — bound,
+         never interpolated. */
+      const { rows } = await db.query(
+        `select id, props, visitor_id, domain, created_at
+           from events
+          where name = $1 and created_at >= $2 and created_at < $3
+            and ($5::text is null or props->>$4 = $5)
+          order by created_at desc
+          limit $6`,
+        [name, from, to, propKey, part, Math.min(1000, Math.max(1, limit))],
+      );
+
+      return rows.map((r) => ({
+        id: String(r.id),
+        at: new Date(r.created_at as string).toISOString(),
+        domain: (r.domain as string | null) ?? null,
+        visitorId: String(r.visitor_id),
+        props: (r.props ?? {}) as Record<string, unknown>,
+      }));
+    },
+
     async eventsByStore(name, from, to, propKey, groupProp = null, part = null) {
       await ready();
       /* GROUPED BY DOMAIN AND BY THE PARAMETER AT ONCE, then folded into one

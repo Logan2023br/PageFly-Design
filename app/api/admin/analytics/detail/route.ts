@@ -1,6 +1,16 @@
 import { readAdminSession } from "@/lib/session";
 import { getRepo } from "@/lib/db";
 import { DETAIL_OF, type DetailRow, type DetailResponse } from "@/lib/analytics/detail";
+import type { EventHit } from "@/lib/db/types";
+
+/**
+ * How many individual presses come back with a tile.
+ *
+ * Enough that a busy day reads as a day rather than as a sample, and few enough
+ * that opening a tile is not a megabyte. The tile itself carries the true total,
+ * so this number never has to be right — only recent.
+ */
+const FEED = 300;
 
 /* ==========================================================================
    What is behind one tile.
@@ -72,15 +82,31 @@ export async function GET(request: Request) {
       : null;
 
   let rows: DetailRow[];
+  let hits: EventHit[];
   try {
-    rows = await getRepo().eventsByStore(
-      event,
-      from.toISOString(),
-      to.toISOString(),
-      spec.propKey,
-      spec.groupProp ?? null,
-      part,
-    );
+    /* TWO READS, ONE WINDOW. The fold and the feed answer different questions —
+       "which stores, how often" and "who, when" — and neither can be derived
+       from the other: folding destroys the order, and the feed is capped so its
+       counts are not the totals. Issued together so they cannot disagree about
+       the range they cover. */
+    [rows, hits] = await Promise.all([
+      getRepo().eventsByStore(
+        event,
+        from.toISOString(),
+        to.toISOString(),
+        spec.propKey,
+        spec.groupProp ?? null,
+        part,
+      ),
+      getRepo().recentEvents(
+        event,
+        from.toISOString(),
+        to.toISOString(),
+        spec.propKey,
+        part,
+        FEED,
+      ),
+    ]);
   } catch {
     /* Same posture as the summary: a database that is not there is not an
        error the operator can act on from this screen. */
@@ -96,5 +122,6 @@ export async function GET(request: Request) {
     unit: spec.unit,
     partLabel: spec.partLabel,
     rows,
+    hits,
   } satisfies DetailResponse);
 }

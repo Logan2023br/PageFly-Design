@@ -223,6 +223,115 @@ const SIGNIN_RESULTS: Record<string, string> = {
   server_error: "Our error",
 };
 
+/* ==========================================================================
+   EVERY LINK TO /design, NAMED ONCE.
+
+   There were two copies of this — the block at the top of the screen and the
+   tile in the per-screen section — and the rebuilt landing page added three
+   links to neither of them. The screen then drew a tile labelled `header`, the
+   raw key, beside properly named ones.
+
+   That is the second time two copies of a lookup table on this screen have
+   drifted; the note on `SIGNIN_RESULTS` above records the first. One table, and
+   both readers import it.
+
+   `header_signin` and `header_store` are NOT "Design now" buttons — they are
+   the way somebody who already has an account gets back in. Kept in the same
+   table because they are still links to /design and the total has to include
+   them, but named so nobody reads them as CTA conversions.
+   ========================================================================== */
+const CTA_LOCATIONS: Record<string, string> = {
+  hero: "Hero · Design my pages",
+  closing: "Closing · Design my pages",
+  header: "Header · Design now",
+  showcase: "Gallery · Design pages for my store",
+  showcase_pill: "Gallery · “Your store” pill",
+  header_signin: "Header · Sign in",
+  header_store: "Header · store name",
+};
+
+/* The nine bands of the landing page, in the order somebody scrolls past them.
+   Numbered in the label because the list is read as a funnel and a reader
+   should not have to know the page's layout to see which way is down. */
+const LANDING_SECTIONS_LABELS: Record<string, string> = {
+  hero: "1 · Hero",
+  proof: "2 · Proof strip",
+  showcase: "3 · Gallery",
+  get: "4 · What you get",
+  comparison: "5 · Comparison",
+  how: "6 · How it works",
+  live: "7 · Going live",
+  faq: "8 · FAQ",
+  final_cta: "9 · Closing ask",
+};
+
+/* The masthead anchors, the same four inside the mobile menu, and the one
+   under the hero. Four of these keys are also section names above, and they
+   mean different things: `faq` here is somebody PRESSING the FAQ link, `faq`
+   there is somebody scrolling far enough to see it. Two tables, on purpose. */
+const LANDING_NAV_LABELS: Record<string, string> = {
+  examples: "Example pages",
+  get: "What you get",
+  how: "How it works",
+  faq: "FAQ",
+  examples_hero: "Hero · See pages it built",
+};
+
+/* The pills above the gallery. Derived from the categories actually in the
+   showcase deck, so which of these appear depends on what has been built —
+   every one the catalogue knows is named so none can render as a raw key. */
+const SHOWCASE_FILTERS: Record<string, string> = {
+  all: "All pages",
+  core: "Core store pages",
+  landing: "Landing pages",
+  trust: "Trust pages",
+  content: "Content pages",
+  conversion: "Conversion pages",
+  account: "Account pages",
+};
+
+const HOW_STEPS: Record<string, string> = {
+  "01": "01 · Answer four questions",
+  "02": "02 · Get your pages back",
+  "03": "03 · Preview, then export",
+  "04": "04 · Import and go live",
+};
+
+/* The two places a real page opens full size. Different visitors: the rail is
+   pressed by somebody who has read nothing yet, the grid by somebody who
+   scrolled to it. */
+const GALLERY_FROM: Record<string, string> = {
+  hero: "Rail under the hero",
+  showcase: "Gallery grid",
+};
+
+/* WHERE THE INSTALL BUTTON WAS PRESSED. One button, many placements — see
+   `SharedBlock` and the note on `Surface` in `lib/analytics.ts`.
+
+   Module level rather than inside the handler, so `test-analytics-coverage.ts`
+   can read it by name and check that every placement a call site passes is
+   named here. Inside the function it had no name to ask for, and the first
+   version of that test silently checked nothing. */
+const SURFACES: Record<string, string> = {
+  /* `landing` and `landing_collections` NO LONGER FIRE. The install button
+     left "How it works" when the page was rebuilt, and the collections section
+     is only on the build screen now. The labels stay because the rows already
+     recorded under them do, and a historical row whose placement renders as a
+     raw key is a chart with a hole in it. */
+  landing: "Landing · How it works",
+  landing_collections: "Landing · Collections",
+  building_collections: "While building · Collections",
+  results: "Finished deck",
+  export_popup: "Popup after an export",
+  landing_live: "Landing · Going live",
+  topbar_landing: "Top bar · Landing",
+  topbar_login: "Top bar · Sign in",
+  topbar_register: "Top bar · Register",
+  topbar_design: "Top bar · Design",
+  topbar_library: "Top bar · Library",
+  topbar_feedback: "Top bar · Feedback",
+};
+
 function slices(
   rows: EventCount[],
   name: string,
@@ -565,17 +674,66 @@ function buildView(
       note: "The front door. Everything here is a visitor with no account yet.",
       metrics: [
         metric("viewed", "Page viewed", "the denominator of every rate below", EV.landingViewed, "The page loading at /"),
-        metric("cta", "CTA pressed", "all four links to /design", EV.ctaClicked, "Any of the four links to /design — the two purple “Design now” buttons, and “Sign in” / the store name in the header", {
-          split: slices(rows, EV.ctaClicked, "location", {
-            hero: "Hero · Design now",
-            closing: "Closing · Design now",
-            header_signin: "Header · Sign in",
-            header_store: "Header · store name",
-          }),
+        /* ==================================================================
+           EVERY LINK TO /design, AND THERE ARE SEVEN OF THEM NOW.
+
+           This listed four, which was right for the page that existed when it
+           was written. The rebuilt front door added a `Design now` to the
+           masthead, a `Design pages for my store` under the gallery and a
+           dashed `Your store` pill in the row of filters above it — and an
+           unnamed `location` renders as its raw key, so the screen showed a
+           tile labelled `header` sitting beside properly named ones. A tile
+           whose label is a variable name is a tile nobody trusts.
+
+           `splitKind: "control"` because these are seven different BUTTONS:
+           which one people press is the question, and one summed figure cannot
+           answer it. The summed tile stays alongside for when the total is
+           what is wanted.
+           ================================================================== */
+        metric("cta", "CTA pressed", "every link to /design, summed", EV.ctaClicked, "Any link that leaves for /design — seven of them, listed one tile each below", {
+          split: slices(rows, EV.ctaClicked, "location", CTA_LOCATIONS),
           splitKind: "control",
         }),
-        metric("gallery", "Gallery opened", "a template in the moving strip", EV.galleryOpened, "A card in the moving strip of templates, near the bottom of the landing page", {
+        /* ==================================================================
+           HOW FAR DOWN THE PAGE PEOPLE GET.
+
+           Nine bands, each reporting once per visit when a third of it has been
+           on screen — see `useSeen`. Read top to bottom it is the only thing on
+           this screen that says WHERE the front door loses people, which for a
+           page of nine sections is the question that decides which ones to cut.
+
+           `outcome`, not `control`: nobody pressed a band. Nine tiles would
+           claim nine buttons where there are none, and the useful reading is
+           the shape of the list, which is a list.
+           ================================================================== */
+        metric("sections", "Sections reached", "once per visit each — read it top to bottom as a funnel", EV.landingSection, "Each band of the landing page, when a third of it has been on screen", {
+          split: slices(rows, EV.landingSection, "section", LANDING_SECTIONS_LABELS),
+        }),
+        metric("nav", "Anchor followed", "moved down the page instead of leaving", EV.landingNav, "The masthead anchors, the same four inside the mobile menu, and “See pages it built” under the hero", {
+          split: slices(rows, EV.landingNav, "to", LANDING_NAV_LABELS),
+          splitKind: "control",
+        }),
+        metric("gallery", "Page preview opened", "a real build, read full size", EV.galleryOpened, "A page in the rail under the hero, or a card in the gallery grid", {
+          split: slices(rows, EV.galleryOpened, "from", GALLERY_FROM),
+          splitKind: "control",
+        }),
+        metric("gallery_type", "…which page type", "the same presses, split by what was opened", EV.galleryOpened, "The same presses as the tile before it, counted by which page type was opened", {
           split: slices(rows, EV.galleryOpened, "page_type", {}),
+        }),
+        metric("filter", "Gallery filter used", "asked to see one kind of page", EV.showcaseFilter, "The row of pills above the gallery grid", {
+          split: slices(rows, EV.showcaseFilter, "category", SHOWCASE_FILTERS),
+          splitKind: "control",
+        }),
+        metric("how_step", "How-it-works picture opened", "looked at a screenshot full size", EV.howStepOpened, "One of the four screenshots in “How it works”, opening the lightbox", {
+          split: slices(rows, EV.howStepOpened, "step", HOW_STEPS),
+          splitKind: "control",
+        }),
+        /* Counted apart from `cta` on purpose — see `landingLinkClicked`. Both
+           are somebody leaving, and only one of them is the thing this page
+           exists to make happen. */
+        metric("outbound", "Left by a footer link", "not a CTA — counted apart so conversion stays honest", EV.landingLinkClicked, "The four links in the footer: PageFly, Help center, Privacy, Terms", {
+          split: slices(rows, EV.landingLinkClicked, "to", {}),
+          splitKind: "control",
         }),
       ],
     },
@@ -682,19 +840,6 @@ function buildView(
     },
   ];
 
-  const SURFACES: Record<string, string> = {
-    landing: "Landing · How it works",
-    landing_collections: "Landing · Collections",
-    building_collections: "While building · Collections",
-    results: "Finished deck",
-    export_popup: "Popup after an export",
-    topbar_landing: "Top bar · Landing",
-    topbar_login: "Top bar · Sign in",
-    topbar_register: "Top bar · Register",
-    topbar_design: "Top bar · Design",
-    topbar_library: "Top bar · Library",
-    topbar_feedback: "Top bar · Feedback",
-  };
 
   const shared: SharedBlock[] = [
     {
@@ -737,12 +882,7 @@ function buildView(
     day,
     empty: rows.length === 0,
     funnel,
-    cta: slices(rows, EV.ctaClicked, "location", {
-      hero: "Hero",
-      closing: "Closing",
-      header_signin: "Header · Sign in",
-      header_store: "Header · Store name",
-    }),
+    cta: slices(rows, EV.ctaClicked, "location", CTA_LOCATIONS),
     signin: slices(rows, EV.signinSubmitted, "result", SIGNIN_RESULTS),
     registerResults: slices(rows, EV.registerSubmitted, "result", {
       success: "Registered",

@@ -561,6 +561,24 @@ export type Repo = {
     part?: string | null,
   ): Promise<EventByStore[]>;
 
+  /**
+   * The individual presses, newest first — see `EventHit`.
+   *
+   * CAPPED, AND THE CAP IS THE POINT. A busy event over thirty days is tens of
+   * thousands of rows and nobody reads the ten-thousandth; the tile above
+   * already carries the total, so this is the recent end of it. Ordered in the
+   * database rather than here, or a cap would keep an arbitrary slice instead
+   * of the newest one.
+   */
+  recentEvents(
+    name: string,
+    from: string,
+    to: string,
+    propKey?: string | null,
+    part?: string | null,
+    limit?: number,
+  ): Promise<EventHit[]>;
+
   /* ---- admin ---- */
   listStoreSummaries(): Promise<StoreSummary[]>;
   stats(): Promise<AdminStats>;
@@ -617,6 +635,37 @@ export type EventByStore = {
   lastAt: string;
   /** the `propKey` values this store produced, busiest first */
   parts: { key: string; count: number }[];
+};
+
+/* ==========================================================================
+   ONE PRESS, AS IT HAPPENED.
+
+   `EventByStore` above folds a store's presses into one row with a first and a
+   last time, which answers "which stores, how often". It cannot answer the
+   other question people ask of this screen — "who pressed this, and when" —
+   because the answer to that is a list in time order and folding destroys the
+   order.
+
+   `domain` IS NULL FOR MOST LANDING-PAGE ROWS AND THAT IS THE READING, not a
+   gap. `/api/events` stamps the domain off the session cookie, so a merchant
+   already signed in who comes back to the front door is named; a stranger is
+   not, and never can be. A feed where most rows say "signed out" and a few name
+   a store is telling you what the traffic on that button IS.
+
+   `visitorId` IS ALWAYS THERE. It is a random value the browser made up for
+   itself and says nothing about the person, but it is stable within a visit —
+   so two rows sharing one is two presses by the same someone, which is what
+   turns a list of clicks into a path through the page.
+   ========================================================================== */
+export type EventHit = {
+  id: string;
+  /** ISO, and the feed is ordered by this, newest first */
+  at: string;
+  /** the store, when the session knew one */
+  domain: string | null;
+  visitorId: string;
+  /** everything the call site sent — which button, which section, which page */
+  props: Record<string, unknown>;
 };
 
 /** One day of events, in the reader's own timezone. */

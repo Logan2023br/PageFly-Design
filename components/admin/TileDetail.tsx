@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import type { DetailResponse, DetailRow } from "@/lib/analytics/detail";
+import type { EventHit } from "@/lib/db/types";
 import { Icon, Panel } from "../ui";
 
 /* ==========================================================================
@@ -21,6 +22,18 @@ import { Icon, Panel } from "../ui";
    FETCHED WHEN OPENED, NEVER BEFORE. Most tiles are never pressed, and loading
    every one of them would be a few hundred rows of nothing for every visit to
    this screen.
+
+   TWO VIEWS OF THE SAME PRESSES, and they answer different questions.
+
+   `Recent` is one row per press, newest first: when, who, and which control.
+   This is the one people mean when they open a tile — an order of events, which
+   is the only thing that shows a path through a page. It is capped at the newest
+   few hundred, so its count is not the total; the tile above carries that.
+
+   `By store` is the older fold: one row per store with a total and a parameter
+   breakdown. Right for "which four stores exported", useless for a signed-out
+   event where it is a single row reading "not signed in · 85" — which is why
+   the feed is what opens first.
    ========================================================================== */
 
 /**
@@ -56,6 +69,11 @@ export function TileDetail({
 }) {
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [rows, setRows] = useState<DetailRow[]>([]);
+  const [hits, setHits] = useState<EventHit[]>([]);
+  /* WHICH HALF IS SHOWING. Defaults to the feed: "who pressed this and when" is
+     the question a tile is opened for, and on a signed-out event the fold
+     beside it is a single row saying "not signed in · 85". */
+  const [tab, setTab] = useState<"feed" | "stores">("feed");
   const [partLabel, setPartLabel] = useState("");
   const [error, setError] = useState("");
 
@@ -82,6 +100,7 @@ export function TileDetail({
           return;
         }
         setRows(body.rows);
+        setHits(body.hits);
         setPartLabel(body.partLabel);
         setState("ready");
       })
@@ -116,7 +135,7 @@ export function TileDetail({
           <p className="px-4 py-5 text-[12px] text-pf-danger">{error}</p>
         )}
 
-        {state === "ready" && rows.length === 0 && (
+        {state === "ready" && rows.length === 0 && hits.length === 0 && (
           /* A REASON, NOT AN EMPTY BOX. The two events that carry the typed
              domain only started carrying it when that was added, so the first
              weeks of a window can be genuinely blank — and "nothing here" reads
@@ -128,7 +147,114 @@ export function TileDetail({
           </p>
         )}
 
-        {state === "ready" && rows.length > 0 && (
+        {state === "ready" && (rows.length > 0 || hits.length > 0) && (
+          <div className="flex items-center gap-1 border-b border-pf-border/60 px-2 py-1.5">
+            {(
+              [
+                ["feed", `Recent${hits.length ? ` · ${hits.length}` : ""}`],
+                ["stores", `By store${rows.length ? ` · ${rows.length}` : ""}`],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                className={
+                  "rounded-pf-sm px-2.5 py-1 text-[11.5px] font-medium transition-colors " +
+                  (tab === id
+                    ? "bg-pf-card-hi text-pf-text"
+                    : "text-pf-faint hover:text-pf-body")
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* ==================================================================
+            ONE ROW PER PRESS, NEWEST FIRST.
+
+            `who` is the store when the session knew one and the browser id
+            otherwise — shortened, because the whole of a uuid is forty
+            characters of noise and the first eight are enough to tell two
+            visitors apart in a list this long. Same browser twice in a row is
+            one person moving through the page, which is the reading the fold
+            beside this cannot produce at all.
+
+            `what` prints the event's own parameters rather than a chosen one:
+            a press carries `location`, or `section`, or `page_type` AND `from`,
+            and which of those matters depends on the tile. Printing them all
+            costs a narrow column and never hides the one that mattered.
+            ================================================================== */}
+        {state === "ready" && tab === "feed" && hits.length > 0 && (
+          <div className="max-h-[420px] overflow-y-auto">
+            <table className="w-full text-left text-[12px]">
+              <thead className="sticky top-0 bg-pf-bg-deep text-[11px] text-pf-faint">
+                <tr>
+                  <th className="w-24 px-4 py-2 font-medium">When</th>
+                  <th className="px-2 py-2 font-medium">Who</th>
+                  <th className="px-4 py-2 font-medium">What</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hits.map((h) => (
+                  <tr key={h.id} className="border-t border-pf-border/60 align-top">
+                    <td className="px-4 py-2 tabular-nums text-pf-body">
+                      {when(h.at).day}
+                      <span className="block text-[10.5px] text-pf-faint">{when(h.at).time}</span>
+                    </td>
+                    <td className="px-2 py-2">
+                      {h.domain ? (
+                        <span className="font-mono text-[11.5px] text-pf-text">{h.domain}</span>
+                      ) : (
+                        <span className="text-pf-faint">
+                          not signed in
+                          <span className="block font-mono text-[10.5px] text-pf-faint/70">
+                            {h.visitorId.slice(0, 8)}
+                          </span>
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2">
+                      <span className="flex flex-wrap gap-1">
+                        {Object.entries(h.props)
+                          .filter(([, v]) => v !== null && v !== undefined && v !== "")
+                          .map(([k, v]) => (
+                            <span
+                              key={k}
+                              className="rounded-pf-sm border border-pf-border px-1.5 py-0.5 text-[11px] text-pf-body"
+                            >
+                              <span className="text-pf-faint">{k}</span> {String(v)}
+                            </span>
+                          ))}
+                        {Object.keys(h.props).length === 0 && (
+                          <span className="text-pf-faint">—</span>
+                        )}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {state === "ready" && tab === "feed" && hits.length > 0 && (
+          <p className="flex items-center gap-1.5 border-t border-pf-border/60 px-4 py-2 text-[11px] text-pf-faint">
+            <Icon name="Info" size={12} />
+            the {hits.length} most recent press{hits.length === 1 ? "" : "es"}, newest first ·
+            the tile above carries the true total
+          </p>
+        )}
+
+        {state === "ready" && tab === "feed" && hits.length === 0 && rows.length > 0 && (
+          <p className="px-4 py-5 text-[12px] text-pf-faint">
+            No individual presses in this window.
+          </p>
+        )}
+
+        {state === "ready" && tab === "stores" && rows.length > 0 && (
           <div className="max-h-[420px] overflow-y-auto">
             <table className="w-full text-left text-[12px]">
               <thead className="sticky top-0 bg-pf-bg-deep text-[11px] text-pf-faint">
@@ -186,7 +312,7 @@ export function TileDetail({
           </div>
         )}
 
-        {state === "ready" && rows.length > 0 && (
+        {state === "ready" && tab === "stores" && rows.length > 0 && (
           <p className="flex items-center gap-1.5 border-t border-pf-border/60 px-4 py-2 text-[11px] text-pf-faint">
             <Icon name="Info" size={12} />
             {rows.length} row{rows.length === 1 ? "" : "s"} · {total} press
