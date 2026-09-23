@@ -145,11 +145,26 @@ export const DESIGN_PROVIDER = "anthropic";
    page. That is 8% of a page's tokens and about 91% of its bill, because its
    output is priced far above DeepSeek's.
 
-   WHAT THE THREE HAVE COST HERE, per page, measured rather than quoted:
+   WHAT THE THREE COST HERE, per page. The TOKENS are measured; the dollars are
+   those tokens at the rates on platform.claude.com, read 2026-09-23:
 
-     Opus 5      in 7,523 · out 28,112   $2.22
-     Sonnet 5    in 8,613 · out 27,112   $0.433
-     Opus 5.5    not yet measured
+     Opus 5.5    in 8,864 · out 21,991   $0.475   ($4/M in · $20/M out)
+     Opus 5      in 7,523 · out 28,112   $0.740   ($5/M in · $25/M out)
+     Sonnet 5    in 8,613 · out 27,112   $0.288   ($2/M in · $10/M out)
+
+   THE FIRST TWO FIGURES THIS NOTE CARRIED WERE WRONG, and wrong in the
+   direction that matters: $2.22 for Opus and $0.433 for Sonnet. Those are the
+   same token counts priced at $15/$75 and $3/$15 — the RETIRED Opus 4.1 rate
+   and the Sonnet 4.x rate. Opus was overstated 3x and Sonnet 1.5x, and the
+   decision to move to Sonnet was taken on them. Corrected here rather than
+   quietly: a cost note nobody re-derives is a number that ages into a lie.
+
+   Only the Opus 5.5 row was measured on the HEXWOOD brief the product now
+   ships as its worked example; the other two were measured on the apparel one
+   it used to ship. Same stage, different input, so the token counts are
+   indicative rather than a controlled comparison —
+   `scripts/measure-design-cost.ts` is what runs it, one page at a time, if
+   somebody wants all three on one brief.
 
    Sonnet went in as a cost decision with the quality question open — its first
    run came back `12 sections, 11 specced · 0 dropped · REFUSED (buy box, page
@@ -163,8 +178,14 @@ export const DESIGN_PROVIDER = "anthropic";
    fails at the first design call of a real build, fifteen minutes into
    somebody's afternoon.
 
-   ONE LINE EITHER WAY. `claude-sonnet-5` puts it back; `claude-opus-5` is the
-   older, dearer one. Whoever settles the trial should write the number above. */
+   ON ONE MEASURED PAGE IT WAS BOTH THE CHEAPEST OPUS AND THE SHORTEST ANSWER:
+   21,991 output tokens against Opus 5's 28,112, at a lower rate. Fewer tokens
+   is not automatically better — a thinner spec could mean a thinner page — so
+   the quality question stays open, and specced, dropped, refused, audit
+   failures and truncation are all printed per build to settle it with.
+
+   ONE LINE EITHER WAY. `claude-sonnet-5` is the cheapest; `claude-opus-5` is
+   the older, dearer Opus. */
 export const DESIGN_MODEL = "claude-opus-5-5";
 
 /** `DESIGN_MODEL` for the design role, `AI_MODEL` for the default one. */
