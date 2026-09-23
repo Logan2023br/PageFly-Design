@@ -382,6 +382,9 @@ async function run(
               ink: palette?.ink ?? "#111114",
               accent: palette?.accent ?? "#111114",
               band: palette?.surfaceAlt ?? "#F7F7F8",
+              /* The merchant's other colours, carried so no prompt forbids
+                 them by name — see `MockupTokens.named`. */
+              named: palette?.named ?? [],
             },
           },
           signal,
@@ -450,6 +453,9 @@ async function run(
               ink: palette?.ink ?? "#111114",
               accent: palette?.accent ?? "#111114",
               band: palette?.surfaceAlt ?? "#F7F7F8",
+              /* The merchant's other colours, carried so no prompt forbids
+                 them by name — see `MockupTokens.named`. */
+              named: palette?.named ?? [],
             },
           },
           signal,
@@ -639,6 +645,10 @@ async function run(
               accent: base.tokens.accent,
               band: base.tokens.surfaceAlt,
               border: base.tokens.border,
+              /* This page's own, not the deck palette's: `base` is the page
+                 being designed and its tokens are resolved from the same brief,
+                 so they agree — taking them from here keeps the one source. */
+              named: base.tokens.named ?? [],
               fontHeading: base.tokens.fontDisplay,
               fontBody: base.tokens.fontBody,
               radius: base.tokens.radius,

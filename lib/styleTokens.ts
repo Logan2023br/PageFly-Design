@@ -58,6 +58,22 @@ export type MockupTokens = {
   imageTreatment: ImageTreatment;
   /** decorative flag a few blocks read for style-specific flourishes */
   hardEdge: boolean;
+
+  /* ========================================================================
+     COLOURS THE MERCHANT NAMED THAT NO ROLE HAD ROOM FOR.
+
+     There are three roles and a brief can name six colours. The extras used to
+     be dropped at the slice, which by itself was only a waste — the damage came
+     one step later, where both design prompts say "use these and nothing else".
+     A merchant who wrote #8B5CF6 violet in their brief was reading a page whose
+     designer had been explicitly forbidden to use it.
+
+     So they are carried instead. Not as roles — nothing here says where they
+     go, because that is the designing model's decision and the whole point of
+     the free-design stage is that it makes those. They travel as permission:
+     these are the merchant's own colours, they are allowed.
+     ======================================================================== */
+  named?: string[];
 };
 
 export type VisualStyleId =

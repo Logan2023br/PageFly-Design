@@ -139,6 +139,8 @@ export type DesignInput = {
     band: string;
     /** card and section outlines */
     border: string;
+    /** other colours the merchant named — see `MockupTokens.named` */
+    named?: string[];
     fontHeading: string;
     fontBody: string;
     radius: number;
@@ -724,8 +726,12 @@ async function buildPrompts(
     ``,
     `Design this page: ${input.pageLabel || input.pageType}`,
     ``,
-    `Palette and faces — work inside these, do not introduce others.`,
-    `Each colour has a job. Use it for that job.`,
+    /* WORDED SO IT CANNOT FORBID THE MERCHANT'S OWN COLOURS. It used to say
+       "do not introduce others" full stop, which on a brief naming six hexes
+       banned the three that no role had room for — see the same change in
+       `sectionSpec.ts` and the note on `MockupTokens.named`. */
+    `Palette and faces — work inside these.`,
+    `Each colour below has a job. Use it for that job.`,
     ``,
     `  background  ${t.bg}`,
     `  text        ${t.ink}`,
@@ -736,6 +742,11 @@ async function buildPrompts(
        so outright it was handed over and used zero times in a 75-node page. */
     t.border &&
       `  border      ${asHex(t.border)}   card and section outlines, dividers. The merchant chose this colour, so cards and bands DO carry a visible 1px outline in it.`,
+    /* Listed after the four with jobs and before the faces, because that is
+       where it belongs in the reading: these have no job, they are simply
+       allowed. */
+    t.named?.length &&
+      `  also allowed  ${t.named.join(", ")}   the merchant named these in their brief — use them where the design calls for them`,
     t.fontHeading && `  heading font-family: ${t.fontHeading}`,
     t.fontBody && `  body font-family: ${t.fontBody}`,
     `  corner radius ${t.radius}px`,

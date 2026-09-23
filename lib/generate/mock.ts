@@ -1152,6 +1152,29 @@ export function buildPage(args: {
   );
   const tokens = styleToTokens(brief.visualStyle as VisualStyleId, brandColors, refSurface);
 
+  /* ==========================================================================
+     THE COLOURS THAT DID NOT FIT A ROLE, KEPT RATHER THAN DROPPED.
+
+     `brandColors` is sliced to the three roles and everything past that used to
+     end here. That was fine while the extras were merely unused; it stopped
+     being fine once the design prompts started saying "use these and nothing
+     else", because then a colour the merchant had written in their own brief
+     was a colour their designer was forbidden to use.
+
+     Compared against what the palette already resolved to, so a hex that DID
+     become the accent is not also listed as an extra — a model told "the accent
+     is #FF6B00, and you may also use #FF6B00" learns nothing and has one more
+     line to read.
+     ========================================================================== */
+  const taken = new Set(
+    [tokens.bg, tokens.ink, tokens.accent, tokens.surfaceAlt, tokens.border]
+      .map((c) => c?.toLowerCase())
+      .filter(Boolean),
+  );
+  tokens.named = Array.from(
+    new Set(own.map((c) => c.toLowerCase()).filter((c) => !taken.has(c))),
+  );
+
   // Brand name is stable across every page in a run, so the deck reads as one
   // store rather than 30 unrelated ones.
   const brandRng = makeRng(`brand::${brief.whatYouSell}::${brief.visualStyle}`);

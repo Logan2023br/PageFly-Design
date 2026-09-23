@@ -80,6 +80,55 @@ check(
   `${before.accent} → ${after.accent}`,
 );
 
+console.log("\nand no colour the merchant named is forbidden");
+
+/* ==========================================================================
+   THE SECOND HALF OF THE SAME BUG, AND THE WORSE HALF.
+
+   Ranking fixed which colour became the accent. It did not fix what happened to
+   the ones past the third role: they were dropped, and then BOTH design prompts
+   said "use these and nothing else" one line under the block that hands over
+   the merchant's own words. A brief naming six colours was read in full and
+   four of them were forbidden by name in the next sentence.
+
+   So the leftovers travel as `tokens.named` — not as roles, because where they
+   go is the designing model's decision, but as permission. This asserts the
+   property that matters and is easy to lose in a refactor: every hex written in
+   the brief either HAS a role or is on the allowed list. None is simply gone.
+   ========================================================================== */
+{
+  const t = styleToTokens("dark", ranked);
+  const taken = new Set(
+    [t.bg, t.ink, t.accent, t.surfaceAlt, t.border]
+      .map((c) => c?.toLowerCase())
+      .filter(Boolean),
+  );
+  /* The same computation `mock.ts` does — kept in step by asserting the
+     PROPERTY rather than the implementation. */
+  const named = Array.from(
+    new Set(ranked.map((c) => c.toLowerCase()).filter((c) => !taken.has(c))),
+  );
+
+  for (const hex of hexes) {
+    const h = hex.toLowerCase();
+    check(
+      taken.has(h) || named.includes(h),
+      `${hex} reaches the model`,
+      taken.has(h) ? "as a role" : "on the allowed list",
+    );
+  }
+
+  check(
+    named.length > 0,
+    "the extras are carried rather than dropped",
+    named.join(" "),
+  );
+  check(
+    !named.includes(t.accent.toLowerCase()),
+    "and the accent is not also listed as an extra",
+  );
+}
+
 console.log("\nit does not fire when there is nothing to fix");
 
 /* A deliberately monochrome brief. Five greys, no accent intended: shuffling

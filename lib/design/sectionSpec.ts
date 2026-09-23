@@ -153,7 +153,14 @@ export type SpecAsk = {
   styleBlurb: string;
   /** the merchant's own words, verbatim */
   prompt: string;
-  tokens: { bg: string; ink: string; accent: string; band: string };
+  tokens: {
+    bg: string;
+    ink: string;
+    accent: string;
+    band: string;
+    /** other colours the merchant named — see `MockupTokens.named` */
+    named?: string[];
+  };
 };
 
 export type SpecOutcome = {
@@ -744,12 +751,37 @@ function userPrompt(ask: SpecAsk): string {
       : []),
   ];
   if (ask.prompt) lines.push(`THE MERCHANT'S OWN WORDS. ${ask.prompt}`);
+  /* ==========================================================================
+     THE PALETTE IS A FLOOR, NOT A CAGE — AND IT USED TO BE A CAGE.
+
+     This block read "use these four and nothing else", one line under a block
+     that hands over the merchant's own words. So a brief naming six colours was
+     read in full and then four of those colours were forbidden, by name, in the
+     next sentence. The reported symptom was a deck in greys built from a brief
+     that named an orange, a violet and an acid green.
+
+     The rule existed for a real reason and it keeps it: a model free to invent
+     a colour per section produces a page of unrelated colours, and the four
+     named here are the ones with JOBS — background, ink, accent, band — which
+     is what makes a page read as one design.
+
+     What changed is that a colour the merchant wrote down is no longer
+     something the page "does not have". It is theirs. Where it goes is still
+     the designing model's decision, which is the whole point of this stage.
+     ========================================================================== */
+  const named = (ask.tokens.named ?? []).filter(Boolean);
   lines.push(
     `PALETTE. background ${ask.tokens.bg} · ink ${ask.tokens.ink} · ` +
       `accent ${ask.tokens.accent} · band ${ask.tokens.band}`,
-    `Use these four and nothing else. Every colour you write in "css" must be`,
-    `one of them, or a transparency of one — a fifth colour is a colour the`,
-    `page's palette does not have.`,
+    `Those four have jobs. Use them for those jobs.`,
+    ...(named.length
+      ? [
+          `The merchant also named these colours in their own words, so they are`,
+          `theirs to use wherever you judge they belong: ${named.join(", ")}.`,
+        ]
+      : []),
+    `Beyond that, stay inside this palette — invent a colour only where the`,
+    `design genuinely calls for one, never to fill space.`,
     ``,
   );
 
