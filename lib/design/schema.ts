@@ -1178,6 +1178,39 @@ const productList = z.object({
    */
   cardStyle: parts(
     [
+      /* ==================================================================
+         THE CARD ITSELF, WHICH WAS THE ONE PART WITH NO NAME.
+
+         Ten parts named everything INSIDE a card and nothing about the card.
+         Its container style was a constant in the exporter —
+         `display:flex; flex-direction:column; gap:12px; width:100%` — so the
+         background, the border, the corner radius and the clipping every
+         mockup draws around its tiles had nowhere to go. Four different
+         designs produced four grids of square, borderless, transparent
+         cards sitting on the band.
+
+         `overflow: hidden` matters more than it looks: without it a
+         photograph with a radius on the card still squares off its own top
+         corners, which is the detail that makes an exported grid read as
+         unfinished next to the mockup it came from.
+         ================================================================== */
+      "card",
+      /* ==================================================================
+         AND WHAT IT DOES WHEN IT IS POINTED AT.
+
+         `atcHover` existed because a quick-add that appears on hover was the
+         one hover this file had been asked for. Everything else a card does —
+         lifting, glowing, throwing a shadow, zooming its photograph — had no
+         name, so a grid that moves under the cursor in the mockup arrives
+         inert, and nothing reports it because a card that does not move is a
+         valid card.
+
+         `cardHover` is what the card does; `imageHover` is what its
+         photograph does, because they are two rules in every mockup that
+         writes them and one of them reaches a child the other cannot.
+         ================================================================== */
+      "cardHover",
+      "imageHover",
       "image",
       "title",
       "price",
@@ -1191,7 +1224,11 @@ const productList = z.object({
     ] as const,
     /* Same reason as the comparison's: an arrow drawn as a turned square is a
        chevron, and without the turn it is a corner. */
-    ["navMark"],
+    /* A lift is a `translateY` and a zoom is a `scale`, so both hovers may
+       turn — the same exception `navMark` has, for the same reason: the
+       property is banned in plain `css` because a node that can translate can
+       leave its section, and a hover returns to where it started. */
+    ["navMark", "cardHover", "imageHover"],
   ),
   /** search phrase for the placeholder photo the mockup shows */
   query,

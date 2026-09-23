@@ -2223,8 +2223,8 @@ function productGrid(
 ): PFNode {
   /* Named parts over the defaults, the same contract the buy box and the tab
      bar use. Everything below that reads `cs(...)` used to be a constant. */
-  const cs = (name: "image" | "title" | "price" | "compareAt" | "atc" | "atcHover"
-    | "badge" | "note" | "nav" | "navMark") => {
+  const cs = (name: "card" | "cardHover" | "imageHover" | "image" | "title" | "price"
+    | "compareAt" | "atc" | "atcHover" | "badge" | "note" | "nav" | "navMark") => {
     const declared = node.cardStyle?.[name];
     return declared ? ` ${declarations(declared)}` : "";
   };
@@ -2342,6 +2342,28 @@ function productGrid(
      The reveal is a rule on the CARD, because `.pcard:hover .qadd` is what the
      mockup writes — the whole card is the trigger, not the button. */
   const CARD_GAP = 12;
+  /* ==========================================================================
+     WHAT THE CARD DOES WHEN IT IS POINTED AT.
+
+     On the CARD, not on anything inside it: `.pcard:hover` is what a mockup
+     writes, and the photograph's zoom is `.pcard:hover img` — a rule that
+     reaches a child no selector on that child can express. `PRODUCT_BOX` takes
+     these as parts because its two slots are fixed and there is no wrapper left
+     to hang a hover on.
+
+     A transition is not added here. Where the design states one it is in
+     `cardStyle.card` already, copied from the mockup with the duration and the
+     curve the mockup chose; inventing one would be this file deciding how fast
+     somebody else's card moves. */
+  const hoverParts: Record<string, string> = {
+    ...(node.cardStyle?.cardHover
+      ? { "&:hover": declarations(node.cardStyle.cardHover) }
+      : {}),
+    ...(node.cardStyle?.imageHover
+      ? { "&:hover img": declarations(node.cardStyle.imageHover) }
+      : {}),
+  };
+
   const overlayParts: Record<string, string> = overImage
     ? {
         '& [data-pf-type="ProductATC2"]':
@@ -2408,8 +2430,13 @@ function productGrid(
         ...(atcNode ? [atcNode] : []),
       ],
     ),
-    `display: flex; flex-direction: column; gap: ${CARD_GAP}px; width: 100%;`,
-    overlayParts,
+    /* THE MOCKUP'S OWN CARD, AFTER THE THREE THINGS THE FORM NEEDS. The layout
+       is not the design's to change — a ProductBox renders a `<form>` and the
+       column inside it is what holds the photograph above the meta — but
+       everything that makes the card look like a card is, and the design's
+       declarations come last so they win where they overlap. */
+    `display: flex; flex-direction: column; gap: ${CARD_GAP}px; width: 100%;` + cs("card"),
+    { ...hoverParts, ...overlayParts },
   );
 
   /* `&` on ProductList2 takes spacing only — the grid itself is

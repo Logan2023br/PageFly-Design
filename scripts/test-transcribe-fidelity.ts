@@ -55,7 +55,8 @@ async function open(tree: unknown) {
   );
   const files = unzipSync(new Uint8Array(await blob.arrayBuffer()));
   const page = JSON.parse(strFromU8(files[Object.keys(files)[0]])) as {
-    items: { type: string; data?: Record<string, unknown> }[];
+    items: { id: string; type: string; data?: Record<string, unknown> }[];
+    styles: { id: string; styles: string }[];
     customCSS?: string;
     customJS?: string;
   };
@@ -245,6 +246,91 @@ async function main(): Promise<void> {
       c !== undefined && /^[A-Za-z_][\w-]*( [A-Za-z_][\w-]*)*$/.test(c) && !c.includes("onload"),
       "and anything that is not a class name is dropped",
       String(c),
+    );
+  }
+
+  /* ── the tile in a product grid ───────────────────────────────────────── */
+  head("a product card looks like the mockup's card");
+  {
+    /* Again in another vocabulary: a teal `.sku-tile` that lifts 9px and zooms
+       its photograph 1.04, none of which is what the page that found this
+       uses. A fix that named one mockup's values would not pass here. */
+    const page = await open(
+      band([
+        {
+          type: "productList",
+          columns: 3,
+          limit: 6,
+          source: "store",
+          badge: "Fresh",
+          badgeCorner: "TOP_RIGHT",
+          cardStyle: {
+            card: {
+              background: "#0E3B34",
+              border: "1px solid #145147",
+              borderRadius: "22px",
+              overflow: "hidden",
+              transition: "transform .4s ease, box-shadow .4s ease",
+            },
+            cardHover: { transform: "translateY(-9px)", boxShadow: "0 0 44px rgba(20,81,71,.5)" },
+            imageHover: { transform: "scale(1.04)" },
+            badge: { margin: "14px", background: "#7FE7C4", color: "#04201B" },
+          },
+        },
+      ]),
+    );
+    const boxStyle = (() => {
+      const box = page.items.find((i) => i.type === "ProductBox")!;
+      const e = page.styles.find((s) => s.id === box.id)!;
+      return JSON.parse(e.styles).all as Record<string, string>;
+    })();
+
+    const form = boxStyle["& > form"] ?? "";
+    check(/border-radius:\s*22px/.test(form), "the tile's radius reaches the card", form.slice(0, 90));
+    check(/background:\s*#0E3B34/i.test(form), "and its background");
+    check(/overflow:\s*hidden/.test(form), "AND ITS overflow, which is what clips the photograph");
+    check(
+      /display:\s*flex/.test(form) && /flex-direction:\s*column/.test(form),
+      "without losing the layout the form needs",
+    );
+
+    check(
+      /translateY\(-9px\)/.test(boxStyle["&:hover"] ?? ""),
+      "the card lifts on hover",
+      boxStyle["&:hover"] ?? "(none)",
+    );
+    check(
+      /scale\(1\.04\)/.test(boxStyle["&:hover img"] ?? ""),
+      "and its photograph zooms — a rule on a child no selector on that child can write",
+      boxStyle["&:hover img"] ?? "(none)",
+    );
+
+    const badge = page.items.find((i) => i.type === "ProductBadge");
+    const bcss = badge ? (JSON.parse(page.styles.find((s) => s.id === badge.id)!.styles).all?.["&"] ?? "") : "";
+    check(/margin:\s*14px/.test(bcss), "the badge is inset by its own margin", bcss.slice(-70));
+    /* WHAT MATTERS IS THE ORDER, not the property name. The default writes
+       `background-color` and the mockup here writes the `background`
+       shorthand; both are in the block, and the design's wins because it comes
+       last. Asserting the property name instead reported a failure on correct
+       output — the colour was there, under the other spelling. */
+    const mine = bcss.indexOf("#7FE7C4");
+    const dflt = bcss.search(/background-color:/);
+    check(
+      mine >= 0 && (dflt === -1 || mine > dflt),
+      "and the mockup's colour is written AFTER the default, so it wins",
+      bcss.slice(0, 90),
+    );
+  }
+  {
+    /* Silence must still mean the default, or every page built before this
+       changes shape. */
+    const page = await open(band([{ type: "productList", columns: 3, limit: 6, source: "store" }]));
+    const box = page.items.find((i) => i.type === "ProductBox")!;
+    const all = JSON.parse(page.styles.find((s) => s.id === box.id)!.styles).all as Record<string, string>;
+    check(!("&:hover" in all), "a card that states no hover gets none");
+    check(
+      !/border-radius|overflow/.test(all["& > form"] ?? ""),
+      "and one that states no look is left alone",
     );
   }
 
