@@ -780,6 +780,109 @@ export function shiftHue(hex: string, deg: number): string {
  * The cap on brand colours is the length of this list — a slot without a job is
  * a slot that should not exist.
  */
+/* ==========================================================================
+   HEXES FOUND IN PROSE, PUT IN THE ORDER THE ROLES NEED.
+
+   THE BUG THIS FIXES, and it is worth writing down because the code that had it
+   looked completely reasonable. `BRAND_COLOR_ROLES` is positional — first is the
+   accent, second tints the alternating band, third draws the borders — and a
+   merchant's SWATCHES are positional too, because the form labels each slot. So
+   colours lifted out of the prompt were appended to that same list and took the
+   roles their positions landed on.
+
+   That assumes the order somebody writes colours in a sentence is the order this
+   file happens to want. It is not, and there is no reason it would be. A real
+   brief read:
+
+       PALETTE #0A0A0F void, #12121A panel, #1A1A25 card,
+               #FF6B00 orange, #8B5CF6 violet, #B6FF3B acid
+
+   which is how anyone describes a palette — grounds first, then the colours that
+   sit on them. Read positionally it made #0A0A0F the accent, so every button,
+   price and badge on the page was told to be the same near-black as the
+   background, and the orange, violet and acid fell off the end of a
+   three-element list without a word. The deck came back in greys and the brief
+   that produced it was perfectly good.
+
+   SO THE ORDER IS EARNED, NOT ASSUMED. An accent's job is buttons, prices,
+   badges and highlighted words; a colour within a few points of the page ground
+   cannot do that job at any position in any sentence. The ones that CAN go
+   first, most colourful first, and the rest keep their written order behind
+   them — nothing is thrown away, it is only ranked.
+
+   THIS DOES NOT TOUCH THE MERCHANT'S SWATCHES. Those are picked against labelled
+   slots — the form says "Accent" above the first one — so their position is a
+   decision, and re-ranking a decision is overruling it. Only prose is reordered,
+   because only prose had no way to express a role.
+   ========================================================================== */
+export function orderHexesForRoles(hexes: string[], ground: string | null): string[] {
+  /* `parseHex` is the file's own reader — reused rather than written again, so
+     a three-digit hex or a stray space behaves here exactly as it does
+     everywhere else. */
+  const bg = parseHex(ground ?? "") ?? [255, 255, 255];
+
+  const scored = hexes
+    .map((hex, at) => {
+      const norm = normalizeHex(hex);
+      const rgb = norm ? parseHex(norm) : null;
+      if (!norm || !rgb) return null;
+      const [r, g, b] = rgb;
+
+      /* How much colour it has, and how far it is from the ground. Both are
+         needed: a mid grey is far from black and still cannot be an accent, and
+         a saturated colour a shade off the background is invisible however
+         saturated it is. */
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      const sat = max === 0 ? 0 : (max - min) / max;
+      const away = Math.hypot(r - bg[0], g - bg[1], b - bg[2]);
+
+      return { hex: norm, at, sat, away, usable: sat > 0.25 && away > 60 };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+
+  const usable = scored.filter((x) => x.usable);
+  /* NOTHING HAPPENS WHEN NOTHING QUALIFIES. A deliberately monochrome brief —
+     five greys, no accent intended — must come through exactly as written
+     rather than be shuffled by a rule that found no colour to promote. */
+  if (usable.length === 0) return scored.map((x) => x.hex);
+
+  /* ==========================================================================
+     ONE COLOUR MOVES. EVERYTHING ELSE STAYS EXACTLY WHERE IT WAS WRITTEN.
+
+     The first attempt promoted every usable colour to the front, and on the
+     brief that prompted all this it produced an accent of orange, an alternating
+     band of ACID GREEN and borders of violet — technically a fix and visibly
+     worse. Acid was written as a highlight and got handed the background of
+     every other section.
+
+     Only one role actually requires a colour: the accent draws buttons, prices
+     and badges, and a near-background one makes them invisible. Bands and
+     borders have no such requirement — on a dark theme a near-background value
+     is exactly what they should be, which is what a brief saying "#12121A
+     panel, #1A1A25 card" is telling us in as many words.
+
+     So this promotes the single best accent and leaves the rest in the order
+     they were written. On that brief: accent orange, band #0A0A0F, borders
+     #12121A — the palette the merchant described, with only the one thing the
+     old code got backwards put right. The smallest move that fixes the defect
+     invents the least.
+     ========================================================================== */
+  /* AND IT ONLY MOVES ANYTHING WHEN THE FIRST COLOUR CANNOT DO THE JOB. A brief
+     that already leads with something that works as an accent has answered the
+     question; reordering it then is not a fix, it is a preference — and on a
+     light page "#0A0A0F and #FF6B00" has two valid answers, so picking the
+     brighter one would be overruling a merchant who led with the near-black on
+     purpose. Intervene on the defect, not on the taste. */
+  if (scored[0]?.usable) return scored.map((x) => x.hex);
+
+  const accent = usable.reduce((best, x) =>
+    x.sat > best.sat || (x.sat === best.sat && x.at < best.at) ? x : best,
+  );
+
+  return [accent.hex, ...scored.filter((x) => x !== accent).map((x) => x.hex)];
+}
+
 export const BRAND_COLOR_ROLES = [
   { label: "Accent", hint: "Buttons, prices, badges, highlighted words" },
   { label: "Alt band", hint: "Background of every other section" },

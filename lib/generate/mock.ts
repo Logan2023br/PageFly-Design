@@ -1,6 +1,11 @@
 import type { StoreTypeId } from "../briefOptions";
 import { CATEGORY_BY_ID, PAGE_BY_ID } from "../pageCatalog";
-import { styleToTokens, type VisualStyleId } from "../styleTokens";
+import {
+  STYLE_BY_ID,
+  orderHexesForRoles,
+  styleToTokens,
+  type VisualStyleId,
+} from "../styleTokens";
 import type { Brief } from "../validation";
 import { mergeReferenceColour } from "../palette";
 import {
@@ -1105,7 +1110,29 @@ export function buildPage(args: {
      lands in position four, which has no role at all, so a colour they chose
      deliberately would silently do nothing. Aligned by index, the reference wins
      each role it has an answer for and the merchant fills the rest. */
-  const own = [...brief.brandColors, ...signals.hexes];
+  /* ==========================================================================
+     THE MERCHANT'S SWATCHES KEEP THEIR POSITIONS. THE PROSE GETS RANKED.
+
+     Both lists used to be concatenated as written, and for the swatches that is
+     right — the form labels each slot, so slot one being the accent is a
+     decision the merchant made and nothing here may overrule it.
+
+     For hexes lifted out of the prompt it was wrong, and quietly so. Their
+     order is the order of a SENTENCE, and a brief reading "PALETTE #0A0A0F
+     void, #12121A panel, #1A1A25 card, #FF6B00 orange…" — grounds first, which
+     is how anybody writes a palette — handed the accent role to the page's own
+     background and dropped the orange off the end of a three-element list. The
+     deck came back in greys from a brief that named three bright colours. See
+     `orderHexesForRoles`.
+
+     The ground is passed so "can this be an accent" is asked against the page
+     it will sit on: the reference screenshot's background when there is one,
+     the style card's otherwise. Judged against white, a near-black would look
+     like a perfectly good accent — which is exactly the wrong answer on a dark
+     page. */
+  const ground =
+    refSurface?.bg ?? STYLE_BY_ID[brief.visualStyle as VisualStyleId]?.tokens.bg ?? null;
+  const own = [...brief.brandColors, ...orderHexesForRoles(signals.hexes, ground)];
   const brandColors = (
     hasReference
       ? Array.from(
