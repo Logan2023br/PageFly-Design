@@ -117,11 +117,18 @@ export const PROMPT_SNIPPETS: {
    look, the sections — because "click Example" with nothing else tells somebody
    who does not click what they lost.
 
+   AND IT SAYS WHAT SKIPPING COSTS, in the same words the help line above the
+   box uses. Repeating it is deliberate: skipping is free, takes no time and
+   still produces a page, so the one fact that changes anybody's mind is that
+   the page comes out worse. Said once beside the title it is a line somebody
+   skims; said again inside the empty box, it is there at the moment they are
+   deciding how much to type.
+
    DETAIL MODE IS THE SHORTER ONE. Here the cards above have already asked for
    the trade, the style and the pages; this field is what is left over, so its
    placeholder says that rather than repeating the whole shape. */
 export const PROMPT_PLACEHOLDER =
-  "Click Example above for the brief that builds the best pages — the more of it you copy, the less generic the result. Anything the cards above did not ask for goes here.";
+  "Click Example above for the brief that builds the best pages — the more of it you copy, the less generic the result. Skipping the structure still builds, it just builds pages that do not look as good. Anything the cards above did not ask for goes here.";
 
 /**
  * The same field, when it is the ONLY field.
@@ -138,7 +145,7 @@ export const PROMPT_PLACEHOLDER =
  */
 export const QUICK_PROMPT_PLACEHOLDER = `Click Example above to see the brief that builds the best pages, then write yours the same way.
 
-The fuller it is, the better the pages: what you sell and who buys it, your colours and fonts, and the sections you want on each page.`;
+The fuller it is, the better the pages: what you sell and who buys it, your colours and fonts, and the sections you want on each page. A brief that skips the structure still builds — it just builds pages that do not look as good.`;
 
 /* Upload constraints (§4.5) ---------------------------------------------- */
 
