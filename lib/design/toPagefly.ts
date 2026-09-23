@@ -3043,12 +3043,31 @@ function pageCss(width: number, motion: boolean): string {
        the wrong font. customCSS survives import and runs on preview and live. */
     `@import url("${WEBFONT_CSS_URL}");`,
     `/* PageFly Design export — keeps the imported page matching its mockup. */`,
-    `#__pf, #__pf * { box-sizing: border-box; }`,
-    `#__pf p, #__pf h1, #__pf h2,`,
-    `#__pf h3, #__pf h4, #__pf h5,`,
-    `#__pf h6 { margin: 0; }`,
-    `#__pf a { color: inherit; text-decoration: none; }`,
-    `#__pf img, #__pf svg { display: block; max-width: 100%; }`,
+    /* ======================================================================
+       `:where()`, AND THE WHOLE RESET TURNS ON IT.
+
+       These are defaults. A default that an element cannot override is not a
+       default, it is a rule — and written as `#__pf a` this one WAS a rule: an
+       id and an element is specificity (1,0,1), while the styleData PageFly
+       compiles for one element is a class, (0,1,0). The id wins every time.
+
+       So `color: inherit` was applied to every Button2 on every exported page,
+       discarding whatever colour the mockup stated for it. A ghost button drawn
+       in near-white came out taking the colour of whatever block it sat in —
+       dark text on a dark band, unreadable, on a page whose own file said
+       `color: #EEF1F6` all along. The export was right and this line threw it
+       away at render time, which is why looking in the .pagefly found nothing
+       wrong.
+
+       `:where(#__pf)` contributes ZERO to specificity, so each rule below is
+       (0,0,1) — under a class, under an inline style, under anything an element
+       says about itself. The scope is unchanged, the intent is unchanged, and
+       an element that states nothing still gets the default it always got.
+       ====================================================================== */
+    `:where(#__pf), :where(#__pf) * { box-sizing: border-box; }`,
+    `:where(#__pf) :is(p, h1, h2, h3, h4, h5, h6) { margin: 0; }`,
+    `:where(#__pf) a { color: inherit; text-decoration: none; }`,
+    `:where(#__pf) :is(img, svg) { display: block; max-width: 100%; }`,
     /* SCOPED TO `#__pf`, WHICH IS ALWAYS THERE.
 
        Every rule here used to read `.pf-design-export …` — a class put on the
