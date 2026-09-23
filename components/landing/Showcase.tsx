@@ -27,12 +27,17 @@ import { useSeen } from "./useSeen";
    loud, Hollis & Rowe is ivory and quiet, and nothing is shared between them
    except the pipeline. Side by side they say the brief decided the look.
 
-   SO "ALL" IS THE DEFAULT, AND THE PILLS ARE A NARROWING. An earlier cut had
-   no pills at all, on the reasoning that nobody compares things they have to
-   click between — true, and it is why picking one is not where the row starts.
-   But fourteen cards is a long scroll for somebody who has already decided
-   which store is nearer their own, and a filter that begins on "All" costs that
-   reader nothing while giving this one a way through.
+   SO THE PILLS ARE A WAY TO THE SECOND SET, NOT A WAY TO HIDE ONE. An earlier
+   cut had no pills at all, on the reasoning that nobody compares things they
+   have to click between. That reasoning is right about what happens AFTER
+   somebody decides to compare, and wrong about the first screen: fourteen cards
+   is a long first impression and fourteen iframes to mount, seven of them for a
+   comparison the reader has not asked for yet.
+
+   So it opens on the first set — seven pages, which is a set, which is the
+   thing to understand first — and the row makes the second store one press
+   away. A visitor who wants the comparison finds it in the same glance that
+   tells them it exists.
 
    ONE SET USED TO BE A QUERY. The gallery drew from `/api/showcase` — the demo
    store's most recent run — while the rail above drew from the curated list, so
@@ -114,8 +119,20 @@ function ExportSet({ set }: { set: ShowcaseSet }) {
 
 export function Showcase() {
   const seen = useSeen<HTMLElement>("showcase");
-  /* `null` is "both", which is where it starts — see the note above. */
-  const [only, setOnly] = useState<string | null>(null);
+  /* ======================================================================
+     IT OPENS ON THE FIRST SET, NOT ON ALL.
+
+     `null` is "all", and that is where this started — on the argument that a
+     filter beginning narrowed hides the very comparison the section exists to
+     make. The trade turned out to be worse than the argument: fourteen cards is
+     a long first impression, and it is fourteen iframes, of which seven are
+     being mounted for a comparison most readers have not asked for yet.
+
+     Seven is a set, which is the first thing to understand; the second store is
+     one press away and the pill row says so in the same glance. The argument is
+     not hidden, it is offered.
+     ====================================================================== */
+  const [only, setOnly] = useState<string | null>(SHOWCASE_SETS[0].id);
   /* The set AND the page, because both are needed to find the files and every
      set has a page called Home. A slug alone would open whichever one the code
      happened to look in first. */
@@ -144,9 +161,10 @@ export function Showcase() {
         {/* ==================================================================
             THE ROW OF PILLS, AND THE ONE THAT LEAVES.
 
-            `All` first, because comparing is what the section is for and a
-            filter that starts narrowed hides the argument. Then a pill per
-            store. Then the dashed one, which is the only one that navigates:
+            `All` first in the ROW even though the page opens on a store: it is
+            the widest view, and a filter whose broadest option is buried in the
+            middle reads as a list of things rather than a range. Then a pill
+            per store. Then the dashed one, which is the only one that navigates:
             the row reads as a set of examples ending in "…or yours", which is
             the whole point of showing examples. A solid pill there would read
             as a third filter and quietly leave the page instead.
