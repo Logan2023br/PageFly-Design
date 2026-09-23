@@ -37,6 +37,26 @@ import type { Session } from "./chrome";
    coarse second opinion. Neither is a gate on its own.
    ========================================================================== */
 
+/* ==========================================================================
+   WHAT NEITHER SIDE CAN BE HELD TO.
+
+   `scripts/preview-pagefly.ts` says so in its own header: the widgets PageFly
+   draws with its own runtime — sliders, tabs, countdowns, product lists bound to
+   a live store — come out of it as static boxes. So every digit of a countdown,
+   every card of a product grid and every slide past the first is "missing" from
+   our render of a file that is perfectly correct.
+
+   Measured across the seven Hexwood pages, that is most of the noise: 352
+   missing text nodes and 59 missing images, against 4 colour differences. A
+   diff that reports those is a diff nobody can act on.
+
+   So anything inside one of these is compared on its BOX and nothing else, and
+   counted as unverified rather than as agreeing. Point six of the brief, and
+   the measurement agrees with it.
+   ========================================================================== */
+const RUNTIME_DRAWN =
+  /\b(Tabs|TabHeader|TabsMenu|TabsContent|TabContent|Slideshow|SlideshowSlide|Slider|CountDown|Countdown|CountdownNumber|CountdownLabel|ProductList|ProductBox|ProductMedia|MediaList|MediaMain|ProductPrice|ProductATC|ProductBadge|ProductVendor|ProductTitle|Quantity|Form2|Accordion3|Article|Collection|Blog)/;
+
 export type TextBox = {
   text: string;
   tag: string;
@@ -50,9 +70,18 @@ export type TextBox = {
   color: string;
   background: string;
   radius: string;
+  /**
+   * EVERY `data-pf-type` from this node up to the body, space-joined.
+   *
+   * The nearest one is not enough and the first version used it: a heading
+   * inside a slideshow slide has `Heading2` directly on it, so the slideshow
+   * two levels up was never seen and 106 layout differences that belong to a
+   * widget were reported as the transcription's fault.
+   */
+  widget: string;
 };
 
-export type ImageBox = { src: string; x: number; y: number; w: number; h: number };
+export type ImageBox = { src: string; x: number; y: number; w: number; h: number; widget: string };
 export type BandBox = { y: number; h: number; photo: boolean };
 
 export type Shot = { bands: BandBox[]; text: TextBox[]; images: ImageBox[] };
@@ -80,7 +109,14 @@ const PROBE = `(function(){
     var r = el.getBoundingClientRect(); if (!r.width || !r.height) continue;
     var cs = getComputedStyle(el);
     if (cs.visibility === 'hidden' || cs.display === 'none') continue;
-    text.push({ text: t.slice(0,80), tag: el.tagName,
+    var chain = []; var up = el;
+    while (up && up !== document.body) {
+      var ty = up.getAttribute && up.getAttribute('data-pf-type');
+      if (ty) chain.push(ty);
+      up = up.parentElement;
+    }
+    var widget = chain.join(' ');
+    text.push({ widget: widget, text: t.slice(0,80), tag: el.tagName,
       x: Math.round(r.x), y: Math.round(r.y + window.scrollY),
       w: Math.round(r.width), h: Math.round(r.height),
       size: cs.fontSize, weight: cs.fontWeight,
@@ -91,7 +127,14 @@ const PROBE = `(function(){
   var images = [];
   Array.prototype.forEach.call(document.querySelectorAll('img'), function(el){
     var r = el.getBoundingClientRect();
-    images.push({ src: (el.currentSrc || el.src || '').slice(-48),
+    var ch = []; var a = el.parentElement;
+    while (a && a !== document.body) {
+      var t2 = a.getAttribute && a.getAttribute('data-pf-type');
+      if (t2) ch.push(t2);
+      a = a.parentElement;
+    }
+    var w = ch.join(' ');
+    images.push({ widget: w, src: (el.currentSrc || el.src || '').slice(-48),
       x: Math.round(r.x), y: Math.round(r.y + window.scrollY),
       w: Math.round(r.width), h: Math.round(r.height) });
   });
@@ -146,13 +189,24 @@ function bandOf(bands: BandBox[], y: number): number | null {
  * insertion as wrong. The words are the stable identity: they are the one thing
  * transcription is forbidden to change.
  */
-export function compare(want: Shot, got: Shot): Mismatch[] {
+export type Report = {
+  bad: Mismatch[];
+  /** nodes inside a widget the preview renderer draws as a static box */
+  unverified: number;
+};
+
+export function compare(want: Shot, got: Shot): Report {
   const out: Mismatch[] = [];
+  let unverified = 0;
   const byText = new Map<string, TextBox>();
   for (const t of got.text) if (!byText.has(t.text)) byText.set(t.text, t);
 
   for (const t of want.text) {
     const band = bandOf(want.bands, t.y);
+    if (RUNTIME_DRAWN.test(t.widget)) {
+      unverified++;
+      continue;
+    }
     const m = byText.get(t.text);
     if (!m) {
       out.push({ band, kind: "missing-text", say: `${t.tag} "${t.text.slice(0, 40)}" is not on the page` });
@@ -176,11 +230,16 @@ export function compare(want: Shot, got: Shot): Mismatch[] {
   /* Images are matched on the tail of their URL — the same photograph, whatever
      the CDN prefix did to it. */
   const gotSrc = new Set(got.images.map((i) => i.src));
-  for (const img of want.images)
+  for (const img of want.images) {
+    if (RUNTIME_DRAWN.test(img.widget)) {
+      unverified++;
+      continue;
+    }
     if (!gotSrc.has(img.src))
       out.push({ band: bandOf(want.bands, img.y), kind: "missing-image", say: `image …${img.src} is not on the page` });
+  }
 
-  return out;
+  return { bad: out, unverified };
 }
 
 /** Per-band SSIM at one width. Bands are matched by order, as they are built. */

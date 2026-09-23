@@ -71,7 +71,7 @@ async function main(): Promise<void> {
     for (const width of widths) {
       const want = await readPage(session, asUrl(a), width);
       const got = await readPage(session, asUrl(b), width);
-      const bad = compare(want, got);
+      const { bad, unverified } = compare(want, got);
       const scores = await bandScores(
         session,
         width,
@@ -83,7 +83,8 @@ async function main(): Promise<void> {
       console.log(
         `bands ${want.bands.length} vs ${got.bands.length} · ` +
           `text ${want.text.length} vs ${got.text.length} · ` +
-          `images ${want.images.length} vs ${got.images.length}`,
+          `images ${want.images.length} vs ${got.images.length} · ` +
+          `${unverified} node(s) unverified (drawn by PageFly's own runtime)`,
       );
 
       const byBand = new Map<number | null, string[]>();
