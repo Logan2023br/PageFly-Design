@@ -6,7 +6,7 @@ import { PAGE_BY_ID } from "@/lib/pageCatalog";
 import { useStore } from "@/lib/store";
 import { Button, Icon, Panel } from "../ui";
 import { WireframeMorph, type MorphPhase } from "./WireframeMorph";
-import { CollectionsSection } from "../collections/CollectionsSection";
+import { Showcase } from "../landing/Showcase";
 
 /* Status copy stays factual. No "consulting the design oracle" theatrics —
    the line says what is happening, because that is what is happening.
@@ -409,10 +409,22 @@ export function GeneratingScreen() {
         </Button>
       </div>
 
-      {/* UNDER THE BUILD, not beside it. The screen above is a fifteen-minute
+      {/* ====================================================================
+          UNDER THE BUILD, not beside it. The screen above is a several-minute
           wait with nothing in its lower two thirds, and a merchant who leaves
-          the tab comes back to a deck they never watched arrive. */}
-      <CollectionsSection surface="building_collections" />
+          the tab comes back to a deck they never watched arrive.
+
+          THE SAME SETS THE FRONT DOOR SHOWS, in the other voice — see `COPY` in
+          `Showcase`. There it is proof for somebody deciding; here it is an
+          offer to somebody who has already decided and has seven minutes to
+          fill. Free pages they can import now is the most useful thing this
+          screen can do with that time.
+
+          It replaces `CollectionsSection`, which stood here doing the same job
+          and has been switched off at `COLLECTIONS_VISIBLE` since before these
+          sets existed.
+          ==================================================================== */}
+      <Showcase place="building" />
 
       <div className="pb-6" />
     </motion.div>

@@ -316,7 +316,12 @@ const HOW_STEPS: Record<string, string> = {
    scrolled to it. */
 const GALLERY_FROM: Record<string, string> = {
   hero: "Rail under the hero",
-  showcase: "Gallery grid",
+  showcase: "Gallery, landing page",
+  /* The same gallery, mounted under a running build. Counted apart because the
+     visitor is not the same one: on the landing page a stranger is deciding
+     whether this works; here a merchant has already decided and is seven
+     minutes into their own pages. A press means a different thing. */
+  building: "Gallery, while a build runs",
 };
 
 /* The five fixed pages under the hero — see `lib/showcasePages.ts`. Written out
@@ -810,7 +815,7 @@ function buildView(
           split: slices(rows, EV.landingNav, "to", LANDING_NAV_LABELS),
           splitKind: "control",
         }),
-        metric("gallery", "Page preview opened", "a real build, read full size", EV.galleryOpened, "A page in the rail under the hero, or a card in the gallery grid", {
+        metric("gallery", "Page preview opened", "a sample page, read full size", EV.galleryOpened, "A page in the rail under the hero, or a card in the gallery — on the landing page or under a running build", {
           split: slices(rows, EV.galleryOpened, "from", GALLERY_FROM),
           splitKind: "control",
         }),

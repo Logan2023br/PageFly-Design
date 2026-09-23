@@ -104,13 +104,13 @@ function download(bytes: Uint8Array, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function ExportSet({ set }: { set: ShowcaseSet }) {
+function ExportSet({ set, from }: { set: ShowcaseSet; from: string }) {
   const [state, setState] = useState<"idle" | "working" | "failed">("idle");
 
   const run = async () => {
     if (state === "working") return;
     setState("working");
-    track(EV.showcaseSetDownloaded, { set: set.id, pages: set.pages.length });
+    track(EV.showcaseSetDownloaded, { set: set.id, pages: set.pages.length, from });
 
     try {
       const files = await Promise.all(
@@ -147,7 +147,49 @@ function ExportSet({ set }: { set: ShowcaseSet }) {
   );
 }
 
-export function Showcase() {
+/* ==========================================================================
+   THE SAME SETS, SAID TWO WAYS.
+
+   ON THE LANDING PAGE this is proof: a stranger is deciding whether the thing
+   works, and three stores that share nothing but a pipeline is the argument.
+
+   WHILE A BUILD RUNS it is not an argument, it is an offer. The merchant has
+   already decided — they are seven minutes into their own pages — and what the
+   lower two thirds of that screen is for is giving them something to do with
+   the wait. So the heading stops arguing and starts handing things over.
+
+   ONE COMPONENT, because the grid, the viewer, the export and the analytics are
+   the same in both and two copies of them would drift. Only the words and the
+   `from` on the events differ, and `from` matters: a press while waiting for
+   your own build is a different act from a press while deciding whether to
+   start one.
+   ========================================================================== */
+const COPY = {
+  landing: {
+    eyebrow: "Pages it has already built",
+    title: (sets: number) =>
+      `${countWord(sets)} briefs. ${countWord(sets)} stores. Every page matches.`,
+    sub: (sets: number, pages: number) =>
+      `${countWord(pages)} pages each, from one short brief each — same voice, same colours, ` +
+      `same product facts across a set, and nothing shared between them. Every page is free ` +
+      `to download and use: open one, read it at three screen sizes, and take the file.`,
+  },
+  building: {
+    eyebrow: "Free while you wait",
+    title: () => "Finished stores, yours to take.",
+    sub: (sets: number, pages: number) =>
+      `${sets * pages} real pages from ${countWord(sets).toLowerCase()} briefs, free to ` +
+      `download and use. Open any of them, read it at three screen sizes, and import a page ` +
+      `— or a whole store — straight into your PageFly editor while your own are building.`,
+  },
+} as const;
+
+/* `place`, NOT `surface`. `Surface` is the install button's own vocabulary —
+   which screen a press of THAT button came from — and reusing the word here for
+   a different idea made `test-analytics-coverage` read `surface="building"` as
+   an install placement and fail, correctly. Two meanings under one name is a
+   collision whether or not a test happens to notice. */
+export function Showcase({ place = "landing" }: { place?: "landing" | "building" }) {
   const seen = useSeen<HTMLElement>("showcase");
   /* ======================================================================
      IT OPENS ON THE FIRST SET, NOT ON ALL.
@@ -168,6 +210,7 @@ export function Showcase() {
      happened to look in first. */
   const [open, setOpen] = useState<{ set: ShowcaseSet; page: ShowcasePage } | null>(null);
 
+  const copy = COPY[place];
   const shown = only === null ? SHOWCASE_SETS : SHOWCASE_SETS.filter((s) => s.id === only);
 
   const pill = (active: boolean) =>
@@ -183,15 +226,9 @@ export function Showcase() {
     >
       <div className="mx-auto flex max-w-[1200px] flex-col items-center">
         <SectionHead
-          eyebrow="Pages it has already built"
-          title={`${countWord(SHOWCASE_SETS.length)} briefs. ${countWord(
-            SHOWCASE_SETS.length,
-          )} stores. Every page matches.`}
-          sub={
-            `${countWord(SHOWCASE_SETS[0].pages.length)} pages each, from one short brief each — ` +
-            `same voice, same colours, same product facts across a set, and nothing shared ` +
-            `between them. Open any of them, read it at three screen sizes, and take the file.`
-          }
+          eyebrow={copy.eyebrow}
+          title={copy.title(SHOWCASE_SETS.length)}
+          sub={copy.sub(SHOWCASE_SETS.length, SHOWCASE_SETS[0].pages.length)}
         />
 
         {/* ==================================================================
@@ -209,7 +246,7 @@ export function Showcase() {
           <button
             type="button"
             onClick={() => {
-              track(EV.showcaseFilter, { set: "all" });
+              track(EV.showcaseFilter, { set: "all", from: place });
               setOnly(null);
             }}
             className={pill(only === null)}
@@ -227,7 +264,7 @@ export function Showcase() {
               type="button"
               title={set.blurb}
               onClick={() => {
-                track(EV.showcaseFilter, { set: set.id });
+                track(EV.showcaseFilter, { set: set.id, from: place });
                 setOnly(set.id);
               }}
               className={pill(only === set.id)}
@@ -237,7 +274,7 @@ export function Showcase() {
           ))}
           <Link
             href="/design"
-            onClick={() => track(EV.ctaClicked, { location: "showcase_pill" })}
+            onClick={() => track(EV.ctaClicked, { location: "showcase_pill", from: place })}
             className="inline-flex items-center gap-1.5 rounded-pf-pill border border-dashed border-pf-primary-hi/50 px-4 py-[9px] text-[14px] font-semibold text-pf-primary-hi transition-colors hover:border-pf-primary-hi hover:text-pf-text"
           >
             Your store
@@ -263,7 +300,7 @@ export function Showcase() {
                   toolbar of an opened page it would be a third download button
                   arguing with the one already there, which takes a single
                   page. */}
-              <ExportSet set={set} />
+              <ExportSet set={set} from={place} />
             </div>
 
             {/* FOUR ACROSS ON A DESKTOP, and the card is 3:4 — so a column of a
@@ -291,7 +328,7 @@ export function Showcase() {
                         track(EV.galleryOpened, {
                           page_type: page.slug,
                           set: set.id,
-                          from: "showcase",
+                          from: place,
                         });
                         setOpen({ set, page });
                       }}
@@ -338,7 +375,7 @@ export function Showcase() {
         <PageViewer
           set={open.set}
           page={open.page}
-          from="showcase"
+          from={place}
           onClose={() => setOpen(null)}
         />
       )}

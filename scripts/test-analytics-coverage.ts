@@ -52,12 +52,31 @@ function sources(dir: string): string[] {
   return out;
 }
 
+/**
+ * The source with its comments removed.
+ *
+ * THE SCAN READS CODE, NOT PROSE, and it took a false positive to make that
+ * explicit: a comment was written explaining why a prop had been RENAMED away
+ * from `surface`, the comment quoted the old `surface="building"`, and this
+ * file failed on a value that no longer exists anywhere that runs. A guard that
+ * fails because somebody documented a fix teaches people not to document
+ * fixes.
+ *
+ * Crude on purpose — this is not a parser and does not need to be. It cannot
+ * tell a `//` inside a string literal from a real comment, which for this
+ * codebase costs nothing: the thing being looked for is a prop assignment, and
+ * none of them live inside string literals containing slashes.
+ */
+function code(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+}
+
 /* The app's own code, minus the admin screen that READS these events — it
    mentions every value by definition and would make the scan tautological. */
 const APP = [join(ROOT, "app"), join(ROOT, "components"), join(ROOT, "lib")]
   .flatMap(sources)
   .filter((f) => !f.includes(join("api", "admin")) && !f.includes(join("components", "admin")))
-  .map((f) => ({ file: f.slice(ROOT.length + 1), text: readFileSync(f, "utf8") }));
+  .map((f) => ({ file: f.slice(ROOT.length + 1), text: code(readFileSync(f, "utf8")) }));
 
 const ROUTE = readFileSync(join(ROOT, "app/api/admin/analytics/route.ts"), "utf8");
 
