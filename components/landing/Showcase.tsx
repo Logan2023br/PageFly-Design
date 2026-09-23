@@ -63,6 +63,36 @@ import { useSeen } from "./useSeen";
    second press retries rather than finding a control that says "Preparing…"
    forever — which is what a fetch that rejects silently looks like.
    ========================================================================== */
+/* ==========================================================================
+   THE HEADING COUNTS THE SETS RATHER THAN STATING A NUMBER.
+
+   It read "Two briefs. Two stores." and the line under it ended "nothing shared
+   between the two" — both true when they were written and both wrong the moment
+   a third set was added, in the one way nothing catches: the page still renders,
+   the sentence is still grammatical, and it is simply lying about what is on
+   the screen below it.
+
+   Spelled out rather than "3 briefs", because a numeral in a headline reads as
+   data. It goes to ten because the same helper writes the PAGE count in the
+   line below, which is seven — the first version stopped at six and rendered
+   "7 pages each" in a sentence whose every other number was a word. Past ten it
+   falls back to the digit, which is where a word stops helping anyway.
+   ========================================================================== */
+const WORDS = [
+  "no",
+  "One",
+  "Two",
+  "Three",
+  "Four",
+  "Five",
+  "Six",
+  "Seven",
+  "Eight",
+  "Nine",
+  "Ten",
+];
+const countWord = (n: number) => WORDS[n] ?? String(n);
+
 function download(bytes: Uint8Array, filename: string) {
   const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: "application/zip" }));
   const link = document.createElement("a");
@@ -112,7 +142,7 @@ function ExportSet({ set }: { set: ShowcaseSet }) {
         ? "Preparing…"
         : state === "failed"
           ? "Try again"
-          : `Export all ${set.pages.length}`}
+          : `Export free all ${set.pages.length}`}
     </button>
   );
 }
@@ -154,8 +184,14 @@ export function Showcase() {
       <div className="mx-auto flex max-w-[1200px] flex-col items-center">
         <SectionHead
           eyebrow="Pages it has already built"
-          title="Two briefs. Two stores. Every page matches."
-          sub="Seven pages each, from one short brief each — same voice, same colours, same product facts across a set, and nothing shared between the two. Open any of them, read it at three screen sizes, and take the file."
+          title={`${countWord(SHOWCASE_SETS.length)} briefs. ${countWord(
+            SHOWCASE_SETS.length,
+          )} stores. Every page matches.`}
+          sub={
+            `${countWord(SHOWCASE_SETS[0].pages.length)} pages each, from one short brief each — ` +
+            `same voice, same colours, same product facts across a set, and nothing shared ` +
+            `between them. Open any of them, read it at three screen sizes, and take the file.`
+          }
         />
 
         {/* ==================================================================
