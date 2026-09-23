@@ -94,6 +94,45 @@ export function splitSections(html: string): string[] {
   return bands.length > 0 ? bands : [scope];
 }
 
+/* ==========================================================================
+   THE SCRIPT THE BANDS DO NOT CARRY.
+
+   A mockup is one self-contained document, and the model that writes it puts
+   its behaviour where any hand-written page puts it: one `<script>` after
+   `</main>`, holding the countdown, the carousel, the reveal observer and the
+   tab bar all at once. `splitSections` scopes to `<main>` — so that script sat
+   outside every band and reached the transcriber in none of them. Measured on
+   the seven Hexwood pages it is the same 9.1 KB missing from each: every page's
+   entire behaviour, dropped in silence, with the export reporting every band
+   built.
+
+   COLLECTED SEPARATELY RATHER THAN FOLDED INTO A BAND. Band 1 is not where the
+   page's script belongs — it is one section's markup, and a transcriber asked
+   to read a section is not being asked to read the page's JavaScript. What this
+   returns goes to a call of its own; see `lib/pagefly/pageScript.ts`.
+
+   WHAT COUNTS AS OUTSIDE. Anything `splitSections` did not hand over: script
+   after `</main>`, script in a `<header>` or `<footer>` the scope cut away, and
+   script in `<body>` between the bands. Script inside `<head>` is excluded — it
+   is in the head block, which every band call already carries in full, so
+   collecting it here would send it twice and ask the page-script pass to
+   re-emit what the bands have already seen.
+   ========================================================================== */
+export function outsideScripts(html: string): string[] {
+  const body = /<body[^>]*>([\s\S]*)<\/body>/i.exec(html)?.[1] ?? html;
+
+  /* The bands are removed from the body rather than the scripts searched for
+     outside them: a band's own inline script is already in the band, and a
+     second copy on the page would run it twice. */
+  let rest = body;
+  for (const band of splitSections(html)) rest = rest.replace(band, "");
+
+  return outermost(rest, ["script"])
+    .filter((tag) => !/\ssrc\s*=/i.test(tag.slice(0, tag.indexOf(">") + 1)))
+    .map((tag) => tag.replace(/^<script\b[^>]*>/i, "").replace(/<\/script>\s*$/i, "").trim())
+    .filter((js) => js !== "");
+}
+
 /** The body with its top-level `<header>` and `<footer>` removed. */
 function stripChrome(html: string): string {
   let out = html;

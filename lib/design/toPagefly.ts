@@ -39,6 +39,7 @@ import {
 } from "../pagefly/builder";
 import { readableInk, WEBFONT_CSS_URL } from "../styleTokens";
 import { cleanBlock, type CleanBlock } from "./customBlock";
+import { hookAttrsJs, hookClasses, type HookSink } from "./hook";
 import { DEVICES, styleAt, type Device } from "./derive";
 import {
   HOVER_NATIVE_TYPES,
@@ -902,6 +903,25 @@ export type EmitOptions = {
   customBlocks?: CleanBlock[];
   customCount?: { value: number };
   /**
+   * Where the mockup's ids and `data-*` are collected on the way past.
+   *
+   * Beside `customBlocks` and for the same reason: PageFly has one script per
+   * page, so anything an element needs written on it at boot has to reach the
+   * top. Absent on a designed page, which has no hooks to carry — see
+   * `lib/design/hook.ts`.
+   */
+  hooks?: HookSink;
+  /**
+   * The page's own behaviour, already wrapped and already checked.
+   *
+   * A transcribed page's script — the countdown, the carousel, the tab bar the
+   * mockup wrote after `</main>` — rewritten for the export by
+   * `lib/pagefly/pageScript.ts` and passed through `wrapPageJs`, which is where
+   * the `<` rule and the IIFE are enforced. It arrives here as a string that is
+   * ready to ship: nothing in this file inspects it.
+   */
+  pageJs?: string;
+  /**
    * True while emitting anything that will end up inside a ContentListItem.
    *
    * `nesting.md` lets a `ContentListItem` hold 140 of the 241 types and
@@ -916,7 +936,28 @@ export type EmitOptions = {
 
 function emit(node: DesignNode, parent: ParentDir, opts: EmitOptions): PFNode | null {
   const built = emitNode(node, parent, opts);
-  return built && hasMotion(node.anim) ? withMotion(built, node.anim, opts) : built;
+  if (!built) return null;
+  /* Before motion, so a node carrying both ends up with the mockup's names
+     first and ours after — which is the order a stylesheet reads best in and
+     the order `withMotion` already appends in. */
+  const hooked = withHook(built, node.hook, opts);
+  return hasMotion(node.anim) ? withMotion(hooked, node.anim, opts) : hooked;
+}
+
+/**
+ * Put the mockup's own class on the element it became, and register its id and
+ * `data-*` for the boot script.
+ *
+ * APPENDED, NEVER ASSIGNED. A node arrives here with the builder's class on it
+ * already — `pf-design-export`, a card-list class, a counter's own hook — and
+ * an assignment would drop whichever of those the element needed to work.
+ */
+function withHook(n: PFNode, hook: DesignNode["hook"], opts: EmitOptions): PFNode {
+  const classes = hookClasses(hook, opts.hooks);
+  if (classes.length === 0) return n;
+  const existing = typeof n.data.classGlobalStyling === "string" ? n.data.classGlobalStyling : "";
+  n.data.classGlobalStyling = [existing, ...classes].filter(Boolean).join(" ");
+  return n;
 }
 
 /**
@@ -3084,8 +3125,10 @@ export function pageflyFromTree(
   /* The page's own text colour travels with every emit, so composites can
      state it rather than inherit whatever the merchant's theme sets. */
   const customBlocks: CleanBlock[] = [];
+  const hooks: HookSink = { rows: [], count: { value: 0 } };
   opts = {
     ...opts,
+    hooks,
     /* Whether the page is bound to a product decides whether a standalone
        add-to-cart button uses `auto` or `custom`. Computed once here from the
        whole tree rather than asked per node. */
@@ -3150,7 +3193,13 @@ export function pageflyFromTree(
         `max-width: ${width}px !important; margin-left: auto; margin-right: auto;`,
       ),
       kids,
-      ["pf-design-export", ...motionClasses(section.anim)].join(" "),
+      /* THE BAND'S HOOKS GO ON THE CONTENT BLOCK, not on the FlexSection around
+         it. The block is the element the band's children sit in and the one a
+         `.hx-hero .hx-title` selector has to pass through; the section outside
+         it is the full-bleed paint. A script that queries `.hx-hero` and then
+         looks inside it finds the page either way, and a stylesheet scoped to
+         it only styles the content when it is here. */
+      ["pf-design-export", ...hookClasses(section.hook, hooks), ...motionClasses(section.anim)].join(" "),
     );
 
     const bandCss = declarations(desktop);
@@ -3193,7 +3242,13 @@ export function pageflyFromTree(
     /* The observer only ships when something actually reveals. Hover needs no
        JS, and a page that runs a MutationObserver for nothing is a page that
        costs the storefront something for nothing. */
-    customJS: [reveals ? MOTION_JS : "", blockJs].filter(Boolean).join("\n"),
+    /* THE ATTRIBUTE TABLE RUNS FIRST. Everything after it may query by `#id` or
+       `[data-x]`, and a selector written against an attribute this has not
+       written back on yet matches nothing — silently, which is the failure
+       mode this whole path exists to end. */
+    customJS: [hookAttrsJs(hooks.rows), reveals ? MOTION_JS : "", blockJs, opts.pageJs ?? ""]
+      .filter(Boolean)
+      .join("\n"),
   });
   for (const s of sections) doc.addSection(s);
 

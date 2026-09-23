@@ -4,7 +4,9 @@ import { designTreeSchema, whyNotASection, type DesignTree } from "../design/sch
 import { pageflyFromTree } from "../design/toPagefly";
 import { loadSkills } from "../ai/skills";
 import { getProvider } from "../ai/provider";
-import { splitSections } from "./fromHtmlSkill";
+import { outsideScripts, splitSections } from "./fromHtmlSkill";
+import { featuresInTree, missingFeatures, retryNote, NATIVE_FEATURES, type NativeFeature } from "./nativeFeatures";
+import { pageScriptFor } from "./pageScript";
 
 /* ==========================================================================
    HTML → design tree → .pagefly, on the live path's own rails.
@@ -77,6 +79,20 @@ export const ASK = [
   "  phone. So a `max-width: 420px` block has nowhere to go — fold whatever",
   "  matters in it into `mobile`.",
   "· Copy is copied. Not rewritten, not improved, not shortened.",
+  "",
+  "· KEEP THE MARKUP'S OWN NAMES. Every node takes a `hook` holding the class,",
+  "  the id and the `data-` attributes the element carries in the markup:",
+  "",
+  '    <section class="hx-hero dark" id="top" data-panel="care">',
+  '    → "hook": { "class": "hx-hero dark", "id": "top", "data": { "panel": "care" } }',
+  "",
+  "  Write it on every element that has one, and leave it out entirely on the",
+  "  ones that do not — most elements do not. Do not invent a name, do not",
+  "  tidy one, and do not turn a class into a shorter word that reads better.",
+  "",
+  "  THIS IS NOT DECORATION. The page's own script addresses these elements by",
+  "  these names. A section whose class you dropped is a section that script can",
+  "  no longer find, and the page arrives looking finished and doing nothing.",
   "· Where a run of markup is really a PageFly element — a table, a tab bar, an",
   "  accordion, a form, a slideshow, a countdown — use that node type. That",
   "  choice is the whole reason you are reading this and not a DOM walker.",
@@ -605,6 +621,29 @@ export function assetsOf(value: unknown, into: { images: Record<string, string>;
   }
 }
 
+/**
+ * Every class name the transcription kept, so the page's script can be told
+ * what it is allowed to select.
+ *
+ * READ OFF THE TREE, NOT OFF THE MOCKUP. The mockup's class list is what the
+ * markup had; this is what SURVIVED — a band the model returned without its
+ * hooks has no classes on the exported page, and a script told otherwise would
+ * be rewritten against selectors that match nothing.
+ */
+function hookClasses(value: unknown, into = new Set<string>()): string[] {
+  if (Array.isArray(value)) {
+    for (const v of value) hookClasses(v, into);
+    return [...into];
+  }
+  if (!value || typeof value !== "object") return [...into];
+  const o = value as Record<string, unknown>;
+  const hook = o.hook as { class?: unknown } | undefined;
+  if (hook && typeof hook.class === "string")
+    for (const c of hook.class.split(/\s+/).filter(Boolean)) into.add(c);
+  for (const v of Object.values(o)) hookClasses(v, into);
+  return [...into];
+}
+
 /** Everything in `<head>`: the model reads declared values off the stylesheet. */
 function headOf(html: string): string {
   return /<head[^>]*>([\s\S]*?)<\/head>/i.exec(html)?.[1]?.trim() ?? "";
@@ -662,10 +701,17 @@ export async function pageflyFromHtmlLive(
         band,
       ].join("\n");
 
-      try {
+      /* ONE BAND, ONE ANSWER — and the caller decides whether to ask again.
+
+         Lifted out of the loop so the retry is the SAME question with a
+         sentence added, rather than a second code path that could drift from
+         the first. See `missingFeatures`: the only thing worth a second bill is
+         a widget that came back as a picture of itself. */
+      const askFor = async (prompt: string) => {
+        try {
         const answer = await provider.complete({
           system,
-          user,
+          user: prompt,
           /* The same ceiling the live design stage uses, for the same reason:
              DeepSeek bills its own reasoning against it, and a band that needs
              20,000 is billed 20,000 whatever number sits above it. */
@@ -710,10 +756,43 @@ export async function pageflyFromHtmlLive(
         const lost = whyNotASection(raw);
         if (lost) console.log(`[pagefly] band ${index + 1} · ${lost}`);
         return checked.data.sections[0];
-      } catch (err) {
-        failures.push({ index, reason: (err as Error).message.slice(0, 160) });
-        return null;
+        } catch (err) {
+          failures.push({ index, reason: (err as Error).message.slice(0, 160) });
+          return null;
+        }
+      };
+
+      const first = await askFor(user);
+      if (first === null) return null;
+
+      /* ==================================================================
+         THE ONE CHECK THAT CANNOT BE A SCHEMA RULE.
+
+         A tab bar transcribed as four stacked blocks is a VALID section: every
+         node exists, every declaration parses, the export succeeds and the page
+         imports. It is also dead — the merchant clicks a tab on their live
+         storefront and nothing happens, and there is no repair short of
+         rebuilding the band.
+
+         So the markup is asked what it plainly contains and the answer is asked
+         whether it came back. One retry, naming the miss; see
+         `nativeFeatures.ts` for why the detectors are deliberately dull. */
+      const missing = missingFeatures(band, first);
+      if (missing.length === 0) return first;
+
+      console.log(`[pagefly] band ${index + 1} · missing ${missing.join(", ")} — asking again`);
+      const second = await askFor(`${user}\n${retryNote(missing)}`);
+      if (second === null) return first;
+
+      /* THE RETRY HAS TO EARN IT. An answer that still lacks the widget is not
+         better than the first one and may be worse — a second transcription of
+         the same band differs everywhere, not only where it was asked to. */
+      const still = missingFeatures(band, second);
+      if (still.length >= missing.length) {
+        console.log(`[pagefly] band ${index + 1} · retry did not find it; keeping the first`);
+        return first;
       }
+      return second;
     }),
   );
 
@@ -729,6 +808,33 @@ export async function pageflyFromHtmlLive(
   const assets = { images: {} as Record<string, string>, videos: {} as Record<string, string> };
   assetsOf(sections, assets);
 
+  /* ==========================================================================
+     THE PAGE'S OWN SCRIPT, in one call after every band.
+
+     ONE CALL, NOT ONE PER BAND, because the script is not a band's. A mockup
+     writes its countdown, its carousel and its tab controller together in one
+     `<script>` after `</main>`, and a transcriber reading one section has no
+     way to know which half of that file is about the section in front of it.
+
+     AFTER THE BANDS, because what it has to delete is decided by what came
+     back: a tab bar that transcribed as a `tabs` node is PageFly's own widget
+     with PageFly's own behaviour, and the mockup's tab controller pointed at
+     the same elements would fight it. The list of what survived is available
+     only here.
+
+     AND IT COSTS NOTHING WHEN THERE IS NOTHING TO DO. `outsideScripts` on a
+     mockup that wrote none returns an empty array and no call is made. */
+  const scripts = outsideScripts(html);
+  const native = NATIVE_FEATURES.filter((f) => featuresInTree(sections).has(f)) as NativeFeature[];
+  const page = await pageScriptFor(scripts, { native, classes: hookClasses(sections), signal });
+  usage.input += page.usage.input;
+  usage.output += page.usage.output;
+  if (scripts.length > 0)
+    console.log(
+      `[pagefly] ${name} · page script: ${scripts.length} source block(s) · ` +
+        (page.js ? `${page.js.length} bytes shipped` : `none shipped (${page.reason ?? "empty"})`),
+    );
+
   const built = pageflyFromTree(
     tree,
     { name, bg: tokens.bg, ink: tokens.ink, fontBody: tokens.fontBody },
@@ -740,6 +846,7 @@ export async function pageflyFromHtmlLive(
       border: tokens.border,
       radius: tokens.radius,
       band: tokens.band,
+      pageJs: page.js,
     },
   );
 
