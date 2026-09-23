@@ -219,33 +219,29 @@ export const MAX_PROMPT_CHARS = 3000;
  * produced the best deck in this beta, trimmed to fit.
  *
  * It sets MAX_PROMPT_CHARS rather than being cut to fit it. The first version
- * was six characters over a 2,000 ceiling and two commas solved it; this one is
- * 169 over, which is a paragraph, not a comma — and the paragraph is the part
- * that names the interactions. An example that will not go in the box it
- * demonstrates is not an example, so the ceiling moved. That is the direction
- * the dependency runs: change this text, then check the number above it.
+ * was six characters over a 2,000 ceiling and two commas solved it; the next
+ * was 169 over, which is a paragraph rather than a comma, so the ceiling moved
+ * to 3,000. An example that will not go in the box it demonstrates is not an
+ * example.
+ *
+ * THIS ONE IS EXACTLY 3,000 — no headroom at all, which is a state a comment
+ * cannot police. `scripts/test-brief-example.ts` asserts it fits, so the day
+ * somebody adds a clause the test says so rather than the Example dialog
+ * quietly showing a brief that cannot be pasted into the field beside it.
  */
-export const PROMPT_EXAMPLE = `Elevated everyday apparel - heavyweight knits, structured denim, tailored outerwear. Unisex, mid-premium, for people who care about fit.
+export const PROMPT_EXAMPLE = `7 PageFly pages for HEXWOOD, a US Halloween superstore (2009, Columbus OH, 42 stores): costumes, decor, candy, props, masks, pet costumes, party. Voice playful, confident, concrete. Pages: Home, Product, Collection, About, Contact, Blog, "Fright Night" sale. No header/footer.
 
-Main colours: #EDE8DE, #1C1A17 and #A8894F. Quietly expensive, editorial, lots of white space. Serif headings in sentence case, sans for prices and sizes. Hairline 1px rules, small-caps eyebrows, square corners and buttons. Brass accent at most twice per page. Fade-up 24px over 320ms, images revealing by clip-path wipe.
+PALETTE #0A0A0F void, #12121A panel, #1A1A25 card, #FF6B00 orange, #8B5CF6 violet, #B6FF3B acid. FONTS Creepster headings (uppercase, fallback Impact) + Nunito body. H1 120px (hero 150), H2 64, H3 30; mobile 56/36. Each heading has one <em> word in orange with a 30px glow. Uppercase pill buttons: primary orange with pulsing shadow, hover lift + −1deg; violet/acid/ghost. Motion: drifting violet+orange fog, glowing bobbing moon in heroes, alternating diagonal clip-path bands, card hover lift + glow + zoom, fade-up reveals, drifting bats (JS, live only).
 
-Same product card everywhere: a 4:5 image crossfading to a second photo on hover, swatch dots that swap the image, a badge top-left, the name, a fabric line like "14oz brushed cotton", the price. Sizes on hover, sold-out struck through.
+RULES: no empty containers (use pseudo-elements or &nbsp; paragraphs) or PageFly shows "Drop element here"; center every section container (max-width 1240, margin auto — check 2560px); gate scroll states behind a runtime class so the JS-less editor renders flat, complete layouts with no 100vh gaps; lock back-to-top to 48×48 with a centered 22px icon; flex-center the Buy-it-now label; use native elements (ProductBox, ProductMedia3, swatches, StockIndicator, ProductList2 source:auto + Load More, CollectionBox, ArticleBox/List2, Form2, Accordion3, Tabs3, Slideshow, CountDown); responsive 4→2→1. Repeat: ships by Oct 31 if ordered by Oct 27 (29 express), free shipping $60+, size swap till Nov 3, returns till Nov 15, CPSIA tested, chat till 2am ET, pickup 8pm Oct 31.
 
-Interactions across the pages: a continuous marquee of short phrases; a before/after comparison with a draggable handle; buttons whose background wipes in from the left on hover and out to the right on leave, with a soft shadow lifting; a slideshow where clicking a thumbnail swaps the main image; and hotspot markers on editorial photos that open a small product card.
-
-Home: 88vh hero with text bottom-left over a background image, its button changing background and lifting a box-shadow on hover, four asymmetric tiles, a new-in rail, two lookbook bands with reversed columns, a shop-the-look photo, bestsellers as a grid, reviews showing height and size.
-
-Collection: text-only hero, no banner, a sticky filter rail with size as a button grid where unavailable sizes are dimmed, plus colour and price, three-column grid.
-
-Product: stacked gallery, a caption reading "Model is 5'9", wearing M", a sticky buy box where swatches swap the gallery and sold-out sizes are struck through, a bar showing whether it runs small or true to size, a Find My Size finder, a size drawer with cm/in toggle.
-
-About: no CTA until the final band, 80vh hero with one sentence, 620px opener, a pull quote, a timeline.
-
-Blog article: 660px measure, standfirst and meta row, two inline product cards.
-
-Contact: three routing cards, order number field only for returns, FAQ.
-
-Launch: pre-launch and live states, 92vh countdown hero, locked cards under a scrim that restore prices when live.`;
+HOME (16 sections): parallax fog hero + moon "Get <em>spooked</em>."; deadline strip + countdown; category slider (6 aisles); SIGNATURE pinned 4-step planner (Costume→Decor→Candy→Party: pins, steps swap on scroll, dot progress, stacks in editor); trust bar; 8-product grid; diagonal shop-the-porch with 4 pulsing hotspots + count-ups + $371 kit; scare-level tabs; costumes-by-who tiles; deal of the week + countdown; bundle builder (−20%); UGC masonry; reviews slider; shipping cut-offs + FAQ; newsletter; overlays.
+PRODUCT: buy box with rating, scare-level chip, stock line, shipping-deadline countdown, glowing swatches, "Add to cauldron", Buy-it-now, perks, spec accordion; pinned how-to-wear; diagonal anatomy hotspots; complete-the-look; reviews; more-in-level slider.
+COLLECTION: parallax hero + dynamic title, deadline strip, filter chips + sort, 12-product grid + Load More, category slider, bundle promo, FAQ.
+ABOUT: hero, 4 count-up stats, pinned 4-chapter story 2009→2026, diagonal values, team, UGC, careers CTA.
+CONTACT: "Costume <em>emergency</em>? We're up.", 4 channel cards, dark form, hours, stores, FAQ.
+BLOG: chips, 88px title, 21:9 hero, TL;DR box, author card, comments, sticky sidebar (TOC, products, countdown), related, shop-the-guide.
+SALE: jack-o'-lantern hero + countdown + copy-code BOO25, 3 offer tiers, diagonal doorbusters, aisle slider, sale grid, porch-kit`;
 
 
 /**
