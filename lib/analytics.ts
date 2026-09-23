@@ -270,6 +270,16 @@ export const EV = {
    * asked.
    */
   showcaseFrameChanged: "design_showcase_frame_changed",
+  /**
+   * A whole sample set taken as one file.
+   *
+   * STRONGER THAN ONE PAGE. Somebody who takes seven has stopped evaluating and
+   * started planning what to do with them — and they did it without an account,
+   * which is the visitor the front door exists to convince. Counted apart from
+   * the single-page download for that reason: summed, one curious press and one
+   * decision would be the same number.
+   */
+  showcaseSetDownloaded: "design_showcase_set_downloaded",
 
   signinViewed: "design_signin_viewed",
   signinSubmitted: "design_signin_submitted",

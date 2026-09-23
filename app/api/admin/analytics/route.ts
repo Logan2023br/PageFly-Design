@@ -851,6 +851,14 @@ function buildView(
           split: slices(rows, EV.galleryOpened, "set", SHOWCASE_SETS_LABELS),
           splitKind: "control",
         }),
+        /* THE WHOLE SET, NOT A PAGE. Seven files as one import is somebody who
+           has stopped evaluating and started planning, so it is counted apart
+           from the single-page download — summed, one curious press and one
+           decision would be the same number. */
+        metric("set_file", "Whole sample set taken", "all seven pages as one import", EV.showcaseSetDownloaded, "“Export all 7” beside a store's name in the gallery", {
+          split: slices(rows, EV.showcaseSetDownloaded, "set", SHOWCASE_SETS_LABELS),
+          splitKind: "control",
+        }),
         metric("frame", "Sample read at another width", "desktop, tablet or mobile", EV.showcaseFrameChanged, "The Desktop / Tablet / Mobile frames in the toolbar of an opened page from the rail under the hero", {
           split: slices(rows, EV.showcaseFrameChanged, "frame", SHOWCASE_FRAMES),
           splitKind: "control",

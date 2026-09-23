@@ -24,7 +24,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { HERO_SET, SHOWCASE_SETS, htmlFor, pageflyFor } from "../lib/showcasePages";
-import { readPageflyPage } from "../lib/collections/pagefly";
+import { combinePagefly, readPageflyPage, readPageflySet } from "../lib/collections/pagefly";
 
 let bad = 0;
 function check(ok: boolean, label: string, detail = ""): void {
@@ -130,6 +130,52 @@ if (!existsSync(DIR)) {
       orphans.length ? orphans.join(" ") : "",
     );
   }
+}
+
+console.log("\nExport all hands over one importable archive");
+
+/* ==========================================================================
+   THE BUTTON BESIDE EACH SET'S NAME FETCHES ITS SEVEN FILES AND COMBINES THEM.
+   A merchant does not want seven downloads and seven imports, so the seven
+   single-page files go back into the shape PageFly's own multi-page export
+   has — `combinePagefly` does it, read off a real export rather than invented.
+
+   ASSERTED BY ROUND-TRIPPING. A zip that is merely produced is not the claim;
+   the claim is that PageFly will read it, and the nearest thing to that here is
+   this app's own reader, which the importer is modelled on. Seven in, seven
+   back out, with the labels intact — a combine that silently kept one entry
+   would otherwise pass every check that only counts bytes.
+   ========================================================================== */
+for (const set of SHOWCASE_SETS) {
+  const paths = set.pages.map((p) => onDisk(pageflyFor(set, p)));
+  if (!paths.every((f) => existsSync(f))) {
+    check(false, `${set.id}: every page has a file to combine`);
+    continue;
+  }
+
+  const one = combinePagefly(paths.map((f) => new Uint8Array(readFileSync(f))));
+  let back: ReturnType<typeof readPageflySet> = [];
+  try {
+    back = readPageflySet(one);
+  } catch (err) {
+    check(false, `${set.id}: the combined archive reads back`, (err as Error).message);
+    continue;
+  }
+
+  check(
+    back.length === set.pages.length,
+    `${set.id}: ${set.pages.length} in, ${back.length} back out`,
+    `${Math.round(one.length / 1024)}KB`,
+  );
+  check(
+    back.every((p) => p.items.length > 0),
+    `${set.id}: every page in it still has content`,
+  );
+  check(
+    new Set(back.map((p) => p.label)).size === back.length,
+    `${set.id}: no two entries collapsed onto one name`,
+    back.map((p) => p.label).join(" · "),
+  );
 }
 
 console.log("\nthe two sets are genuinely different stores");

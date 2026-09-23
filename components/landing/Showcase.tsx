@@ -3,7 +3,13 @@
 import Link from "next/link";
 import { useState } from "react";
 import { EV, track } from "@/lib/analytics";
-import { SHOWCASE_SETS, type ShowcasePage, type ShowcaseSet } from "@/lib/showcasePages";
+import { combinePagefly } from "@/lib/collections/pagefly";
+import {
+  SHOWCASE_SETS,
+  pageflyFor,
+  type ShowcasePage,
+  type ShowcaseSet,
+} from "@/lib/showcasePages";
 import { Icon } from "../ui";
 import { PageThumb, PageViewer } from "./PagePreview";
 import { SectionHead } from "./SectionHead";
@@ -34,6 +40,77 @@ import { useSeen } from "./useSeen";
    matching set, and nothing said which half came from where. Both read
    `lib/showcasePages.ts` now; that contradiction is the reason this is a list.
    ========================================================================== */
+
+/* ==========================================================================
+   THE WHOLE SET, AS ONE FILE.
+
+   A merchant who wants this store does not want seven downloads and seven
+   imports. PageFly's own multi-page export is a zip of numbered entries, and
+   `combinePagefly` puts seven single-page files back into exactly that shape —
+   read off a real export rather than invented, and already what the collections
+   section hands over.
+
+   FETCHED WHEN PRESSED, NOT BEFORE. The seven files are about 200KB for a set
+   and most visitors press nothing; loading them to have them ready would be a
+   quarter of a megabyte spent on the chance.
+
+   IT CANNOT LEAVE THE BUTTON STUCK. Any failure lands back on `idle`, so a
+   second press retries rather than finding a control that says "Preparing…"
+   forever — which is what a fetch that rejects silently looks like.
+   ========================================================================== */
+function download(bytes: Uint8Array, filename: string) {
+  const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: "application/zip" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  /* Revoked on the next tick rather than immediately — Safari has not started
+     reading the blob by the time click() returns. */
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function ExportSet({ set }: { set: ShowcaseSet }) {
+  const [state, setState] = useState<"idle" | "working" | "failed">("idle");
+
+  const run = async () => {
+    if (state === "working") return;
+    setState("working");
+    track(EV.showcaseSetDownloaded, { set: set.id, pages: set.pages.length });
+
+    try {
+      const files = await Promise.all(
+        set.pages.map(async (page) => {
+          const res = await fetch(pageflyFor(set, page));
+          if (!res.ok) throw new Error(`${page.slug}: ${res.status}`);
+          return new Uint8Array(await res.arrayBuffer());
+        }),
+      );
+      download(combinePagefly(files), `${set.id}.pagefly`);
+      setState("idle");
+    } catch {
+      /* Said on the button rather than in a console nobody has open. It returns
+         to idle on the next press, so the failure is a retry rather than a dead
+         control. */
+      setState("failed");
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={() => void run()}
+      disabled={state === "working"}
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-pf-md border border-pf-border-hi px-3 py-1.5 text-[12.5px] font-semibold text-pf-body transition-colors hover:border-pf-primary-hi hover:text-pf-text disabled:opacity-60"
+    >
+      <Icon name={state === "failed" ? "CircleAlert" : "Download"} size={13} />
+      {state === "working"
+        ? "Preparing…"
+        : state === "failed"
+          ? "Try again"
+          : `Export all ${set.pages.length}`}
+    </button>
+  );
+}
 
 export function Showcase() {
   const seen = useSeen<HTMLElement>("showcase");
@@ -116,11 +193,18 @@ export function Showcase() {
                 cards a reader has to sort by eye. The rule and the name do that
                 for them, and the blurb says what the look is so the contrast is
                 stated rather than left to be noticed. */}
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-pf-border pt-5">
-              <h3 className="font-display text-[18px] font-semibold tracking-[-0.011em] text-pf-text">
-                {set.name}
-              </h3>
-              <p className="text-[13px] text-pf-faint">{set.blurb}</p>
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-pf-border pt-5">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <h3 className="font-display text-[18px] font-semibold tracking-[-0.011em] text-pf-text">
+                  {set.name}
+                </h3>
+                <p className="text-[13px] text-pf-faint">{set.blurb}</p>
+              </div>
+              {/* BESIDE THE SET'S NAME, because that is what it exports. In the
+                  toolbar of an opened page it would be a third download button
+                  arguing with the one already there, which takes a single
+                  page. */}
+              <ExportSet set={set} />
             </div>
 
             {/* FOUR ACROSS ON A DESKTOP, and the card is 3:4 — so a column of a

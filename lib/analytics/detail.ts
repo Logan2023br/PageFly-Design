@@ -139,6 +139,7 @@ export const DETAIL_OF: Record<string, DetailSpec> = {
   [EV.galleryOpened]: { propKey: "from", unit: "store", partLabel: "where from" },
   [EV.showcaseFileDownloaded]: { propKey: "page_type", unit: "store", partLabel: "page" },
   [EV.showcaseFrameChanged]: { propKey: "frame", unit: "store", partLabel: "width" },
+  [EV.showcaseSetDownloaded]: { propKey: "set", unit: "store", partLabel: "store" },
 
   /* The gate's own two page views, which had no drill-down either — so "who
      reached the form today" was unanswerable while "who submitted it" was not. */
