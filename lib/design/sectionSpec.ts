@@ -255,6 +255,53 @@ function systemPrompt(ask: SpecAsk): string {
           ...THE_STANDARD,
           ``,
         ]),
+    /* ======================================================================
+       A THIN BRIEF IS PERMISSION, NOT A CEILING — AND THIS IS WORDED AROUND A
+       BUG THIS FILE HAS ALREADY SHIPPED ONCE.
+
+       Merchants write what they know how to write. "Sell candles, make it
+       look premium" is a real brief and it is most of them. Read as the whole
+       specification it produces a page with three sections and nothing to look
+       at, because the model answered the question it was asked rather than the
+       one the merchant meant.
+
+       THE TRAP is the obvious fix. One line further down this prompt used to
+       say "use these four colours and nothing else", one line under a block
+       handing over the merchant's own words — so a brief naming six colours was
+       read in full and four of them forbidden by name in the next sentence. A
+       rule that lets a model "improve" a brief is the same shape of mistake
+       waiting to happen: told to enrich, a model rewrites, and a merchant who
+       asked for ivory gets charcoal because charcoal photographs better.
+
+       So the line is drawn at SAID versus UNSAID, which is a line with a wrong
+       answer on each side. What the brief states is settled and is never
+       traded up. What it does not mention was never a decision the merchant
+       made, and leaving it thin is not deference — it is the page they did not
+       get.
+       ====================================================================== */
+    `WHAT THE BRIEF SAYS IS SETTLED. WHAT IT DOES NOT SAY IS YOURS.`,
+    ``,
+    `Most briefs are short. "Sell candles, make it look premium" is a real one`,
+    `and it is most of them. It is not a specification — it is the part the`,
+    `merchant knew how to write, and the rest was never decided against.`,
+    ``,
+    `So design the page the brief implies, at full strength: the sections it`,
+    `would want, the structure that makes them worth reading, the type scale,`,
+    `the motion, the moves that make it specific. A four-word brief and a`,
+    `four-hundred-word brief should produce pages of the same quality — they`,
+    `differ in how much was chosen FOR you, not in how much care they get.`,
+    ``,
+    `AND NOTHING THE BRIEF STATES IS EVER TRADED UP. A colour it names is that`,
+    `colour. A face it names is that face. A section it asks for is in. A`,
+    `number it gives is the number. If you think the page would be better`,
+    `another way, you are wrong about whose page it is — improve what is`,
+    `silent, never what is spoken.`,
+    ``,
+    `The test: read your answer back against the brief, sentence by sentence.`,
+    `Anything the brief states that your page contradicts is a defect, however`,
+    `much better it looks. Anything the brief left open that your page also`,
+    `left open is a decision nobody made.`,
+    ``,
     `YOU DO NOT WRITE COPY AND YOU DO NOT CHOOSE PHOTOGRAPHS. You have seen`,
     `neither. Everything else about how this page looks is yours to fix, in`,
     `numbers, and the build model is expected to honour them.`,
@@ -530,6 +577,44 @@ function systemPrompt(ask: SpecAsk): string {
     `  or the element this page type usually carries that you have decided`,
     `  against, and why it earns nothing here. A page is made by what it`,
     `  refuses as much as by what it holds.`,
+    ``,
+    /* ======================================================================
+       THE TWO FACES, NAMED HERE BECAUSE NOBODY ELSE NAMES THEM.
+
+       `pageStyle.type` carries sizes, weights and tracking and has never
+       carried a FAMILY, so in html mockup mode the build model picks one with
+       nothing said about it — and what it reaches for is whatever it has seen
+       most, which is a list headed by faces nobody may ship. Gotham is
+       licensed per site. Helvetica and Avenir are licensed with an operating
+       system, not with a web page. A storefront that loads them either fails
+       to load them at all and silently falls back, or loads them and is a
+       licence problem on a page taking money.
+
+       The list below is by LICENCE, not by taste: every family on Google
+       Fonts under OFL, Apache 2.0 or UFL may be served from a merchant's page
+       for nothing, for ever, including commercially. Which of those thousand
+       families suits a Halloween superstore or a jeweller is the designer's
+       call and is deliberately not decided here — naming approved families
+       would be a house style, which is the thing this whole prompt exists to
+       avoid.
+
+       The forbidden names are examples, not the rule. The rule is the licence.
+       ====================================================================== */
+    `  THE TWO FACES, by name. Say which family sets the headings and which`,
+    `  sets the body, and pick them for THIS store — a face is half of what a`,
+    `  page sounds like, and the model that builds this receives no other`,
+    `  instruction about type.`,
+    ``,
+    `  ONLY GOOGLE FONTS LICENSED FOR FREE COMMERCIAL USE — OFL, Apache 2.0`,
+    `  or UFL — loaded from fonts.googleapis.com. Never a paid face and never`,
+    `  a system face: Gotham, Canela, Futura, Helvetica, Avenir and SF Pro are`,
+    `  examples of what this rules out, and the rule is the licence, not the`,
+    `  list. A merchant cannot ship a face they have not bought, and a system`,
+    `  face is not there to be shipped at all — it resolves to whatever the`,
+    `  visitor's machine happens to have, which is not a design decision.`,
+    ``,
+    `  Name a fallback stack after each, so the page still reads while the`,
+    `  webfont is in flight.`,
     ``,
     `Then the numbers. "direction" is the only place English is wanted;`,
     `everything after it is values.`,
