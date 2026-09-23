@@ -332,6 +332,14 @@ const SHOWCASE_FRAMES: Record<string, string> = {
   mobile: "Mobile",
 };
 
+/* The worked briefs the Example pills open — see `PROMPT_EXAMPLES`. Written out
+   rather than imported from there so this file names them the way a chart
+   reader needs; the ids are what has to match, and the test asserts it. */
+const PROMPT_EXAMPLE_LABELS: Record<string, string> = {
+  hexwood: "Dark & loud (Halloween)",
+  hollis: "Light & quiet (luxury)",
+};
+
 const SHOWCASE_SLUGS: Record<string, string> = {
   home: "Home",
   "product-page": "Product",
@@ -897,7 +905,16 @@ function buildView(
           unit: "store",
           split: slices(rows, EV.briefModeSelected, "mode", { quick: "Quick", detail: "Build detail" }),
         }),
-        metric("example", "Example opened", "read the sample brief first", EV.briefExampleClicked, "The small “Example” pill beside the description box", { unit: "store" }),
+        /* WHICH example, because that is the one thing this press says about
+           the merchant. Two briefs are offered — a dark loud Halloween shop and
+           a quiet ivory department store — and which one somebody opens is a
+           reading of what kind of store is arriving that no other event on this
+           screen can give. */
+        metric("example", "Example opened", "read a sample brief first", EV.briefExampleClicked, "The “Dark & loud” / “Light & quiet” pills beside the description box", {
+          unit: "store",
+          split: slices(rows, EV.briefExampleClicked, "which", PROMPT_EXAMPLE_LABELS),
+          splitKind: "control",
+        }),
         metric("started", "Build started", "pressed the button", EV.generateStarted, "The build button at the bottom of the brief", { unit: "store" }),
       ],
     },

@@ -3,7 +3,11 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { EV, track } from "@/lib/analytics";
-import { MAX_PROMPT_CHARS, PROMPT_EXAMPLE } from "@/lib/briefOptions";
+import {
+  MAX_PROMPT_CHARS,
+  PROMPT_EXAMPLES,
+  type PromptExample,
+} from "@/lib/briefOptions";
 import { Icon } from "../ui";
 
 /* ==========================================================================
@@ -22,7 +26,11 @@ import { Icon } from "../ui";
    ========================================================================== */
 
 export function PromptExampleButton() {
-  const [open, setOpen] = useState(false);
+  /* WHICH example is open, not whether one is. Two buttons open two different
+     briefs into the same dialog, so the state has to name the brief — a boolean
+     plus a separate "which" is two values that can disagree, and the way they
+     disagree is a dialog showing example one under example two's heading. */
+  const [open, setOpen] = useState<PromptExample | null>(null);
   const [copied, setCopied] = useState(false);
 
   /* Escape closes it. A dialog that traps someone until they find the small
@@ -30,7 +38,7 @@ export function PromptExampleButton() {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") setOpen(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -45,9 +53,9 @@ export function PromptExampleButton() {
     return () => clearTimeout(t);
   }, [copied]);
 
-  const copy = async () => {
+  const copy = async (text: string) => {
     try {
-      await navigator.clipboard.writeText(PROMPT_EXAMPLE);
+      await navigator.clipboard.writeText(text);
       setCopied(true);
     } catch {
       /* Denied permission, or an insecure origin. The text is on screen and
@@ -58,17 +66,34 @@ export function PromptExampleButton() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => {
-          track(EV.briefExampleClicked);
-          setOpen(true);
-        }}
-        className="inline-flex items-center gap-1.5 rounded-pf-pill border border-pf-primary-hi/45 bg-pf-primary/16 px-2.5 py-1 text-[11.5px] font-semibold text-pf-text transition-colors hover:bg-pf-primary/28"
-      >
-        <Icon name="FileText" size={12} />
-        Example
-      </button>
+      {/* ====================================================================
+          ONE BUTTON PER EXAMPLE, AND THEY ARE NAMED FOR WHAT THEY ARE.
+
+          "Example 1" and "Example 2" would tell a merchant nothing about which
+          to open, and the only reason there are two is that they are opposite
+          kinds of store — a dark, loud Halloween shop and a quiet ivory
+          department store. Named that way, a merchant picks the one nearer
+          their own and copies less that has to be undone.
+
+          `which` rides on the event so the two are counted apart. Which example
+          people open says what kind of store is actually arriving, and a single
+          total cannot answer that.
+          ==================================================================== */}
+      {PROMPT_EXAMPLES.map((example) => (
+        <button
+          key={example.id}
+          type="button"
+          onClick={() => {
+            track(EV.briefExampleClicked, { which: example.id });
+            setOpen(example);
+          }}
+          title={example.blurb}
+          className="inline-flex items-center gap-1.5 rounded-pf-pill border border-pf-primary-hi/45 bg-pf-primary/16 px-2.5 py-1 text-[11.5px] font-semibold text-pf-text transition-colors hover:bg-pf-primary/28"
+        >
+          <Icon name="FileText" size={12} />
+          {example.label}
+        </button>
+      ))}
 
       <AnimatePresence>
         {open && (
@@ -80,7 +105,7 @@ export function PromptExampleButton() {
             role="dialog"
             aria-modal="true"
             aria-label="Example prompt"
-            onClick={() => setOpen(false)}
+            onClick={() => setOpen(null)}
             className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(6,4,14,.88)] p-4 backdrop-blur-sm"
           >
             <motion.div
@@ -97,16 +122,21 @@ export function PromptExampleButton() {
               <header className="flex items-start justify-between gap-3 border-b border-pf-border px-5 py-4">
                 <div className="min-w-0">
                   <h2 className="font-display text-[16px] font-semibold text-pf-text">
-                    Example prompt
+                    {open.label}
                   </h2>
-                  <p className="mt-1 text-[12.5px] text-pf-muted">
+                  {/* The blurb first, because a reader who opened the wrong one
+                      finds out here rather than after reading 3,000
+                      characters. Then the shape, which is the same in both and
+                      is the thing being taught. */}
+                  <p className="mt-1 text-[12.5px] text-pf-muted">{open.blurb}</p>
+                  <p className="mt-1 text-[12.5px] text-pf-faint">
                     What you sell, then the look, then one line per page naming
                     the sections you want on it.
                   </p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setOpen(false)}
+                  onClick={() => setOpen(null)}
                   aria-label="Close"
                   className="shrink-0 rounded-pf-sm border border-pf-border p-1.5 text-pf-muted transition-colors hover:text-pf-text"
                 >
@@ -119,17 +149,17 @@ export function PromptExampleButton() {
                   this is one wall of text and teaches nothing. */}
               <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
                 <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-pf-body">
-                  {PROMPT_EXAMPLE}
+                  {open.text}
                 </p>
               </div>
 
               <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-pf-border px-5 py-3.5">
                 <span className="text-[12px] tabular-nums text-pf-faint">
-                  {PROMPT_EXAMPLE.length} / {MAX_PROMPT_CHARS} characters
+                  {open.text.length} / {MAX_PROMPT_CHARS} characters
                 </span>
                 <button
                   type="button"
-                  onClick={() => void copy()}
+                  onClick={() => void copy(open.text)}
                   className="inline-flex items-center gap-1.5 rounded-pf-md border border-pf-border px-3 py-1.5 text-[12.5px] font-semibold text-pf-text transition-colors hover:border-pf-border-hi"
                 >
                   <Icon name={copied ? "Check" : "Copy"} size={14} />

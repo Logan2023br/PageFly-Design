@@ -249,7 +249,24 @@ export const MAX_PROMPT_CHARS = 3000;
  * somebody adds a clause the test says so rather than the Example dialog
  * quietly showing a brief that cannot be pasted into the field beside it.
  */
-export const PROMPT_EXAMPLE = `7 PageFly pages for HEXWOOD, a US Halloween superstore (2009, Columbus OH, 42 stores): costumes, decor, candy, props, masks, pet costumes, party. Voice playful, confident, concrete. Pages: Home, Product, Collection, About, Contact, Blog, "Fright Night" sale. No header/footer.
+export type PromptExample = {
+  id: string;
+  /* What the button says. NOT "Example 1" and "Example 2" — a number tells a
+     merchant nothing about which one is closer to their shop, and the whole
+     reason there are two is that they are different KINDS of store. */
+  label: string;
+  /** one line in the dialog header, so the reader knows what they are copying */
+  blurb: string;
+  text: string;
+};
+
+export const PROMPT_EXAMPLES: PromptExample[] = [
+  {
+    id: "hexwood",
+    label: "Dark & loud",
+    blurb:
+      "A Halloween superstore: near-black grounds, one hot accent, heavy motion, seven pages.",
+    text: `7 PageFly pages for HEXWOOD, a US Halloween superstore (2009, Columbus OH, 42 stores): costumes, decor, candy, props, masks, pet costumes, party. Voice playful, confident, concrete. Pages: Home, Product, Collection, About, Contact, Blog, "Fright Night" sale. No header/footer.
 
 PALETTE #0A0A0F void, #12121A panel, #1A1A25 card, #FF6B00 orange, #8B5CF6 violet, #B6FF3B acid. FONTS Creepster headings (uppercase, fallback Impact) + Nunito body. H1 120px (hero 150), H2 64, H3 30; mobile 56/36. Each heading has one <em> word in orange with a 30px glow. Uppercase pill buttons: primary orange with pulsing shadow, hover lift + −1deg; violet/acid/ghost. Motion: drifting violet+orange fog, glowing bobbing moon in heroes, alternating diagonal clip-path bands, card hover lift + glow + zoom, fade-up reveals, drifting bats (JS, live only).
 
@@ -261,7 +278,38 @@ COLLECTION: parallax hero + dynamic title, deadline strip, filter chips + sort, 
 ABOUT: hero, 4 count-up stats, pinned 4-chapter story 2009→2026, diagonal values, team, UGC, careers CTA.
 CONTACT: "Costume <em>emergency</em>? We're up.", 4 channel cards, dark form, hours, stores, FAQ.
 BLOG: chips, 88px title, 21:9 hero, TL;DR box, author card, comments, sticky sidebar (TOC, products, countdown), related, shop-the-guide.
-SALE: jack-o'-lantern hero + countdown + copy-code BOO25, 3 offer tiers, diagonal doorbusters, aisle slider, sale grid, porch-kit`;
+SALE: jack-o'-lantern hero + countdown + copy-code BOO25, 3 offer tiers, diagonal doorbusters, aisle slider, sale grid, porch-kit`,
+  },
+  {
+    id: "hollis",
+    label: "Light & quiet",
+    blurb:
+      "A luxury department store: ivory and gold, serif headings, restraint, seven pages.",
+    text: `7 PageFly pages for HOLLIS & ROWE, a US luxury department store (Madison Ave, est. 1926): home, women, men, fine jewelry, beauty, handbags, tabletop, gifts. Voice calm, specific. Pages: Home, Product, Collection, About, Contact, Blog, Private Sale. No header/footer.
+
+STYLE Light luxury. Ivory #F8F4EE, stone #EFE8DD, white, champagne gold #B8955A, espresso #2A221C, taupe #7A6E63. Bodoni Moda headings (400, fallback Didot/Georgia) + Jost 300–500 body. H1 92px, H2 58, mobile 46/34. One word per heading in gold italic <em>. Eyebrows: 11px uppercase gold with a drawn-in 32px line. Square buttons (radius 0), 12px uppercase .2em; hover sweeps gold across. Radius 2px, soft 3-layer shadows, 110px section padding.
+
+RULES: no empty containers (use pseudo-elements or &nbsp; paragraphs); containers max 1320, margin auto (check 2560px); gate parallax behind a JS class so the editor renders flat; back-to-top 48×48, centered icon; Buy-it-now label flex-centered; product cards: 32px gap, ATC box-sizing border-box inside card, pinned to card bottom; accordions width 100% open or closed; article images get a CSS background fallback photo; native PageFly elements (ProductBox, ProductList2 source:auto + Load More, CollectionBox, ArticleBox, Form2, Accordion3, Tabs3, Slideshow, CountDown); 4→2→1.
+
+HOME (15): split hero — copy + 3-image mosaic with multi-speed parallax + rotating circular SVG badge "Autumn · Winter 2026"; service strip (delivery $150+, 60-day returns, gift wrap, stylist); CATEGORY INDEX — 8 big serif rows (number, name, count, arrow), hover turns name gold italic, slides it right and reveals a floating tilted image; EXPANDING PANELS — 5 edit images in a row, hovered panel grows to 3×, copy fades in; new-arrivals slider; designer marquee; shop-the-salon hotspots with white tooltips; gift guide by price, gold border draws on hover; underline serif tabs by floor; heritage split with overlapping images + 4 stats; quote slider; concierge 3-step CTA; journal; Instagram strip; newsletter in double gold frame.
+PRODUCT: 4:5 gallery, title, rating, price, stock, square swatches, gold-sweep ATC, Buy-it-now, services, accordion; service strip; craft story (overlapping images + 3 numbered steps); complete the room; 3 review cards; slider.
+COLLECTION: split hero with dynamic title/description + 2 parallax images; underlined sub-category links; filter chips + sort; 12-grid Load More; shop-by-room expanding panels; consultation CTA; FAQ.
+ABOUT: hero + staggered parallax images; timeline 1926→2026; buying rule + stats; 4 value cards; team (greyscale to color on hover); press marquee; visit flagship.
+CONTACT: 4 channel cards, cream form, hours + floor list, FAQ.
+BLOG: centered title, 21:9 hero, "In brief" box, gold drop cap, author, comments, sticky sidebar (TOC, products, dark stylist CTA), related, shop the story.
+SALE: invitation card with double gold frame, countdown, copy code MADISON25, 3 tiers (middle dark), sale by floor, slider, grid, terms FAQ.`,
+  },
+];
+
+/**
+ * The first example, for the places that need ONE.
+ *
+ * `measure-design-cost.ts` prices the design stage on a brief and has to price
+ * it on the same brief every time, or two runs are not comparable. Named rather
+ * than written as `[0].text` at the call site so what it means — the default,
+ * the one the button opens first — is said once here.
+ */
+export const PROMPT_EXAMPLE = PROMPT_EXAMPLES[0].text;
 
 
 /**

@@ -92,7 +92,7 @@ export const DETAIL_OF: Record<string, DetailSpec> = {
 
   [EV.briefViewed]: { propKey: null, unit: "store", partLabel: "" },
   [EV.briefModeSelected]: { propKey: "mode", unit: "store", partLabel: "mode" },
-  [EV.briefExampleClicked]: { propKey: null, unit: "store", partLabel: "" },
+  [EV.briefExampleClicked]: { propKey: "which", unit: "store", partLabel: "example" },
   [EV.briefEdit]: { propKey: null, unit: "store", partLabel: "" },
 
   [EV.generateStarted]: { propKey: null, unit: "store", partLabel: "" },
