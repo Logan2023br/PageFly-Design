@@ -336,8 +336,8 @@ const SHOWCASE_FRAMES: Record<string, string> = {
    rather than imported from there so this file names them the way a chart
    reader needs; the ids are what has to match, and the test asserts it. */
 const PROMPT_EXAMPLE_LABELS: Record<string, string> = {
-  hexwood: "Dark & loud (Halloween)",
-  hollis: "Light & quiet (luxury)",
+  hexwood: "Example 1 · Halloween",
+  hollis: "Example 2 · luxury",
 };
 
 const SHOWCASE_SLUGS: Record<string, string> = {
@@ -910,7 +910,7 @@ function buildView(
            a quiet ivory department store — and which one somebody opens is a
            reading of what kind of store is arriving that no other event on this
            screen can give. */
-        metric("example", "Example opened", "read a sample brief first", EV.briefExampleClicked, "The “Dark & loud” / “Light & quiet” pills beside the description box", {
+        metric("example", "Example opened", "read a sample brief first", EV.briefExampleClicked, "The “Example 1” / “Example 2” pills beside the description box", {
           unit: "store",
           split: slices(rows, EV.briefExampleClicked, "which", PROMPT_EXAMPLE_LABELS),
           splitKind: "control",

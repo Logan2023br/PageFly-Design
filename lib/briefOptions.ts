@@ -258,9 +258,10 @@ export const MAX_PROMPT_CHARS = 3000;
  */
 export type PromptExample = {
   id: string;
-  /* What the button says. NOT "Example 1" and "Example 2" — a number tells a
-     merchant nothing about which one is closer to their shop, and the whole
-     reason there are two is that they are different KINDS of store. */
+  /* What the button says. The number is the label and the BLURB carries what
+     kind of store it is — shown on hover and again at the top of the dialog, so
+     a merchant still learns which one is nearer their shop without the button
+     itself having to argue for it. */
   label: string;
   /** one line in the dialog header, so the reader knows what they are copying */
   blurb: string;
@@ -270,7 +271,7 @@ export type PromptExample = {
 export const PROMPT_EXAMPLES: PromptExample[] = [
   {
     id: "hexwood",
-    label: "Dark & loud",
+    label: "Example 1",
     blurb:
       "A Halloween superstore: near-black grounds, one hot accent, heavy motion, seven pages.",
     text: `7 PageFly pages for HEXWOOD, a US Halloween superstore (2009, Columbus OH, 42 stores): costumes, decor, candy, props, masks, pet costumes, party. Voice playful, confident, concrete. Pages: Home, Product, Collection, About, Contact, Blog, "Fright Night" sale. No header/footer.
@@ -289,7 +290,7 @@ SALE: jack-o'-lantern hero + countdown + copy-code BOO25, 3 offer tiers, diagona
   },
   {
     id: "hollis",
-    label: "Light & quiet",
+    label: "Example 2",
     blurb:
       "A luxury department store: ivory and gold, serif headings, restraint, seven pages.",
     text: `7 PageFly pages for HOLLIS & ROWE, a US luxury department store (Madison Ave, est. 1926): home, women, men, fine jewelry, beauty, handbags, tabletop, gifts. Voice calm, specific. Pages: Home, Product, Collection, About, Contact, Blog, Private Sale. No header/footer.

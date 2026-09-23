@@ -67,13 +67,12 @@ export function PromptExampleButton() {
   return (
     <>
       {/* ====================================================================
-          ONE BUTTON PER EXAMPLE, AND THEY ARE NAMED FOR WHAT THEY ARE.
+          ONE BUTTON PER EXAMPLE.
 
-          "Example 1" and "Example 2" would tell a merchant nothing about which
-          to open, and the only reason there are two is that they are opposite
-          kinds of store — a dark, loud Halloween shop and a quiet ivory
-          department store. Named that way, a merchant picks the one nearer
-          their own and copies less that has to be undone.
+          Numbered, because that is what they are called. What KIND of store
+          each one is lives in the blurb — on the button's tooltip and again as
+          the first line of the dialog — so somebody who opened the wrong one
+          finds out in the header rather than after 3,000 characters.
 
           `which` rides on the event so the two are counted apart. Which example
           people open says what kind of store is actually arriving, and a single
