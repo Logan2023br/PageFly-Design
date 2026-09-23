@@ -298,13 +298,9 @@ const LANDING_NAV_LABELS: Record<string, string> = {
    showcase deck, so which of these appear depends on what has been built —
    every one the catalogue knows is named so none can render as a raw key. */
 const SHOWCASE_FILTERS: Record<string, string> = {
-  all: "All pages",
-  core: "Core store pages",
-  landing: "Landing pages",
-  trust: "Trust pages",
-  content: "Content pages",
-  conversion: "Conversion pages",
-  account: "Account pages",
+  all: "Both stores",
+  hexwood: "Hexwood (dark)",
+  hollis: "Hollis & Rowe (light)",
 };
 
 const HOW_STEPS: Record<string, string> = {
@@ -818,8 +814,13 @@ function buildView(
         metric("gallery_type", "…which page type", "the same presses, split by what was opened", EV.galleryOpened, "The same presses as the tile before it, counted by which page type was opened", {
           split: slices(rows, EV.galleryOpened, "page_type", {}),
         }),
-        metric("filter", "Gallery filter used", "asked to see one kind of page", EV.showcaseFilter, "The row of pills above the gallery grid", {
-          split: slices(rows, EV.showcaseFilter, "category", SHOWCASE_FILTERS),
+        /* The pills pick a STORE now, not a page category — the gallery shows
+           two sample sets and the row narrows to one of them. `category` was
+           the old shape and is left out of the split rather than merged: a
+           press recorded under either key meant something different, and one
+           tile claiming otherwise would be a number nobody could act on. */
+        metric("filter", "Gallery filter used", "narrowed to one of the two stores", EV.showcaseFilter, "The “Both stores” / store-name pills above the gallery grid", {
+          split: slices(rows, EV.showcaseFilter, "set", SHOWCASE_FILTERS),
           splitKind: "control",
         }),
         /* ==================================================================

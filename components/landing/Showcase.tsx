@@ -19,9 +19,14 @@ import { useSeen } from "./useSeen";
 
    Two sets answer it, and only by being unalike: Hexwood is near-black and
    loud, Hollis & Rowe is ivory and quiet, and nothing is shared between them
-   except the pipeline. Side by side they say the brief decided the look. Shown
-   one at a time behind a filter they would not, because nobody compares things
-   they have to click between.
+   except the pipeline. Side by side they say the brief decided the look.
+
+   SO "BOTH" IS THE DEFAULT, AND THE PILLS ARE A NARROWING. An earlier cut had
+   no pills at all, on the reasoning that nobody compares things they have to
+   click between — true, and it is why picking one is not where the row starts.
+   But fourteen cards is a long scroll for somebody who has already decided
+   which store is nearer their own, and a filter that begins on "Both" costs
+   that reader nothing while giving this one a way through.
 
    ONE SET USED TO BE A QUERY. The gallery drew from `/api/showcase` — the demo
    store's most recent run — while the rail above drew from the curated list, so
@@ -32,10 +37,20 @@ import { useSeen } from "./useSeen";
 
 export function Showcase() {
   const seen = useSeen<HTMLElement>("showcase");
+  /* `null` is "both", which is where it starts — see the note above. */
+  const [only, setOnly] = useState<string | null>(null);
   /* The set AND the page, because both are needed to find the files and every
      set has a page called Home. A slug alone would open whichever one the code
      happened to look in first. */
   const [open, setOpen] = useState<{ set: ShowcaseSet; page: ShowcasePage } | null>(null);
+
+  const shown = only === null ? SHOWCASE_SETS : SHOWCASE_SETS.filter((s) => s.id === only);
+
+  const pill = (active: boolean) =>
+    "rounded-pf-pill border px-4 py-[9px] text-[14px] transition-colors " +
+    (active
+      ? "border-pf-border-hi bg-pf-card-hi font-semibold text-pf-text"
+      : "border-pf-border font-medium text-pf-muted hover:border-pf-border-hi hover:text-pf-text");
 
   return (
     <section
@@ -49,8 +64,53 @@ export function Showcase() {
           sub="Seven pages each, from one short brief each — same voice, same colours, same product facts across a set, and nothing shared between the two. Open any of them, read it at three screen sizes, and take the file."
         />
 
-        {SHOWCASE_SETS.map((set, at) => (
-          <div key={set.id} className={at === 0 ? "w-full" : "mt-14 w-full"}>
+        {/* ==================================================================
+            THE ROW OF PILLS, AND THE ONE THAT LEAVES.
+
+            `Both` first, because comparing is what the section is for and a
+            filter that starts narrowed hides the argument. Then a pill per
+            store. Then the dashed one, which is the only one that navigates:
+            the row reads as a set of examples ending in "…or yours", which is
+            the whole point of showing examples. A solid pill there would read
+            as a third filter and quietly leave the page instead.
+            ================================================================== */}
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              track(EV.showcaseFilter, { set: "all" });
+              setOnly(null);
+            }}
+            className={pill(only === null)}
+          >
+            Both stores
+          </button>
+          {SHOWCASE_SETS.map((set) => (
+            <button
+              key={set.id}
+              type="button"
+              title={set.blurb}
+              onClick={() => {
+                track(EV.showcaseFilter, { set: set.id });
+                setOnly(set.id);
+              }}
+              className={pill(only === set.id)}
+            >
+              {set.name}
+            </button>
+          ))}
+          <Link
+            href="/design"
+            onClick={() => track(EV.ctaClicked, { location: "showcase_pill" })}
+            className="inline-flex items-center gap-1.5 rounded-pf-pill border border-dashed border-pf-primary-hi/50 px-4 py-[9px] text-[14px] font-semibold text-pf-primary-hi transition-colors hover:border-pf-primary-hi hover:text-pf-text"
+          >
+            Your store
+            <Icon name="ArrowRight" size={13} />
+          </Link>
+        </div>
+
+        {shown.map((set, at) => (
+          <div key={set.id} className={at === 0 ? "mt-9 w-full" : "mt-14 w-full"}>
             {/* THE SET IS NAMED ABOVE ITS ROW. Both stores have a page called
                 Home, so a grid of fourteen cards with no headings is fourteen
                 cards a reader has to sort by eye. The rule and the name do that

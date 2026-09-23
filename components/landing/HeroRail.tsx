@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { EV, track } from "@/lib/analytics";
-import { HERO_SET, type ShowcasePage } from "@/lib/showcasePages";
+import { HERO_RAIL_PAGES, HERO_SET, type ShowcasePage } from "@/lib/showcasePages";
 import { Icon } from "../ui";
 import { PageThumb, PageViewer } from "./PagePreview";
 
@@ -10,16 +10,19 @@ import { PageThumb, PageViewer } from "./PagePreview";
    THE WHOLE SET, UNDER THE HERO.
 
    The promise above them is "every page back", and a claim about a SET cannot
-   be made by one screenshot. Seven side by side is the claim itself: same
-   voice, same colours, seven different jobs — including the blog and the sale
-   page, which are the two a merchant is least sure this can do, and so the two
-   whose absence left the most doubt in place.
+   be made by one screenshot. Five side by side is the claim itself: same voice,
+   same colours, five different jobs — the pages a shop cannot open without.
+
+   FIVE, NOT ALL SEVEN. Past a point a row of cards reads as a list rather than
+   a set, and the blog and the sale page are the two a visitor is least likely
+   to be checking for in the first three seconds. Both are in the gallery below,
+   which is where somebody looking for them goes. `HERO_RAIL_PAGES` names them.
 
    ONE SET HERE, THOUGH THERE ARE TWO. This strip is glanced at under a
-   headline and its subject is COMPLETENESS — seven jobs, one voice. The
-   gallery further down is where the second set belongs, because its subject is
-   the other question: whether the match is yours or a house style. Fourteen
-   cards here would be 80px each and answer neither.
+   headline and its subject is COMPLETENESS — the jobs a store needs, in one
+   voice. The gallery further down is where the second set belongs, because its
+   subject is the other question: whether the match is yours or a house style.
+   Both sets here would be fourteen cards at 80px and answer neither.
 
    The card and the panel it opens live in `PagePreview`, shared with the
    gallery further down the page. See the note there for why they were lifted
@@ -43,16 +46,16 @@ export function HeroRail() {
           So above `lg` the cards are FLEXIBLE: they share the row, shrink to
           whatever it is, and stop growing at 200px. There is no width at which
           they overflow, so there is nothing to scroll and `justify-center` can
-          do its job. Seven on a 1,200px row is about 157px each.
+          do its job. Five on a 1,200px row is the full 200px each.
 
-          BELOW `lg` IT STILL SCROLLS, on purpose. Seven 3:4 cards shrunk into a
-          375px phone are 45px wide — a stamp that cannot be told from the next
+          BELOW `lg` IT STILL SCROLLS, on purpose. Five 3:4 cards shrunk into a
+          375px phone are 63px wide — a stamp that cannot be told from the next
           one, with a label that does not fit. A strip you push sideways is the
           honest answer at that width, bleeding to the edge of the screen so the
           cut-off card reads as "more over here" rather than as a gutter.
           ==================================================================== */}
       <div className="pfd-scroll-thin -mx-5 mt-12 flex w-full items-end gap-3 overflow-x-auto px-5 pb-3 [justify-content:safe_center] sm:-mx-8 sm:gap-4 sm:px-8 lg:mx-0 lg:justify-center lg:overflow-visible lg:px-0 lg:pb-0">
-        {HERO_SET.pages.map((page) => (
+        {HERO_RAIL_PAGES.map((page) => (
           <figure
             key={page.slug}
             className="group relative m-0 w-[140px] shrink-0 overflow-hidden rounded-pf-md border border-pf-border-hi bg-pf-bg-alt transition-colors hover:border-pf-primary-hi sm:w-[170px] lg:w-auto lg:min-w-0 lg:max-w-[200px] lg:flex-1 lg:shrink"

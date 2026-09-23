@@ -134,7 +134,7 @@ export const DETAIL_OF: Record<string, DetailSpec> = {
   [EV.ctaClicked]: { propKey: "location", unit: "store", partLabel: "control" },
   [EV.landingNav]: { propKey: "to", unit: "store", partLabel: "anchor" },
   [EV.landingLinkClicked]: { propKey: "to", unit: "store", partLabel: "link" },
-  [EV.showcaseFilter]: { propKey: "category", unit: "store", partLabel: "pill" },
+  [EV.showcaseFilter]: { propKey: "set", unit: "store", partLabel: "store" },
   [EV.howStepOpened]: { propKey: "step", unit: "store", partLabel: "step" },
   [EV.galleryOpened]: { propKey: "from", unit: "store", partLabel: "where from" },
   [EV.showcaseFileDownloaded]: { propKey: "page_type", unit: "store", partLabel: "page" },

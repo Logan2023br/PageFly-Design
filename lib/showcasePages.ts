@@ -136,6 +136,28 @@ export const SHOWCASE_SETS: ShowcaseSet[] = [
  */
 export const HERO_SET = SHOWCASE_SETS[0];
 
+/* ==========================================================================
+   FIVE OF THE SEVEN, IN THE STRIP UNDER THE HERO.
+
+   The rail is glanced at, and its job is to show that a STORE arrived — the
+   pages a shop cannot open without. Seven cards is seven, which past a point
+   reads as a list rather than a set, and the two it drops are the two a visitor
+   is least likely to be checking for in the first three seconds.
+
+   They are not lost: the gallery below shows every page of both sets, which is
+   where somebody who wants the blog or the sale page goes looking.
+
+   NAMED RATHER THAN SLICED. `pages.slice(0, 5)` gives the same five today and
+   silently gives different ones the moment anybody reorders the set for an
+   unrelated reason — and the change would show up as a different hero, with
+   nothing in the diff that mentions the hero.
+   ========================================================================== */
+const RAIL_SLUGS = ["home", "product-page", "collection-page", "about-us", "contact"];
+
+export const HERO_RAIL_PAGES: ShowcasePage[] = RAIL_SLUGS.flatMap(
+  (slug) => HERO_SET.pages.find((p) => p.slug === slug) ?? [],
+);
+
 /** Where the rendered preview lives, under `public/`. */
 export function htmlFor(set: ShowcaseSet, page: ShowcasePage): string {
   return `/showcase/${set.id}/${page.slug}.html`;
