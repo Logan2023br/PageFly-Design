@@ -615,7 +615,17 @@ export type LiveBuild = {
   filename: string;
   sections: number;
   built: number;
-  usage: { input: number; output: number };
+  /**
+   * `cached` is the part of `input` the vendor served from its prefix cache —
+   * the number that says whether the ordering above is working.
+   *
+   * `reasoning` is the part of `output` the model spent thinking rather than
+   * answering, and it is the one that matters most: on a measured export the
+   * output was 81% of the bill, so what the model is billing as thought is the
+   * largest single line in it. The provider has always returned it per call and
+   * this path was dropping it.
+   */
+  usage: { input: number; output: number; cached: number; reasoning: number };
   failures: { index: number; reason: string }[];
 };
 
@@ -645,17 +655,36 @@ export async function pageflyFromHtmlLive(
   const props = customProps(head);
   const bands = splitSections(html);
 
-  const usage = { input: 0, output: 0 };
+  const usage = { input: 0, output: 0, cached: 0, reasoning: 0 };
   const failures: { index: number; reason: string }[] = [];
 
   const results = await Promise.all(
     bands.map(async (band, index) => {
+      /* ==================================================================
+         THE STYLESHEET FIRST, AND THAT IS THE WHOLE CHANGE.
+
+         Every band call sends the same two things — the skills and this
+         page's `<head>` — and one thing that differs. A vendor caches a
+         PREFIX, so whatever differs has to come last or nothing before it
+         can be reused.
+
+         It was the other way round. `Band 3 of 10` sat at the top of the
+         user message, which made the first line of every call different and
+         put the 8,000-token stylesheet behind it, where the cache could
+         never reach it. The skills are in the system message and were fine;
+         the stylesheet was being paid for at full price on every band of
+         every export, and on a page whose head is 33 KB that is most of the
+         bill.
+
+         Nothing about what the model receives has changed — the same three
+         pieces, the same words. Only the order, and only so the first two
+         are byte-identical across the calls that share them. */
       const user = [
-        `Band ${index + 1} of ${bands.length} of one finished page.`,
-        "",
         "THE PAGE'S STYLESHEET — every class the markup uses is defined here:",
         "",
         head,
+        "",
+        `Band ${index + 1} of ${bands.length} of one finished page.`,
         "",
         "THE BAND:",
         "",
@@ -674,6 +703,8 @@ export async function pageflyFromHtmlLive(
         });
         usage.input += answer.usage.input;
         usage.output += answer.usage.output;
+        usage.cached += answer.usage.cached ?? 0;
+        usage.reasoning += answer.reasoning ?? 0;
 
         const parsed = firstObject(answer.text) as { section?: unknown } | null;
         /* Before validation, so the schema sees the value the mockup states

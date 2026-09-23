@@ -35,7 +35,21 @@ import { deepseekAccumulator, sseDecoder } from "./sse";
    which is how a spend on an expensive model is kept legible on a bill.
    ========================================================================== */
 
-export type Usage = { input: number; output: number };
+/**
+ * `cached` is the part of `input` the vendor served from its prefix cache, and
+ * it is the only way to tell a prompt that is being reused from one that merely
+ * looks like it is.
+ *
+ * DeepSeek prices a cache hit at $0.006/M against $0.30/M for a miss — fifty
+ * times — so "is the cache working" is the single biggest question about what
+ * an export costs, and before this it was unanswerable from our side: the
+ * vendor returns the split on every call and this file was throwing it away.
+ *
+ * Null where the provider does not report it. Anthropic reports the same thing
+ * under two different keys and is not read here yet, so it stays null there
+ * rather than being guessed at.
+ */
+export type Usage = { input: number; output: number; cached?: number | null };
 
 /**
  * `truncated` is the difference between "the model could not do it" and "the
@@ -514,6 +528,9 @@ function deepseekProvider(role: Role): Provider {
           prompt_tokens?: number;
           completion_tokens?: number;
           completion_tokens_details?: { reasoning_tokens?: number };
+          /* DeepSeek splits the input for us; both keys are on every answer. */
+          prompt_cache_hit_tokens?: number;
+          prompt_cache_miss_tokens?: number;
         };
       };
 
@@ -524,6 +541,7 @@ function deepseekProvider(role: Role): Provider {
         usage: {
           input: body.usage?.prompt_tokens ?? 0,
           output: body.usage?.completion_tokens ?? 0,
+          cached: body.usage?.prompt_cache_hit_tokens ?? null,
         },
       };
     },

@@ -82,9 +82,36 @@ export async function POST(req: Request): Promise<Response> {
           );
     const bytes = new Uint8Array(await built.blob.arrayBuffer());
 
+    /* CACHED, NOT JUST TOTAL. The input is mostly the same stylesheet, sent
+       once per band; whether the vendor served it from its own cache is a
+       fifty-fold difference in what that input costs, and the total alone
+       cannot show it. Only the live path reports the split — the skill path
+       has no `cached` and says nothing rather than claiming zero. */
+    const usage = built.usage as {
+      input: number;
+      output: number;
+      cached?: number;
+      reasoning?: number;
+    };
+    const cachedNote =
+      typeof usage.cached !== "number"
+        ? ""
+        : usage.cached > 0
+          ? ` (${Math.round((usage.cached / Math.max(1, usage.input)) * 100)}% of input cached)`
+          : " (no cached input)";
+    /* And what the output was spent on. Thinking is billed at the answer's
+       rate, so a band that reasoned for 20,000 tokens and wrote 2,000 costs
+       eleven times what the page it produced would suggest. */
+    const thoughtNote =
+      typeof usage.reasoning === "number" && usage.reasoning > 0
+        ? ` · ${Math.round((usage.reasoning / Math.max(1, usage.output)) * 100)}% of output was reasoning`
+        : "";
+
     console.log(
       `[pagefly] ${name} · ${mode} · ${built.built}/${built.sections} sections · ` +
         `${bytes.length.toLocaleString()} bytes · in ${built.usage.input} out ${built.usage.output}` +
+        cachedNote +
+        thoughtNote +
         (built.failures.length
           ? ` · ${built.failures.length} failed: ${built.failures[0].reason}`
           : ""),
