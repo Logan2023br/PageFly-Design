@@ -191,14 +191,21 @@ const COPY = {
        somebody who has not signed up, and the reader of this screen signed up,
        signed in, filled in a brief and is watching their own pages build. Told
        there is no password to set up, they can only wonder what the one they
-       typed was for. */
+       typed was for. And the whole row it sits in is hidden on that screen now
+       — see the closing block below — so this is null for the reader of the
+       type rather than for the renderer. */
     note: null,
-    /* THE LIBRARY, NOT THE BRIEF. Reading this row, "yours" means the pages
-       this merchant already has — and they are three pills along from three
-       sample stores, so the promised thing is a store to look at, not a form to
-       fill in. `/design` would also have been the one link on the screen that
-       walks away from the build it is sitting under. */
-    storeHref: "/design/library",
+    /* NO PILL AT ALL. It pointed at `/design`, which is the route the build
+       screen IS, so pressing it re-rendered the same build and jumped to the
+       top — a control that scrolled and did nothing else.
+
+       Pointing it at the library would have made it work, and it still would
+       not have belonged: every other pill in that row narrows the grid, and one
+       that silently navigates away is a different kind of thing wearing the
+       same shape. On the front door that is a good ending to a row of examples
+       — "…or yours". To somebody whose own pages are being built as they read,
+       it is an invitation to somewhere they already are. */
+    storeHref: null,
   },
 } as const;
 
@@ -290,14 +297,16 @@ export function Showcase({ place = "landing" }: { place?: "landing" | "building"
               {set.name}
             </button>
           ))}
-          <Link
-            href={copy.storeHref}
-            onClick={() => track(EV.ctaClicked, { location: "showcase_pill", from: place })}
-            className="inline-flex items-center gap-1.5 rounded-pf-pill border border-dashed border-pf-primary-hi/50 px-4 py-[9px] text-[14px] font-semibold text-pf-primary-hi transition-colors hover:border-pf-primary-hi hover:text-pf-text"
-          >
-            Your store
-            <Icon name="ArrowRight" size={13} />
-          </Link>
+          {copy.storeHref && (
+            <Link
+              href={copy.storeHref}
+              onClick={() => track(EV.ctaClicked, { location: "showcase_pill", from: place })}
+              className="inline-flex items-center gap-1.5 rounded-pf-pill border border-dashed border-pf-primary-hi/50 px-4 py-[9px] text-[14px] font-semibold text-pf-primary-hi transition-colors hover:border-pf-primary-hi hover:text-pf-text"
+            >
+              Your store
+              <Icon name="ArrowRight" size={13} />
+            </Link>
+          )}
         </div>
 
         {shown.map((set, at) => (
@@ -374,17 +383,38 @@ export function Showcase({ place = "landing" }: { place?: "landing" | "building"
           </div>
         ))}
 
-        <div className="mt-10 flex flex-wrap items-center justify-center gap-x-[18px] gap-y-3">
-          <Link
-            href="/design"
-            onClick={() => track(EV.ctaClicked, { location: "showcase" })}
-            className="inline-flex min-h-12 items-center gap-2.5 rounded-pf-md bg-pf-primary px-6 py-3.5 text-[16px] font-semibold text-white shadow-pf-button transition-colors duration-150 hover:bg-pf-primary-hi"
-          >
-            Design pages for my store
-            <Icon name="ArrowRight" size={15} />
-          </Link>
-          {copy.note && <span className="text-[13.5px] text-pf-faint">{copy.note}</span>}
-        </div>
+        {/* ==================================================================
+            THE CLOSING ASK, AND THERE IS NOTHING TO ASK WHILE A BUILD RUNS.
+
+            "Design pages for my store" pointed at `/design`, which is the route
+            the build screen IS — so on that screen it re-rendered the same build
+            and the browser jumped to the top. The same defect the "Your store"
+            pill had, and here it cannot be fixed by changing the destination:
+            the action is to go to the brief, and the brief is unreachable until
+            the build finishes.
+
+            So the whole row goes there. Both halves were aimed at somebody who
+            is not building — the button at somebody who has not started, the
+            line beside it ("no card, no password") at somebody who has not
+            signed up. The reader of that screen did both, minutes ago.
+
+            What the section is FOR is unchanged either way: three finished
+            stores, free, with the pills, the previews and the export buttons
+            all working.
+            ================================================================== */}
+        {place === "landing" && (
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-x-[18px] gap-y-3">
+            <Link
+              href="/design"
+              onClick={() => track(EV.ctaClicked, { location: "showcase" })}
+              className="inline-flex min-h-12 items-center gap-2.5 rounded-pf-md bg-pf-primary px-6 py-3.5 text-[16px] font-semibold text-white shadow-pf-button transition-colors duration-150 hover:bg-pf-primary-hi"
+            >
+              Design pages for my store
+              <Icon name="ArrowRight" size={15} />
+            </Link>
+            {copy.note && <span className="text-[13.5px] text-pf-faint">{copy.note}</span>}
+          </div>
+        )}
       </div>
 
       {open && (
