@@ -176,6 +176,9 @@ const COPY = {
     /* The line beside the closing button. A signup pitch, which is right for a
        stranger reading the front door. */
     note: "First 3 pages free — no card, no password.",
+    /* The dashed pill at the end of the row. A stranger has no store here yet,
+       so "yours" is the brief — the place where one gets made. */
+    storeHref: "/design",
   },
   building: {
     eyebrow: "Free while you wait",
@@ -190,6 +193,12 @@ const COPY = {
        there is no password to set up, they can only wonder what the one they
        typed was for. */
     note: null,
+    /* THE LIBRARY, NOT THE BRIEF. Reading this row, "yours" means the pages
+       this merchant already has — and they are three pills along from three
+       sample stores, so the promised thing is a store to look at, not a form to
+       fill in. `/design` would also have been the one link on the screen that
+       walks away from the build it is sitting under. */
+    storeHref: "/design/library",
   },
 } as const;
 
@@ -282,7 +291,7 @@ export function Showcase({ place = "landing" }: { place?: "landing" | "building"
             </button>
           ))}
           <Link
-            href="/design"
+            href={copy.storeHref}
             onClick={() => track(EV.ctaClicked, { location: "showcase_pill", from: place })}
             className="inline-flex items-center gap-1.5 rounded-pf-pill border border-dashed border-pf-primary-hi/50 px-4 py-[9px] text-[14px] font-semibold text-pf-primary-hi transition-colors hover:border-pf-primary-hi hover:text-pf-text"
           >
