@@ -40,7 +40,7 @@ const onDisk = (url: string) => join(ROOT, "public", url.replace(/^\//, ""));
 
 console.log("\nthe sets");
 
-check(SHOWCASE_SETS.length >= 2, "there are two sets", String(SHOWCASE_SETS.length));
+check(SHOWCASE_SETS.length >= 2, "there is more than one set", String(SHOWCASE_SETS.length));
 check(
   new Set(SHOWCASE_SETS.map((s) => s.id)).size === SHOWCASE_SETS.length,
   "no two share an id — the id is the directory and the analytics key",
@@ -178,25 +178,39 @@ for (const set of SHOWCASE_SETS) {
   );
 }
 
-console.log("\nthe two sets are genuinely different stores");
+console.log("\nevery pair of sets is a genuinely different store");
 
-/* Two sets that look alike are one set with extra scrolling — the whole reason
-   the second is there is to show that the LOOK came from the brief. */
+/* ==========================================================================
+   TWO SETS THAT LOOK ALIKE ARE ONE SET WITH EXTRA SCROLLING. The whole reason
+   there is more than one is to show that the LOOK came from the brief, and a
+   pair that shares a palette says the opposite of that out loud.
+
+   EVERY PAIR, not the first two. With three sets a check on `[0]` and `[1]`
+   leaves a third that could be a near-copy of either and pass — and the check
+   would still read as though it had been verified.
+   ========================================================================== */
 {
-  const [a, b] = SHOWCASE_SETS;
-  const hexes = (set: (typeof SHOWCASE_SETS)[number]) => {
+  const palette = (set: (typeof SHOWCASE_SETS)[number]) => {
     const home = readFileSync(onDisk(htmlFor(set, set.pages[0])), "utf8");
     return new Set((home.match(/#[0-9a-f]{6}\b/gi) ?? []).map((h) => h.toLowerCase()));
   };
-  const ha = hexes(a);
-  const hb = hexes(b);
-  const shared = [...ha].filter((h) => hb.has(h)).length;
-  const overlap = shared / Math.min(ha.size, hb.size);
-  check(
-    overlap < 0.5,
-    "their home pages share under half their colours",
-    `${Math.round(overlap * 100)}%`,
-  );
+  const palettes = new Map(SHOWCASE_SETS.map((s) => [s.id, palette(s)]));
+
+  for (let i = 0; i < SHOWCASE_SETS.length; i++) {
+    for (let j = i + 1; j < SHOWCASE_SETS.length; j++) {
+      const a = SHOWCASE_SETS[i];
+      const b = SHOWCASE_SETS[j];
+      const pa = palettes.get(a.id)!;
+      const pb = palettes.get(b.id)!;
+      const shared = [...pa].filter((h) => pb.has(h)).length;
+      const overlap = shared / Math.max(1, Math.min(pa.size, pb.size));
+      check(
+        overlap < 0.5,
+        `${a.id} vs ${b.id}: under half their home-page colours are shared`,
+        `${Math.round(overlap * 100)}%`,
+      );
+    }
+  }
 }
 
 console.log("\nthe analytics screen can name every page");

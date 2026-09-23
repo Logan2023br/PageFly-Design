@@ -24,11 +24,16 @@
 
    Both are written by `scripts/make-showcase-pages.ts` from real exports.
 
-   TWO SETS, AND THAT IS THE ARGUMENT THE GALLERY MAKES. One set proves the
-   pages of a store match each other. Two prove the thing a merchant actually
-   doubts — that the match is THEIRS and not a house style. Hexwood is
-   near-black and loud; Hollis & Rowe is ivory and quiet; nothing about them is
-   shared except the pipeline that produced them, which is the point.
+   MORE THAN ONE SET, AND THAT IS THE ARGUMENT THE GALLERY MAKES. One set proves
+   the pages of a store match each other. Several prove the thing a merchant
+   actually doubts — that the match is THEIRS and not a house style. Hexwood is
+   near-black and loud, Hollis & Rowe is ivory and quiet, Creature Feature is
+   cream and oxblood with a poster's swagger; nothing is shared between them
+   except the pipeline that produced them, which is the point.
+
+   TWO WOULD HAVE BEEN A CONTRAST. Three is closer to a range, and a range is
+   what answers "would it do MINE" — two examples invite a reader to place
+   themselves at one end or the other, and the honest answer is neither.
 
    THE RAIL SHOWS ONE. It sits under a headline, is glanced at, and is about
    completeness — seven jobs, one voice. Two sets there would be fourteen cards
@@ -121,6 +126,40 @@ export const SHOWCASE_SETS: ShowcaseSet[] = [
       {
         slug: "private-sale",
         label: "Private sale",
+        blurb: "A dated offer: countdown, tiers and a code, built to end.",
+      },
+    ],
+  },
+  {
+    id: "creature",
+    name: "Creature Feature Co.",
+    blurb: "A 1978 monster-movie shop — warm cream and oxblood, serif, a poster's swagger.",
+    pages: [
+      { slug: "home", label: "Home", blurb: "The front page — what the store is, in one scroll." },
+      {
+        slug: "product-page",
+        label: "Product",
+        blurb: "One product, with the facts an order needs before it is placed.",
+      },
+      {
+        slug: "collection-page",
+        label: "Collection",
+        blurb: "A category, laid out so a browser can choose.",
+      },
+      { slug: "about-us", label: "About", blurb: "Who is behind the shop, and why it exists." },
+      {
+        slug: "contact",
+        label: "Contact",
+        blurb: "How to reach a person, and what to expect back.",
+      },
+      {
+        slug: "blog-article",
+        label: "Blog article",
+        blurb: "A piece worth reading, with the products it mentions beside it.",
+      },
+      {
+        slug: "midnight-screening-sale",
+        label: "Sale",
         blurb: "A dated offer: countdown, tiers and a code, built to end.",
       },
     ],

@@ -301,6 +301,7 @@ const SHOWCASE_FILTERS: Record<string, string> = {
   all: "All",
   hexwood: "Hexwood (dark)",
   hollis: "Hollis & Rowe (light)",
+  creature: "Creature Feature (cream)",
 };
 
 const HOW_STEPS: Record<string, string> = {
@@ -341,6 +342,7 @@ const PROMPT_EXAMPLE_LABELS: Record<string, string> = {
 const SHOWCASE_SETS_LABELS: Record<string, string> = {
   hexwood: "Hexwood (dark)",
   hollis: "Hollis & Rowe (light)",
+  creature: "Creature Feature (cream)",
 };
 
 /* Every page slug across both sets — see `lib/showcasePages.ts`. Written out
@@ -359,6 +361,7 @@ const SHOWCASE_SLUGS: Record<string, string> = {
   "blog-article": "Blog article",
   "private-sale": "Private sale",
   "fright-night-sale": "Sale",
+  "midnight-screening-sale": "Sale",
 };
 
 /* WHERE THE INSTALL BUTTON WAS PRESSED. One button, many placements — see
