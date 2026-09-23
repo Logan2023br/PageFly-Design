@@ -346,6 +346,8 @@ const SHOWCASE_SLUGS: Record<string, string> = {
   "collection-page": "Collection",
   "about-us": "About",
   contact: "Contact",
+  "blog-article": "Blog article",
+  "private-sale": "Private sale",
 };
 
 /* WHERE THE INSTALL BUTTON WAS PRESSED. One button, many placements — see

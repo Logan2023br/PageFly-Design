@@ -1,11 +1,11 @@
 /* ==========================================================================
-   THE FIVE PAGES UNDER THE HERO.
+   THE PAGES ON THE FRONT DOOR.
 
    A LIST IN THE REPOSITORY, not a query. The rail used to take whatever the
    demo store's showcase run happened to hold, and that is the wrong source for
-   this particular claim: the line under it says "designed as one matching set",
-   and what arrived was four home pages and a collection — the same job five
-   times, which argues the opposite. A curated five is the claim being made.
+   the claim being made under it: "designed as one matching set". What arrived
+   was four home pages and a collection — the same job five times, which argues
+   the opposite. A curated set is the claim itself.
 
    The same reasoning `lib/collections/index.ts` gives for its sets, and the
    same reasoning `lib/showcase.ts` gives for compiling in a demo store: a value
@@ -24,6 +24,11 @@
 
    Both are written by `scripts/make-showcase-pages.ts` from a real export —
    see the note there on why that is a script and not a copy command.
+
+   SEVEN, WHICH IS THE WHOLE SET. The hero promises "every page back" and the
+   pages a store cannot open without are not five of them. Blog and the sale
+   page are the two a merchant is least sure this can do, so leaving them out
+   left the doubt in place.
    ========================================================================== */
 
 export type ShowcasePage = {
@@ -35,8 +40,8 @@ export type ShowcasePage = {
   blurb: string;
 };
 
-/* Ordered as a merchant meets them, not alphabetically: Home first because it
-   is the cover, then the two pages that sell, then the two that reassure. */
+/* Ordered as a merchant meets them: the cover first, then the two pages that
+   sell, then the two that reassure, then the two that are asked for last. */
 export const SHOWCASE_PAGES: ShowcasePage[] = [
   { slug: "home", label: "Home", blurb: "The front page — what the store is, in one scroll." },
   {
@@ -51,14 +56,24 @@ export const SHOWCASE_PAGES: ShowcasePage[] = [
   },
   { slug: "about-us", label: "About", blurb: "Who is behind the shop, and why it exists." },
   { slug: "contact", label: "Contact", blurb: "How to reach a person, and what to expect back." },
+  {
+    slug: "blog-article",
+    label: "Blog article",
+    blurb: "A piece worth reading, with the products it mentions beside it.",
+  },
+  {
+    slug: "private-sale",
+    label: "Private sale",
+    blurb: "A dated offer: countdown, tiers and a code, built to end.",
+  },
 ];
 
 /** Where the rendered preview lives, under `public/`. */
 export function htmlFor(page: ShowcasePage): string {
-  return `/showcase/hexwood/${page.slug}.html`;
+  return `/showcase/pages/${page.slug}.html`;
 }
 
 /** Where the importable file lives, under `public/`. */
 export function pageflyFor(page: ShowcasePage): string {
-  return `/showcase/hexwood/${page.slug}.pagefly`;
+  return `/showcase/pages/${page.slug}.pagefly`;
 }

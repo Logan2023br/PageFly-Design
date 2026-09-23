@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { InstallPageFlyButton } from "../pagefly/InstallPageFly";
 import { EV, track } from "@/lib/analytics";
-import type { PageMockup } from "@/lib/generate/types";
 import { cleanedUrl, inviteParams, loginParam, type Invite } from "@/lib/autoSignIn";
 import type { StoreAuthResponse } from "@/app/api/auth/store/route";
 import type { ProvisionResponse } from "@/app/api/auth/provision/route";
@@ -60,7 +59,6 @@ const NAV: { label: string; to: string }[] = [
 ];
 
 export function LandingScreen() {
-  const [pages, setPages] = useState<PageMockup[]>([]);
   /**
    * The signed-in store, or null.
    *
@@ -334,23 +332,21 @@ export function LandingScreen() {
     window.location.assign("/");
   };
 
-  useEffect(() => {
-    let alive = true;
-    fetch("/api/showcase")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (!alive || !data) return;
-        setPages(Array.isArray(data.pages) ? data.pages : []);
-      })
-      .catch(() => {
-        /* Nothing. The sections render nothing when they have nothing, which is
-           the whole failure plan: a front door that errors because a demo run
-           was deleted is worse than one with a section missing. */
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  /* ==========================================================================
+     THE GALLERY NO LONGER FETCHES ANYTHING.
+
+     It used to pull `/api/showcase` — the demo store's most recent run — while
+     the strip under the hero drew from the curated list in
+     `lib/showcasePages.ts`. So the page showed two different stores under one
+     heading claiming they were one matching set, and the contradiction was
+     invisible unless you knew which half came from where.
+
+     Both read that list now, so there is nothing left to load, nothing to fail,
+     and no first second of the visit where the gallery is empty. The endpoint
+     and everything behind it stay — `lib/showcase.ts` is still what a future
+     "recent builds" section would read — they are simply not what the front
+     door claims a matching set from.
+     ========================================================================== */
 
   return (
     <main className="pfd-root relative min-h-dvh overflow-x-clip bg-pf-bg text-pf-body">
@@ -660,7 +656,7 @@ export function LandingScreen() {
           the whole visit whenever the endpoint is down. A link that does
           nothing is worse than a section that is still loading. */}
       <div id="examples" className="scroll-mt-[72px]">
-        <Showcase pages={pages} />
+        <Showcase />
       </div>
       <WhatYouGet />
       <Comparison />
