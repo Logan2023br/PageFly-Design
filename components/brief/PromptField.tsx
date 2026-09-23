@@ -51,11 +51,25 @@ export function PromptField() {
          names the section, not after the box they have not filled in yet. */
       eyebrowAction={<PromptExampleButton />}
       title={quick ? "What should we build?" : "Anything else?"}
-      /* Both modes say the same thing now, and it is an instruction rather than
-         an aphorism. "The more specific, the less generic" is true and gives a
-         merchant nothing to do; the example gives them the structure, so the
-         help line's whole job is to send them to it. */
-      help="Please click the Example button to write yours in the right structure."
+      /* ====================================================================
+         AN INSTRUCTION, THEN WHAT IT COSTS TO IGNORE IT.
+
+         "The more specific, the less generic" is true and gives a merchant
+         nothing to do. The example gives them the structure, so the first half
+         sends them to it.
+
+         THE SECOND HALF IS THE PART THAT MAKES ANYONE GO. A merchant reading
+         only "write yours in the right structure" has been told there is a
+         right way and not what happens if they skip it — and skipping it is
+         free, takes no time, and produces a page. So the consequence is named:
+         the page still gets built, it just comes out worse, and that is the one
+         thing nobody finds out until fifteen minutes later.
+
+         Stated as "may" because it is true rather than a threat — a short brief
+         sometimes does fine, and a merchant who is told it always fails once
+         and sees it work will not believe the line again.
+         ==================================================================== */
+      help="Please click the Example button to write yours in the right structure. A brief that does not follow it may build pages that do not look good."
       aside={<Counter value={prompt.length} max={MAX_PROMPT_CHARS} />}
     >
       <div className="grid gap-3.5">
