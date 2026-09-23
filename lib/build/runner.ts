@@ -6,6 +6,7 @@ import { EV } from "../analytics";
 import { readReferences } from "../ai/refVision";
 import { decideStructure } from "../design/structure";
 import { deckPlanEnabled, planDeck } from "../design/deckPlan";
+import { prebuildFiles } from "../pagefly/prebuild";
 import { freeDesignEnabled, planSpecs, sectionSpecEnabled } from "../design/sectionSpec";
 import { verticalFor } from "../design/plan";
 import type { DeckOutcome } from "../design/deckPlan";
@@ -903,4 +904,10 @@ async function saveRun(
   const runPages: RunPageRecord[] = rows.map((r) => ({ runId: id, ...r }));
 
   await getRepo().saveRun(run, runPages).catch(() => {});
+
+  /* AND THE FILES, once the deck is on disk and not before: a conversion whose
+     run was never saved is a file nobody can ask for. Deliberately unawaited —
+     the merchant's build is finished, and this is work done for a download they
+     may never request. See `lib/pagefly/prebuild.ts`. */
+  void prebuildFiles(job.domain, pages).catch(() => {});
 }

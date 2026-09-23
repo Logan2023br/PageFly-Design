@@ -128,6 +128,37 @@ export type RunPageRecord = {
   index: number;
 };
 
+/* ==========================================================================
+   THE .PAGEFLY FILE ITSELF, BUILT ONCE AND KEPT.
+
+   Converting one mockup is a model call per band — about two minutes and
+   twenty cents — and until this existed the result was held in a variable in
+   the browser tab. Closing the tab lost it; reloading the results screen
+   converted the WHOLE DECK again, which is the single most expensive thing
+   this application did and nothing anywhere said so.
+
+   Kept per document, not per page slot. `keyForHtml` is the page's id plus a
+   hash of the mockup, so a rebuild under the same id writes a new key and the
+   old file is simply never asked for again — the file follows the document it
+   was made from rather than the slot the document is in.
+
+   BYTES, NOT BASE64 IN THE SNAPSHOT. A `.pagefly` is a zip; base64 in
+   `runs.snapshot` would have tripled a jsonb value that Postgres rewrites
+   whole on every save of the run, to carry something no reader of that value
+   wants. Its own table is read only when somebody downloads.
+   ========================================================================== */
+export type PageFileRecord = {
+  /** the store this was built for; two stores may hold the same document */
+  domain: string;
+  /** `keyForHtml(page.id, mockup)` — see `lib/pagefly/prepared.ts` */
+  key: string;
+  /** what the merchant downloads, exactly */
+  bytes: Uint8Array;
+  /** the name the download is given */
+  filename: string;
+  createdAt: string;
+};
+
 export type ReviewRecord = {
   domain: string;
   stars: number;
@@ -423,6 +454,13 @@ export type Repo = {
   lastRunAt(domain: string): Promise<string | null>;
 
   /* ---- reviews ---- */
+  /* ---- built files ---- */
+  /** Overwrites: a second build of the same document is the same document. */
+  savePageFile(file: PageFileRecord): Promise<void>;
+  getPageFile(domain: string, key: string): Promise<PageFileRecord | null>;
+  /** Which of these keys already have a file — one round trip, not N. */
+  pageFilesPresent(domain: string, keys: string[]): Promise<string[]>;
+
   getReview(domain: string): Promise<ReviewRecord | null>;
   saveReview(review: ReviewRecord): Promise<void>;
   /**

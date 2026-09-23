@@ -41,6 +41,11 @@ type Shape = {
   runs: RunRecord[];
   runPages: RunPageRecord[];
   reviews: ReviewRecord[];
+  /* BASE64, because this driver's whole store is one JSON file and a
+     `Uint8Array` does not survive `JSON.stringify` as anything you can read
+     back — it becomes an object keyed "0", "1", "2". Converted on the way in
+     and out, so the Repo contract is bytes on both drivers. */
+  pageFiles: { domain: string; key: string; base64: string; filename: string; createdAt: string }[];
   photos: PhotoRecord[];
   jobs: JobRecord[];
   training: TrainingItem[];
@@ -62,7 +67,7 @@ function geoAllows(country: string | null, geo: GeoFilter): boolean {
   return true;
 }
 
-const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], photos: [], jobs: [], training: [], trainingSections: [], events: [] };
+const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], pageFiles: [], photos: [], jobs: [], training: [], trainingSections: [], events: [] };
 
 /** The map key for "no store". A domain can never contain a space, so this
     cannot collide with one — and unlike a NUL it survives grep and an editor. */
@@ -83,6 +88,7 @@ export function createMemoryRepo(file: string): Repo {
         runs: parsed.runs ?? [],
         runPages: parsed.runPages ?? [],
         reviews: parsed.reviews ?? [],
+        pageFiles: parsed.pageFiles ?? [],
         photos: parsed.photos ?? [],
         jobs: parsed.jobs ?? [],
         events: parsed.events ?? [],
@@ -267,6 +273,44 @@ export function createMemoryRepo(file: string): Repo {
           .sort()
           .at(-1) ?? null
       );
+    },
+
+    async savePageFile(file) {
+      sync();
+      const row = {
+        domain: file.domain,
+        key: file.key,
+        base64: Buffer.from(file.bytes).toString("base64"),
+        filename: file.filename,
+        createdAt: file.createdAt,
+      };
+      const at = data.pageFiles.findIndex(
+        (f) => f.domain === file.domain && f.key === file.key,
+      );
+      if (at >= 0) data.pageFiles[at] = row;
+      else data.pageFiles.push(row);
+      flush();
+    },
+
+    async getPageFile(domain, key) {
+      sync();
+      const f = data.pageFiles.find((x) => x.domain === domain && x.key === key);
+      if (!f) return null;
+      return {
+        domain: f.domain,
+        key: f.key,
+        bytes: new Uint8Array(Buffer.from(f.base64, "base64")),
+        filename: f.filename,
+        createdAt: f.createdAt,
+      };
+    },
+
+    async pageFilesPresent(domain, keys) {
+      sync();
+      const want = new Set(keys);
+      return data.pageFiles
+        .filter((f) => f.domain === domain && want.has(f.key))
+        .map((f) => f.key);
     },
 
     async getReview(domain) {

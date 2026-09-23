@@ -38,12 +38,6 @@ type ExportState = {
   exportPagefly: (page: PageMockup) => Promise<void>;
   /** one .pagefly per page, downloaded in sequence */
   exportPageflyAll: (pages: PageMockup[]) => Promise<void>;
-  /**
-   * Start converting these pages now, so the Export click has nothing to wait
-   * for. Safe to call on every render: a page already converting or converted
-   * is not converted again.
-   */
-  prepare: (pages: PageMockup[]) => void;
   clearError: () => void;
 };
 
@@ -132,6 +126,29 @@ const EXPORT_WIDTH = 1440;
 const prepared = createPreparer<{ page: PageMockup; html: string }, Built | null>(
   ({ page, html }) => pageflyFromHtmlViaSkill(page, html),
 );
+
+/**
+ * The file this page was already converted into, when the server has it.
+ *
+ * THE USUAL ANSWER, not an optimisation. A deck's files are built once when the
+ * deck is saved, so by the time a merchant is looking at their pages the file
+ * is normally sitting there and the click costs a download. Null means "not
+ * yet" — the build may still be running, or it may have failed — and the caller
+ * converts on demand, which is what every click did before this existed.
+ */
+async function storedPagefly(page: PageMockup, html: string): Promise<Built | null> {
+  try {
+    const res = await fetch(
+      `/api/pagefly/file?key=${encodeURIComponent(keyForHtml(page.id, html))}`,
+    );
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    if (blob.size === 0) return null;
+    return { blob, filename: `${fileStem(page)}.pagefly` };
+  } catch {
+    return null;
+  }
+}
 
 /** The document a page will be converted from, when it has one. */
 function htmlOf(page: PageMockup): string | null {
@@ -255,11 +272,21 @@ export function ExportProvider({ children }: { children: ReactNode }) {
          model that already wrote the page, and lets it choose the elements. The
          measuring converter is not deleted and nothing about it has changed;
          set `PAGEFLY_FROM_HTML=measure` to go back to it. */
-      /* COLLECTED, NOT STARTED. If `prepare` has already run this document the
-         file is here; if it is still running, this joins that one rather than
-         racing a second conversion for the same download; and if nothing
-         started it — a page opened straight from the Library, say — this is
-         the first ask and behaves exactly as the click always did. */
+      /* THE STORED FILE FIRST, and it is normally there: the deck's files are
+         built once on the server when the deck is saved, and kept. This is a
+         download, not a conversion — no model call, no minute of waiting, and
+         no second bill for a page that has already been converted. */
+      const ready = await storedPagefly(page, html);
+      if (ready) {
+        downloadBlob(ready.blob, ready.filename);
+        announceExport();
+        return;
+      }
+
+      /* NOT THERE YET, so convert now. The deck's own conversion may still be
+         running, or it may have failed; either way the merchant asked for this
+         file and gets it. `prepared` keeps a second click from racing a second
+         conversion of the same document. */
       const built = await prepared
         .start(keyForHtml(page.id, html), { page, html }, { now: true })
         .catch(() => null);
@@ -380,17 +407,6 @@ export function ExportProvider({ children }: { children: ReactNode }) {
     [capture],
   );
 
-  /* Fire and forget: the promise is the preparer's to hold, and a failure here
-     is not the merchant's problem yet — the export click falls back to the
-     measuring converter, which is what it did before any of this existed. */
-  const prepare = useCallback((pages: PageMockup[]) => {
-    for (const page of pages) {
-      const html = htmlOf(page);
-      if (html === null) continue;
-      void prepared.start(keyForHtml(page.id, html), { page, html }).catch(() => undefined);
-    }
-  }, []);
-
   const value = useMemo<ExportState>(
     () => ({
       exporting,
@@ -400,7 +416,6 @@ export function ExportProvider({ children }: { children: ReactNode }) {
       exportAll,
       exportPagefly,
       exportPageflyAll,
-      prepare,
       clearError: () => setError(null),
     }),
     [
@@ -411,7 +426,6 @@ export function ExportProvider({ children }: { children: ReactNode }) {
       exportAll,
       exportPagefly,
       exportPageflyAll,
-      prepare,
     ],
   );
 

@@ -148,6 +148,15 @@ create table if not exists run_pages (
   primary key (run_id, page_id)
 );
 
+create table if not exists page_files (
+  domain     text not null,
+  key        text not null,
+  bytes      bytea not null,
+  filename   text not null,
+  created_at timestamptz not null default now(),
+  primary key (domain, key)
+);
+
 create table if not exists reviews (
   domain     text primary key,
   stars      integer not null,
@@ -619,6 +628,51 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
         [domain],
       );
       return iso(rows[0]?.at);
+    },
+
+    async savePageFile(file) {
+      await ready();
+      /* Overwrite rather than skip: the same key means the same document, and
+         a second build of it is the newer answer to the same question. */
+      await db.query(
+        `insert into page_files (domain, key, bytes, filename, created_at)
+         values ($1, $2, $3, $4, $5)
+         on conflict (domain, key) do update set
+           bytes      = excluded.bytes,
+           filename   = excluded.filename,
+           created_at = excluded.created_at`,
+        [file.domain, file.key, Buffer.from(file.bytes), file.filename, file.createdAt],
+      );
+    },
+
+    async getPageFile(domain, key) {
+      await ready();
+      const { rows } = await db.query(
+        "select * from page_files where domain = $1 and key = $2",
+        [domain, key],
+      );
+      const r = rows[0];
+      if (!r) return null;
+      return {
+        domain: String(r.domain),
+        key: String(r.key),
+        bytes: new Uint8Array(r.bytes as Buffer),
+        filename: String(r.filename),
+        createdAt: iso(r.created_at) ?? "",
+      };
+    },
+
+    async pageFilesPresent(domain, keys) {
+      await ready();
+      if (keys.length === 0) return [];
+      /* The keys only — the point of this call is to decide what NOT to build,
+         and pulling the bytes to answer that would read megabytes to learn a
+         boolean. */
+      const { rows } = await db.query(
+        "select key from page_files where domain = $1 and key = any($2::text[])",
+        [domain, keys],
+      );
+      return rows.map((r) => String(r.key));
     },
 
     async getReview(domain) {

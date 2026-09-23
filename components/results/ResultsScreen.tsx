@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { EV, track } from "@/lib/analytics";
 import { CATEGORY_BY_ID, PAGE_BY_ID, type CategoryId } from "@/lib/pageCatalog";
 import { useStore, useVisiblePages } from "@/lib/store";
@@ -226,22 +226,27 @@ export function ResultsScreen({
      page the merchant has filtered out is still owed the credit. */
   const allPages = useStore((s) => s.pages);
   const rebuilding = useStore((s) => s.rebuilding);
-  const { error, clearError, prepare } = useExport();
+  const { error, clearError } = useExport();
 
-  /* THE FILE STARTS BUILDING NOW, not on the Export click.
+  /* ==========================================================================
+     THE DECK IS NOT CONVERTED HERE ANY MORE, and taking this out is the whole
+     point of the change that removed it.
 
-     Converting an HTML mockup is a model call per band — about a minute — and
-     it used to run when the merchant asked for the file, after they had
-     already waited once for the page itself. Started here it runs while they
-     are reading, and the click usually has nothing left to wait for.
+     This screen used to call `prepare(allPages)` in an effect, which started a
+     conversion — a model call per band, about two minutes and twenty cents a
+     page — for EVERY page of the deck the moment the screen mounted, into a
+     variable at module scope. The reasoning was latency, and on a first visit
+     it was sound. What it did not survive was a second visit: module scope dies
+     with the tab, so every reload, every fresh open of the Library, converted
+     the whole deck again, for a file most merchants download once and many
+     never download at all. Nothing said so; it was simply the largest line on
+     the bill.
 
-     Every render is fine: a document already converting or converted is not
-     converted again. The whole deck rather than the filtered view, because a
-     merchant who filters to one category and then clears the filter should not
-     find the other pages have been sitting idle. */
-  useEffect(() => {
-    prepare(allPages);
-  }, [allPages, prepare]);
+     The conversion now happens once, on the server, when the deck is saved, and
+     the file is kept — `lib/pagefly/prebuild.ts`. The Export click downloads it.
+     A page whose file is not there yet still converts on the click, exactly as
+     it always did, so nothing depends on the prebuild having finished.
+     ========================================================================== */
 
   return (
     <motion.div
