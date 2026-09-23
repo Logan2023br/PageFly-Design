@@ -27,12 +27,12 @@ import { useSeen } from "./useSeen";
    loud, Hollis & Rowe is ivory and quiet, and nothing is shared between them
    except the pipeline. Side by side they say the brief decided the look.
 
-   SO "BOTH" IS THE DEFAULT, AND THE PILLS ARE A NARROWING. An earlier cut had
+   SO "ALL" IS THE DEFAULT, AND THE PILLS ARE A NARROWING. An earlier cut had
    no pills at all, on the reasoning that nobody compares things they have to
    click between — true, and it is why picking one is not where the row starts.
    But fourteen cards is a long scroll for somebody who has already decided
-   which store is nearer their own, and a filter that begins on "Both" costs
-   that reader nothing while giving this one a way through.
+   which store is nearer their own, and a filter that begins on "All" costs that
+   reader nothing while giving this one a way through.
 
    ONE SET USED TO BE A QUERY. The gallery drew from `/api/showcase` — the demo
    store's most recent run — while the rail above drew from the curated list, so
@@ -144,7 +144,7 @@ export function Showcase() {
         {/* ==================================================================
             THE ROW OF PILLS, AND THE ONE THAT LEAVES.
 
-            `Both` first, because comparing is what the section is for and a
+            `All` first, because comparing is what the section is for and a
             filter that starts narrowed hides the argument. Then a pill per
             store. Then the dashed one, which is the only one that navigates:
             the row reads as a set of examples ending in "…or yours", which is
@@ -160,7 +160,12 @@ export function Showcase() {
             }}
             className={pill(only === null)}
           >
-            Both stores
+            {/* "All", not "All stores". `All` is not a noun and never takes the
+                plural; and the three pills beside it are store names, so the
+                word would only repeat what the row already says. The last pill
+                is singular — "Your store" — so a plural at the other end would
+                also leave the two ends of one row disagreeing. */}
+            All
           </button>
           {SHOWCASE_SETS.map((set) => (
             <button
