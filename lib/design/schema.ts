@@ -71,9 +71,6 @@ function loose() {
   return z.unknown().optional();
 }
 
-/** The mockup's own class / id / data-* on one node; see `hook` below. */
-export type Hook = { class?: string; id?: string; data?: Record<string, string> };
-
 /** A CSS declaration block, camelCase keys, exactly as React wants them. */
 export type Css = Record<string, string | number>;
 
@@ -458,77 +455,9 @@ function parts<T extends readonly string[]>(names: T, mayTurn: readonly string[]
   });
 }
 
-/* ==========================================================================
-   THE MOCKUP'S OWN HANDLES.
-
-   A transcribed page keeps its layout, its copy and its colours, and used to
-   lose the one thing its own script needs: the names. A mockup writes
-   `<section class="hx-hero" id="hero" data-tab="care">` and then a script that
-   says `document.querySelector('#hero')`. Exported, the section became a
-   FlexSection with PageFly's own generated class and nothing else, so every
-   selector in the page's script addressed an element that no longer existed.
-
-   CLASSES RIDE NATIVELY. `classGlobalStyling` is the one key PageFly writes
-   classes on — 476 of the 480 elements in `reference/all-elements.pagefly`
-   carry it — and the exporter appends the mockup's to whatever the builder and
-   the motion pass already put there.
-
-   ID AND `data-*` DO NOT, because PageFly has no field for them: there is no
-   element id and no attribute map anywhere in those 480 elements. So they are
-   carried by a marker class the exporter mints (`pfd-h-N`) plus a table in the
-   page's own script that writes the attributes back on at boot. That is the
-   whole reason the marker is per-node rather than per-class: two tabs sharing
-   `class="tab"` and differing only by `data-tab` are one class and two nodes,
-   and a table keyed by class would give them both the same value.
-
-   OPTIONAL EVERYWHERE, and absent on a designed page. `designPageTree` invents
-   its own structure and has no names to keep; only transcription fills this in.
-   ========================================================================== */
-const hook = loose()
-  .transform((value): { class?: string; id?: string; data?: Record<string, string> } | undefined => {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-    const o = value as Record<string, unknown>;
-    const out: { class?: string; id?: string; data?: Record<string, string> } = {};
-
-    /* A class list, cleaned of anything that is not a class. The model does
-       copy `class="a b"` faithfully, and it has also written `.a .b` and
-       `"a, b"` — all three mean the same two names here. */
-    const names = typeof o.class === "string" ? o.class : typeof o.className === "string" ? o.className : "";
-    const cls = names
-      .split(/[\s,.]+/)
-      .map((n) => n.trim())
-      .filter((n) => /^[A-Za-z_][\w-]*$/.test(n))
-      .slice(0, 12);
-    if (cls.length) out.class = cls.join(" ");
-
-    const id = typeof o.id === "string" ? o.id.trim() : "";
-    if (/^[A-Za-z_][\w-]*$/.test(id)) out.id = id;
-
-    /* `data` is the attributes WITHOUT their `data-` prefix or with it — the
-       model writes both — and the value is a string whatever it looked like in
-       the markup, because that is what `getAttribute` answers. */
-    const raw = o.data;
-    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-      const data: Record<string, string> = {};
-      for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-        const key = k.replace(/^data-/, "").trim();
-        if (!/^[A-Za-z][\w-]*$/.test(key)) continue;
-        if (v === null || typeof v === "object") continue;
-        data[key] = String(v).slice(0, 200);
-        if (Object.keys(data).length >= 8) break;
-      }
-      if (Object.keys(data).length) out.data = data;
-    }
-
-    return Object.keys(out).length ? out : undefined;
-  })
-  .optional();
-
 const styled = {
   /** desktop, and the base every other breakpoint inherits from */
   css,
-  /** the mockup's own class / id / data-* on this node — see the note above */
-  hook,
   /**
    * Only the properties that differ between 768px and 1024px.
    *
@@ -1500,7 +1429,6 @@ export type DesignNode =
       tablet?: Css;
       mobile?: Css;
       anim?: Anim;
-      hook?: Hook;
     }
   | z.infer<typeof bound>
   | z.infer<typeof productList>
@@ -1518,7 +1446,6 @@ export type DesignNode =
       tablet?: Css;
       mobile?: Css;
       anim?: Anim;
-      hook?: Hook;
       children: DesignNode[];
     }
   | {
@@ -1528,7 +1455,6 @@ export type DesignNode =
       tablet?: Css;
       mobile?: Css;
       anim?: Anim;
-      hook?: Hook;
       children: DesignNode[];
     }
   | {
@@ -1539,7 +1465,6 @@ export type DesignNode =
       tablet?: Css;
       mobile?: Css;
       anim?: Anim;
-      hook?: Hook;
       children: DesignNode[];
     }
   | z.infer<typeof accordion>
@@ -1552,7 +1477,6 @@ export type DesignNode =
       tablet?: Css;
       mobile?: Css;
       anim?: Anim;
-      hook?: Hook;
       slides: DesignNode[];
     }
   | {
@@ -1566,7 +1490,6 @@ export type DesignNode =
       tablet?: Css;
       mobile?: Css;
       anim?: Anim;
-      hook?: Hook;
     }
   | {
       type: "tabs";
@@ -1579,10 +1502,9 @@ export type DesignNode =
       tablet?: Css;
       mobile?: Css;
       anim?: Anim;
-      hook?: Hook;
     }
-  | { type: "row"; css?: Css; mobile?: Css; anim?: Anim; hook?: Hook; children: DesignNode[] }
-  | { type: "col"; css?: Css; mobile?: Css; anim?: Anim; hook?: Hook; children: DesignNode[] };
+  | { type: "row"; css?: Css; mobile?: Css; anim?: Anim; children: DesignNode[] }
+  | { type: "col"; css?: Css; mobile?: Css; anim?: Anim; children: DesignNode[] };
 
 const node: z.ZodType<DesignNode> = z.lazy(() =>
   z.discriminatedUnion("type", [

@@ -213,48 +213,6 @@ export function wrapJs(raw: string, className: string): string {
   ].join("\n");
 }
 
-/* ==========================================================================
-   THE PAGE'S OWN SCRIPT, as opposed to one block's.
-
-   A transcribed page arrives with behaviour that belongs to the whole document
-   — a countdown, a tab bar, a carousel, all of it written once after `</main>`
-   — and there is no block to scope it to. So it gets the same treatment one
-   level up: one IIFE, the callback-registering globals shadowed with wrapped
-   versions, and silence on failure.
-
-   THREE DIFFERENCES FROM A BLOCK'S, and each is the reason this is not just
-   `wrapJs` with a different class.
-
-     NO `root`. A block's script is handed its own element; this one addresses
-     the page, so it queries for itself — which is why the mockup's classes have
-     to survive the export at all (`lib/design/hook.ts`).
-
-     ONCE PER PAGE. PageFly re-runs custom JS on an editor preview refresh, and
-     a countdown started twice ticks twice as fast. The flag is the same shape
-     `MOTION_JS` uses, for the same reason.
-
-     IT MAY NOT HIDE ANYTHING. A block that fails costs a decoration. This runs
-     over the whole page, and a script that sets `display:none` on the panels it
-     means to tab between leaves a page with one section visible if it never
-     runs — and PageFly's editor does not run custom JS, so "never runs" is the
-     merchant's first sight of their own page. The rule is enforced where the
-     script is written, in the prompt; what is enforced HERE is that the failure
-     is silent and contained.
-   ========================================================================== */
-export function wrapPageJs(raw: string): string {
-  if (!raw.trim()) return "";
-  /* The same `<` rule as a block's, and here it costs more: this is the page's
-     behaviour, not one wave divider. See the note in `wrapJs`. */
-  if (raw.includes("<")) return "";
-  return [
-    `(function(){try{`,
-    `if(window.__pfdPage)return;window.__pfdPage=1;`,
-    guardPrelude(""),
-    raw.trim(),
-    `}catch(e){}})();`,
-  ].join("\n");
-}
-
 /**
  * The same JS, for the preview, where a failure IS worth saying out loud.
  *
