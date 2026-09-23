@@ -284,6 +284,51 @@ function kids(max: number): z.ZodType<DesignNode[], unknown> {
  * anything there. Because every list drops the items that fail, an empty
  * heading now costs one heading — the sentence above the rule, applied.
  */
+/* ==========================================================================
+   ONE WORD OF A SENTENCE, SET APART.
+
+   Nearly every heading a designer writes has one word doing something the rest
+   is not — a colour, a glow, an italic, a rule under it. The mockups this
+   pipeline reads mark it `<em>`; the vocabulary had no way to say it, so a
+   transcriber's only move was to CUT THE HEADING IN TWO and style the halves.
+   Measured on one exported page: nine of nine headings that had an emphasis
+   came out as two or three separate `Heading2` blocks, and what was one line of
+   type became blocks whose spacing is decided by a layout rather than by the
+   sentence.
+
+   PAGEFLY RENDERS INLINE MARKUP INSIDE A TEXT VALUE — its own export of these
+   pages carries `Get <em>spooked</em>.` in a single Heading2, and
+   `scripts/preview-pagefly.ts` says the same in its own note. So the fix is not
+   new machinery; it is permission, plus a sanitiser, because a text value
+   reaches the page UNESCAPED and a model writing `<script>` into a heading
+   would otherwise ship it to a storefront that takes payments.
+
+   WHAT IS ALLOWED is the list below and nothing else: inline typography, no
+   attributes at all. No `<a>` (a heading that navigates is a button), no
+   `<span class>` (a class here would name a rule nobody wrote), no `style=`
+   (the mockup's own declarations travel in `emphasisCss`, where they are parsed
+   rather than trusted).
+   ========================================================================== */
+const INLINE_OK = /^(em|strong|b|i|u|s|mark|sup|sub|br)$/i;
+
+function inline(max: number) {
+  return words(max).transform((raw) => {
+    if (!raw) return raw;
+    return (
+      raw
+        /* Tags first, so a stripped `<script>` cannot leave its contents
+           looking like copy the designer wrote. */
+        .replace(/<script\b[\s\S]*?<\/\s*script\s*>/gi, "")
+        .replace(/<style\b[\s\S]*?<\/\s*style\s*>/gi, "")
+        /* Every remaining tag: kept only if it is on the list, and kept only as
+           a bare tag — every attribute goes, `on*` handlers with them. */
+        .replace(/<\s*(\/?)\s*([A-Za-z][A-Za-z0-9]*)\b[^>]*>/g, (_m, slash: string, tag: string) =>
+          INLINE_OK.test(tag) ? `<${slash}${tag.toLowerCase()}>` : "",
+        )
+    );
+  });
+}
+
 function saying(max: number) {
   return words(max).refine((s) => s.trim() !== "");
 }
@@ -362,6 +407,60 @@ const REVEALS = ["fade", "fade-up", "slide-left", "slide-right", "zoom"] as cons
 type Hover = (typeof HOVERS)[number];
 type Reveal = (typeof REVEALS)[number];
 
+/* ==========================================================================
+   THE MOTION THE SIX NAMES DO NOT COVER, COPIED RATHER THAN ENUMERATED.
+
+   `hover` has six names and `reveal` has five. Every mockup this pipeline has
+   read uses motion outside those eleven: a pulsing ring on a call to action,
+   fog drifting behind a hero, a moon rising and falling, a promise bar running
+   sideways, bats crossing the screen. Measured on one page, six `@keyframes`
+   were declared and three survived — the three that happened to land inside a
+   `custom` block or a `marquee` node. The other three had nowhere to go.
+
+   THE ANSWER IS NOT A LONGER LIST. A seventh name fixes this page and misses
+   the next one, which will animate something nobody has thought of. The
+   repository already settled this question once, for hovers: "A HOVER THE SIX
+   NAMES DO NOT COVER IS COPIED, NOT APPROXIMATED" — `hoverCss` carries the
+   mockup's own declarations verbatim and the exporter scopes them. This is the
+   same decision for keyframe animation.
+
+   WHAT IS ACCEPTED, and the shape is checked rather than trusted: one or more
+   complete `@keyframes` blocks, and an `animation` shorthand with no `;` and no
+   `}` in it. Both go on the page's stylesheet under a class minted for this
+   node, so a malformed value costs its own element and can reach nothing else.
+   `@import` is refused outright — it would pull a stylesheet from another
+   origin into a merchant's storefront.
+   ========================================================================== */
+const KEYFRAMES_OK = /@(?:-webkit-)?keyframes\s+[A-Za-z_-][\w-]*\s*\{[\s\S]*?\}\s*\}/g;
+
+function keyframeMotion(o: Record<string, unknown>): {
+  keyframes?: string;
+  animation?: string;
+} {
+  const rawFrames = typeof o.keyframes === "string" ? o.keyframes : "";
+  const rawAnim = typeof o.animation === "string" ? o.animation.trim() : "";
+
+  /* Whole blocks only, taken one at a time: anything between or around them —
+     a stray declaration, a comment carrying a brace — is simply not matched
+     and therefore not carried. */
+  const frames = (rawFrames.includes("@import") ? "" : rawFrames).match(KEYFRAMES_OK);
+  const keyframes = frames ? frames.join("\n").slice(0, 2000) : undefined;
+
+  /* A shorthand is a single declaration's value. A `;` or a `}` in it would
+     end that declaration and start something the design never wrote. */
+  const animation =
+    rawAnim && !/[;{}<]/.test(rawAnim) && rawAnim.length <= 200 ? rawAnim : undefined;
+
+  /* Both or neither. An `animation` naming keyframes that did not arrive is a
+     rule pointing at nothing, and keyframes nobody plays are bytes. */
+  if (!keyframes || !animation) return {};
+  /* And the name has to match, or the pair is two halves of different things. */
+  const names = [...keyframes.matchAll(/@(?:-webkit-)?keyframes\s+([A-Za-z_-][\w-]*)/g)].map(
+    (m) => m[1],
+  );
+  return names.some((n) => animation.includes(n)) ? { keyframes, animation } : {};
+}
+
 const anim = loose().transform((v): Anim => {
   if (!v || typeof v !== "object" || Array.isArray(v)) return undefined;
   const o = v as Record<string, unknown>;
@@ -405,8 +504,24 @@ const anim = loose().transform((v): Anim => {
 
   /* Nothing recognised is no motion, not an empty motion object — the renderer
      and the exporter both branch on the property being absent. */
-  if (!hover && !reveal && delay === undefined) return undefined;
-  return { hover, reveal, delay, ms, delayMs, distance, easing, hoverCss: onHover };
+  /* AND THE THIRD KIND. This gate asked whether the node had one of the two
+     motions with NAMES, and dropped everything else — including a node whose
+     only motion is the mockup's own keyframes, which parsed fine one line
+     below and was then thrown away with the object holding it. Nothing failed:
+     an absent animation is a still element. */
+  const own = keyframeMotion(o);
+  if (!hover && !reveal && delay === undefined && !own.animation) return undefined;
+  return {
+    hover,
+    reveal,
+    delay,
+    ms,
+    delayMs,
+    distance,
+    easing,
+    hoverCss: onHover,
+    ...own,
+  };
 });
 
 export type Anim =
@@ -421,6 +536,10 @@ export type Anim =
       easing?: string;
       /** the mockup's own `:hover` declarations, verbatim */
       hoverCss?: Css;
+      /** the mockup's own `@keyframes` block(s), verbatim — see above */
+      keyframes?: string;
+      /** the `animation` shorthand that plays them, verbatim */
+      animation?: string;
     }
   | undefined;
 
@@ -455,9 +574,45 @@ function parts<T extends readonly string[]>(names: T, mayTurn: readonly string[]
   });
 }
 
+/* ==========================================================================
+   THE MOCKUP'S OWN CLASS NAMES, KEPT.
+
+   A transcribed page keeps its layout, its copy and its colours, and used to
+   lose the one thing its own script needs: the names. A mockup writes
+   `<button class="hx-tab">` and then a script that says
+   `document.querySelectorAll('.hx-tab')`. Exported, the button became a
+   PageFly element with PageFly's generated class and nothing else, so every
+   selector in the page's script addressed an element that no longer existed —
+   which made sending that script along pointless.
+
+   CLASSES ONLY. An earlier version carried the id and the `data-*` too, by
+   minting a marker class and writing the attributes back on at boot. That
+   works, and it is more machinery than the problem needs: a class is a real
+   PageFly field (`classGlobalStyling`, on 476 of the 480 elements in
+   `reference/all-elements.pagefly`), it is what nearly every mockup selector
+   uses, and it costs one string per node.
+
+   OPTIONAL EVERYWHERE, and absent on a designed page: `designPageTree` invents
+   its own structure and has no names to keep. Only transcription fills it in.
+   ========================================================================== */
+const classes = loose().transform((value): string | undefined => {
+  const raw = typeof value === "string" ? value : "";
+  /* A class list, cleaned of everything that is not one. The model copies
+     `class="a b"` faithfully, and it has also written `.a .b` and `"a, b"` —
+     all three mean the same two names here. */
+  const names = raw
+    .split(/[\s,.]+/)
+    .map((n) => n.trim())
+    .filter((n) => /^[A-Za-z_][\w-]*$/.test(n))
+    .slice(0, 12);
+  return names.length ? names.join(" ") : undefined;
+});
+
 const styled = {
   /** desktop, and the base every other breakpoint inherits from */
   css,
+  /** the mockup's own class names on this node — see the note above */
+  classes,
   /**
    * Only the properties that differ between 768px and 1024px.
    *
@@ -482,13 +637,26 @@ const heading = z.object({
   /** h1..h6 — the merchant's SEO outline, which is why the model must choose it
       rather than us guessing from font size after the fact */
   level: whole(1, 6, 2),
-  text: saying(300),
+  /** may carry `<em>` and the other inline tags — see `inline` above */
+  text: inline(300).refine((s) => s.trim() !== ""),
+  /**
+   * What the mockup's own stylesheet gives the emphasised word.
+   *
+   * COPIED, NOT NAMED. The alternative was a list of emphasis styles — "orange
+   * glow", "gold italic" — and a list is a thing the next page falls off the
+   * end of. These are the declarations the mockup states for its own `<em>`,
+   * parsed by the same `css` every other declaration in this file goes through,
+   * and the exporter scopes them to this node alone.
+   */
+  emphasisCss: css,
   ...styled,
 });
 
 const text = z.object({
   type: z.literal("text"),
-  text: saying(2000),
+  text: inline(2000).refine((s) => s.trim() !== ""),
+  /** as `heading.emphasisCss` */
+  emphasisCss: css,
   ...styled,
 });
 
@@ -1076,12 +1244,40 @@ const form = z.object({
           typeof v === "string" ? (FIELD_KIND[v.trim().toLowerCase()] ?? "text") : "text",
         ),
       required: flag(false),
+      /**
+       * The grey text inside the box, as the mockup writes it.
+       *
+       * There was nowhere to put this, so PageFly filled every imported input
+       * with its own "This is your placeholder text" — on a newsletter box
+       * whose mockup plainly said `you@email.com`. The value arrived at the
+       * transcriber intact every time; it had no field to land in.
+       */
+      placeholder: spare(80),
+      /**
+       * Whether the label is DRAWN, as opposed to merely known.
+       *
+       * `FORM_FIELD` wrote `label.on: true` as a constant, and the comment
+       * there records why: written as a bare string every label was hidden and
+       * three inputs arrived carrying PageFly's placeholder and no names. The
+       * fix turned them all on, which is right for a contact form with Name,
+       * Email and Message — and wrong for a one-line signup whose mockup gives
+       * the input an `aria-label` and draws no label at all. Then the label
+       * appears above the box, pushes the button out of the row, and the pill
+       * the design was built around comes apart.
+       *
+       * Defaults to TRUE, so every page built before this reads as it did.
+       */
+      labelOn: flag(true),
     }),
     8,
   ).transform((fields) =>
     /* A form with no usable fields is a Send button over nothing. One email
        input is the honest minimum and is what both intents want anyway. */
-    fields.length ? fields : [{ label: "Email", kind: "email" as const, required: true }],
+    /* The same SHAPE as a parsed field, new keys included: a fallback that is
+       missing one is a fallback the exporter has to branch on. */
+    fields.length
+      ? fields
+      : [{ label: "Email", kind: "email" as const, required: true, labelOn: true }],
   ),
   submitText: words(40, "Send"),
   ...styled,
@@ -1429,6 +1625,7 @@ export type DesignNode =
       tablet?: Css;
       mobile?: Css;
       anim?: Anim;
+      classes?: string;
     }
   | z.infer<typeof bound>
   | z.infer<typeof productList>
@@ -1446,6 +1643,7 @@ export type DesignNode =
       tablet?: Css;
       mobile?: Css;
       anim?: Anim;
+      classes?: string;
       children: DesignNode[];
     }
   | {
@@ -1455,6 +1653,7 @@ export type DesignNode =
       tablet?: Css;
       mobile?: Css;
       anim?: Anim;
+      classes?: string;
       children: DesignNode[];
     }
   | {
@@ -1465,6 +1664,7 @@ export type DesignNode =
       tablet?: Css;
       mobile?: Css;
       anim?: Anim;
+      classes?: string;
       children: DesignNode[];
     }
   | z.infer<typeof accordion>
@@ -1477,6 +1677,7 @@ export type DesignNode =
       tablet?: Css;
       mobile?: Css;
       anim?: Anim;
+      classes?: string;
       slides: DesignNode[];
     }
   | {
@@ -1490,6 +1691,7 @@ export type DesignNode =
       tablet?: Css;
       mobile?: Css;
       anim?: Anim;
+      classes?: string;
     }
   | {
       type: "tabs";
@@ -1502,9 +1704,10 @@ export type DesignNode =
       tablet?: Css;
       mobile?: Css;
       anim?: Anim;
+      classes?: string;
     }
-  | { type: "row"; css?: Css; mobile?: Css; anim?: Anim; children: DesignNode[] }
-  | { type: "col"; css?: Css; mobile?: Css; anim?: Anim; children: DesignNode[] };
+  | { type: "row"; css?: Css; mobile?: Css; anim?: Anim; classes?: string; children: DesignNode[] }
+  | { type: "col"; css?: Css; mobile?: Css; anim?: Anim; classes?: string; children: DesignNode[] };
 
 const node: z.ZodType<DesignNode> = z.lazy(() =>
   z.discriminatedUnion("type", [

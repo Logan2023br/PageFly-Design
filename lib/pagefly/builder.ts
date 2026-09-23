@@ -1627,6 +1627,21 @@ export function FORM_FIELD(
   /** Which form this field belongs to. Written onto the field and the input the
       way the reference does — see `context` below. */
   formType: "customer" | "contact" = "contact",
+  /**
+   * The grey text inside the box, and whether the label is drawn at all.
+   *
+   * Both were constants here. The placeholder was simply never written, so
+   * PageFly filled every imported input with its own "This is your placeholder
+   * text" — including a newsletter box whose mockup said `you@email.com`. And
+   * `label.on` was hard `true`, which is right for a contact form with three
+   * named fields and wrong for a one-line signup that labels its input with
+   * `aria-label` and draws nothing: the label then appears above the box and
+   * pushes the button out of the pill the design was built around.
+   *
+   * Defaulted so every caller that does not pass them behaves exactly as
+   * before.
+   */
+  opts: { placeholder?: string; labelOn?: boolean } = {},
 ) {
   return node(
     "Form2.Field",
@@ -1653,7 +1668,7 @@ export function FORM_FIELD(
        * that does not know which form it belongs to cannot know which settings
        * to show.
        */
-      label: { text: label, on: true, position: "top" },
+      label: { text: label, on: opts.labelOn ?? true, position: "top" },
       context: { formType },
       required,
     },
@@ -1698,6 +1713,10 @@ export function FORM_FIELD(
           inputType: INPUT_TYPE[kind] ?? 0,
           context: { formType },
           id: `field-${uid().replace(/-/g, "").slice(0, 8)}`,
+          /* Omitted rather than sent empty: absent, PageFly shows its own
+             default, which is what it did before this existed and is a better
+             answer than a box with nothing in it. */
+          ...(opts.placeholder ? { placeholder: opts.placeholder } : {}),
         },
         null,
         [],

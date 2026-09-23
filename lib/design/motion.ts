@@ -76,7 +76,10 @@ export function hasExactMotion(a: Anim): boolean {
         a.delayMs !== undefined ||
         a.distance !== undefined ||
         a.easing ||
-        a.hoverCss),
+        a.hoverCss ||
+        /* The keyframe animation the eleven names do not cover, carried
+           verbatim — see the note in `lib/design/schema.ts`. */
+        (a.keyframes && a.animation)),
   );
 }
 
@@ -115,12 +118,31 @@ export function exactClass(a: Anim): string {
  */
 export function exactCss(cls: string, a: Anim): string {
   if (!a) return "";
+
+  /* ======================================================================
+     THE MOCKUP'S OWN KEYFRAMES, FIRST AND UNTOUCHED.
+
+     Not gated behind `.pfd-motion-ready`, and that is the difference between
+     this and a reveal. A reveal HIDES its element until a script says
+     otherwise, so it has to be disarmed where no script runs. An animation
+     that drifts, pulses or bobs changes nothing about whether the element is
+     readable: without it the thing sits still, which is a page, not a hole.
+
+     The name inside the `@keyframes` is the mockup's. Two nodes that state the
+     same animation share one class — `exactClass` hashes the whole `anim` — so
+     the same block is not written twice, and two nodes that state DIFFERENT
+     animations under one name would be a mockup contradicting itself.
+     ====================================================================== */
+  const keyframed: string[] = [];
+  if (a.keyframes && a.animation) {
+    keyframed.push(a.keyframes, `.${cls}{animation:${a.animation};}`);
+  }
   const timing: string[] = [];
   if (a.ms !== undefined) timing.push(`transition-duration:${a.ms}ms`);
   if (a.easing) timing.push(`transition-timing-function:${a.easing}`);
   if (a.delayMs !== undefined) timing.push(`transition-delay:${a.delayMs}ms`);
 
-  const out: string[] = [];
+  const out: string[] = [...keyframed];
   if (timing.length) out.push(`.pfd-motion-ready .${cls}{${timing.join(";")};}`);
 
   /* Only the reveal the design actually stated — a distance written onto every
@@ -170,7 +192,13 @@ function declarationsOf(css: Record<string, string | number>): string {
 }
 
 export function hasMotion(a: Anim): boolean {
-  return Boolean(a?.hover || a?.reveal);
+  /* THE THIRD KIND. This asked about the two motions with NAMES — a hover from
+     the six, a reveal from the five — and a node whose only motion is the
+     mockup's own keyframes has neither. It therefore never reached
+     `withMotion`, so its class was never minted and `exactCss` was never
+     called: the animation parsed, validated, and then quietly went nowhere.
+     Caught by a test, not by a failure; there was nothing to fail. */
+  return Boolean(a?.hover || a?.reveal || (a?.keyframes && a?.animation));
 }
 
 /**

@@ -4,7 +4,9 @@ import { designTreeSchema, whyNotASection, type DesignTree } from "../design/sch
 import { pageflyFromTree } from "../design/toPagefly";
 import { loadSkills } from "../ai/skills";
 import { getProvider } from "../ai/provider";
-import { splitSections } from "./fromHtmlSkill";
+import { outsideScripts, splitSections } from "./fromHtmlSkill";
+import { featuresInTree, missingFeatures, retryNote, NATIVE_FEATURES, type NativeFeature } from "./nativeFeatures";
+import { pageScriptFor } from "./pageScript";
 
 /* ==========================================================================
    HTML → design tree → .pagefly, on the live path's own rails.
@@ -77,6 +79,49 @@ export const ASK = [
   "  phone. So a `max-width: 420px` block has nowhere to go — fold whatever",
   "  matters in it into `mobile`.",
   "· Copy is copied. Not rewritten, not improved, not shortened.",
+  "",
+  "· KEEP THE MARKUP'S OWN CLASS NAMES. Every node takes `classes`, holding the",
+  "  class attribute of the element it came from, verbatim:",
+  "",
+  '    <section class="promo dark"> → "classes": "promo dark"',
+  "",
+  "  Not a tidier name, not a shorter one, not one you invented. The page's own",
+  "  script addresses these elements by these names; a node whose classes you",
+  "  dropped is a node that script can no longer find.",
+  "",
+  "· A WORD SET APART INSIDE A LINE STAYS INSIDE IT. Where the markup marks one",
+  "  word of a heading or a paragraph — `<em>`, `<strong>`, `<b>`, `<i>`, `<u>`",
+  "  — keep the tag in `text`, and put what the stylesheet gives that tag in",
+  "  `emphasisCss`:",
+  "",
+  '    <h2>Order by <em>Friday</em></h2>  with  em{color:#C03;letter-spacing:.02em}',
+  '    → { "type":"heading", "level":2, "text":"Order by <em>Friday</em>",',
+  '        "emphasisCss": { "color":"#C03", "letterSpacing":".02em" } }',
+  "",
+  "  DO NOT SPLIT THE LINE INTO TWO NODES to colour half of it. One sentence is",
+  "  one node; split, its spacing stops being the sentence's and becomes the",
+  "  layout's, and it reflows wrongly at every width the design was drawn for.",
+  "",
+  "· AN ANIMATION THE MOTION NAMES DO NOT COVER IS COPIED, NOT DROPPED. `anim`",
+  "  has six hovers and five reveals. Anything else the stylesheet plays — a",
+  "  pulse, a drift, a bob, a marquee, a shimmer, whatever it is called — goes",
+  "  on the node as the two things that make it work, verbatim:",
+  "",
+  '    .badge{animation:throb 2s infinite}  @keyframes throb{...}',
+  '    → "anim": { "keyframes":"@keyframes throb{...}", "animation":"throb 2s infinite" }',
+  "",
+  "  Copy the `@keyframes` block whole, braces and all, and copy the `animation`",
+  "  shorthand as the stylesheet writes it. Both or neither: a shorthand naming",
+  "  keyframes you did not bring plays nothing.",
+  "",
+  "· A FORM FIELD CARRIES ITS PLACEHOLDER, AND SAYS WHETHER ITS LABEL SHOWS.",
+  "",
+  '    <input placeholder="you@shop.com" aria-label="Email">',
+  '    → { "label":"Email", "kind":"email", "placeholder":"you@shop.com", "labelOn":false }',
+  "",
+  "  `labelOn` is false when the markup has no visible `<label>` — an",
+  "  `aria-label` or a placeholder alone means the design draws none, and a",
+  "  label added above the box pushes everything below it out of place.",
   "· Where a run of markup is really a PageFly element — a table, a tab bar, an",
   "  accordion, a form, a slideshow, a countdown — use that node type. That",
   "  choice is the whole reason you are reading this and not a DOM walker.",
@@ -605,6 +650,28 @@ export function assetsOf(value: unknown, into: { images: Record<string, string>;
   }
 }
 
+/**
+ * Every class name the transcription kept, so the page's script can be told
+ * what it is allowed to select.
+ *
+ * READ OFF THE TREE, NOT OFF THE MOCKUP. The mockup's class list is what the
+ * markup had; this is what SURVIVED. A band the model returned without its
+ * names has no classes on the exported page, and a script rewritten against
+ * selectors that match nothing is worse than no script.
+ */
+function keptClasses(value: unknown, into = new Set<string>()): string[] {
+  if (Array.isArray(value)) {
+    for (const v of value) keptClasses(v, into);
+    return [...into];
+  }
+  if (!value || typeof value !== "object") return [...into];
+  const o = value as Record<string, unknown>;
+  if (typeof o.classes === "string")
+    for (const c of o.classes.split(/\s+/).filter(Boolean)) into.add(c);
+  for (const v of Object.values(o)) keptClasses(v, into);
+  return [...into];
+}
+
 /** Everything in `<head>`: the model reads declared values off the stylesheet. */
 function headOf(html: string): string {
   return /<head[^>]*>([\s\S]*?)<\/head>/i.exec(html)?.[1]?.trim() ?? "";
@@ -691,10 +758,14 @@ export async function pageflyFromHtmlLive(
         band,
       ].join("\n");
 
-      try {
+      /* ONE BAND, ONE ANSWER — and the caller decides whether to ask again.
+         Lifted out so the retry is the SAME question with a sentence added,
+         rather than a second code path that could drift from the first. */
+      const askFor = async (prompt: string) => {
+        try {
         const answer = await provider.complete({
           system,
-          user,
+          user: prompt,
           /* The same ceiling the live design stage uses, for the same reason:
              DeepSeek bills its own reasoning against it, and a band that needs
              20,000 is billed 20,000 whatever number sits above it. */
@@ -741,10 +812,34 @@ export async function pageflyFromHtmlLive(
         const lost = whyNotASection(raw);
         if (lost) console.log(`[pagefly] band ${index + 1} · ${lost}`);
         return checked.data.sections[0];
-      } catch (err) {
-        failures.push({ index, reason: (err as Error).message.slice(0, 160) });
-        return null;
+        } catch (err) {
+          failures.push({ index, reason: (err as Error).message.slice(0, 160) });
+          return null;
+        }
+      };
+
+      const first = await askFor(user);
+      if (first === null) return null;
+
+      /* A tab bar transcribed as four stacked blocks is a VALID section: every
+         node exists, the export succeeds, the page imports — and a shopper
+         clicks a tab and nothing happens. That cannot throw, so it is caught by
+         comparing what the markup plainly has against what came back. */
+      const missing = missingFeatures(band, first);
+      if (missing.length === 0) return first;
+
+      console.log(`[pagefly] band ${index + 1} · missing ${missing.join(", ")} — asking again`);
+      const second = await askFor(`${user}\n${retryNote(missing)}`);
+      if (second === null) return first;
+
+      /* The retry has to EARN it: a second transcription differs everywhere,
+         not only where it was asked to. */
+      const still = missingFeatures(band, second);
+      if (still.length >= missing.length) {
+        console.log(`[pagefly] band ${index + 1} · retry did not find it; keeping the first`);
+        return first;
       }
+      return second;
     }),
   );
 
@@ -760,6 +855,32 @@ export async function pageflyFromHtmlLive(
   const assets = { images: {} as Record<string, string>, videos: {} as Record<string, string> };
   assetsOf(sections, assets);
 
+  /* ==========================================================================
+     THE PAGE'S OWN SCRIPT, in one call after every band.
+
+     ONE CALL, NOT ONE PER BAND, because the script is not a band's. A mockup
+     writes its countdown, its carousel and its tab controller together in one
+     `<script>` after `</main>`, and a transcriber reading one section has no
+     way to know which half of that file is about the section in front of it.
+
+     AFTER THE BANDS, because what it has to DELETE is decided by what came
+     back: a tab bar that transcribed as a `tabs` node is PageFly's own widget
+     with PageFly's own behaviour, and the mockup's tab controller pointed at
+     the same elements would fight it.
+
+     AND IT COSTS NOTHING WHEN THERE IS NOTHING TO DO: a mockup that wrote no
+     script outside its bands makes no call. */
+  const scripts = outsideScripts(html);
+  const native = NATIVE_FEATURES.filter((f) => featuresInTree(sections).has(f)) as NativeFeature[];
+  const page = await pageScriptFor(scripts, { native, classes: keptClasses(sections), signal });
+  usage.input += page.usage.input;
+  usage.output += page.usage.output;
+  if (scripts.length > 0)
+    console.log(
+      `[pagefly] ${name} · page script: ${scripts.length} block(s) in · ` +
+        (page.js ? `${page.js.length} bytes shipped` : `none shipped (${page.reason ?? "empty"})`),
+    );
+
   const built = pageflyFromTree(
     tree,
     { name, bg: tokens.bg, ink: tokens.ink, fontBody: tokens.fontBody },
@@ -771,6 +892,7 @@ export async function pageflyFromHtmlLive(
       border: tokens.border,
       radius: tokens.radius,
       band: tokens.band,
+      pageJs: page.js,
     },
   );
 

@@ -902,6 +902,16 @@ export type EmitOptions = {
   customBlocks?: CleanBlock[];
   customCount?: { value: number };
   /**
+   * The page's own behaviour, already wrapped and already checked.
+   *
+   * A transcribed page's script — the countdown, the carousel, the tab bar the
+   * mockup wrote after `</main>` — rewritten for the export by
+   * `lib/pagefly/pageScript.ts` and passed through `wrapPageJs`, which is where
+   * the `<` rule and the IIFE are enforced. It arrives here ready to ship;
+   * nothing in this file inspects it.
+   */
+  pageJs?: string;
+  /**
    * True while emitting anything that will end up inside a ContentListItem.
    *
    * `nesting.md` lets a `ContentListItem` hold 140 of the 241 types and
@@ -916,7 +926,26 @@ export type EmitOptions = {
 
 function emit(node: DesignNode, parent: ParentDir, opts: EmitOptions): PFNode | null {
   const built = emitNode(node, parent, opts);
-  return built && hasMotion(node.anim) ? withMotion(built, node.anim, opts) : built;
+  if (!built) return null;
+  /* Before motion, so the mockup's own names come first and ours after — the
+     order a stylesheet reads best in, and the order `withMotion` already
+     appends in. */
+  const named = withClasses(built, node.classes);
+  return hasMotion(node.anim) ? withMotion(named, node.anim, opts) : named;
+}
+
+/**
+ * Put the mockup's own class names on the element it became.
+ *
+ * APPENDED, NEVER ASSIGNED. A node arrives here with the builder's class on it
+ * already — `pf-design-export`, a card-list class, a counter's own hook — and
+ * an assignment would drop whichever of those the element needed to work.
+ */
+function withClasses(n: PFNode, classes: string | undefined): PFNode {
+  if (!classes) return n;
+  const existing = typeof n.data.classGlobalStyling === "string" ? n.data.classGlobalStyling : "";
+  n.data.classGlobalStyling = [existing, classes].filter(Boolean).join(" ");
+  return n;
 }
 
 /**
@@ -984,6 +1013,44 @@ function withMotion(n: PFNode, anim: Anim, opts: EmitOptions): PFNode {
   return n;
 }
 
+/**
+ * Style the emphasised word inside a line of type.
+ *
+ * ONE RULE, SCOPED TO THIS NODE. The mockup declares its `<em>` once, globally,
+ * and a global rule is the one thing an imported page may not bring: it would
+ * restyle every emphasis on a storefront this page knows nothing about. So the
+ * declarations travel on the node, and the node gets a class of its own.
+ *
+ * Keyed by the declarations, so a page whose headings all emphasise the same
+ * way writes ONE rule and shares it — the same trick `withMotion` plays with
+ * `exactClass`, for the same reason.
+ */
+function withEmphasis(n: PFNode, css: Css | undefined, opts: EmitOptions): PFNode {
+  const rules = css && declarations(css);
+  if (!rules) return n;
+
+  const cls = `pfd-em-${hashOf(rules)}`;
+  const blocks = opts.customBlocks;
+  if (blocks && !blocks.some((b) => b.className === cls)) {
+    /* `em` AND `strong`, because the sanitiser allows both and a designer who
+       marks a word with one means the same thing by the other. */
+    blocks.push({ className: cls, html: "", css: `.${cls} em,.${cls} strong{${rules}}`, js: "" });
+  }
+  const existing = typeof n.data.classGlobalStyling === "string" ? n.data.classGlobalStyling : "";
+  n.data.classGlobalStyling = [existing, cls].filter(Boolean).join(" ");
+  return n;
+}
+
+/** A short, stable name for a block of declarations. */
+function hashOf(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
+
 function emitNode(
   node: DesignNode,
   parent: ParentDir,
@@ -995,10 +1062,10 @@ function emitNode(
     case "heading":
       /* Heading2 carries the level in `data.tag`; the tree chose it, so the
          merchant's outline survives the round trip. */
-      return withTag(H2(node.text, sd), `h${node.level}`);
+      return withEmphasis(withTag(H2(node.text, sd), `h${node.level}`), node.emphasisCss, opts);
 
     case "text":
-      return P4(node.text, sd);
+      return withEmphasis(P4(node.text, sd), node.emphasisCss, opts);
 
     /* A marker for a bound part of a buy box. Inside one, `boundSlot` returns
        the real element — the price, the cart button, whichever the design named
@@ -1148,7 +1215,10 @@ function emitNode(
 
       return FORM(
         node.fields.map((f) =>
-          FORM_FIELD(f.label, f.kind, f.required, fieldStyle, labelStyle),
+          FORM_FIELD(f.label, f.kind, f.required, fieldStyle, labelStyle, "contact", {
+            placeholder: f.placeholder,
+            labelOn: f.labelOn,
+          }),
         ),
         node.submitText,
         node.intent,
@@ -3150,7 +3220,10 @@ export function pageflyFromTree(
         `max-width: ${width}px !important; margin-left: auto; margin-right: auto;`,
       ),
       kids,
-      ["pf-design-export", ...motionClasses(section.anim)].join(" "),
+      /* THE BAND'S NAMES GO ON THE CONTENT BLOCK, not the FlexSection around it:
+         the block is what the band's children sit in and what a
+         `.hx-hero .hx-title` selector has to pass through. */
+      ["pf-design-export", ...(section.classes ? [section.classes] : []), ...motionClasses(section.anim)].join(" "),
     );
 
     const bandCss = declarations(desktop);
@@ -3193,7 +3266,9 @@ export function pageflyFromTree(
     /* The observer only ships when something actually reveals. Hover needs no
        JS, and a page that runs a MutationObserver for nothing is a page that
        costs the storefront something for nothing. */
-    customJS: [reveals ? MOTION_JS : "", blockJs].filter(Boolean).join("\n"),
+    customJS: [reveals ? MOTION_JS : "", blockJs, opts.pageJs ?? ""]
+      .filter(Boolean)
+      .join("\n"),
   });
   for (const s of sections) doc.addSection(s);
 
