@@ -102,23 +102,43 @@ export const PROMPT_SNIPPETS: {
   },
 ];
 
+/* ==========================================================================
+   THE PLACEHOLDER SENDS PEOPLE TO THE EXAMPLE.
+
+   It used to be a specimen answer — a good one, about stoneware mugs. The
+   trouble with a specimen in a placeholder is that it is the RIGHT LENGTH to be
+   mistaken for the whole job. A merchant reads two lines of grey text, writes
+   two lines of their own, and gets a page built from two lines; the brief that
+   actually produces good pages is a hundred times that and lives one click
+   away, behind a button they had no reason to press.
+
+   So the placeholder's job is now to spend the merchant's attention on the
+   button rather than on itself. The shape is still named — what you sell, the
+   look, the sections — because "click Example" with nothing else tells somebody
+   who does not click what they lost.
+
+   DETAIL MODE IS THE SHORTER ONE. Here the cards above have already asked for
+   the trade, the style and the pages; this field is what is left over, so its
+   placeholder says that rather than repeating the whole shape. */
 export const PROMPT_PLACEHOLDER =
-  "Hand-thrown stoneware mugs, small batches. Audience: home cooks in their 30s. Tone: quiet and specific. Colors: #2F3B2F, #EFE7D8.";
+  "Click Example above for the brief that builds the best pages — the more of it you copy, the less generic the result. Anything the cards above did not ask for goes here.";
 
 /**
  * The same field, when it is the ONLY field.
  *
  * In Build Quickly this prompt is the whole brief — what the merchant does not
- * put here, nothing else asks them for. So the placeholder is written as an
- * example of a complete answer rather than an afterthought, and names the three
- * things the form no longer has a card for: the trade, the colours, and what
- * they want the page to actually contain.
+ * put here, nothing else asks them for. Which is exactly why it points at the
+ * Example rather than standing in for one: this is the field where writing too
+ * little costs the most, and the example is the only thing on the screen that
+ * shows how much "enough" is.
+ *
+ * It still names the three things the form has no card for — the trade, the
+ * look, and what the pages should contain — so somebody who never opens the
+ * example is not left guessing.
  */
-export const QUICK_PROMPT_PLACEHOLDER = `Hand-thrown stoneware mugs, small batches, sold to home cooks in their 30s.
+export const QUICK_PROMPT_PLACEHOLDER = `Click Example above to see the brief that builds the best pages, then write yours the same way.
 
-Main colours: #2F3B2F and #EFE7D8. Quiet and specific, lots of white space.
-
-On the page I want: a hero with one mug photographed close up, the glazing process in three steps, customer reviews, a size guide, and a newsletter signup at the end.`;
+The fuller it is, the better the pages: what you sell and who buys it, your colours and fonts, and the sections you want on each page.`;
 
 /* Upload constraints (§4.5) ---------------------------------------------- */
 
