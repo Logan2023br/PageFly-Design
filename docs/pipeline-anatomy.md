@@ -68,12 +68,18 @@ merchant's brief
 
 Read off `lib/ai/provider.ts`: stages 1 and 2 call `getProvider("design")`,
 which is pinned in code — `DESIGN_PROVIDER = "anthropic"`, `DESIGN_MODEL =
-"claude-opus-5"`. Stage 3 calls `getProvider()` with no role, which is
+"claude-opus-5-5"`. Stage 3 calls `getProvider()` with no role, which is
 `AI_PROVIDER=deepseek`.
 
-**So Opus decides and DeepSeek builds.** The division matters for every bug
-report: a section in the wrong place is Opus, wrong copy or a collapsed column
-is DeepSeek, and an element that will not render is neither.
+The designing model has moved — Opus 5, then Sonnet 5 on cost, now Opus 5.5 on
+trial. The note beside the constant carries the measured cost of each and what
+would settle it; this file only promises to name the one in force. Check the
+constant, or `/api/health`, before quoting a model in a bug report.
+
+**So the designing model decides and DeepSeek builds.** The division matters
+for every bug report: a section in the wrong place is the designing model,
+wrong copy or a collapsed column is DeepSeek, and an element that will not
+render is neither.
 
 ---
 

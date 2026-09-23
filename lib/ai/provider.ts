@@ -138,23 +138,34 @@ const PREFIX: Record<Role, string | null> = {
    something cheaper, which is the failure mode worth keeping.
    ========================================================================== */
 export const DESIGN_PROVIDER = "anthropic";
-/* SONNET, AND THE REASON IS COST WITH THE QUALITY QUESTION STILL OPEN.
+/* OPUS 5.5, ON TRIAL. THIS LINE MOVES THE COST OF A PAGE MORE THAN ANYTHING
+   ELSE IN THE REPOSITORY, so it gets the long note.
 
    Measured on this pipeline, the design stage is `in 7,523 · out 28,112` per
    page. That is 8% of a page's tokens and about 91% of its bill, because its
-   output is priced far above DeepSeek's — so this one constant moves the cost
-   of a page more than everything else in the repository put together.
+   output is priced far above DeepSeek's.
 
-   Sonnet's first run on the same stage came back `12 sections, 11 specced · 0
-   dropped · REFUSED (buy box, page has no product)×1` — the same refusal Opus
-   earns on a home page, nothing dropped, and slightly MORE written. One run is
-   not evidence about design quality, and nobody has compared the pages yet.
-   The counters this build already prints — specced, dropped, refused, audit
-   failures, truncation — are what that comparison should be made of.
+   WHAT THE THREE HAVE COST HERE, per page, measured rather than quoted:
 
-   So this is a cost decision taken with the quality question open, and it is
-   one line either way: `claude-opus-5` puts it back. */
-export const DESIGN_MODEL = "claude-sonnet-5";
+     Opus 5      in 7,523 · out 28,112   $2.22
+     Sonnet 5    in 8,613 · out 27,112   $0.433
+     Opus 5.5    not yet measured
+
+   Sonnet went in as a cost decision with the quality question open — its first
+   run came back `12 sections, 11 specced · 0 dropped · REFUSED (buy box, page
+   has no product)×1`, the same refusal Opus earns on a home page, nothing
+   dropped and slightly MORE written. One run was never evidence, and the
+   comparison nobody has made is still the one worth making: specced, dropped,
+   refused, audit failures and truncation are all already printed per build.
+
+   `claude-opus-5-5` is what the API actually lists — checked against
+   `GET /v1/models` rather than assumed, because a model id that does not exist
+   fails at the first design call of a real build, fifteen minutes into
+   somebody's afternoon.
+
+   ONE LINE EITHER WAY. `claude-sonnet-5` puts it back; `claude-opus-5` is the
+   older, dearer one. Whoever settles the trial should write the number above. */
+export const DESIGN_MODEL = "claude-opus-5-5";
 
 /** `DESIGN_MODEL` for the design role, `AI_MODEL` for the default one. */
 function roleVar(role: Role, name: "PROVIDER" | "MODEL" | "API_KEY"): string | undefined {
