@@ -173,6 +173,9 @@ const COPY = {
       `${countWord(pages)} pages each, from one short brief each — same voice, same colours, ` +
       `same product facts across a set, and nothing shared between them. Every page is free ` +
       `to download and use: open one, read it at three screen sizes, and take the file.`,
+    /* The line beside the closing button. A signup pitch, which is right for a
+       stranger reading the front door. */
+    note: "First 3 pages free — no card, no password.",
   },
   building: {
     eyebrow: "Free while you wait",
@@ -181,6 +184,12 @@ const COPY = {
       `${sets * pages} real pages from ${countWord(sets).toLowerCase()} briefs, free to ` +
       `download and use. Open any of them, read it at three screen sizes, and import a page ` +
       `— or a whole store — straight into your PageFly editor while your own are building.`,
+    /* NOTHING HERE. "First 3 pages free — no card, no password" is a pitch at
+       somebody who has not signed up, and the reader of this screen signed up,
+       signed in, filled in a brief and is watching their own pages build. Told
+       there is no password to set up, they can only wonder what the one they
+       typed was for. */
+    note: null,
   },
 } as const;
 
@@ -365,9 +374,7 @@ export function Showcase({ place = "landing" }: { place?: "landing" | "building"
             Design pages for my store
             <Icon name="ArrowRight" size={15} />
           </Link>
-          <span className="text-[13.5px] text-pf-faint">
-            First 3 pages free — no card, no password.
-          </span>
+          {copy.note && <span className="text-[13.5px] text-pf-faint">{copy.note}</span>}
         </div>
       </div>
 
