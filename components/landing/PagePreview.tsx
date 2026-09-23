@@ -2,7 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { EV, track } from "@/lib/analytics";
-import { htmlFor, pageflyFor, type ShowcasePage } from "@/lib/showcasePages";
+import {
+  htmlFor,
+  pageflyFor,
+  type ShowcasePage,
+  type ShowcaseSet,
+} from "@/lib/showcasePages";
 import { Icon } from "../ui";
 
 /* ==========================================================================
@@ -60,19 +65,23 @@ type FrameId = (typeof FRAMES)[number]["id"];
 /**
  * One page, drawn small.
  *
- * ALL OF THEM LOAD, AND THAT IS MEASURED rather than assumed. An earlier cut
- * held each iframe back behind an `IntersectionObserver`, on the assumption
- * that a row of previews was a lot of weight for a hero. Measured, the seven
- * come to 108KB gzipped between them — about one of this app's own JavaScript
- * chunks. The weight was never the HTML, it was the 200-odd external images
+ * `lazy` IS OFF BY DEFAULT AND ON FOR THE GALLERY, and the number is why. With
+ * one set the whole thing was seven iframes and 108KB gzipped — less than one
+ * of this app's own JavaScript chunks, so holding them back was complexity
+ * buying nothing, and an earlier cut removed exactly that. With two sets the
+ * page mounts TWENTY-ONE: seven in the strip and fourteen in the gallery, of
+ * which fourteen are below the fold at load. Each one is a whole HTML document
+ * with its own scripts. That is worth a gate; the first seven are not.
+ *
+ * NO HYDRATION RISK EITHER WAY, which is what made it safe to add back. The
+ * iframe already renders only once the card has been MEASURED, so the server
+ * emits none of them in either mode — `IntersectionObserver` being undefined
+ * there changes nothing that was ever rendered.
+ *
+ * The weight was never the HTML anyway, it is the 200-odd external images
  * inside it, and those are made lazy when the files are written; see
  * `make-showcase-pages.ts`. A card shows the top of a tall page, so it fetches
  * the handful in that first screen and nothing else.
- *
- * Dropping the observer also dropped two real problems it brought: a white card
- * on first paint while it decided, and a hydration mismatch waiting to happen,
- * since `IntersectionObserver` is undefined on the server and defined in the
- * browser.
  *
  * THE SCALE IS MEASURED, NOT ASSUMED. It was a constant 200, true while every
  * card was 200px wide and a lie the moment they were allowed to shrink — a
@@ -85,9 +94,53 @@ type FrameId = (typeof FRAMES)[number]["id"];
  * or its storage. These files are ours; the sandbox is for the day one is
  * regenerated from a store whose content nobody has read.
  */
-export function PageThumb({ page }: { page: ShowcasePage }) {
+export function PageThumb({
+  set,
+  page,
+  lazy = false,
+}: {
+  set: ShowcaseSet;
+  page: ShowcasePage;
+  /** hold the iframe until the card is near the viewport — see above */
+  lazy?: boolean;
+}) {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
+  /* ======================================================================
+     DECIDED AT FIRST RENDER, NOT SET FROM INSIDE THE EFFECT.
+
+     A browser with no `IntersectionObserver` has to load the card — one that
+     never appears is worse than one that costs a request — and the obvious
+     place to say so is inside the effect, which is a synchronous setState in an
+     effect body and the cascading render React warns about.
+
+     Reading it here is safe because it CANNOT change what the server rendered:
+     the iframe also waits on `scale`, which is measured in the browser, so the
+     server emits nothing in either state. There is no markup for the two to
+     disagree about.
+     ====================================================================== */
+  const [near, setNear] = useState(
+    () => !lazy || typeof IntersectionObserver === "undefined",
+  );
+
+  useEffect(() => {
+    if (near) return;
+    const node = box.current;
+    if (!node) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setNear(true);
+          io.disconnect();
+        }
+      },
+      /* A screen of warning, so a card is loaded by the time it is looked at
+         rather than starting to load when it arrives. */
+      { rootMargin: "800px" },
+    );
+    io.observe(node);
+    return () => io.disconnect();
+  }, [near]);
 
   useEffect(() => {
     const node = box.current;
@@ -108,10 +161,10 @@ export function PageThumb({ page }: { page: ShowcasePage }) {
 
   return (
     <div ref={box} className="absolute inset-0 overflow-hidden bg-white">
-      {scale > 0 && (
+      {near && scale > 0 && (
         <iframe
-          src={htmlFor(page)}
-          title={`${page.label} page preview`}
+          src={htmlFor(set, page)}
+          title={`${set.name} ${page.label} page preview`}
           tabIndex={-1}
           aria-hidden
           scrolling="no"
@@ -141,10 +194,12 @@ export function PageThumb({ page }: { page: ShowcasePage }) {
  * gallery by somebody who scrolled to it.
  */
 export function PageViewer({
+  set,
   page,
   from,
   onClose,
 }: {
+  set: ShowcaseSet;
   page: ShowcasePage;
   from: string;
   onClose: () => void;
@@ -171,7 +226,7 @@ export function PageViewer({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={`${page.label} page`}
+      aria-label={`${set.name} — ${page.label} page`}
       className="fixed inset-0 z-[70] flex flex-col bg-[rgba(6,4,14,.92)] backdrop-blur-sm"
       onClick={onClose}
     >
@@ -182,7 +237,12 @@ export function PageViewer({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="min-w-0">
-          <p className="truncate text-[14px] font-semibold text-pf-text">{page.label} page</p>
+          {/* THE SET IS NAMED. Two stores are on this page now and their pages
+              share every label — both have a Home — so a panel headed only
+              "Home page" cannot say which store's. */}
+          <p className="truncate text-[14px] font-semibold text-pf-text">
+            {set.name} — {page.label}
+          </p>
           <p className="truncate text-[12px] text-pf-faint">{page.blurb}</p>
         </div>
 
@@ -197,7 +257,7 @@ export function PageViewer({
               type="button"
               onClick={() => {
                 setFrame(f.id);
-                track(EV.showcaseFrameChanged, { frame: f.id, page_type: page.slug, from });
+                track(EV.showcaseFrameChanged, { frame: f.id, page_type: page.slug, set: set.id, from });
               }}
               aria-pressed={frame === f.id}
               className={`flex flex-1 items-center justify-center gap-1.5 rounded-[9px] px-3 py-1.5 text-[12.5px] font-semibold transition-colors sm:flex-none ${
@@ -215,9 +275,13 @@ export function PageViewer({
               is a render of exactly these bytes, so "is this real" is answered by
               taking it rather than by a sentence. */}
           <a
-            href={pageflyFor(page)}
-            download={`${page.slug}.pagefly`}
-            onClick={() => track(EV.showcaseFileDownloaded, { page_type: page.slug, from })}
+            href={pageflyFor(set, page)}
+            /* Prefixed with the set, because a merchant who takes one from each
+               store ends up with two files called `home.pagefly`. */
+            download={`${set.id}-${page.slug}.pagefly`}
+            onClick={() =>
+              track(EV.showcaseFileDownloaded, { page_type: page.slug, set: set.id, from })
+            }
             className="inline-flex items-center gap-1.5 rounded-pf-md border border-pf-border-hi px-3 py-1.5 text-[12.5px] font-semibold text-pf-body transition-colors hover:border-pf-primary-hi hover:text-pf-text"
           >
             <Icon name="Download" size={13} />
@@ -255,9 +319,9 @@ export function PageViewer({
         <iframe
           /* Keyed on the frame as well as the page: changing width has to
              re-load, or the page keeps the layout it first measured. */
-          key={`${page.slug}-${frame}`}
-          src={htmlFor(page)}
-          title={`${page.label} page`}
+          key={`${set.id}-${page.slug}-${frame}`}
+          src={htmlFor(set, page)}
+          title={`${set.name} ${page.label} page`}
           sandbox="allow-scripts"
           /* `maxWidth` so a tablet frame on a narrow window shrinks rather than
              pushing a horizontal scrollbar under the whole panel. */

@@ -1,57 +1,71 @@
 /* ==========================================================================
-   THE PAGES SHOWN ON THE FRONT DOOR, BUILT FROM A REAL EXPORT.
+   THE PAGE SETS SHOWN ON THE FRONT DOOR, BUILT FROM REAL EXPORTS.
 
-       npx tsx scripts/make-showcase-pages.ts ~/Downloads/files.zip
+       npx tsx scripts/make-showcase-pages.ts <set> <previews.zip>
+       npx tsx scripts/make-showcase-pages.ts <set> <export.pagefly> <previews.zip>
 
-   The zip is what PageFly hands over when a whole set is exported page by page:
-   one `<Name>.pagefly` and one `<Name>-preview.html` per page, paired by name.
+   TWO INPUT SHAPES, BECAUSE PAGEFLY HANDS OVER TWO. Exported page by page, a
+   set arrives as one zip holding a `<Name>.pagefly` and a `<Name>-preview.html`
+   each — the first form. Exported all at once, the .pagefly files are one
+   multi-page archive and the previews are a separate zip — the second. Both are
+   read here rather than one being converted by hand, because the conversion is
+   exactly the step that goes wrong quietly.
 
-   WHY A SCRIPT AND NOT A COPY COMMAND. These assets are refreshed whenever the
+   WHY A SCRIPT AND NOT A COPY COMMAND. These assets are refreshed whenever a
    demo store is rebuilt, and the refresh has steps that are each easy to get
-   subtly wrong by hand: pairing the two files, slugging the names so the
-   manifest and the files agree, and making the HTML light enough to sit in a
-   hero. Done by hand once, the next person does it differently and the rail
-   half-breaks.
+   subtly wrong: pairing the two halves, slugging names so the manifest and the
+   files agree, and making the HTML light enough to sit in a hero.
 
-   THE LAZY IMAGES ARE THE WHOLE REASON THIS IS NOT `cp`. A set of previews
-   carries well over a hundred external images, every one full size — one home
-   page alone had 78. Seven thumbnails in a hero would pull all of them before a
-   visitor had read the headline. `loading="lazy"` costs nothing, changes
-   nothing about what renders, and means a thumbnail — which only ever shows the
-   top of a tall page — fetches the handful actually in that first screen.
+   THE LAZY IMAGES ARE THE WHOLE REASON THIS IS NOT `cp`. A set carries well
+   over a hundred external images, every one full size — one home page alone had
+   78. A row of thumbnails would pull all of them before a visitor had read the
+   headline. `loading="lazy"` costs nothing, changes nothing about what renders,
+   and means a thumbnail — which only ever shows the top of a tall page —
+   fetches the handful actually in that first screen.
 
-   IT WRITES INTO AN EMPTY DIRECTORY. The previous set is removed first, so a
-   page dropped from the export does not linger as a file the manifest no longer
-   names and nothing ever serves.
+   IT WRITES INTO AN EMPTY DIRECTORY, per set. A page dropped from an export
+   cannot linger as a file the manifest no longer names and nothing serves.
    ========================================================================== */
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { unzipSync, strFromU8 } from "fflate";
+import { unzipSync, zipSync, strFromU8 } from "fflate";
 
-const OUT = join(import.meta.dirname, "..", "public", "showcase", "pages");
+const ROOT = join(import.meta.dirname, "..");
 
 /**
  * `HollisRowe-Private-Sale-preview.html` → `private-sale`.
+ * `4 - 1 _ Hexwood Contact _ 2026_09_.json` → `contact`.
  *
- * The store's own name is dropped: it is the same on every entry, so repeating
- * it in seven file names says nothing and makes the manifest read as a list of
- * one thing. What is left is the page, which is what everything downstream is
- * keyed by.
+ * The store's own name goes: it is the same on every entry, so repeating it in
+ * seven file names says nothing and makes the manifest read as a list of one
+ * thing. So do PageFly's export numbering and its truncated date stamp, which
+ * are facts about the export rather than about the page.
  */
 function slugOf(entry: string, brand: string): string {
   return entry
-    .replace(/\.(pagefly|html)$/i, "")
+    .replace(/\.(pagefly|html|json)$/i, "")
     .replace(/-preview$/i, "")
-    .replace(new RegExp(`^${brand}[-_]?`, "i"), "")
+    /* `7 - 1 _ ` — the export's index, then PageFly's own page number. */
+    .replace(/^\s*\d+\s*-\s*/, "")
+    .replace(/^\s*\d+\s*_\s*/, "")
+    /* The trailing date, which PageFly truncates to whatever fits a filename —
+       `_ 2026`, `_ 2026_09_`, `_ 2`. Matched at one to four digits for that
+       reason; `lib/collections/pagefly.ts` carries the long version of this. */
+    .replace(/[_\s]+\d{1,4}([_\s].*)?$/, "")
+    .replace(new RegExp(`^${brand}[-_\\s]*`, "i"), "")
+    .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 }
 
-/** The prefix every entry shares, so it can be stripped. */
+/** The word every entry starts with, so it can be stripped. */
 function brandOf(names: string[]): string {
-  const first = names[0]?.split("-")[0] ?? "";
-  return names.every((n) => n.startsWith(first)) ? first : "";
+  const words = names.map((n) =>
+    n.replace(/^\s*\d+\s*-\s*/, "").replace(/^\s*\d+\s*_\s*/, "").split(/[-_\s]/)[0] ?? "",
+  );
+  const first = words[0] ?? "";
+  return first && words.every((w) => w === first) ? first : "";
 }
 
 /**
@@ -60,9 +74,8 @@ function brandOf(names: string[]): string {
  * A REGEX OVER HTML, WHICH IS USUALLY WRONG. It is right here for one reason:
  * the input is machine-generated by one exporter, `<img` is always followed by
  * attributes and closed with `>`, and the edit inserts an attribute rather than
- * restructuring anything. A parser would be a dependency and a second thing to
- * keep correct. The count below is what makes it safe — if the shape of the
- * export ever changes, it comes back zero and the script stops.
+ * restructuring anything. The count below is what makes it safe — if the shape
+ * of the export ever changes, it comes back zero and the script stops.
  */
 function lazify(html: string): { out: string; changed: number } {
   let changed = 0;
@@ -73,59 +86,84 @@ function lazify(html: string): { out: string; changed: number } {
   return { out, changed };
 }
 
+/** `.pagefly` bytes for one page, whichever shape the export arrived in. */
+function onePagefly(entry: string, bytes: Uint8Array, fromBundle: boolean): Uint8Array {
+  /* Already a single-page file: hand it straight over. Re-zipping it would
+     change bytes nobody here is qualified to change. */
+  if (!fromBundle) return bytes;
+
+  /* One entry of a multi-page archive, renumbered to 1 and otherwise
+     byte-for-byte — which is exactly what a single-page export is.
+     `combinePagefly` in `lib/collections/pagefly.ts` does the reverse. */
+  const bare = entry.replace(/\.json$/i, "").replace(/^\s*\d+\s*-\s*/, "");
+  return zipSync({ [`1 - ${bare}.json`]: bytes }, { level: 6 });
+}
+
 function main(): void {
-  const [zipPath] = process.argv.slice(2);
-  if (!zipPath) {
-    console.error("usage: make-showcase-pages.ts <export.zip>");
+  const [set, a, b] = process.argv.slice(2);
+  if (!set || !a) {
+    console.error("usage: make-showcase-pages.ts <set> <previews.zip>");
+    console.error("       make-showcase-pages.ts <set> <export.pagefly> <previews.zip>");
     process.exitCode = 1;
     return;
   }
 
-  const files = unzipSync(readFileSync(zipPath));
-  const names = Object.keys(files).filter((n) => !n.startsWith("__MACOSX"));
-  const brand = brandOf(names);
+  const bundled = Boolean(b);
+  const pageflyZip = unzipSync(readFileSync(a));
+  const previews = unzipSync(readFileSync(bundled ? b : a));
 
-  /* Paired by slug rather than by position: a zip's key order is not
-     guaranteed, and a set where the HTML and the .pagefly came out in different
-     orders would put one page's file behind another page's picture. */
-  const pages = new Map<string, { html?: string; pagefly?: string }>();
-  for (const name of names) {
-    const slug = slugOf(name, brand);
-    const hit = pages.get(slug) ?? {};
-    if (/\.html$/i.test(name)) hit.html = name;
-    if (/\.pagefly$/i.test(name)) hit.pagefly = name;
-    pages.set(slug, hit);
+  const real = (o: Record<string, Uint8Array>) =>
+    Object.keys(o).filter((n) => !n.startsWith("__MACOSX") && !n.endsWith("/"));
+
+  const htmlNames = real(previews).filter((n) => /\.html$/i.test(n));
+  const pageNames = real(pageflyZip).filter((n) => /\.(pagefly|json)$/i.test(n));
+
+  const htmlBrand = brandOf(htmlNames);
+  const pageBrand = brandOf(pageNames);
+
+  /* Paired by SLUG rather than by position: a zip's key order is not
+     guaranteed, and a set whose two halves came out in different orders would
+     put one page's file behind another page's picture — which looks right and
+     hands over the wrong thing. */
+  const pages = new Map<string, { html?: string; page?: string }>();
+  for (const n of htmlNames) {
+    const slug = slugOf(n, htmlBrand);
+    pages.set(slug, { ...(pages.get(slug) ?? {}), html: n });
+  }
+  for (const n of pageNames) {
+    const slug = slugOf(n, pageBrand);
+    pages.set(slug, { ...(pages.get(slug) ?? {}), page: n });
   }
 
-  rmSync(OUT, { recursive: true, force: true });
-  mkdirSync(OUT, { recursive: true });
+  const out = join(ROOT, "public", "showcase", set);
+  rmSync(out, { recursive: true, force: true });
+  mkdirSync(out, { recursive: true });
 
   const written: string[] = [];
   for (const [slug, pair] of pages) {
-    if (!pair.html || !pair.pagefly) {
+    if (!pair.html || !pair.page)
       throw new Error(
         `"${slug}" has only ${pair.html ? "an .html" : "a .pagefly"} — every page needs both`,
       );
-    }
 
-    const { out, changed } = lazify(strFromU8(files[pair.html]));
+    const { out: html, changed } = lazify(strFromU8(previews[pair.html]));
     if (changed === 0)
       throw new Error(`${pair.html} has no <img> to make lazy — has the export changed shape?`);
 
-    writeFileSync(join(OUT, `${slug}.html`), out);
-    writeFileSync(join(OUT, `${slug}.pagefly`), files[pair.pagefly]);
+    const file = onePagefly(pair.page, pageflyZip[pair.page], bundled);
+    writeFileSync(join(out, `${slug}.html`), html);
+    writeFileSync(join(out, `${slug}.pagefly`), file);
     written.push(slug);
 
     console.log(
-      `  ${slug.padEnd(16)} html ${String(Math.round(out.length / 1024)).padStart(4)}KB ` +
-        `(${String(changed).padStart(3)} images made lazy)   ` +
-        `pagefly ${String(Math.round(files[pair.pagefly].length / 1024)).padStart(3)}KB`,
+      `  ${slug.padEnd(18)} html ${String(Math.round(html.length / 1024)).padStart(4)}KB ` +
+        `(${String(changed).padStart(3)} lazy)   pagefly ${String(Math.round(file.length / 1024)).padStart(3)}KB`,
     );
   }
 
-  console.log(`\nwrote ${written.length * 2} files to public/showcase/pages/`);
+  console.log(`\nwrote ${written.length * 2} files to public/showcase/${set}/`);
   console.log(`slugs: ${written.join(", ")}`);
-  console.log(`\nNow check lib/showcasePages.ts names exactly these slugs.`);
+  console.log(`\nNow check lib/showcasePages.ts names exactly these slugs for "${set}".`);
 }
 
 main();

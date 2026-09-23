@@ -340,6 +340,20 @@ const PROMPT_EXAMPLE_LABELS: Record<string, string> = {
   hollis: "Example 2 · luxury",
 };
 
+/* The two sample stores. Ids rather than names, because the id is what rides on
+   the event — a renamed store must not orphan the rows already recorded. */
+const SHOWCASE_SETS_LABELS: Record<string, string> = {
+  hexwood: "Hexwood (dark)",
+  hollis: "Hollis & Rowe (light)",
+};
+
+/* Every page slug across both sets — see `lib/showcasePages.ts`. Written out
+   rather than derived from that list: these labels name a PAGE TYPE for
+   somebody reading a chart, and the ones there are chips on a card.
+
+   The two sets SHARE most slugs — both have a Home — which is what makes this
+   read as "which page type do people open", the question the tile is for.
+   Which STORE is a second split on the same event, not a doubled list. */
 const SHOWCASE_SLUGS: Record<string, string> = {
   home: "Home",
   "product-page": "Product",
@@ -348,6 +362,7 @@ const SHOWCASE_SLUGS: Record<string, string> = {
   contact: "Contact",
   "blog-article": "Blog article",
   "private-sale": "Private sale",
+  "fright-night-sale": "Sale",
 };
 
 /* WHERE THE INSTALL BUTTON WAS PRESSED. One button, many placements — see
@@ -827,6 +842,14 @@ function buildView(
            merchant whose traffic is mostly mobile asks "will this work on a
            phone" before anything else; every press of Tablet or Mobile here is
            that question being asked out loud. */
+        /* WHICH STORE people open. Two sets are shown and they are deliberately
+           unalike — near-black and loud against ivory and quiet — so which one
+           a visitor reaches for is the closest thing this page has to a reading
+           of their taste, and it cannot be got from the page-type split. */
+        metric("set", "Which store was opened", "the two sample sets", EV.galleryOpened, "The same presses as the tile above, counted by which of the two sample stores the page belonged to", {
+          split: slices(rows, EV.galleryOpened, "set", SHOWCASE_SETS_LABELS),
+          splitKind: "control",
+        }),
         metric("frame", "Sample read at another width", "desktop, tablet or mobile", EV.showcaseFrameChanged, "The Desktop / Tablet / Mobile frames in the toolbar of an opened page from the rail under the hero", {
           split: slices(rows, EV.showcaseFrameChanged, "frame", SHOWCASE_FRAMES),
           splitKind: "control",
