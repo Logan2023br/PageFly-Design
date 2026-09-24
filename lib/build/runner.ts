@@ -1,6 +1,7 @@
 import "server-only";
 
 import { designPageTree } from "../ai/designServer";
+import { withMeter } from "../ai/meter";
 import { trackServer } from "../analyticsServer";
 import { EV } from "../analytics";
 import { readReferences } from "../ai/refVision";
@@ -187,8 +188,20 @@ export async function startBuild(
      that did nothing. `run` wraps its worker loop but its deck-level setup sits
      above that try, so "nothing here can throw" was never a property of the
      code, only a hope about it. A build that dies now says so. */
-  void run(job, brief, variants, plan, controller.signal)
-    .catch(async (err) => {
+  /* EVERY MODEL CALL UNDER THIS BUILD IS TAGGED WITH IT. The context reaches
+     the meter through async storage rather than through 400 lines of parameter
+     passing, and the run id is computed here — from the brief, exactly as
+     `saveRun` computes it — so the rows land under the run they paid for and
+     `stats()` can tell a measured build from one that predates measuring. */
+  void withMeter(
+    {
+      domain: job.domain,
+      stage: "build",
+      runId: runId(job.domain, encodeRunPayload(brief, variants)),
+    },
+    () => run(job, brief, variants, plan, controller.signal),
+  )
+    .catch(async (err: unknown) => {
       /* THE STACK, not just the message. A merchant saw the word "terminated"
          on their brief — undici's fetch error for a connection cut mid-stream,
          escaping raw from somewhere in `run`'s 420 lines of deck-level setup,

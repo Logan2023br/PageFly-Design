@@ -16,6 +16,7 @@ import type {
   TrainingSummary,
 } from "./types";
 import { REGISTER_USER_TYPE } from "./types";
+import type { ModelSpendRow } from "./types";
 
 /* ==========================================================================
    Postgres. Works unchanged against Vercel Postgres, Neon and Supabase — they
@@ -205,6 +206,24 @@ alter table jobs add column if not exists progress jsonb not null default '{}'::
    composite on (name, created_at) was the other option and is not worth it
    until one name dwarfs the rest — there are twenty-odd of them and they
    arrive at roughly the rate people click. */
+create table if not exists model_calls (
+  id         text primary key,
+  created_at timestamptz not null default now(),
+  domain     text,
+  stage      text not null default '',
+  vendor     text not null,
+  model      text not null,
+  input      integer not null default 0,
+  output     integer not null default 0,
+  cached     integer not null default 0,
+  reasoning  integer not null default 0,
+  /* NULLABLE ON PURPOSE. A model with no rate on file is an unknown cost, and
+     0.0 here would read as "this was free" on the admin screen. */
+  cost_usd   double precision
+);
+create index if not exists model_calls_created on model_calls (created_at desc);
+create index if not exists model_calls_model on model_calls (model, created_at desc);
+
 create table if not exists events (
   id         text primary key,
   name       text not null,
@@ -1324,17 +1343,47 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
         .sort((x, y) => y.count - x.count || (x.domain ?? "").localeCompare(y.domain ?? ""));
     },
 
-    async stats() {
+    async recordModelCall(call) {
+      /* BEST EFFORT, ALWAYS. This runs inside the call it is measuring; a
+         metering insert that throws would fail a merchant's build to protect
+         a number on an admin screen. */
+      try {
+        await ready();
+        await db.query(
+          `insert into model_calls
+             (id, created_at, domain, stage, vendor, model, input, output, cached, reasoning, cost_usd)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+           on conflict (id) do nothing`,
+          [call.id, call.createdAt, call.domain, call.stage, call.vendor, call.model,
+           call.input, call.output, call.cached, call.reasoning, call.costUsd],
+        );
+      } catch {
+        /* nothing: see above */
+      }
+    },
+
+    async stats(days = 30) {
       await ready();
-      const [totals, reviews, daily] = await Promise.all([
+      /* `days` of 0 means everything. Interpolated as a literal interval
+         because a parameter cannot sit inside `interval '$1 days'`; it is
+         coerced to an integer first, so it cannot carry anything but a
+         number into the statement. */
+      const n = Math.max(0, Math.floor(Number(days) || 0));
+      const since = n === 0 ? "" : `where r.created_at > now() - interval '${n} days'`;
+      const sinceBare = n === 0 ? "" : `where created_at > now() - interval '${n} days'`;
+
+      const [totals, reviews, daily, types, spend, legacy, geo] = await Promise.all([
         db.query(
           `select
              (select count(*)::int from stores)                                as allowed_stores,
              (select count(*)::int from stores where last_seen_at is not null) as active_stores,
              (select count(*)::int from stores where user_type = $1)           as registered_stores,
-             (select count(*)::int from runs)                                  as total_runs,
-             (select count(*)::int from run_pages)                             as total_pages,
-             (select coalesce(sum(tokens),0)::int from runs)                    as total_tokens`,
+             (select count(distinct r.domain)::int
+                from runs r join run_pages p on p.run_id = r.id)               as built_stores,
+             (select count(*)::int from runs r ${since})                        as total_runs,
+             (select count(p.page_id)::int
+                from runs r join run_pages p on p.run_id = r.id ${since})       as total_pages,
+             (select coalesce(sum(r.tokens),0)::bigint from runs r ${since})    as total_tokens`,
           [REGISTER_USER_TYPE],
         ),
         db.query(
@@ -1345,8 +1394,44 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
                   count(distinct r.id)::int as runs,
                   count(p.page_id)::int     as pages
              from runs r left join run_pages p on p.run_id = r.id
-            where r.created_at > now() - interval '30 days'
+            ${since || "where true"}
             group by 1 order by 1`,
+        ),
+        db.query(
+          `select p.page_type as type, count(*)::int as pages
+             from run_pages p join runs r on r.id = p.run_id
+            ${since || "where true"}
+            group by 1 order by 2 desc, 1`,
+        ),
+        db.query(
+          `select vendor, model, count(*)::int as calls,
+                  coalesce(sum(input),0)::bigint  as input,
+                  coalesce(sum(output),0)::bigint as output,
+                  coalesce(sum(cached),0)::bigint as cached,
+                  coalesce(sum(cost_usd),0)::double precision as cost,
+                  bool_or(cost_usd is null) as unpriced
+             from model_calls ${sinceBare}
+            group by 1,2 order by 7 desc`,
+        ),
+        /* THE TOKENS THAT PREDATE PER-CALL ROWS. A run whose id appears in
+           `model_calls` is accounted for there; one that does not is history,
+           and its `tokens` integer is all that is known about it. Matching on
+           the run id keeps the two from ever being counted twice. */
+        db.query(
+          `select coalesce(sum(r.tokens),0)::bigint as tokens
+             from runs r
+            where not exists (select 1 from model_calls m where m.id like r.id || '%')
+              ${n === 0 ? "" : `and r.created_at > now() - interval '${n} days'`}`,
+        ),
+        db.query(
+          `select coalesce(s.country, 'unknown') as country,
+                  count(distinct r.domain)::int as stores,
+                  count(p.page_id)::int         as pages
+             from runs r
+             join run_pages p on p.run_id = r.id
+             left join stores s on s.domain = r.domain
+            ${since || "where true"}
+            group by 1 order by 3 desc, 1`,
         ),
       ]);
 
@@ -1356,7 +1441,26 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
         const s = Number(row.stars);
         if (s >= 1 && s <= 5) histogram[s - 1] = Number(row.n);
       }
-      return buildStats(t as Record<string, unknown>, histogram, daily.rows as never[]);
+      return buildStats(t as Record<string, unknown>, histogram, daily.rows as never[], {
+        days: n,
+        pageTypes: types.rows.map((r) => ({ type: String(r.type), pages: Number(r.pages) })),
+        countries: geo.rows.map((r) => ({
+          country: String(r.country),
+          stores: Number(r.stores),
+          pages: Number(r.pages),
+        })),
+        spendRows: spend.rows.map((r) => ({
+          vendor: String(r.vendor),
+          model: String(r.model),
+          calls: Number(r.calls),
+          input: Number(r.input),
+          output: Number(r.output),
+          cached: Number(r.cached),
+          tokens: Number(r.input) + Number(r.output),
+          costUsd: r.unpriced ? null : Number(r.cost),
+        })),
+        unattributedTokens: Number(legacy.rows[0]?.tokens ?? 0),
+      });
     },
   };
 }
@@ -1367,16 +1471,48 @@ export function buildStats(
   totals: Record<string, unknown>,
   histogram: number[],
   daily: { date: string; runs: number; pages: number }[],
+  extra: {
+    days: number;
+    pageTypes: { type: string; pages: number }[];
+    countries: { country: string; stores: number; pages: number }[];
+    spendRows: ModelSpendRow[];
+    unattributedTokens: number;
+  },
 ): AdminStats {
   const total = histogram.reduce((a, b) => a + b, 0);
   const weighted = histogram.reduce((sum, n, i) => sum + n * (i + 1), 0);
+
+  const active = Number(totals.active_stores ?? 0);
+  const built = Math.min(Number(totals.built_stores ?? 0), active);
+
+  /* THE TOTAL IS THE RECORDED ROWS PLUS WHAT PREDATES THEM, and the two are
+     kept apart above so this addition is the only place they meet. Legacy
+     tokens carry no model and no price, so they add to the token count and
+     NOT to the dollars — which is why the total cost goes null the moment any
+     of the window is unattributed or unpriced. Reporting a smaller-than-real
+     bill as if it were the bill is the failure this shape exists to prevent. */
+  const attributed = extra.spendRows.reduce((n, r) => n + r.tokens, 0);
+  const anyUnpriced = extra.spendRows.some((r) => r.costUsd === null);
+  const costs = extra.spendRows.reduce((n, r) => n + (r.costUsd ?? 0), 0);
+
   return {
     allowedStores: Number(totals.allowed_stores ?? 0),
     registeredStores: Number(totals.registered_stores ?? 0),
-    activeStores: Number(totals.active_stores ?? 0),
+    activeStores: active,
+    builtStores: built,
+    idleStores: active - built,
     totalRuns: Number(totals.total_runs ?? 0),
     totalPages: Number(totals.total_pages ?? 0),
     totalTokens: Number(totals.total_tokens ?? 0),
+    pageTypes: extra.pageTypes,
+    countries: extra.countries,
+    spend: {
+      rows: extra.spendRows,
+      unattributedTokens: extra.unattributedTokens,
+      totalTokens: attributed + extra.unattributedTokens,
+      totalCostUsd: anyUnpriced || extra.unattributedTokens > 0 ? null : costs,
+    },
+    days: extra.days,
     reviews: {
       total,
       good: histogram[3] + histogram[4],

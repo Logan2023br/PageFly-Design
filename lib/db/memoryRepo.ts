@@ -2,6 +2,8 @@ import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { buildStats } from "./postgresRepo";
 import { REGISTER_USER_TYPE, reviewOnlyStore } from "./types";
 import type {
+  ModelCallRecord,
+  ModelSpendRow,
   CountryCount,
   EventRecord,
   GeoFilter,
@@ -51,6 +53,7 @@ type Shape = {
   training: TrainingItem[];
   trainingSections: TrainingSection[];
   events: EventRecord[];
+  modelCalls: ModelCallRecord[];
 };
 
 /* The same rule as `geoClause` in the postgres repo, in the other language —
@@ -67,7 +70,7 @@ function geoAllows(country: string | null, geo: GeoFilter): boolean {
   return true;
 }
 
-const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], pageFiles: [], photos: [], jobs: [], training: [], trainingSections: [], events: [] };
+const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], pageFiles: [], photos: [], jobs: [], training: [], trainingSections: [], events: [], modelCalls: [] };
 
 /** The map key for "no store". A domain can never contain a space, so this
     cannot collide with one — and unlike a NUL it survives grep and an editor. */
@@ -92,6 +95,7 @@ export function createMemoryRepo(file: string): Repo {
         photos: parsed.photos ?? [],
         jobs: parsed.jobs ?? [],
         events: parsed.events ?? [],
+        modelCalls: parsed.modelCalls ?? [],
         training: parsed.training ?? [],
         /* Absent in a file written before section references existed. Rows
            written before `vertical` existed read as the shared filing, which is
@@ -805,21 +809,86 @@ export function createMemoryRepo(file: string): Repo {
         .sort((x, y) => y.count - x.count || (x.domain ?? "").localeCompare(y.domain ?? ""));
     },
 
-    async stats() {
+    async recordModelCall(call) {
+      /* Best effort, exactly as in the postgres driver: a measurement must
+         never fail the thing it measures. */
+      try {
+        sync();
+        if (!data.modelCalls.some((c) => c.id === call.id)) data.modelCalls.push(call);
+        flush();
+      } catch {
+        /* nothing */
+      }
+    },
+
+    async stats(days = 30) {
       sync();
+      const n = Math.max(0, Math.floor(Number(days) || 0));
+      /* THE SAME WINDOW AS THE SQL, in the other language. `test-stats-window`
+         runs the same fixture through both drivers precisely because this is
+         two implementations of one rule. */
+      const cutoff = n === 0 ? null : Date.now() - n * 86_400_000;
+      const inWindow = (iso: string) => cutoff === null || Date.parse(iso) > cutoff;
+
       const histogram = [0, 0, 0, 0, 0];
       for (const r of data.reviews) {
         if (r.stars >= 1 && r.stars <= 5) histogram[r.stars - 1]++;
       }
 
+      const runs = data.runs.filter((r) => inWindow(r.createdAt));
+      const runIds = new Set(runs.map((r) => r.id));
+      const pages = data.runPages.filter((p) => runIds.has(p.runId));
+
       const byDay = new Map<string, { runs: number; pages: number }>();
-      for (const run of data.runs) {
+      for (const run of runs) {
         const day = run.createdAt.slice(0, 10);
         const entry = byDay.get(day) ?? { runs: 0, pages: 0 };
         entry.runs++;
         entry.pages += data.runPages.filter((p) => p.runId === run.id).length;
         byDay.set(day, entry);
       }
+
+      const byType = new Map<string, number>();
+      for (const p of pages) byType.set(p.pageType, (byType.get(p.pageType) ?? 0) + 1);
+
+      /* A store counts as having built only where a page row exists — the same
+         rule the proof feed uses, and for the same reason: a run that claimed
+         pages with nothing behind it delivered nothing. */
+      const everBuilt = new Set(
+        data.runs.filter((r) => data.runPages.some((p) => p.runId === r.id)).map((r) => r.domain),
+      );
+
+      const geo = new Map<string, { stores: Set<string>; pages: number }>();
+      for (const r of runs) {
+        const country = data.stores.find((s) => s.domain === r.domain)?.country ?? "unknown";
+        const hit = geo.get(country) ?? { stores: new Set<string>(), pages: 0 };
+        hit.stores.add(r.domain);
+        hit.pages += data.runPages.filter((p) => p.runId === r.id).length;
+        geo.set(country, hit);
+      }
+
+      const calls = data.modelCalls.filter((c) => inWindow(c.createdAt));
+      const byModel = new Map<string, ModelSpendRow & { unpriced: boolean }>();
+      for (const c of calls) {
+        const key = `${c.vendor}/${c.model}`;
+        const hit = byModel.get(key) ?? {
+          vendor: c.vendor, model: c.model, calls: 0,
+          input: 0, output: 0, cached: 0, tokens: 0, costUsd: 0, unpriced: false,
+        };
+        hit.calls++;
+        hit.input += c.input;
+        hit.output += c.output;
+        hit.cached += c.cached;
+        hit.tokens += c.input + c.output;
+        if (c.costUsd === null) hit.unpriced = true;
+        else hit.costUsd = (hit.costUsd ?? 0) + c.costUsd;
+        byModel.set(key, hit);
+      }
+
+      const measured = new Set(calls.map((c) => c.id.split(":")[0]));
+      const unattributed = runs
+        .filter((r) => !measured.has(r.id))
+        .reduce((sum, r) => sum + r.tokens, 0);
 
       return buildStats(
         {
@@ -828,14 +897,28 @@ export function createMemoryRepo(file: string): Repo {
           registered_stores: data.stores.filter(
             (s) => s.userType === REGISTER_USER_TYPE,
           ).length,
-          total_runs: data.runs.length,
-          total_pages: data.runPages.length,
-          total_tokens: data.runs.reduce((sum, r) => sum + r.tokens, 0),
+          built_stores: everBuilt.size,
+          total_runs: runs.length,
+          total_pages: pages.length,
+          total_tokens: runs.reduce((sum, r) => sum + r.tokens, 0),
         },
         histogram,
         [...byDay.entries()]
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([date, v]) => ({ date, ...v })),
+        {
+          days: n,
+          pageTypes: [...byType.entries()]
+            .map(([type, p]) => ({ type, pages: p }))
+            .sort((a, b) => b.pages - a.pages || a.type.localeCompare(b.type)),
+          countries: [...geo.entries()]
+            .map(([country, v]) => ({ country, stores: v.stores.size, pages: v.pages }))
+            .sort((a, b) => b.pages - a.pages || a.country.localeCompare(b.country)),
+          spendRows: [...byModel.values()]
+            .map(({ unpriced, ...row }) => ({ ...row, costUsd: unpriced ? null : row.costUsd }))
+            .sort((a, b) => (b.costUsd ?? 0) - (a.costUsd ?? 0) || b.tokens - a.tokens),
+          unattributedTokens: unattributed,
+        },
       );
     },
   };

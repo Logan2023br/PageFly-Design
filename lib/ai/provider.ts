@@ -49,6 +49,8 @@ import { deepseekAccumulator, sseDecoder } from "./sse";
  * under two different keys and is not read here yet, so it stays null there
  * rather than being guessed at.
  */
+import { metered } from "./meter";
+
 export type Usage = { input: number; output: number; cached?: number | null };
 
 /**
@@ -548,7 +550,18 @@ function deepseekProvider(role: Role): Provider {
   };
 }
 
+/**
+ * THE ONE DOOR. Every model call in the product comes through here, which is
+ * why the meter wraps the result rather than each caller: a call site added
+ * later is measured without anybody remembering to measure it. Wrapping
+ * callers instead is the design that left the export path's DeepSeek spend out
+ * of the admin total entirely — see `lib/ai/meter.ts`.
+ */
 export function getProvider(role: Role = "default"): Provider | null {
+  return metered(rawProvider(role));
+}
+
+function rawProvider(role: Role): Provider | null {
   switch (providerName(role)) {
     case "anthropic":
       return anthropicProvider(role);

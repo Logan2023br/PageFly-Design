@@ -1,4 +1,5 @@
 import "server-only";
+import { withMeter } from "../ai/meter";
 
 import { getRepo } from "../db";
 import { keyForHtml } from "./prepared";
@@ -82,7 +83,8 @@ export async function prebuildFiles(domain: string, pages: PageMockup[]): Promis
     const started = Date.now();
     try {
       const t = page.tokens;
-      const built = await pageflyFromHtmlLive(page.design!.html!, fileStem(page), {
+      const built = await withMeter({ domain, stage: "export" }, () =>
+        pageflyFromHtmlLive(page.design!.html!, fileStem(page), {
         bg: t.bg,
         ink: t.ink,
         fontBody: t.fontBody,
@@ -90,7 +92,8 @@ export async function prebuildFiles(domain: string, pages: PageMockup[]): Promis
         border: t.border,
         radius: t.radius,
         band: t.surfaceAlt,
-      });
+        }),
+      );
       const bytes = new Uint8Array(await built.blob.arrayBuffer());
       await repo.savePageFile({
         domain,

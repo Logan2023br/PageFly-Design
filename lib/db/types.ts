@@ -178,6 +178,58 @@ export type StoreSummary = StoreRecord & {
   review: { stars: number; comment: string | null; createdAt: string } | null;
 };
 
+
+/* ==========================================================================
+   ONE ROW PER MODEL CALL.
+
+   Before this, a build added `input + output` into a running `tokens` integer
+   and threw the model's name away, so "24,596,534 tokens" could not be asked
+   which model spent them or what they cost. Worse, the export path — one
+   DeepSeek call per band, and the largest single consumer in the product —
+   only ever wrote its usage to `console.log`, so it was not in that figure at
+   all.
+
+   ROWS, NOT COUNTERS, for the reason the events table already states: a
+   counter can only answer the question it was written for. "What did Opus cost
+   last week" and "which stage is expensive" and "how much of our input is
+   cache hits" are three questions and one row shape.
+
+   `costUsd` is stored rather than derived at read time because a rate is a
+   fact about the day the call was made. Re-pricing history against today's
+   card would silently rewrite what last month cost.
+   ========================================================================== */
+export type ModelCallRecord = {
+  id: string;
+  createdAt: string;
+  /** null for work not done on behalf of one store */
+  domain: string | null;
+  /** which part of the pipeline spent it — "design", "page", "export" … */
+  stage: string;
+  vendor: string;
+  model: string;
+  input: number;
+  output: number;
+  /** of `input`, how many were served from the vendor's prompt cache */
+  cached: number;
+  /** of `output`, how many were the model thinking */
+  reasoning: number;
+  /** null when the model had no rate on file — NOT zero; see lib/ai/pricing.ts */
+  costUsd: number | null;
+};
+
+/** One model's share of the bill, over a window. */
+export type ModelSpendRow = {
+  vendor: string;
+  model: string;
+  calls: number;
+  input: number;
+  output: number;
+  cached: number;
+  tokens: number;
+  /** null when any call in this group was unpriced — an unknown, not a zero */
+  costUsd: number | null;
+};
+
 export type AdminStats = {
   /** stores that have signed in at least once */
   activeStores: number;
@@ -205,6 +257,36 @@ export type AdminStats = {
     /** index 0 = 1 star … index 4 = 5 stars */
     histogram: number[];
   };
+  /**
+   * Of the stores that signed in, how many got as far as building.
+   *
+   * `activeStores` alone cannot tell a merchant who arrived and left from one
+   * who is using the product, and those two numbers move for opposite reasons.
+   */
+  builtStores: number;
+  /** signed in, never built — `activeStores - builtStores` */
+  idleStores: number;
+  /** what kind of pages were built, commonest first */
+  pageTypes: { type: string; pages: number }[];
+  /** where the stores are, by pages built */
+  countries: { country: string; stores: number; pages: number }[];
+  spend: {
+    /** one row per model, dearest first */
+    rows: ModelSpendRow[];
+    /**
+     * Tokens on runs recorded before per-call rows existed.
+     *
+     * Kept as its own figure rather than folded in or dropped: folding it in
+     * would attribute it to a model that may not have spent it, and dropping
+     * it would make the headline fall off a cliff on the day this shipped.
+     */
+    unattributedTokens: number;
+    totalTokens: number;
+    /** null when any part of the window is unpriced */
+    totalCostUsd: number | null;
+  };
+  /** the window these build figures cover, in days; 0 means everything */
+  days: number;
   /** pages built per day, oldest first — drives the stats chart */
   daily: { date: string; pages: number; runs: number }[];
 };
@@ -631,7 +713,10 @@ export type Repo = {
 
   /* ---- admin ---- */
   listStoreSummaries(): Promise<StoreSummary[]>;
-  stats(): Promise<AdminStats>;
+  /** Best-effort: metering must never fail the request it is measuring. */
+  recordModelCall(call: ModelCallRecord): Promise<void>;
+  /** `days` of 0 means every row ever. */
+  stats(days?: number): Promise<AdminStats>;
 };
 
 /* ==========================================================================

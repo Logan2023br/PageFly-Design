@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { pageflyFromHtmlSkill } from "@/lib/pagefly/fromHtmlSkill";
 import { pageflyFromHtmlLive } from "@/lib/pagefly/htmlToTree";
+import { flushMeter, withMeter } from "@/lib/ai/meter";
 
 /* ==========================================================================
    POST /api/pagefly/from-html
@@ -64,7 +65,8 @@ export async function POST(req: Request): Promise<Response> {
     const built =
       mode === "skill"
         ? await pageflyFromHtmlSkill(html, name, req.signal)
-        : await pageflyFromHtmlLive(
+        : await withMeter({ stage: "export" }, () =>
+            pageflyFromHtmlLive(
             html,
             name,
             {
@@ -79,7 +81,12 @@ export async function POST(req: Request): Promise<Response> {
               band: typeof body.band === "string" ? body.band : undefined,
             },
             req.signal,
+            ),
           );
+    /* The rows are written outside the response path on purpose, so this is
+       where they are made to land: the answer is already built, and a host
+       that freezes the process on return would otherwise drop them. */
+    await flushMeter();
     const bytes = new Uint8Array(await built.blob.arrayBuffer());
 
     /* CACHED, NOT JUST TOTAL. The input is mostly the same stylesheet, sent
