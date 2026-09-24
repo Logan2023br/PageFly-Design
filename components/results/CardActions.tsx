@@ -6,6 +6,8 @@ import { EV, track } from "@/lib/analytics";
 import type { PageMockup } from "@/lib/generate/types";
 import { useExport } from "./ExportProvider";
 import { actionLabel, type ExportState } from "./exportLabel";
+import { useAdminView } from "./adminView";
+import { htmlFileName, htmlOfPage } from "./downloadHtml";
 import { Icon } from "../ui";
 
 /* ==========================================================================
@@ -22,6 +24,9 @@ export const LOCKED_TOOLTIP =
 
 export function CardActions({ page }: { page: PageMockup }) {
   const { exportPagefly, exporting, exportingId } = useExport();
+  /* Operators only. See `adminView.tsx` — false anywhere the provider is not. */
+  const admin = useAdminView();
+  const html = admin ? htmlOfPage(page) : null;
   const [state, setState] = useState<ExportState>("idle");
   const [tip, setTip] = useState(false);
   /* The tooltip normally sits above the button. If the card has been scrolled
@@ -62,6 +67,33 @@ export function CardActions({ page }: { page: PageMockup }) {
 
   return (
     <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex items-start justify-between gap-2 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
+      {/* ---- download the mockup's own html · operators only ----
+           The document every later step is derived from, and the only thing
+           that says what the export was supposed to produce. A page with no
+           mockup renders no button rather than a zero-byte file named like a
+           real one — see `downloadHtml.ts`. */}
+      {html && (
+        <button
+          type="button"
+          onClick={() => {
+            const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = htmlFileName(page);
+            a.click();
+            /* Revoked on the next turn of the loop: released synchronously,
+               the click has not started the download yet and Safari takes
+               nothing. */
+            setTimeout(() => URL.revokeObjectURL(url), 0);
+          }}
+          title="Download HTML — the mockup this page was built as"
+          className="pointer-events-auto inline-flex items-center gap-1.5 rounded-pf-md bg-pf-bg/85 px-2.5 py-1.5 text-[11.5px] font-semibold text-pf-body shadow-pf-float backdrop-blur transition-colors duration-150 hover:bg-pf-primary hover:text-white"
+        >
+          <Icon name="FileText" size={13} />
+          HTML
+        </button>
+      )}
+
       {/* ---- export .pagefly ---- */}
       <button
         type="button"

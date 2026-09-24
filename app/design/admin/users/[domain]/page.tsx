@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { AdminLogin } from "@/components/admin/AdminLogin";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { LibraryContent } from "@/components/library/LibraryScreen";
+import { AdminView } from "@/components/results/adminView";
 import { getRepo } from "@/lib/db";
 import { readAdminSession } from "@/lib/session";
 import { normalizeDomain } from "@/lib/sheet";
@@ -68,7 +69,12 @@ export default async function AdminStorePagesPage({
       title={store.storeName || store.domain}
       subtitle={`${store.domain} · ${runs.length} ${runs.length === 1 ? "build" : "builds"} · ${runs.reduce((n, r) => n + r.pageCount, 0)}/${store.pageLimit} pages`}
     >
-      <LibraryContent runs={runs} ownerLabel={store.storeName || store.domain} />
+      {/* THE ONE PLACE THE GATE IS OPEN. Everything inside may offer an
+          operator the mockup's own HTML; the merchant's own Library renders the
+          same component without this and gets nothing. */}
+      <AdminView>
+        <LibraryContent runs={runs} ownerLabel={store.storeName || store.domain} />
+      </AdminView>
     </AdminShell>
   );
 }
