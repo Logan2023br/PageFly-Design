@@ -27,12 +27,31 @@ export async function GET(req: Request): Promise<Response> {
     return Response.json({ error: "not signed in" }, { status: 401 });
   }
 
+  const p = new URL(req.url).searchParams;
+
   /* CLAMPED TO A LIST, not merely parsed. The window is interpolated into an
      SQL interval — `Number()` already makes an injection impossible, but a
      caller asking for 100000 days would ask the database for a sequential scan
      of everything on an endpoint that needs no such range. */
-  const asked = Number(new URL(req.url).searchParams.get("days") ?? 30);
+  const asked = Number(p.get("days") ?? 30);
   const days = ALLOWED.has(asked) ? asked : 30;
 
-  return Response.json(await getRepo().stats(days));
+  /* Shape-checked here as well as in the driver. The day reaches SQL as a bound
+     parameter either way, so this is about refusing nonsense early rather than
+     about safety. */
+  const rawDay = p.get("day");
+  const day = rawDay && /^\d{4}-\d{2}-\d{2}$/.test(rawDay) ? rawDay : null;
+
+  /* A two-letter code, or the bucket that holds every store with no country on
+     file. Anything else is dropped rather than passed through as a filter that
+     would silently match nothing. */
+  const rawCountry = p.get("country");
+  const country =
+    rawCountry && (/^[A-Za-z]{2}$/.test(rawCountry) || rawCountry === "unknown")
+      ? rawCountry.length === 2
+        ? rawCountry.toUpperCase()
+        : rawCountry
+      : null;
+
+  return Response.json(await getRepo().stats({ days, day, country }));
 }

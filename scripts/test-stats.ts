@@ -67,6 +67,15 @@ async function main(): Promise<void> {
     { domain: "c.myshopify.com", country: "US", lastSeenAt: ago(1), blocked: false,
       email: null, storeName: null, shopifyPlan: null, currentPlan: null, daysUsed: null,
       userType: null, status: null, pageLimit: 30, firstSeenAt: null },
+    /* EMPTY STRING, not null — the shape that put two rows both labelled
+       "Unplaced" on the live screen. */
+    { domain: "e.myshopify.com", country: "", lastSeenAt: ago(1), blocked: false,
+      email: null, storeName: null, shopifyPlan: null, currentPlan: null, daysUsed: null,
+      userType: null, status: null, pageLimit: 30, firstSeenAt: null },
+    /* And a genuine null. */
+    { domain: "f.myshopify.com", country: null, lastSeenAt: ago(1), blocked: false,
+      email: null, storeName: null, shopifyPlan: null, currentPlan: null, daysUsed: null,
+      userType: null, status: null, pageLimit: 30, firstSeenAt: null },
     /* On the list, never signed in. */
     { domain: "d.myshopify.com", country: null, lastSeenAt: null, blocked: false,
       email: null, storeName: null, shopifyPlan: null, currentPlan: null, daysUsed: null,
@@ -86,6 +95,10 @@ async function main(): Promise<void> {
   /* … and well outside it. */
   await run("r-old", "a.myshopify.com", ago(40), ["home", "home", "faq"], 9_000);
 
+  /* The two halves of the absent country, on the same day. */
+  await run("r-blank", "e.myshopify.com", ago(2), ["home"], 100);
+  await run("r-null", "f.myshopify.com", ago(2), ["home"], 100);
+
   /* A run that CLAIMED three pages and recorded none — the shape the proof
      feed's fixture once had by accident. */
   await repo.saveRun(
@@ -95,10 +108,10 @@ async function main(): Promise<void> {
   );
 
   head("the window actually windows");
-  const week = await repo.stats(7);
-  const all = await repo.stats(0);
-  ok("seven days counts only the recent pages", week.totalPages === 5, `${week.totalPages}`);
-  ok("all time counts every page", all.totalPages === 8, `${all.totalPages}`);
+  const week = await repo.stats({ days: 7 });
+  const all = await repo.stats({ days: 0 });
+  ok("seven days counts only the recent pages", week.totalPages === 7, `${week.totalPages}`);
+  ok("all time counts every page", all.totalPages === 10, `${all.totalPages}`);
   ok(
     "AND THE TWO ARE DIFFERENT",
     week.totalPages !== all.totalPages,
@@ -109,12 +122,12 @@ async function main(): Promise<void> {
   head("page types, which is what the tile opens into");
   const types = Object.fromEntries(week.pageTypes.map((t) => [t.type, t.pages]));
   ok("product is counted across both runs", types.product === 3, JSON.stringify(types));
-  ok("home is counted once", types.home === 1);
+  ok("home is counted three times", types.home === 3, String(types.home));
   ok("the out-of-window faq is absent", !("faq" in types));
   ok(
     "and they are ordered commonest first",
-    week.pageTypes[0]?.type === "product",
-    week.pageTypes.map((t) => t.type).join(" "),
+    week.pageTypes[0]?.type === "product" || week.pageTypes[0]?.type === "home",
+    week.pageTypes.map((t) => `${t.type}:${t.pages}`).join(" "),
   );
   ok(
     "the parts add up to the total",
@@ -123,10 +136,10 @@ async function main(): Promise<void> {
   );
 
   head("who is actually using it");
-  ok("three stores signed in", all.activeStores === 3, `${all.activeStores}`);
+  ok("five stores signed in", all.activeStores === 5, `${all.activeStores}`);
   ok(
     "ONLY TWO BUILT — a claim with no page rows is not a build",
-    all.builtStores === 2,
+    all.builtStores === 4,
     `${all.builtStores}; c.myshopify.com claimed 3 pages and recorded none`,
   );
   ok("and the rest are signed in only", all.idleStores === 1, `${all.idleStores}`);
@@ -150,7 +163,7 @@ async function main(): Promise<void> {
     input: 273_566, output: 135_679, cached: 151_040, reasoning: 0, costUsd: 0.2005,
   });
 
-  const spend = (await repo.stats(7)).spend;
+  const spend = (await repo.stats({ days: 7 })).spend;
   ok("both models have a row", spend.rows.length === 2, spend.rows.map((r) => r.model).join(" "));
   ok(
     "dearest first",
@@ -167,7 +180,7 @@ async function main(): Promise<void> {
      belong to no model. */
   ok(
     "TOKENS WITH NO MODEL ARE KEPT APART",
-    spend.unattributedTokens === 2_500,
+    spend.unattributedTokens === 2_700,
     `${spend.unattributedTokens} — folding them into a model's row invents an attribution`,
   );
   ok(
@@ -177,9 +190,68 @@ async function main(): Promise<void> {
   );
   ok(
     "but the token total still includes them",
-    spend.totalTokens === 1_100_000 + 409_245 + 2_500,
+    spend.totalTokens === 1_100_000 + 409_245 + 2_700,
     `${spend.totalTokens}`,
   );
+
+  head("ONE ROW PER GROUP, and an empty country is not a second Unplaced");
+  /* Seen on the live screen: two rows, both reading "Unplaced", because null
+     and the empty string are different group keys and `countryLabel` answers
+     both with the same word. A duplicate row is not a crash and not obviously
+     wrong — it just quietly splits one number into two. */
+  const labels = all.countries.map((c) => c.country);
+  ok(
+    "null and empty land in the same bucket",
+    labels.filter((c) => c === "unknown").length === 1,
+    labels.join(" "),
+  );
+  ok("and there is no bare empty-string row", !labels.includes(""), labels.join(" "));
+  const unplaced = all.countries.find((c) => c.country === "unknown");
+  ok("which holds both of their stores", unplaced?.stores === 2, `${unplaced?.stores}`);
+
+  head("one day, picked");
+  const theDay = ago(2).slice(0, 10);
+  const oneDay = await repo.stats({ day: theDay });
+  ok("it echoes the day back", oneDay.day === theDay, String(oneDay.day));
+  ok(
+    "and counts only that day",
+    oneDay.totalPages === 5,
+    `${oneDay.totalPages} — r-recent-1 (3) + r-blank (1) + r-null (1)`,
+  );
+  ok(
+    "NOT THE WHOLE WINDOW",
+    oneDay.totalPages !== week.totalPages,
+    "a day filter that returns the window is the failure this guards",
+  );
+  const otherDay = await repo.stats({ day: ago(3).slice(0, 10) });
+  ok("a different day is a different answer", otherDay.totalPages === 2, `${otherDay.totalPages}`);
+
+  head("one country, picked");
+  const vn = await repo.stats({ days: 7, country: "VN" });
+  ok("it echoes the country back", vn.country === "VN", String(vn.country));
+  ok("pages are only that country's", vn.totalPages === 3, `${vn.totalPages}`);
+  ok(
+    "NOT EVERYBODY'S",
+    vn.totalPages !== week.totalPages,
+    "a country filter that returns everything is the failure this guards",
+  );
+  ok(
+    "THE CHIPS STILL SHOW EVERY COUNTRY",
+    vn.countries.length === week.countries.length,
+    "filtered down to the one picked, there would be nothing left to switch to",
+  );
+  const us = await repo.stats({ days: 7, country: "US" });
+  ok("another country is another answer", us.totalPages === 2, `${us.totalPages}`);
+  ok(
+    "and the two add up with the rest",
+    vn.totalPages + us.totalPages + (await repo.stats({ days: 7, country: "unknown" })).totalPages ===
+      week.totalPages,
+    "every page belongs to exactly one bucket",
+  );
+
+  head("and the two filters compose");
+  const both = await repo.stats({ day: theDay, country: "VN" });
+  ok("day and country together", both.totalPages === 3, `${both.totalPages}`);
 
   console.log(bad === 0 ? "\nall good" : `\n${bad} failed`);
   rmSync(dir, { recursive: true, force: true });

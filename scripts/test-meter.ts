@@ -77,7 +77,7 @@ async function main(): Promise<void> {
 
   /* ---- 2. a row, with the model and the money on it ---------------------- */
   await flushMeter();
-  const rows = await getRepo().stats(0);
+  const rows = await getRepo().stats({ days: 0 });
   const row = rows.spend.rows[0];
   ok("a row was recorded", rows.spend.rows.length === 1, `${rows.spend.rows.length} row(s)`);
   ok("it names the model", row?.model === "deepseek-v4-flash", row?.model);
@@ -95,7 +95,7 @@ async function main(): Promise<void> {
     metered(odd)!.complete({ system: "s", user: "u", maxTokens: 10 }),
   );
   await flushMeter();
-  const after = await getRepo().stats(0);
+  const after = await getRepo().stats({ days: 0 });
   const oddRow = after.spend.rows.find((r) => r.model === "some-unpriced-model");
   ok("an unpriced model records null, not 0", oddRow?.costUsd === null, String(oddRow?.costUsd));
   ok("AND THE TOTAL REFUSES TO BE A NUMBER", after.spend.totalCostUsd === null,
@@ -119,7 +119,7 @@ async function main(): Promise<void> {
   /* ---- 5. no context is still a row -------------------------------------- */
   await metered(exploding)!.complete({ system: "s", user: "u", maxTokens: 10 });
   await flushMeter();
-  const last = await getRepo().stats(0);
+  const last = await getRepo().stats({ days: 0 });
   ok(
     "a call made outside any context is still counted",
     last.spend.rows.some((r) => r.model === "claude-opus-5-5"),
@@ -158,12 +158,12 @@ async function main(): Promise<void> {
        how this assertion failed the first time it was run. */
     const of = (s: Awaited<ReturnType<typeof getRepo>["stats"]> extends never ? never : Awaited<ReturnType<ReturnType<typeof getRepo>["stats"]>>) =>
       s.spend.rows.find((r) => r.model === door.model);
-    const before = of(await getRepo().stats(0));
+    const before = of(await getRepo().stats({ days: 0 }));
     await withMeter({ domain: "wired.example", stage: "wiring" }, () =>
       door.complete({ system: "s", user: "u json", maxTokens: 100 }),
     );
     await flushMeter();
-    const after2 = of(await getRepo().stats(0));
+    const after2 = of(await getRepo().stats({ days: 0 }));
     const grewBy = (after2?.tokens ?? 0) - (before?.tokens ?? 0);
     ok(
       "GETPROVIDER ITSELF RETURNS A METERED PROVIDER",

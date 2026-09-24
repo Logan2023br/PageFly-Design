@@ -1362,15 +1362,45 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       }
     },
 
-    async stats(days = 30) {
+    async stats(q = {}) {
       await ready();
-      /* `days` of 0 means everything. Interpolated as a literal interval
-         because a parameter cannot sit inside `interval '$1 days'`; it is
-         coerced to an integer first, so it cannot carry anything but a
-         number into the statement. */
-      const n = Math.max(0, Math.floor(Number(days) || 0));
-      const since = n === 0 ? "" : `where r.created_at > now() - interval '${n} days'`;
-      const sinceBare = n === 0 ? "" : `where created_at > now() - interval '${n} days'`;
+
+      /* THE DAY WINS. A picked date and a window applied together would mean
+         "the 23rd, if it falls inside the last seven days" — an empty screen
+         nobody can explain. */
+      const day = typeof q.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(q.day) ? q.day : null;
+      const n = day !== null ? 0 : Math.max(0, Math.floor(Number(q.days ?? 30) || 0));
+      const country = typeof q.country === "string" && q.country ? q.country : null;
+
+      /* IN UTC, EXPLICITLY, on both sides of the driver split and in the chart
+         labels too. Left to the session timezone, the bar labelled 09-23 and
+         the rows returned for "2026-09-23" are two different days on a server
+         that is not on UTC, and clicking the bar would show numbers that do
+         not match it. */
+      const params: unknown[] = [REGISTER_USER_TYPE];
+      const where: string[] = [];
+      if (day !== null) {
+        params.push(day);
+        where.push(`to_char(r.created_at at time zone 'UTC', 'YYYY-MM-DD') = $${params.length}`);
+      } else if (n > 0) {
+        where.push(`r.created_at > now() - interval '${n} days'`);
+      }
+      const timeOnly = where.length ? `where ${where.join(" and ")}` : "";
+
+      /* The country reaches the run through its store. `nullif(trim(...))`
+         because an empty string and a null are the same absence and were
+         coming out as two rows on the screen, both reading "Unplaced". */
+      const COUNTRY_OF = `coalesce(nullif(trim(s.country), ''), 'unknown')`;
+      let scoped = timeOnly;
+      if (country !== null) {
+        params.push(country);
+        scoped =
+          `${timeOnly ? `${timeOnly} and` : "where"} ` +
+          `${COUNTRY_OF} = $${params.length}`;
+      }
+      /* A join only the country filter needs; added always so one string of
+         SQL serves both cases. */
+      const withStore = `left join stores s on s.domain = r.domain`;
 
       const [totals, reviews, daily, types, spend, legacy, geo] = await Promise.all([
         db.query(
@@ -1380,65 +1410,72 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
              (select count(*)::int from stores where user_type = $1)           as registered_stores,
              (select count(distinct r.domain)::int
                 from runs r join run_pages p on p.run_id = r.id)               as built_stores,
-             (select count(*)::int from runs r ${since})                        as total_runs,
+             (select count(*)::int from runs r ${withStore} ${scoped})          as total_runs,
              (select count(p.page_id)::int
-                from runs r join run_pages p on p.run_id = r.id ${since})       as total_pages,
-             (select coalesce(sum(r.tokens),0)::bigint from runs r ${since})    as total_tokens`,
-          [REGISTER_USER_TYPE],
+                from runs r join run_pages p on p.run_id = r.id ${withStore} ${scoped})
+                                                                               as total_pages,
+             (select coalesce(sum(r.tokens),0)::bigint
+                from runs r ${withStore} ${scoped})                            as total_tokens`,
+          params,
         ),
         db.query(
           `select stars, count(*)::int as n from reviews group by stars order by stars`,
         ),
         db.query(
-          `select to_char(date_trunc('day', r.created_at), 'YYYY-MM-DD') as date,
+          `select to_char(r.created_at at time zone 'UTC', 'YYYY-MM-DD') as date,
                   count(distinct r.id)::int as runs,
                   count(p.page_id)::int     as pages
-             from runs r left join run_pages p on p.run_id = r.id
-            ${since || "where true"}
+             from runs r left join run_pages p on p.run_id = r.id ${withStore}
+            ${scoped || "where true"}
             group by 1 order by 1`,
+          params,
         ),
         db.query(
           `select p.page_type as type, count(*)::int as pages
-             from run_pages p join runs r on r.id = p.run_id
-            ${since || "where true"}
+             from run_pages p join runs r on r.id = p.run_id ${withStore}
+            ${scoped || "where true"}
             group by 1 order by 2 desc, 1`,
+          params,
         ),
+        /* Spend is joined through the run so a country can reach it. A call
+           with no run — the on-demand export, which has no store — has no
+           country either, so picking one correctly leaves it out. */
         db.query(
-          `select vendor, model, count(*)::int as calls,
-                  coalesce(sum(input),0)::bigint  as input,
-                  coalesce(sum(output),0)::bigint as output,
-                  coalesce(sum(cached),0)::bigint as cached,
-                  coalesce(sum(cost_usd),0)::double precision as cost,
-                  bool_or(cost_usd is null) as unpriced
-             from model_calls ${sinceBare}
+          `select m.vendor, m.model, count(*)::int as calls,
+                  coalesce(sum(m.input),0)::bigint  as input,
+                  coalesce(sum(m.output),0)::bigint as output,
+                  coalesce(sum(m.cached),0)::bigint as cached,
+                  coalesce(sum(m.cost_usd),0)::double precision as cost,
+                  bool_or(m.cost_usd is null) as unpriced
+             from model_calls m
+             ${
+               country === null && day === null && n === 0
+                 ? ""
+                 : `join runs r on m.id like r.id || ':%' ${withStore}`
+             }
+            ${country === null && day === null && n === 0 ? "" : scoped || "where true"}
             group by 1,2 order by 7 desc`,
+          country === null && day === null && n === 0 ? [] : params,
         ),
-        /* THE TOKENS THAT PREDATE PER-CALL ROWS. A run whose id appears in
-           `model_calls` is accounted for there; one that does not is history,
-           and its `tokens` integer is all that is known about it. Matching on
-           the run id keeps the two from ever being counted twice. */
         db.query(
           `select coalesce(sum(r.tokens),0)::bigint as tokens
-             from runs r
-            /* A COLON-ANCHORED PREFIX, not a bare one. A run id is
-               variable-length base36, so one can be a prefix of another --
-               abc and abcd -- and a bare prefix match would let abcd's call
-               rows mark run abc as measured, quietly dropping its tokens from
-               the unattributed figure. The meter writes runId, a colon, then a
-               sequence, and base36 never contains a colon. The memory driver
-               splits on the same character for the same reason. */
-            where not exists (select 1 from model_calls m where m.id like r.id || ':%')
-              ${n === 0 ? "" : `and r.created_at > now() - interval '${n} days'`}`,
+             from runs r ${withStore}
+            ${scoped ? `${scoped} and` : "where"}
+              not exists (select 1 from model_calls m where m.id like r.id || ':%')`,
+          params,
         ),
+        /* THE COUNTRY LIST IGNORES THE COUNTRY FILTER. Narrowed to the one
+           already chosen, the chips would have nothing to switch to. */
         db.query(
-          `select coalesce(s.country, 'unknown') as country,
+          `select ${COUNTRY_OF} as country,
                   count(distinct r.domain)::int as stores,
                   count(p.page_id)::int         as pages
              from runs r
              join run_pages p on p.run_id = r.id
-             left join stores s on s.domain = r.domain
-            ${since || "where true"}
+             ${withStore}
+            ${timeOnly || "where true"}
             group by 1 order by 3 desc, 1`,
+          day !== null ? [REGISTER_USER_TYPE, day] : [REGISTER_USER_TYPE],
         ),
       ]);
 
@@ -1450,6 +1487,8 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       }
       return buildStats(t as Record<string, unknown>, histogram, daily.rows as never[], {
         days: n,
+        day,
+        country,
         pageTypes: types.rows.map((r) => ({ type: String(r.type), pages: Number(r.pages) })),
         countries: geo.rows.map((r) => ({
           country: String(r.country),
@@ -1480,6 +1519,8 @@ export function buildStats(
   daily: { date: string; runs: number; pages: number }[],
   extra: {
     days: number;
+    day: string | null;
+    country: string | null;
     pageTypes: { type: string; pages: number }[];
     countries: { country: string; stores: number; pages: number }[];
     spendRows: ModelSpendRow[];
@@ -1520,6 +1561,8 @@ export function buildStats(
       totalCostUsd: anyUnpriced || extra.unattributedTokens > 0 ? null : costs,
     },
     days: extra.days,
+    day: extra.day,
+    country: extra.country,
     reviews: {
       total,
       good: histogram[3] + histogram[4],

@@ -230,6 +230,26 @@ export type ModelSpendRow = {
   costUsd: number | null;
 };
 
+/**
+ * What slice of the build history to report on.
+ *
+ * `day` BEATS `days`. A picked date is a smaller and more specific question
+ * than a window, and having both apply would mean "the 23rd, if it happens to
+ * fall inside the last seven days" — an empty screen the operator cannot
+ * explain. One or the other, and the answer says which it used.
+ *
+ * THE COUNTRY FILTERS THE FIGURES, NOT THE COUNTRY LIST. Narrowing the list to
+ * the country already chosen leaves nothing to switch to.
+ */
+export type StatsQuery = {
+  /** window in days; 0 is everything. Ignored when `day` is given. */
+  days?: number;
+  /** a calendar day in UTC, YYYY-MM-DD */
+  day?: string | null;
+  /** a two-letter code, or "unknown" for stores with no country on file */
+  country?: string | null;
+};
+
 export type AdminStats = {
   /** stores that have signed in at least once */
   activeStores: number;
@@ -287,6 +307,10 @@ export type AdminStats = {
   };
   /** the window these build figures cover, in days; 0 means everything */
   days: number;
+  /** the single day being shown, when one is picked — then `days` is moot */
+  day: string | null;
+  /** the country the build figures are filtered to, when one is picked */
+  country: string | null;
   /** pages built per day, oldest first — drives the stats chart */
   daily: { date: string; pages: number; runs: number }[];
 };
@@ -715,8 +739,7 @@ export type Repo = {
   listStoreSummaries(): Promise<StoreSummary[]>;
   /** Best-effort: metering must never fail the request it is measuring. */
   recordModelCall(call: ModelCallRecord): Promise<void>;
-  /** `days` of 0 means every row ever. */
-  stats(days?: number): Promise<AdminStats>;
+  stats(q?: StatsQuery): Promise<AdminStats>;
 };
 
 /* ==========================================================================

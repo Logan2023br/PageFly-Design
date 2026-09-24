@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import type { AdminStats } from "@/lib/db";
 import { countryLabel } from "@/lib/countries";
-import { Panel } from "../ui";
+import { Icon, Panel } from "../ui";
 import { StatTile } from "./StatTile";
 
 /* ==========================================================================
@@ -66,21 +66,35 @@ const PAGE_TYPE_NAME: Record<string, string> = {
   faq: "FAQ page",
 };
 
+/** Today in UTC, which is the calendar the figures are grouped by. */
+function todayUtc(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export function StatsView({ stats: initial }: { stats: AdminStats }) {
   const [days, setDays] = useState(30);
+  /* A PICKED DAY BEATS THE WINDOW, here as in the driver. Holding both and
+     applying both would mean "the 23rd, if it falls inside the last seven
+     days" — an empty screen nobody can explain. */
+  const [day, setDay] = useState<string | null>(null);
+  const [country, setCountry] = useState<string | null>(null);
   const [stats, setStats] = useState(initial);
 
   /* DERIVED, NOT HELD. A `loading` flag set at the top of the effect is a
      setState during render's commit, and the lint is right to refuse it — but
      the better reason is that the flag would be a second source of truth for
-     something the data already says. Every payload carries the window it
+     something the data already says. Every payload carries the slice it
      answers for, so "the figures on screen are not the ones asked for" is a
      comparison, not a state. */
-  const loading = stats.days !== days;
+  const loading =
+    stats.country !== country || (day !== null ? stats.day !== day : stats.day !== null || stats.days !== days);
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/admin/stats?days=${days}`)
+    const q = new URLSearchParams({ days: String(days) });
+    if (day) q.set("day", day);
+    if (country) q.set("country", country);
+    fetch(`/api/admin/stats?${q}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d: AdminStats | null) => {
         if (!cancelled && d) setStats(d);
@@ -91,10 +105,16 @@ export function StatsView({ stats: initial }: { stats: AdminStats }) {
     return () => {
       cancelled = true;
     };
-  }, [days]);
+  }, [days, day, country]);
 
   const { reviews, spend } = stats;
-  const window = days === 0 ? "all time" : days === 1 ? "last 24 hours" : `last ${days} days`;
+  const window = day
+    ? day
+    : days === 0
+      ? "all time"
+      : days === 1
+        ? "last 24 hours"
+        : `last ${days} days`;
 
   /* What the priced rows add up to — a floor under the real bill. */
   const knownCost = spend.rows.reduce((t, r) => t + (r.costUsd ?? 0), 0);
@@ -111,20 +131,93 @@ export function StatsView({ stats: initial }: { stats: AdminStats }) {
             <button
               key={r.days}
               type="button"
-              onClick={() => setDays(r.days)}
-              aria-pressed={days === r.days}
+              onClick={() => {
+                setDays(r.days);
+                setDay(null);
+              }}
+              /* NOT PRESSED WHILE A DAY IS PICKED. The day wins in the
+                 driver, so a lit range button beside a filled date field is
+                 the screen claiming two windows and showing one. */
+              aria-pressed={day === null && days === r.days}
               className={`rounded-pf-sm px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
-                days === r.days ? "bg-pf-primary text-white" : "text-pf-muted hover:text-pf-text"
+                day === null && days === r.days
+                  ? "bg-pf-primary text-white"
+                  : "text-pf-muted hover:text-pf-text"
               }`}
             >
               {r.label}
             </button>
           ))}
         </div>
+        {/* A DATE, FOR ANY DAY — including one outside every window above.
+            Picking one turns the ranges off rather than combining with them;
+            pressing a range clears it back. Two controls for one question
+            would otherwise leave a state where neither label is true. */}
+        <label className="flex items-center gap-2 rounded-pf-md border border-pf-border px-2.5 py-1.5">
+          <span className="text-[11.5px] text-pf-muted">Day</span>
+          <input
+            type="date"
+            value={day ?? ""}
+            max={todayUtc()}
+            onChange={(e) => setDay(e.target.value || null)}
+            className="bg-transparent text-[12.5px] tabular-nums text-pf-text outline-none [color-scheme:dark]"
+          />
+          {day && (
+            <button
+              type="button"
+              onClick={() => setDay(null)}
+              aria-label="Clear the day"
+              className="text-pf-faint transition-colors hover:text-pf-text"
+            >
+              <Icon name="X" size={13} />
+            </button>
+          )}
+        </label>
+
         <span className="text-[11.5px] text-pf-faint">
-          {loading ? "loading…" : `builds, pages and spend over the ${window}`}
+          {loading
+            ? "loading…"
+            : `builds, pages and spend · ${day ? day : `the ${window}`}` +
+              (country ? ` · ${countryLabel(country === "unknown" ? null : country)}` : "")}
         </span>
       </div>
+
+      {/* ---- the countries, as a filter ---------------------------------- */}
+      {/* BUILT FROM THE UNFILTERED LIST. `countries` deliberately ignores the
+          country filter in the driver — narrowed to the one already chosen,
+          there would be nothing here to switch to. */}
+      {stats.countries.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setCountry(null)}
+            aria-pressed={country === null}
+            className={`rounded-pf-pill border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+              country === null
+                ? "border-pf-primary bg-pf-primary/15 text-pf-primary-hi"
+                : "border-pf-border text-pf-muted hover:text-pf-text"
+            }`}
+          >
+            All countries
+          </button>
+          {stats.countries.map((c) => (
+            <button
+              key={c.country}
+              type="button"
+              onClick={() => setCountry(c.country === country ? null : c.country)}
+              aria-pressed={country === c.country}
+              className={`flex items-center gap-1.5 rounded-pf-pill border px-3 py-1.5 text-[12px] transition-colors ${
+                country === c.country
+                  ? "border-pf-primary bg-pf-primary/15 text-pf-primary-hi"
+                  : "border-pf-border text-pf-muted hover:text-pf-text"
+              }`}
+            >
+              {countryLabel(c.country === "unknown" ? null : c.country)}
+              <span className="tabular-nums text-pf-faint">{c.pages}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {/* THE SELF-REGISTERED TILE IS GONE. It answered "came through the
@@ -258,7 +351,7 @@ export function StatsView({ stats: initial }: { stats: AdminStats }) {
             Pages per day
           </h2>
           <p className="mt-0.5 text-[11.5px] text-pf-muted">{window}</p>
-          <DayChart daily={stats.daily} />
+          <DayChart daily={stats.daily} onPick={setDay} picked={day} />
         </Panel>
 
         <Panel className="p-4 sm:p-5">
@@ -329,7 +422,18 @@ function CountrySplit({
 
 /* ---- day bars ------------------------------------------------------------ */
 
-function DayChart({ daily }: { daily: AdminStats["daily"] }) {
+function DayChart({
+  daily,
+  onPick,
+  picked,
+}: {
+  daily: AdminStats["daily"];
+  /* THE BAR IS THE OBVIOUS PLACE TO PRESS. A reader who sees a spike wants
+     that day, and reaching for a date field to retype what is already under
+     the cursor is a step that exists only because nobody wired the chart. */
+  onPick: (day: string) => void;
+  picked: string | null;
+}) {
   if (daily.length === 0) {
     return (
       <p className="grid h-[168px] place-items-center text-[12.5px] text-pf-muted">
@@ -356,16 +460,26 @@ function DayChart({ daily }: { daily: AdminStats["daily"] }) {
                 stiffness: 260,
                 damping: 26,
               }}
-              title={`${day.date}: ${day.pages} page${day.pages === 1 ? "" : "s"}, ${day.runs} build${day.runs === 1 ? "" : "s"}`}
-              className="min-w-[4px] flex-1 rounded-t-[3px] bg-gradient-to-t from-pf-primary/45 to-pf-primary-hi"
+              onClick={() => onPick(day.date)}
+              role="button"
+              tabIndex={0}
+              aria-label={`Show ${day.date} only`}
+              title={`${day.date}: ${day.pages} page${day.pages === 1 ? "" : "s"}, ${day.runs} build${day.runs === 1 ? "" : "s"} — press to show this day only`}
+              className={`min-w-[4px] flex-1 cursor-pointer rounded-t-[3px] bg-gradient-to-t transition-opacity hover:opacity-100 ${
+                picked === null || picked === day.date
+                  ? "from-pf-primary/45 to-pf-primary-hi"
+                  : "from-pf-primary/20 to-pf-primary-hi/40 opacity-60"
+              }`}
             />
           );
         })}
       </div>
+      {/* One bar is one day, and printing the same date at both ends of an
+          axis reads as a broken range rather than as a single day. */}
       <div className="mt-2 flex justify-between text-[10.5px] tabular-nums text-pf-faint">
         <span>{daily[0].date.slice(5)}</span>
         <span>peak {peak}</span>
-        <span>{daily[daily.length - 1].date.slice(5)}</span>
+        {daily.length > 1 && <span>{daily[daily.length - 1].date.slice(5)}</span>}
       </div>
     </div>
   );

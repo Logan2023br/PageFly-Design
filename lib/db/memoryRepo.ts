@@ -821,21 +821,37 @@ export function createMemoryRepo(file: string): Repo {
       }
     },
 
-    async stats(days = 30) {
+    async stats(q = {}) {
       sync();
-      const n = Math.max(0, Math.floor(Number(days) || 0));
-      /* THE SAME WINDOW AS THE SQL, in the other language. `test-stats-window`
-         runs the same fixture through both drivers precisely because this is
-         two implementations of one rule. */
+
+      /* THE SAME RULES AS THE SQL, in the other language — the driver split
+         this repo already worries about in `geoAllows`. The day beats the
+         window, and the day is read in UTC on both sides so the bar labelled
+         09-23 and the rows for "2026-09-23" are the same day on a server that
+         is not on UTC. */
+      const day = typeof q.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(q.day) ? q.day : null;
+      const n = day !== null ? 0 : Math.max(0, Math.floor(Number(q.days ?? 30) || 0));
+      const country = typeof q.country === "string" && q.country ? q.country : null;
+
       const cutoff = n === 0 ? null : Date.now() - n * 86_400_000;
-      const inWindow = (iso: string) => cutoff === null || Date.parse(iso) > cutoff;
+      const inWindow = (iso: string) =>
+        day !== null ? iso.slice(0, 10) === day : cutoff === null || Date.parse(iso) > cutoff;
+
+      /* An empty string and a null are the same absence. Two keys for it put
+         two rows both reading "Unplaced" on the live screen. */
+      const countryOf = (domain: string) =>
+        data.stores.find((s) => s.domain === domain)?.country?.trim() || "unknown";
+      const inCountry = (domain: string) => country === null || countryOf(domain) === country;
 
       const histogram = [0, 0, 0, 0, 0];
       for (const r of data.reviews) {
         if (r.stars >= 1 && r.stars <= 5) histogram[r.stars - 1]++;
       }
 
-      const runs = data.runs.filter((r) => inWindow(r.createdAt));
+      /* The time window alone — the country chips are built from this, so
+         that picking one still leaves the others to switch to. */
+      const timed = data.runs.filter((r) => inWindow(r.createdAt));
+      const runs = timed.filter((r) => inCountry(r.domain));
       const runIds = new Set(runs.map((r) => r.id));
       const pages = data.runPages.filter((p) => runIds.has(p.runId));
 
@@ -859,15 +875,23 @@ export function createMemoryRepo(file: string): Repo {
       );
 
       const geo = new Map<string, { stores: Set<string>; pages: number }>();
-      for (const r of runs) {
-        const country = data.stores.find((s) => s.domain === r.domain)?.country ?? "unknown";
-        const hit = geo.get(country) ?? { stores: new Set<string>(), pages: 0 };
+      for (const r of timed) {
+        const pagesOf = data.runPages.filter((p) => p.runId === r.id).length;
+        if (pagesOf === 0) continue;
+        const key = countryOf(r.domain);
+        const hit = geo.get(key) ?? { stores: new Set<string>(), pages: 0 };
         hit.stores.add(r.domain);
-        hit.pages += data.runPages.filter((p) => p.runId === r.id).length;
-        geo.set(country, hit);
+        hit.pages += pagesOf;
+        geo.set(key, hit);
       }
 
-      const calls = data.modelCalls.filter((c) => inWindow(c.createdAt));
+      /* Spend reaches a country through the run that paid for it; a call with
+         no run — the on-demand export, which has no store — has no country, so
+         picking one correctly leaves it out. */
+      const ofRun = new Set(runs.map((r) => r.id));
+      const calls = data.modelCalls.filter(
+        (c) => inWindow(c.createdAt) && (country === null || ofRun.has(c.id.split(":")[0])),
+      );
       const byModel = new Map<string, ModelSpendRow & { unpriced: boolean }>();
       for (const c of calls) {
         const key = `${c.vendor}/${c.model}`;
@@ -908,6 +932,8 @@ export function createMemoryRepo(file: string): Repo {
           .map(([date, v]) => ({ date, ...v })),
         {
           days: n,
+          day,
+          country,
           pageTypes: [...byType.entries()]
             .map(([type, p]) => ({ type, pages: p }))
             .sort((a, b) => b.pages - a.pages || a.type.localeCompare(b.type)),
