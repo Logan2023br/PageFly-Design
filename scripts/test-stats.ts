@@ -234,8 +234,8 @@ async function main(): Promise<void> {
   ok("a different day is a different answer", otherDay.totalPages === 2, `${otherDay.totalPages}`);
 
   head("one country, picked");
-  const vn = await repo.stats({ days: 7, country: "VN" });
-  ok("it echoes the country back", vn.country === "VN", String(vn.country));
+  const vn = await repo.stats({ days: 7, only: ["VN"] });
+  ok("it echoes the pick back", JSON.stringify(vn.only) === '["VN"]', JSON.stringify(vn.only));
   ok("pages are only that country's", vn.totalPages === 3, `${vn.totalPages}`);
   ok(
     "NOT EVERYBODY'S",
@@ -247,17 +247,17 @@ async function main(): Promise<void> {
     vn.countries.length === week.countries.length,
     "filtered down to the one picked, there would be nothing left to switch to",
   );
-  const us = await repo.stats({ days: 7, country: "US" });
+  const us = await repo.stats({ days: 7, only: ["US"] });
   ok("another country is another answer", us.totalPages === 2, `${us.totalPages}`);
   ok(
     "and the two add up with the rest",
-    vn.totalPages + us.totalPages + (await repo.stats({ days: 7, country: "unknown" })).totalPages ===
+    vn.totalPages + us.totalPages + (await repo.stats({ days: 7, only: ["unknown"] })).totalPages ===
       week.totalPages,
     "every page belongs to exactly one bucket",
   );
 
   head("and the two filters compose");
-  const both = await repo.stats({ day: theDay, country: "VN" });
+  const both = await repo.stats({ day: theDay, only: ["VN"] });
   ok("day and country together", both.totalPages === 3, `${both.totalPages}`);
 
   head("AND THE STORE TILE OBEYS THE FILTER TOO");
@@ -266,7 +266,7 @@ async function main(): Promise<void> {
      one figure on a filtered screen that answered a different question — and a
      number that does not move when the filter moves reads as a stuck number,
      not as a deliberate all-time total. */
-  const vnStores = await repo.stats({ days: 0, country: "VN" });
+  const vnStores = await repo.stats({ days: 0, only: ["VN"] });
   ok(
     "signed-in stores are the country's",
     vnStores.activeStores === 1,
@@ -280,7 +280,7 @@ async function main(): Promise<void> {
   ok("the beta list narrows too", vnStores.allowedStores === 1, `${vnStores.allowedStores}`);
   ok("and so does who built", vnStores.builtStores === 1, `${vnStores.builtStores}`);
 
-  const usStores = await repo.stats({ days: 0, country: "US" });
+  const usStores = await repo.stats({ days: 0, only: ["US"] });
   ok(
     "another country is another set",
     usStores.activeStores === 2 && usStores.builtStores === 1,
@@ -307,6 +307,54 @@ async function main(): Promise<void> {
     "AND THE TWO ARE NOT THE SAME NUMBER",
     weekBuilt !== wideBuilt,
     "one figure answering both questions is how the tile got stuck in the first place",
+  );
+
+  head("several countries at once, and one country out");
+  /* Matching the analytics screen, whose chips are a three-way control and
+     whose note says why: "show me Vietnam" and "show me everything except
+     Vietnam" are both things people want, and a checkbox expresses only the
+     first. The predicate itself is `geoClause`/`geoAllows`, already written
+     once per driver and already checked against each other — a third
+     implementation for this screen is the thing that drifts. */
+  const two = await repo.stats({ days: 7, only: ["VN", "US"] });
+  ok(
+    "the pages are both countries'",
+    two.totalPages === vn.totalPages + us.totalPages,
+    `${two.totalPages} = ${vn.totalPages} + ${us.totalPages}`,
+  );
+  ok(
+    "AND MORE THAN EITHER ALONE",
+    two.totalPages > vn.totalPages && two.totalPages > us.totalPages,
+    "a second chip that changes nothing is a chip that is being ignored",
+  );
+  ok("the stores are both countries'", two.activeStores === 3, `${two.activeStores} — a, b, c`);
+  ok(
+    "order does not matter",
+    (await repo.stats({ days: 7, only: ["US", "VN"] })).totalPages === two.totalPages,
+  );
+  ok(
+    "an empty pick is every country",
+    (await repo.stats({ days: 7, only: [] })).totalPages === week.totalPages,
+    "no chip lit must mean all, never none",
+  );
+  ok("and the chips are still the whole list", two.countries.length === week.countries.length);
+
+  const notVn = await repo.stats({ days: 7, except: ["VN"] });
+  ok(
+    "excluding one leaves the rest",
+    notVn.totalPages === week.totalPages - vn.totalPages,
+    `${notVn.totalPages} = ${week.totalPages} - ${vn.totalPages}`,
+  );
+  ok(
+    "AND IT IS NOT THE SAME AS PICKING IT",
+    notVn.totalPages !== vn.totalPages,
+    "an except read as an only is a filter showing the exact opposite of what it says",
+  );
+  ok(
+    "the unplaced bucket can be excluded too",
+    (await repo.stats({ days: 7, except: ["unknown"] })).totalPages ===
+      vn.totalPages + us.totalPages,
+    "null and empty are one bucket, so excluding it must drop both",
   );
 
   console.log(bad === 0 ? "\nall good" : `\n${bad} failed`);

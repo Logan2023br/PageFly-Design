@@ -77,7 +77,17 @@ export function StatsView({ stats: initial }: { stats: AdminStats }) {
      applying both would mean "the 23rd, if it falls inside the last seven
      days" — an empty screen nobody can explain. */
   const [day, setDay] = useState<string | null>(null);
-  const [country, setCountry] = useState<string | null>(null);
+  /* TWO LISTS, NOT ONE PICK — the same control the analytics screen carries,
+     and its note says why: "show me Vietnam" and "show me everything except
+     Vietnam" are both things people want, and a single selection expresses
+     only the first. */
+  const [only, setOnly] = useState<string[]>([]);
+  const [except, setExcept] = useState<string[]>([]);
+  /* Stable keys for the effect: an array is a new identity every render, and
+     `only.join()` inside the dependency list is an expression the lint cannot
+     check statically. */
+  const onlyKey = only.join();
+  const exceptKey = except.join();
   const [stats, setStats] = useState(initial);
 
   /* DERIVED, NOT HELD. A `loading` flag set at the top of the effect is a
@@ -87,14 +97,25 @@ export function StatsView({ stats: initial }: { stats: AdminStats }) {
      answers for, so "the figures on screen are not the ones asked for" is a
      comparison, not a state. */
   const loading =
-    stats.country !== country || (day !== null ? stats.day !== day : stats.day !== null || stats.days !== days);
+    stats.only.join() !== onlyKey ||
+    stats.except.join() !== exceptKey ||
+    (day !== null ? stats.day !== day : stats.day !== null || stats.days !== days);
+
+  /* THE WHOLE REQUEST AS ONE STRING, built out here. The effect then depends
+     on a single value that changes exactly when the question changes — arrays
+     are a new identity every render, and keying off them inside the dependency
+     list is something the lint cannot check and a reader cannot either. */
+  const query = (() => {
+    const q = new URLSearchParams({ days: String(days) });
+    if (day) q.set("day", day);
+    if (onlyKey) q.set("country", onlyKey);
+    if (exceptKey) q.set("exclude", exceptKey);
+    return q.toString();
+  })();
 
   useEffect(() => {
     let cancelled = false;
-    const q = new URLSearchParams({ days: String(days) });
-    if (day) q.set("day", day);
-    if (country) q.set("country", country);
-    fetch(`/api/admin/stats?${q}`)
+    fetch(`/api/admin/stats?${query}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d: AdminStats | null) => {
         if (!cancelled && d) setStats(d);
@@ -105,7 +126,7 @@ export function StatsView({ stats: initial }: { stats: AdminStats }) {
     return () => {
       cancelled = true;
     };
-  }, [days, day, country]);
+  }, [query]);
 
   const { reviews, spend } = stats;
   const window = day
@@ -182,44 +203,79 @@ export function StatsView({ stats: initial }: { stats: AdminStats }) {
           {loading
             ? "loading…"
             : `builds, pages and spend · ${day ? day : `the ${window}`}` +
-              (country ? ` · ${countryLabel(country === "unknown" ? null : country)}` : "")}
+              (only.length > 0
+                ? ` · only ${only.map((c) => countryLabel(c === "unknown" ? null : c)).join(", ")}`
+                : except.length > 0
+                  ? ` · everything except ${except
+                      .map((c) => countryLabel(c === "unknown" ? null : c))
+                      .join(", ")}`
+                  : "")}
         </span>
       </div>
 
-      {/* ---- the countries, as a filter ---------------------------------- */}
-      {/* BUILT FROM THE UNFILTERED LIST. `countries` deliberately ignores the
-          country filter in the driver — narrowed to the one already chosen,
-          there would be nothing here to switch to. */}
-      {stats.countries.length > 0 && (
+      {/* ---- the countries ------------------------------------------------
+          BUILT FROM THE UNFILTERED LIST. `countries` deliberately ignores these
+          chips in the driver — narrowed to what is already picked, there would
+          be nothing here to switch to.
+
+          A CHIP IS A THREE-WAY CONTROL, not a checkbox, matching the analytics
+          screen exactly: press once for only that country, again to exclude it,
+          again to clear. The state is written on the chip so nobody has to
+          remember which press they are on. */}
+      {stats.countries.length > 1 && (
         <div className="flex flex-wrap items-center gap-1.5">
           <button
             type="button"
-            onClick={() => setCountry(null)}
-            aria-pressed={country === null}
-            className={`rounded-pf-pill border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-              country === null
+            onClick={() => {
+              setOnly([]);
+              setExcept([]);
+            }}
+            aria-pressed={only.length === 0 && except.length === 0}
+            className={`rounded-pf-pill border px-2.5 py-1 text-[12px] font-semibold transition-colors ${
+              only.length === 0 && except.length === 0
                 ? "border-pf-primary bg-pf-primary/15 text-pf-primary-hi"
                 : "border-pf-border text-pf-muted hover:text-pf-text"
             }`}
           >
             All countries
           </button>
-          {stats.countries.map((c) => (
-            <button
-              key={c.country}
-              type="button"
-              onClick={() => setCountry(c.country === country ? null : c.country)}
-              aria-pressed={country === c.country}
-              className={`flex items-center gap-1.5 rounded-pf-pill border px-3 py-1.5 text-[12px] transition-colors ${
-                country === c.country
-                  ? "border-pf-primary bg-pf-primary/15 text-pf-primary-hi"
-                  : "border-pf-border text-pf-muted hover:text-pf-text"
-              }`}
-            >
-              {countryLabel(c.country === "unknown" ? null : c.country)}
-              <span className="tabular-nums text-pf-faint">{c.pages}</span>
-            </button>
-          ))}
+
+          {stats.countries.map((c) => {
+            const picked = only.includes(c.country);
+            const banned = except.includes(c.country);
+            return (
+              <button
+                key={c.country}
+                type="button"
+                title={`${c.pages} page${c.pages === 1 ? "" : "s"} · ${c.stores} store${c.stores === 1 ? "" : "s"}`}
+                onClick={() => {
+                  /* only → except → clear. Each press moves the chip one step
+                     and never leaves it in both lists, which would be a filter
+                     that contradicts itself. */
+                  if (picked) {
+                    setOnly((l) => l.filter((x) => x !== c.country));
+                    setExcept((l) => [...l, c.country]);
+                  } else if (banned) {
+                    setExcept((l) => l.filter((x) => x !== c.country));
+                  } else {
+                    setExcept((l) => l.filter((x) => x !== c.country));
+                    setOnly((l) => [...l, c.country]);
+                  }
+                }}
+                className={`flex items-center gap-1.5 rounded-pf-pill border px-2.5 py-1 text-[12px] font-medium transition-colors ${
+                  picked
+                    ? "border-pf-primary bg-pf-primary/15 text-pf-primary-hi"
+                    : banned
+                      ? "border-pf-danger/50 bg-pf-danger/10 text-pf-danger line-through"
+                      : "border-pf-border text-pf-muted hover:text-pf-text"
+                }`}
+              >
+                {banned && <Icon name="Minus" size={11} />}
+                {countryLabel(c.country === "unknown" ? null : c.country)}
+                <span className="tabular-nums opacity-60">{c.pages}</span>
+              </button>
+            );
+          })}
         </div>
       )}
 

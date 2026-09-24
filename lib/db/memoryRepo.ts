@@ -831,7 +831,14 @@ export function createMemoryRepo(file: string): Repo {
          is not on UTC. */
       const day = typeof q.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(q.day) ? q.day : null;
       const n = day !== null ? 0 : Math.max(0, Math.floor(Number(q.days ?? 30) || 0));
-      const country = typeof q.country === "string" && q.country ? q.country : null;
+      /* THE SAME TWO LISTS, through `geoAllows` — the predicate this driver
+         already carries and that `test-geo-filter` already checks against the
+         SQL one. A third spelling for this screen is the one that drifts. */
+      const codes = (l: unknown) =>
+        Array.isArray(l) ? l.filter((c): c is string => typeof c === "string" && c.length > 0) : [];
+      const only = codes(q.only);
+      const except = codes(q.except);
+      const geo: GeoFilter = only.length > 0 || except.length > 0 ? { only, except } : null;
 
       const cutoff = n === 0 ? null : Date.now() - n * 86_400_000;
       const inWindow = (iso: string) =>
@@ -839,9 +846,10 @@ export function createMemoryRepo(file: string): Repo {
 
       /* An empty string and a null are the same absence. Two keys for it put
          two rows both reading "Unplaced" on the live screen. */
-      const countryOf = (domain: string) =>
-        data.stores.find((s) => s.domain === domain)?.country?.trim() || "unknown";
-      const inCountry = (domain: string) => country === null || countryOf(domain) === country;
+      const placeOf = (domain: string) =>
+        data.stores.find((s) => s.domain === domain)?.country?.trim() || null;
+      const countryOf = (domain: string) => placeOf(domain) ?? "unknown";
+      const inCountry = (domain: string) => geoAllows(placeOf(domain), geo);
 
       const histogram = [0, 0, 0, 0, 0];
       for (const r of data.reviews) {
@@ -875,7 +883,7 @@ export function createMemoryRepo(file: string): Repo {
          narrowing by it asks the same question of fewer stores; a window is
          not, and "how many built this week" gets its own figure rather than
          redefining "how many stores do we have". */
-      const stores = data.stores.filter((st) => country === null || (st.country?.trim() || "unknown") === country);
+      const stores = data.stores.filter((st) => geoAllows(st.country?.trim() || null, geo));
       const everBuilt = new Set(
         data.runs
           .filter((r) => data.runPages.some((p) => p.runId === r.id) && inCountry(r.domain))
@@ -885,23 +893,23 @@ export function createMemoryRepo(file: string): Repo {
         runs.filter((r) => data.runPages.some((p) => p.runId === r.id)).map((r) => r.domain),
       );
 
-      const geo = new Map<string, { stores: Set<string>; pages: number }>();
+      const places = new Map<string, { stores: Set<string>; pages: number }>();
       for (const r of timed) {
         const pagesOf = data.runPages.filter((p) => p.runId === r.id).length;
         if (pagesOf === 0) continue;
         const key = countryOf(r.domain);
-        const hit = geo.get(key) ?? { stores: new Set<string>(), pages: 0 };
+        const hit = places.get(key) ?? { stores: new Set<string>(), pages: 0 };
         hit.stores.add(r.domain);
         hit.pages += pagesOf;
-        geo.set(key, hit);
+        places.set(key, hit);
       }
 
       /* Spend reaches a country through the run that paid for it; a call with
          no run — the on-demand export, which has no store — has no country, so
-         picking one correctly leaves it out. */
+         narrowing by country correctly leaves it out. */
       const ofRun = new Set(runs.map((r) => r.id));
       const calls = data.modelCalls.filter(
-        (c) => inWindow(c.createdAt) && (country === null || ofRun.has(c.id.split(":")[0])),
+        (c) => inWindow(c.createdAt) && (geo === null || ofRun.has(c.id.split(":")[0])),
       );
       const byModel = new Map<string, ModelSpendRow & { unpriced: boolean }>();
       for (const c of calls) {
@@ -943,11 +951,12 @@ export function createMemoryRepo(file: string): Repo {
         {
           days: n,
           day,
-          country,
+          only,
+          except,
           pageTypes: [...byType.entries()]
             .map(([type, p]) => ({ type, pages: p }))
             .sort((a, b) => b.pages - a.pages || a.type.localeCompare(b.type)),
-          countries: [...geo.entries()]
+          countries: [...places.entries()]
             .map(([country, v]) => ({ country, stores: v.stores.size, pages: v.pages }))
             .sort((a, b) => b.pages - a.pages || a.country.localeCompare(b.country)),
           spendRows: [...byModel.values()]

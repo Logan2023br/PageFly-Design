@@ -64,7 +64,19 @@ function getPool(url: string): Pool {
    not known to be Vietnamese; dropping it would silently also drop every
    visitor the resolver missed.
    ========================================================================== */
-function geoClause(geo: GeoFilter, nextParam: number): { sql: string; params: unknown[] } {
+/**
+ * `col` is the expression that yields the country, with NULL meaning unplaced.
+ *
+ * It defaults to the bare column this was written for. The stats screen passes
+ * `nullif(trim(s.country), '')` instead, because an empty string and a null are
+ * the same absence there and two keys for it put two rows both reading
+ * "Unplaced" on the live screen.
+ */
+export function geoClause(
+  geo: GeoFilter,
+  nextParam: number,
+  col = "country",
+): { sql: string; params: unknown[] } {
   if (!geo) return { sql: "", params: [] };
 
   const parts: string[] = [];
@@ -80,11 +92,11 @@ function geoClause(geo: GeoFilter, nextParam: number): { sql: string; params: un
     const { codes, unknown } = split(geo.only);
     const or: string[] = [];
     if (codes.length > 0) {
-      or.push(`country = any($${n}::text[])`);
+      or.push(`${col} = any($${n}::text[])`);
       params.push(codes);
       n += 1;
     }
-    if (unknown) or.push("country is null");
+    if (unknown) or.push(`${col} is null`);
     /* An `only` that names nothing at all matches nothing, rather than silently
        becoming "everything" — a filter that quietly stops filtering is worse
        than an empty screen. */
@@ -94,11 +106,11 @@ function geoClause(geo: GeoFilter, nextParam: number): { sql: string; params: un
   if (geo.except && geo.except.length > 0) {
     const { codes, unknown } = split(geo.except);
     if (codes.length > 0) {
-      parts.push(`(country is null or country <> all($${n}::text[]))`);
+      parts.push(`(${col} is null or ${col} <> all($${n}::text[]))`);
       params.push(codes);
       n += 1;
     }
-    if (unknown) parts.push("country is not null");
+    if (unknown) parts.push(`${col} is not null`);
   }
 
   return { sql: parts.length > 0 ? ` and ${parts.join(" and ")}` : "", params };
@@ -1383,56 +1395,57 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
          nobody can explain. */
       const day = typeof q.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(q.day) ? q.day : null;
       const n = day !== null ? 0 : Math.max(0, Math.floor(Number(q.days ?? 30) || 0));
-      const country = typeof q.country === "string" && q.country ? q.country : null;
 
-      /* ==================================================================
-         EVERY QUERY NUMBERS ITS OWN PLACEHOLDERS.
+      /* THE SAME TWO LISTS THE ANALYTICS SCREEN USES, through the same
+         predicate. `geoClause` was already written and already checked against
+         the memory driver's `geoAllows`; a third spelling of this filter for
+         one more screen is the one that drifts out of step. */
+      const codes = (l: unknown) =>
+        Array.isArray(l) ? l.filter((c): c is string => typeof c === "string" && c.length > 0) : [];
+      const only = codes(q.only);
+      const except = codes(q.except);
+      const geo: GeoFilter = only.length > 0 || except.length > 0 ? { only, except } : null;
 
-         The first version of this built one shared `params` array and handed
-         it to all seven statements. Six of them have no `$1` at all when no
-         filter is set, and postgres rejects the whole statement for that —
-         "bind message supplies 1 parameters, but prepared statement requires
-         0" — which took the admin screen down with a 500. A parameter list
-         that does not match its own text is not something the surrounding
-         code can notice, so the text and the list are built together here and
-         never separately.
-
-         IN UTC, EXPLICITLY, on both sides of the driver split and in the chart
-         labels too. Left to the session timezone, the bar labelled 09-23 and
-         the rows returned for "2026-09-23" are two different days on a server
-         that is not on UTC.
-         ================================================================== */
-      const COUNTRY_OF = `coalesce(nullif(trim(s.country), ''), 'unknown')`;
-      /* The same predicate where the row IS the store and there is no alias. */
-      const COUNTRY_BARE = `coalesce(nullif(trim(country), ''), 'unknown')`;
+      /* NULL MEANS UNPLACED, and an empty string is the same absence — two
+         keys for it put two rows both reading "Unplaced" on the live screen. */
+      const RUN_COUNTRY = `nullif(trim(s.country), '')`;
+      const STORE_COUNTRY = `nullif(trim(country), '')`;
+      /* The grouping key for the chips, where unplaced needs a name. */
+      const COUNTRY_OF = `coalesce(${RUN_COUNTRY}, 'unknown')`;
 
       /**
-       * Builds a WHERE clause and the exact list of values it refers to.
+       * A WHERE clause and the exact values it refers to.
        *
-       * `lead` is what already occupies the low slots in that statement, so the
-       * numbering here continues from it rather than colliding with it.
+       * `lead` is what already occupies the low slots of that statement, so the
+       * numbering continues from it rather than colliding with it — which is
+       * the mistake that took this screen down once already.
        */
-      const filter = (opts: { country: boolean; lead?: unknown[] }) => {
+      const scope = (opts: { geo: boolean; lead?: unknown[] }) => {
         const lead = opts.lead ?? [];
         const vals: unknown[] = [];
         const parts: string[] = [];
-        const slot = () => lead.length + vals.length;
         if (day !== null) {
           vals.push(day);
-          parts.push(`to_char(r.created_at at time zone 'UTC', 'YYYY-MM-DD') = $${slot()}`);
+          parts.push(
+            `to_char(r.created_at at time zone 'UTC', 'YYYY-MM-DD') = $${lead.length + vals.length}`,
+          );
         } else if (n > 0) {
           /* An integer coerced above, so it carries nothing but a number. */
           parts.push(`r.created_at > now() - interval '${n} days'`);
         }
-        if (opts.country && country !== null) {
-          vals.push(country);
-          parts.push(`${COUNTRY_OF} = $${slot()}`);
+        if (opts.geo && geo) {
+          const g = geoClause(geo, lead.length + vals.length + 1, RUN_COUNTRY);
+          /* `geoClause` returns a fragment meant to be appended to an existing
+             WHERE, so it opens with " and ". Here it is one part among
+             several. */
+          const bare = g.sql.replace(/^\s*and\s+/, "");
+          if (bare) parts.push(bare);
+          vals.push(...g.params);
         }
         return {
           where: parts.length ? `where ${parts.join(" and ")}` : "",
           parts,
           vals: [...lead, ...vals],
-          own: vals,
         };
       };
 
@@ -1441,11 +1454,13 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
          key, so this cannot multiply a run into several rows. */
       const withStore = `left join stores s on s.domain = r.domain`;
 
-      const main = filter({ country: true });
-      const geoF = filter({ country: false });
+      const main = scope({ geo: true });
+      /* THE CHIP LIST IGNORES THE CHIPS. Narrowed to what is already picked,
+         there would be nothing left to switch to. */
+      const geoF = scope({ geo: false });
 
       /* ------------------------------------------------------------------
-         THE STORE FIGURES TAKE THE COUNTRY AND NOT THE WINDOW.
+         THE STORE FIGURES TAKE THE COUNTRIES AND NOT THE WINDOW.
 
          A country is a property of a store, so narrowing by it asks the same
          question of fewer stores — which is what the screen was reported for:
@@ -1456,16 +1471,25 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
          filter is a different question, and it gets `built_stores_window`
          rather than quietly redefining the standing figure.
 
-         Slots here: $1 the register type, $2 the country if there is one, and
-         the day after that.
+         Slots: $1 the register type, then the store-level country lists, then
+         whatever the run-level scope needs. The same codes appear twice in the
+         values because the two clauses test different columns.
          ------------------------------------------------------------------ */
-      const lead: unknown[] = [REGISTER_USER_TYPE, ...(country === null ? [] : [country])];
-      const storeWhere = country === null ? "" : `where ${COUNTRY_BARE} = $2`;
-      const storeAnd = country === null ? "" : `and ${COUNTRY_BARE} = $2`;
-      const builtWhere = country === null ? "" : `where ${COUNTRY_OF} = $2`;
-      const totalsF = filter({ country: true, lead });
+      const storeGeo = geo ? geoClause(geo, 2, STORE_COUNTRY) : { sql: "", params: [] };
+      const storeWhere = storeGeo.sql ? `where ${storeGeo.sql.replace(/^\s*and\s+/, "")}` : "";
+      const storeAnd = storeGeo.sql;
+      const runGeoOnly = geo
+        ? geoClause(geo, 2 + storeGeo.params.length, RUN_COUNTRY)
+        : { sql: "", params: [] };
+      const builtWhere = runGeoOnly.sql
+        ? `where ${runGeoOnly.sql.replace(/^\s*and\s+/, "")}`
+        : "";
+      const totalsF = scope({
+        geo: true,
+        lead: [REGISTER_USER_TYPE, ...storeGeo.params, ...runGeoOnly.params],
+      });
 
-      const [totals, reviews, daily, types, spend, legacy, geo] = await Promise.all([
+      const [totals, reviews, daily, types, spend, legacy, geoRows] = await Promise.all([
         db.query(
           `select
              (select count(*)::int from stores ${storeWhere})                  as allowed_stores,
@@ -1573,9 +1597,10 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       return buildStats(t as Record<string, unknown>, histogram, daily.rows as never[], {
         days: n,
         day,
-        country,
+        only,
+        except,
         pageTypes: types.rows.map((r) => ({ type: String(r.type), pages: Number(r.pages) })),
-        countries: geo.rows.map((r) => ({
+        countries: geoRows.rows.map((r) => ({
           country: String(r.country),
           stores: Number(r.stores),
           pages: Number(r.pages),
@@ -1605,7 +1630,8 @@ export function buildStats(
   extra: {
     days: number;
     day: string | null;
-    country: string | null;
+    only: string[];
+    except: string[];
     pageTypes: { type: string; pages: number }[];
     countries: { country: string; stores: number; pages: number }[];
     spendRows: ModelSpendRow[];
@@ -1648,7 +1674,8 @@ export function buildStats(
     },
     days: extra.days,
     day: extra.day,
-    country: extra.country,
+    only: extra.only,
+    except: extra.except,
     reviews: {
       total,
       good: histogram[3] + histogram[4],

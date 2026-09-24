@@ -64,10 +64,13 @@ const SHAPES: { name: string; q: Parameters<ReturnType<typeof createPostgresRepo
   { name: "all time", q: { days: 0 } },
   { name: "seven days", q: { days: 7 } },
   { name: "one day", q: { day: "2026-09-22" } },
-  { name: "one country", q: { country: "VN" } },
-  { name: "all time, one country", q: { days: 0, country: "VN" } },
-  { name: "day and country", q: { day: "2026-09-22", country: "US" } },
-  { name: "the unplaced bucket", q: { days: 7, country: "unknown" } },
+  { name: "one country", q: { only: ["VN"] } },
+  { name: "all time, one country", q: { days: 0, only: ["VN"] } },
+  { name: "day and two countries", q: { day: "2026-09-22", only: ["US", "VN"] } },
+  { name: "a country excluded", q: { days: 7, except: ["VN"] } },
+  { name: "some in, some out", q: { days: 30, only: ["VN"], except: ["US"] } },
+  { name: "the unplaced bucket", q: { days: 7, only: ["unknown"] } },
+  { name: "everything placed", q: { days: 7, except: ["unknown"] } },
 ];
 
 async function main(): Promise<void> {
@@ -111,11 +114,15 @@ async function main(): Promise<void> {
   const { pool, asked } = recorder();
   await createPostgresRepo("postgres://unused/x", pool).stats({
     day: "2026-09-22",
-    country: "VN",
+    only: ["VN"],
   });
   const flat = asked.flatMap((a) => a.values);
   ok("the day is a bound value", flat.includes("2026-09-22"), JSON.stringify(flat));
-  ok("so is the country", flat.includes("VN"));
+  ok(
+    "so is the country, as an array",
+    flat.some((v) => Array.isArray(v) && v.includes("VN")),
+    JSON.stringify(flat),
+  );
   ok(
     "AND NEITHER IS SPLICED INTO THE TEXT",
     !asked.some((a) => a.text.includes("2026-09-22") || a.text.includes("'VN'")),

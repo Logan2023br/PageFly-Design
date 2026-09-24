@@ -29,11 +29,11 @@
    at the bottom, which are a text test and say so.
    ========================================================================== */
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { rmSync } from "node:fs";
+import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createMemoryRepo } from "../lib/db/memoryRepo";
+import { geoClause } from "../lib/db/postgresRepo";
 import type { EventRecord, GeoFilter } from "../lib/db/types";
 
 let bad = 0;
@@ -181,27 +181,67 @@ async function main(): Promise<void> {
   /* ==========================================================================
      AND THE SQL SAYS THE SAME THING.
 
-     A text test, and it is honest about being one: this script cannot open a
-     Postgres, so what it can check is that the clause is SHAPED the way the rules
-     above require. The two that matter are the two that are easy to get backwards.
+     This used to read `postgresRepo.ts` as text and grep it for the literal
+     spelling of two clauses — honest about being a text test, on the grounds
+     that the script cannot open a Postgres. But `geoClause` is a pure string
+     builder: it needs no database, only to be exported. So it is CALLED now.
+
+     The difference is not academic. The text version broke the moment the
+     column became a parameter — a change that emits byte-identical SQL — while
+     a genuinely inverted `only`/`except` spelled the old way would have passed
+     it. It was asserting how the function is written, not what it returns.
      ========================================================================== */
   console.log("\nthe postgres clause encodes the same two rules");
 
-  const PG = readFileSync(join(import.meta.dirname, "..", "lib/db/postgresRepo.ts"), "utf8");
-  const clause = PG.slice(PG.indexOf("function geoClause"), PG.indexOf("const NO_STORE"));
-
-  check(clause.length > 0, "geoClause was found");
+  const onlyVn = geoClause({ only: ["VN"], except: [] }, 3);
   check(
-    clause.includes("country is null or country <> all("),
+    onlyVn.sql.includes("country = any($3::text[])") && onlyVn.params[0] instanceof Array,
+    "picking matches the named codes, with the codes as a bound array",
+    onlyVn.sql,
+  );
+  check(
+    geoClause({ only: ["unknown"], except: [] }, 1).sql.includes("country is null"),
+    "`unknown` means the rows with no country",
+  );
+  check(
+    geoClause({ only: [], except: ["VN"] }, 1).sql.includes(
+      "(country is null or country <> all($1::text[]))",
+    ),
     "excluding keeps rows with no country",
   );
   check(
-    clause.includes("country = any(") && clause.includes('or.push("country is null")'),
-    "picking matches the named codes, and `unknown` means country is null",
+    geoClause({ only: [], except: ["unknown"] }, 1).sql.includes("country is not null"),
+    "and excluding `unknown` drops exactly those",
   );
   check(
-    clause.includes('parts.push(or.length > 0 ? `(${or.join(" or ")})` : "false")'),
-    "an `only` that resolves to nothing matches nothing, never everything",
+    geoClause({ only: ["unknown"], except: [] }, 1).params.length === 0,
+    "a pick with no codes binds nothing",
+  );
+
+  /* The two that are easy to get backwards, asserted as opposites rather than
+     as spellings. */
+  check(
+    geoClause({ only: ["VN"], except: [] }, 1).sql !==
+      geoClause({ only: [], except: ["VN"] }, 1).sql,
+    "AN ONLY AND AN EXCEPT ARE NOT THE SAME CLAUSE",
+  );
+
+  /* The numbering has to continue from where the caller left off, or the codes
+     bind to somebody else's slot. */
+  check(
+    geoClause({ only: ["VN"], except: ["US"] }, 5).sql.includes("$5") &&
+      geoClause({ only: ["VN"], except: ["US"] }, 5).sql.includes("$6"),
+    "two lists take two consecutive slots from where they were told to start",
+    geoClause({ only: ["VN"], except: ["US"] }, 5).sql,
+  );
+
+  /* The column is a parameter now, because the stats screen counts a store
+     whose country is the empty string as unplaced, like a null. */
+  check(
+    geoClause({ only: ["unknown"], except: [] }, 1, "nullif(trim(s.country), '')").sql.includes(
+      "nullif(trim(s.country), '') is null",
+    ),
+    "and the column it tests can be an expression",
   );
 
 }

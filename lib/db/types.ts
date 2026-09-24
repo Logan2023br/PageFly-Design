@@ -246,8 +246,20 @@ export type StatsQuery = {
   days?: number;
   /** a calendar day in UTC, YYYY-MM-DD */
   day?: string | null;
-  /** a two-letter code, or "unknown" for stores with no country on file */
-  country?: string | null;
+  /**
+   * Countries to keep, and countries to drop.
+   *
+   * THE SAME SHAPE THE ANALYTICS SCREEN USES, and the same predicate —
+   * `geoClause` on one driver, `geoAllows` on the other, both already written
+   * and already checked against each other by `test-geo-filter`. A third
+   * implementation for this screen is the one that drifts.
+   *
+   * "unknown" is a value in both lists: it means the stores with no country on
+   * file, and "how much of this is unplaced" and "everything we could place"
+   * are both real questions.
+   */
+  only?: string[];
+  except?: string[];
 };
 
 export type AdminStats = {
@@ -318,8 +330,10 @@ export type AdminStats = {
   days: number;
   /** the single day being shown, when one is picked — then `days` is moot */
   day: string | null;
-  /** the country the build figures are filtered to, when one is picked */
-  country: string | null;
+  /** the countries the build figures are narrowed to, echoed back */
+  only: string[];
+  /** and the ones dropped */
+  except: string[];
   /** pages built per day, oldest first — drives the stats chart */
   daily: { date: string; pages: number; runs: number }[];
 };

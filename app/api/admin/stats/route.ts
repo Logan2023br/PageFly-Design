@@ -42,16 +42,22 @@ export async function GET(req: Request): Promise<Response> {
   const rawDay = p.get("day");
   const day = rawDay && /^\d{4}-\d{2}-\d{2}$/.test(rawDay) ? rawDay : null;
 
-  /* A two-letter code, or the bucket that holds every store with no country on
-     file. Anything else is dropped rather than passed through as a filter that
-     would silently match nothing. */
-  const rawCountry = p.get("country");
-  const country =
-    rawCountry && (/^[A-Za-z]{2}$/.test(rawCountry) || rawCountry === "unknown")
-      ? rawCountry.length === 2
-        ? rawCountry.toUpperCase()
-        : rawCountry
-      : null;
+  /* THE SAME PARAMETER NAMES THE ANALYTICS ROUTE USES — `country` for the ones
+     to keep, `exclude` for the ones to drop — because the two screens ask the
+     same question and a reader comparing their URLs should not have to learn
+     two spellings.
 
-  return Response.json(await getRepo().stats({ days, day, country }));
+     Each entry is a two-letter code or the literal `unknown`, the bucket
+     holding every store with no country on file. Anything else is dropped
+     rather than passed through as a filter that would silently match nothing. */
+  const list = (name: string) =>
+    (p.get(name) ?? "")
+      .split(",")
+      .map((c) => c.trim())
+      .filter((c) => /^[A-Za-z]{2}$/.test(c) || c === "unknown")
+      .map((c) => (c.length === 2 ? c.toUpperCase() : c));
+
+  return Response.json(
+    await getRepo().stats({ days, day, only: list("country"), except: list("exclude") }),
+  );
 }
