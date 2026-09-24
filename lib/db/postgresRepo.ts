@@ -320,8 +320,21 @@ update training_items
  where jsonb_array_length(images) > 0 and jsonb_typeof(images -> 0) = 'string';
 `;
 
-export function createPostgresRepo(url: string): Repo {
-  const db = getPool(url);
+/**
+ * Builds the driver.
+ *
+ * A seam, so a test can hand this something that records what was asked
+ * instead of a socket.
+ *
+ * It exists because of a specific outage: six of the seven statements behind
+ * the admin screen were given a parameter list holding one value and no `$1`
+ * to put it in. Postgres rejects the whole statement for that, the screen
+ * returned 500, and nothing on this machine could have caught it — there is no
+ * Postgres here. `scripts/test-stats-sql.ts` reads the statements this builds
+ * and checks each against its own list, which needs no database at all.
+ */
+export function createPostgresRepo(url: string, override?: Pool): Repo {
+  const db = override ?? getPool(url);
 
   /* Ensured once per instance, not once per request: `create table if not
      exists` is cheap but not free, and it would run on every page view. */
@@ -1372,35 +1385,51 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       const n = day !== null ? 0 : Math.max(0, Math.floor(Number(q.days ?? 30) || 0));
       const country = typeof q.country === "string" && q.country ? q.country : null;
 
-      /* IN UTC, EXPLICITLY, on both sides of the driver split and in the chart
+      /* ==================================================================
+         EVERY QUERY NUMBERS ITS OWN PLACEHOLDERS.
+
+         The first version of this built one shared `params` array and handed
+         it to all seven statements. Six of them have no `$1` at all when no
+         filter is set, and postgres rejects the whole statement for that —
+         "bind message supplies 1 parameters, but prepared statement requires
+         0" — which took the admin screen down with a 500. A parameter list
+         that does not match its own text is not something the surrounding
+         code can notice, so the text and the list are built together here and
+         never separately.
+
+         IN UTC, EXPLICITLY, on both sides of the driver split and in the chart
          labels too. Left to the session timezone, the bar labelled 09-23 and
          the rows returned for "2026-09-23" are two different days on a server
-         that is not on UTC, and clicking the bar would show numbers that do
-         not match it. */
-      const params: unknown[] = [REGISTER_USER_TYPE];
-      const where: string[] = [];
-      if (day !== null) {
-        params.push(day);
-        where.push(`to_char(r.created_at at time zone 'UTC', 'YYYY-MM-DD') = $${params.length}`);
-      } else if (n > 0) {
-        where.push(`r.created_at > now() - interval '${n} days'`);
-      }
-      const timeOnly = where.length ? `where ${where.join(" and ")}` : "";
-
-      /* The country reaches the run through its store. `nullif(trim(...))`
-         because an empty string and a null are the same absence and were
-         coming out as two rows on the screen, both reading "Unplaced". */
+         that is not on UTC.
+         ================================================================== */
       const COUNTRY_OF = `coalesce(nullif(trim(s.country), ''), 'unknown')`;
-      let scoped = timeOnly;
-      if (country !== null) {
-        params.push(country);
-        scoped =
-          `${timeOnly ? `${timeOnly} and` : "where"} ` +
-          `${COUNTRY_OF} = $${params.length}`;
-      }
-      /* A join only the country filter needs; added always so one string of
-         SQL serves both cases. */
+
+      /** Builds a WHERE clause and the exact list of values it refers to. */
+      const filter = (opts: { country: boolean; lead?: unknown[] }) => {
+        const vals: unknown[] = [...(opts.lead ?? [])];
+        const parts: string[] = [];
+        if (day !== null) {
+          vals.push(day);
+          parts.push(`to_char(r.created_at at time zone 'UTC', 'YYYY-MM-DD') = $${vals.length}`);
+        } else if (n > 0) {
+          /* An integer coerced above, so it carries nothing but a number. */
+          parts.push(`r.created_at > now() - interval '${n} days'`);
+        }
+        if (opts.country && country !== null) {
+          vals.push(country);
+          parts.push(`${COUNTRY_OF} = $${vals.length}`);
+        }
+        return { where: parts.length ? `where ${parts.join(" and ")}` : "", parts, vals };
+      };
+
+      /* A join only the country predicate needs; harmless and always present
+         so one string of SQL serves both cases. `stores.domain` is the primary
+         key, so this cannot multiply a run into several rows. */
       const withStore = `left join stores s on s.domain = r.domain`;
+
+      const main = filter({ country: true });
+      const totalsF = filter({ country: true, lead: [REGISTER_USER_TYPE] });
+      const geoF = filter({ country: false });
 
       const [totals, reviews, daily, types, spend, legacy, geo] = await Promise.all([
         db.query(
@@ -1410,13 +1439,13 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
              (select count(*)::int from stores where user_type = $1)           as registered_stores,
              (select count(distinct r.domain)::int
                 from runs r join run_pages p on p.run_id = r.id)               as built_stores,
-             (select count(*)::int from runs r ${withStore} ${scoped})          as total_runs,
+             (select count(*)::int from runs r ${withStore} ${totalsF.where})   as total_runs,
              (select count(p.page_id)::int
-                from runs r join run_pages p on p.run_id = r.id ${withStore} ${scoped})
+                from runs r join run_pages p on p.run_id = r.id ${withStore} ${totalsF.where})
                                                                                as total_pages,
              (select coalesce(sum(r.tokens),0)::bigint
-                from runs r ${withStore} ${scoped})                            as total_tokens`,
-          params,
+                from runs r ${withStore} ${totalsF.where})                     as total_tokens`,
+          totalsF.vals,
         ),
         db.query(
           `select stars, count(*)::int as n from reviews group by stars order by stars`,
@@ -1426,43 +1455,59 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
                   count(distinct r.id)::int as runs,
                   count(p.page_id)::int     as pages
              from runs r left join run_pages p on p.run_id = r.id ${withStore}
-            ${scoped || "where true"}
+            ${main.where}
             group by 1 order by 1`,
-          params,
+          main.vals,
         ),
         db.query(
           `select p.page_type as type, count(*)::int as pages
              from run_pages p join runs r on r.id = p.run_id ${withStore}
-            ${scoped || "where true"}
+            ${main.where}
             group by 1 order by 2 desc, 1`,
-          params,
+          main.vals,
         ),
-        /* Spend is joined through the run so a country can reach it. A call
+        /* Spend reaches a country through the run that paid for it. A call
            with no run — the on-demand export, which has no store — has no
-           country either, so picking one correctly leaves it out. */
-        db.query(
-          `select m.vendor, m.model, count(*)::int as calls,
-                  coalesce(sum(m.input),0)::bigint  as input,
-                  coalesce(sum(m.output),0)::bigint as output,
-                  coalesce(sum(m.cached),0)::bigint as cached,
-                  coalesce(sum(m.cost_usd),0)::double precision as cost,
-                  bool_or(m.cost_usd is null) as unpriced
-             from model_calls m
-             ${
-               country === null && day === null && n === 0
-                 ? ""
-                 : `join runs r on m.id like r.id || ':%' ${withStore}`
-             }
-            ${country === null && day === null && n === 0 ? "" : scoped || "where true"}
-            group by 1,2 order by 7 desc`,
-          country === null && day === null && n === 0 ? [] : params,
-        ),
+           country either, so picking one correctly leaves it out. With no
+           filter at all the join is dropped, because every call counts and
+           joining would silently exclude the ones without a run. */
+        main.parts.length === 0
+          ? db.query(
+              `select m.vendor, m.model, count(*)::int as calls,
+                      coalesce(sum(m.input),0)::bigint  as input,
+                      coalesce(sum(m.output),0)::bigint as output,
+                      coalesce(sum(m.cached),0)::bigint as cached,
+                      coalesce(sum(m.cost_usd),0)::double precision as cost,
+                      bool_or(m.cost_usd is null) as unpriced
+                 from model_calls m
+                group by 1,2 order by 7 desc`,
+            )
+          : db.query(
+              `select m.vendor, m.model, count(*)::int as calls,
+                      coalesce(sum(m.input),0)::bigint  as input,
+                      coalesce(sum(m.output),0)::bigint as output,
+                      coalesce(sum(m.cached),0)::bigint as cached,
+                      coalesce(sum(m.cost_usd),0)::double precision as cost,
+                      bool_or(m.cost_usd is null) as unpriced
+                 from model_calls m
+                 join runs r on m.id like r.id || ':%'
+                 ${withStore}
+                ${main.where}
+                group by 1,2 order by 7 desc`,
+              main.vals,
+            ),
+        /* A COLON-ANCHORED PREFIX, not a bare one. A run id is variable-length
+           base36, so one can be a prefix of another -- abc and abcd -- and a
+           bare prefix match would let abcd's call rows mark run abc as
+           measured, quietly dropping its tokens from the unattributed figure.
+           The meter writes runId, a colon, then a sequence, and base36 never
+           contains a colon. The memory driver splits on the same character. */
         db.query(
           `select coalesce(sum(r.tokens),0)::bigint as tokens
              from runs r ${withStore}
-            ${scoped ? `${scoped} and` : "where"}
+            ${main.parts.length ? `${main.where} and` : "where"}
               not exists (select 1 from model_calls m where m.id like r.id || ':%')`,
-          params,
+          main.vals,
         ),
         /* THE COUNTRY LIST IGNORES THE COUNTRY FILTER. Narrowed to the one
            already chosen, the chips would have nothing to switch to. */
@@ -1473,9 +1518,9 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
              from runs r
              join run_pages p on p.run_id = r.id
              ${withStore}
-            ${timeOnly || "where true"}
+            ${geoF.where}
             group by 1 order by 3 desc, 1`,
-          day !== null ? [REGISTER_USER_TYPE, day] : [REGISTER_USER_TYPE],
+          geoF.vals,
         ),
       ]);
 
