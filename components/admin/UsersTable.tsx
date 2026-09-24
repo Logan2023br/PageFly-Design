@@ -7,6 +7,13 @@ import type { StoresResponse } from "@/app/api/admin/stores/route";
 import type { StoreSummary } from "@/lib/db";
 import { EditStore } from "./EditStore";
 import { Icon, Panel } from "../ui";
+import {
+  DEFAULT_PAGE_SIZE,
+  PAGE_SIZES,
+  clampPage,
+  pageCount,
+  shownRange,
+} from "./tablePaging";
 
 /* ==========================================================================
    Users.
@@ -26,6 +33,8 @@ export function UsersTable({ stores }: { stores: StoreSummary[] }) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("recent");
   const [editing, setEditing] = useState<StoreSummary | null>(null);
+  const [size, setSize] = useState<number>(DEFAULT_PAGE_SIZE);
+  const [page, setPage] = useState(1);
 
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -62,6 +71,15 @@ export function UsersTable({ stores }: { stores: StoreSummary[] }) {
     });
     return sorted;
   }, [stores, query, sort]);
+
+  /* CLAMPED ON EVERY RENDER, not on the change. The list shrinks from a search,
+     a sort, a delete and a sync, and hooking one of those leaves the others —
+     where the failure is an empty table under a filter that DID match, which
+     reads as "no results" and is indistinguishable from the true answer. */
+  const pages = pageCount(rows.length, size);
+  const current = clampPage(page, rows.length, size);
+  const range = shownRange(current, size, rows.length);
+  const visible = rows.slice((current - 1) * size, current * size);
 
   return (
     <div className="grid gap-3">
@@ -137,7 +155,7 @@ export function UsersTable({ stores }: { stores: StoreSummary[] }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((store, i) => (
+              {visible.map((store, i) => (
                 <motion.tr
                   key={store.domain}
                   initial={{ opacity: 0 }}
@@ -244,6 +262,65 @@ export function UsersTable({ stores }: { stores: StoreSummary[] }) {
             </tbody>
           </table>
         </Panel>
+      )}
+
+      {rows.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[12px] tabular-nums text-pf-muted">
+            {`Showing ${range.from.toLocaleString()}–${range.to.toLocaleString()} of ${rows.length.toLocaleString()}`}
+          </span>
+
+          {pages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setPage(current - 1)}
+                disabled={current === 1}
+                aria-label="Previous page"
+                className="grid size-8 place-items-center rounded-pf-md border border-pf-border text-pf-muted transition-colors hover:border-pf-border-hi hover:text-pf-text disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Icon name="ChevronLeft" size={14} />
+              </button>
+              <span className="px-1 text-[12px] tabular-nums text-pf-muted">
+                {`${current} / ${pages}`}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage(current + 1)}
+                disabled={current === pages}
+                aria-label="Next page"
+                className="grid size-8 place-items-center rounded-pf-md border border-pf-border text-pf-muted transition-colors hover:border-pf-border-hi hover:text-pf-text disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Icon name="ChevronRight" size={14} />
+              </button>
+            </div>
+          )}
+
+          {/* HARD RIGHT, beside the pager. How many rows is a setting about the
+              table, not about which page you are on, so it sits apart from the
+              arrows rather than among them. */}
+          <label className="ml-auto flex items-center gap-2 text-[12px] text-pf-muted">
+            Rows
+            <select
+              value={size}
+              onChange={(e) => {
+                setSize(Number(e.target.value));
+                /* Back to the top. Keeping the page number across a size change
+                   lands an operator somewhere they did not ask to be — page 61
+                   of 25 is page 7 of 250, which is a different part of the
+                   list. */
+                setPage(1);
+              }}
+              className="rounded-pf-md border border-pf-border bg-pf-bg-alt px-2 py-1.5 text-[12px] text-pf-text outline-none"
+            >
+              {PAGE_SIZES.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       )}
     </div>
   );
