@@ -16,6 +16,7 @@ import { GoingLive } from "./GoingLive";
 import { HowItWorks } from "./HowItWorks";
 import { LandingFooter } from "./LandingFooter";
 import { ProofStrip } from "./ProofStrip";
+import { ProofToast } from "./ProofToast";
 import { WhatYouGet } from "./WhatYouGet";
 import { useSeen } from "./useSeen";
 import { Showcase } from "./Showcase";
@@ -711,6 +712,11 @@ export function LandingScreen() {
       </section>
 
       <LandingFooter />
+
+      {/* Fixed to the viewport, so it sits last in the source rather than in
+          the section it happens to appear over — and it renders nothing until
+          it has a real merchant to name. */}
+      <ProofToast />
     </main>
   );
 }

@@ -1,5 +1,6 @@
 import { getRepo } from "@/lib/db";
 import { showcasePages } from "@/lib/showcase";
+import { proofFeed } from "@/lib/proof";
 
 /* ==========================================================================
    GET /api/showcase — what the front door shows.
@@ -44,8 +45,14 @@ export async function GET() {
        nothing, which is the honest answer to "how many". */
   }
 
+  /* ONE PUBLIC ENDPOINT, STILL. A second route for this would widen the
+     surface this file's header exists to keep narrow, and the two are read by
+     the same page at the same moment. Names are masked in `lib/proof.ts`,
+     server-side: no domain is in what leaves here. */
+  const proof = await proofFeed().catch(() => []);
+
   return Response.json(
-    { pages, counts },
+    { pages, counts, proof },
     {
       /* Cheap to compute and identical for everyone. A minute is short enough
          that a new showcase run appears while someone is still looking at the
