@@ -1420,7 +1420,14 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
         db.query(
           `select coalesce(sum(r.tokens),0)::bigint as tokens
              from runs r
-            where not exists (select 1 from model_calls m where m.id like r.id || '%')
+            /* A COLON-ANCHORED PREFIX, not a bare one. A run id is
+               variable-length base36, so one can be a prefix of another --
+               abc and abcd -- and a bare prefix match would let abcd's call
+               rows mark run abc as measured, quietly dropping its tokens from
+               the unattributed figure. The meter writes runId, a colon, then a
+               sequence, and base36 never contains a colon. The memory driver
+               splits on the same character for the same reason. */
+            where not exists (select 1 from model_calls m where m.id like r.id || ':%')
               ${n === 0 ? "" : `and r.created_at > now() - interval '${n} days'`}`,
         ),
         db.query(

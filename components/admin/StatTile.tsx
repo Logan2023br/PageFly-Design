@@ -82,6 +82,7 @@ export function StatTile({
   day,
   only,
   except,
+  breakdown,
 }: {
   icon: IconName;
   label: string;
@@ -120,6 +121,23 @@ export function StatTile({
    */
   event?: string;
   /**
+   * A breakdown the CALLER already has, shown when the tile is pressed.
+   *
+   * The `event` route above opens a drill-down by asking the analytics detail
+   * endpoint what is behind an event. Thống kê's numbers are not events — the
+   * page types behind "333 pages", the models behind a token total — and the
+   * caller is holding those rows already. Giving them a second door costs one
+   * branch and saves a round trip for data that came down with the tile.
+   *
+   * A tile may have one or the other. Both would be two panels under one
+   * chevron.
+   */
+  breakdown?: {
+    rows: { label: string; value: string; note?: string; ratio?: number }[];
+    /** what to say when there is nothing to show yet, and why */
+    empty?: string;
+  };
+  /**
    * One value of the event's parameter, when this tile counts one slice of it.
    *
    * The five Install PageFly tiles are one event fired from five placements.
@@ -139,7 +157,7 @@ export function StatTile({
   const geo = useContext(GeoContext);
   const geoOnly = only ?? geo.only;
   const geoExcept = except ?? geo.except;
-  const canOpen = Boolean(event && DETAIL_OF[event]);
+  const canOpen = Boolean((event && DETAIL_OF[event]) || breakdown);
   const [what, ...rest] = (hint ?? "").split("\n");
 
   return (
@@ -239,7 +257,51 @@ export function StatTile({
     </Panel>
     </div>
     </div>
-    {open && event && (
+    {open && breakdown && (
+      <motion.div
+        initial={{ opacity: 0, y: -4 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.16 }}
+        className="col-span-full"
+      >
+        <Panel className="p-4">
+          {breakdown.rows.length === 0 ? (
+            <p className="text-[12px] text-pf-muted">{breakdown.empty ?? "Nothing yet."}</p>
+          ) : (
+            <div className="grid gap-2">
+              {breakdown.rows.map((r) => (
+                <div key={r.label} className="grid gap-1">
+                  <div className="flex items-baseline gap-3">
+                    <span className="min-w-0 flex-1 truncate text-[12.5px] text-pf-body">
+                      {r.label}
+                    </span>
+                    {r.note && (
+                      <span className="shrink-0 text-[11px] tabular-nums text-pf-faint">
+                        {r.note}
+                      </span>
+                    )}
+                    <span className="shrink-0 text-[12.5px] font-semibold tabular-nums text-pf-text">
+                      {r.value}
+                    </span>
+                  </div>
+                  {r.ratio !== undefined && (
+                    <div className="h-[3px] overflow-hidden rounded-pf-pill bg-pf-bg-deep">
+                      <motion.div
+                        className="h-full rounded-pf-pill bg-pf-primary"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${Math.max(0, Math.min(1, r.ratio)) * 100}%` }}
+                        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
+      </motion.div>
+    )}
+    {open && !breakdown && event && (
       <TileDetail
         /* REMOUNTED when any of these change — the panel fetches on mount and
            does not re-fetch, so the key is what makes a filter change reach an
