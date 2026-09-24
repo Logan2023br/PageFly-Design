@@ -29,6 +29,14 @@ import { MockupPage } from "../mockup/MockupPage";
 
 type ExportState = {
   exporting: boolean;
+  /**
+   * The page an export is running for, when one is.
+   *
+   * `exporting` alone made every card say "Exporting…" the moment any card was
+   * pressed. Blocking is shared — the stage is one node — but the label is
+   * this card's or nobody's.
+   */
+  exportingId: string | null;
   /** "3 of 8" while a batch runs */
   progress: string | null;
   error: string | null;
@@ -189,6 +197,7 @@ function iconMarkup(stage: HTMLElement | null, name: string): string | null {
 export function ExportProvider({ children }: { children: ReactNode }) {
   const [staged, setStaged] = useState<PageMockup | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportingId, setExportingId] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -318,6 +327,9 @@ export function ExportProvider({ children }: { children: ReactNode }) {
   const exportPagefly = useCallback(
     async (page: PageMockup) => {
       setExporting(true);
+      /* WHICH page, so one card can say "Exporting…" and the rest stay quiet.
+         They are all disabled either way — the stage is one node. */
+      setExportingId(page.id);
       setError(null);
       try {
         await buildPagefly(page);
@@ -330,6 +342,7 @@ export function ExportProvider({ children }: { children: ReactNode }) {
       } finally {
         setStaged(null);
         setExporting(false);
+        setExportingId(null);
       }
     },
     [buildPagefly],
@@ -358,6 +371,7 @@ export function ExportProvider({ children }: { children: ReactNode }) {
         setStaged(null);
         setProgress(null);
         setExporting(false);
+        setExportingId(null);
       }
     },
     [buildPagefly],
@@ -366,6 +380,7 @@ export function ExportProvider({ children }: { children: ReactNode }) {
   const exportOne = useCallback(
     async (page: PageMockup) => {
       setExporting(true);
+      setExportingId(page.id);
       setError(null);
       try {
         await capture(page);
@@ -374,6 +389,7 @@ export function ExportProvider({ children }: { children: ReactNode }) {
       } finally {
         setStaged(null);
         setExporting(false);
+        setExportingId(null);
       }
     },
     [capture],
@@ -402,6 +418,7 @@ export function ExportProvider({ children }: { children: ReactNode }) {
         setStaged(null);
         setProgress(null);
         setExporting(false);
+        setExportingId(null);
       }
     },
     [capture],
@@ -410,6 +427,7 @@ export function ExportProvider({ children }: { children: ReactNode }) {
   const value = useMemo<ExportState>(
     () => ({
       exporting,
+      exportingId,
       progress,
       error,
       exportOne,
@@ -420,6 +438,7 @@ export function ExportProvider({ children }: { children: ReactNode }) {
     }),
     [
       exporting,
+      exportingId,
       progress,
       error,
       exportOne,

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { EV, track } from "@/lib/analytics";
 import type { PageMockup } from "@/lib/generate/types";
 import { useExport } from "./ExportProvider";
+import { actionLabel, type ExportState } from "./exportLabel";
 import { Icon } from "../ui";
 
 /* ==========================================================================
@@ -19,10 +20,8 @@ import { Icon } from "../ui";
 export const LOCKED_TOOLTIP =
   "This feature will be available in a future update.";
 
-type ExportState = "idle" | "done" | "failed";
-
 export function CardActions({ page }: { page: PageMockup }) {
-  const { exportPagefly, exporting } = useExport();
+  const { exportPagefly, exporting, exportingId } = useExport();
   const [state, setState] = useState<ExportState>("idle");
   const [tip, setTip] = useState(false);
   /* The tooltip normally sits above the button. If the card has been scrolled
@@ -56,14 +55,10 @@ export function CardActions({ page }: { page: PageMockup }) {
     timer.current = setTimeout(() => setState("idle"), 2200);
   };
 
-  const label =
-    state === "done"
-      ? "Exported"
-      : state === "failed"
-        ? "Export failed"
-        : exporting
-          ? "Exporting…"
-          : "Export";
+  /* DISABLED BECAUSE THE STAGE IS SHARED; LABELLED BECAUSE THIS CARD ASKED.
+     One boolean did both, so pressing Export on one page made all seven say
+     "Exporting…" — the screen reporting work that was not happening to them. */
+  const label = actionLabel(state, exporting, exportingId === page.id);
 
   return (
     <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex items-start justify-between gap-2 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
