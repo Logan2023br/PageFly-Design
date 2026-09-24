@@ -1222,7 +1222,18 @@ function emitNode(
         ),
         node.submitText,
         node.intent,
-        styled,
+        /* AND THE FORM ITSELF FILLS, which is the third element in this subtree
+           to need saying. `Form2.Field` and `FormInput` each have their own note
+           above after the same symptom; the form was handed its styleData raw
+           while every other node in this file goes through `filling`. It came
+           out carrying `--pf-flex-layout-width: fill` and no actual width, and
+           PageFly hugs a node with no width opinion — a newsletter block 390
+           pixels wide inside a container twice that, field and button stacked
+           in a narrow column.
+
+           `filling` leaves a width the mockup DID state exactly where it is, so
+           a centred max-width row is not stretched to the band. */
+        filling(styled),
       );
     }
 
