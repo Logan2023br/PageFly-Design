@@ -138,7 +138,9 @@ function DeckView({ building }: { building: boolean }) {
         {building && visible.length === 0 ? (
           <GeneratingScreen key="generating" />
         ) : (
-          <ResultsScreen key="results" onOpen={openPreview} readOnly />
+          /* PAGED HERE AND NOWHERE ELSE. Both the merchant's Library and the
+             admin's view of a store render through this component. */
+          <ResultsScreen key="results" onOpen={openPreview} readOnly paged />
         )}
       </AnimatePresence>
 

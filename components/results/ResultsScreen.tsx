@@ -8,6 +8,7 @@ import { useStore, useVisiblePages } from "@/lib/store";
 import { InstallPageFlyLink } from "../pagefly/InstallPageFly";
 import { Button, Chip, Icon, InlineError, Panel } from "../ui";
 import { useExport } from "./ExportProvider";
+import { FIRST_BATCH, STEP, moreAfter, shownAfter } from "./paging";
 import { LOCKED_TOOLTIP } from "./CardActions";
 import { ResultCard } from "./ResultCard";
 import { PhotoCredits } from "./PhotoCredits";
@@ -216,12 +217,42 @@ function Toolbar({ readOnly }: { readOnly: boolean }) {
 export function ResultsScreen({
   onOpen,
   readOnly = false,
+  paged = false,
 }: {
   onOpen: (index: number) => void;
   /** true in the Library, where the deck is a saved build being viewed */
   readOnly?: boolean;
+  /**
+   * Draw eight cards and offer the rest on a button.
+   *
+   * THE LIBRARY ONLY. A card is not a thumbnail — `MockupPage` hands the
+   * page's own document to an `<iframe>`, which parses it and then fetches
+   * that page's fonts and photographs itself. A store with forty-seven saved
+   * pages made an operator wait for all of them.
+   *
+   * A build in progress is not paged: the merchant is watching pages arrive
+   * and hiding the ones that just landed is the opposite of what that screen
+   * is for.
+   */
+  paged?: boolean;
 }) {
-  const visible = useVisiblePages();
+  const all = useVisiblePages();
+  const [shown, setShown] = useState(FIRST_BATCH);
+  /* BACK TO EIGHT WHEN THE DECK CHANGES. Without this the component stays
+     mounted while a different store's pages load and immediately draws however
+     many the last one had been expanded to — forty iframes at once, which is
+     the thing this exists to prevent.
+
+     Adjusted during render rather than in an effect. React documents this
+     exact case, and the effect version is a second render that paints the old
+     count first; the lint refuses it for the same reason. */
+  const [seen, setSeen] = useState(all.length);
+  if (seen !== all.length) {
+    setSeen(all.length);
+    setShown(FIRST_BATCH);
+  }
+  const visible = paged ? all.slice(0, shown) : all;
+  const hidden = paged ? moreAfter(all.length, shown) : 0;
   /* The whole deck, not the filtered view: a photographer whose work is on a
      page the merchant has filtered out is still owed the credit. */
   const allPages = useStore((s) => s.pages);
@@ -300,6 +331,19 @@ export function ResultsScreen({
             ))}
           </AnimatePresence>
         </div>
+
+        {hidden > 0 && (
+          <div className="flex justify-center pb-10">
+            <Button
+              variant="ghost"
+              size="sm"
+              icon="ChevronDown"
+              onClick={() => setShown((n) => shownAfter(all.length, n))}
+            >
+              {`Load ${Math.min(hidden, STEP)} more · ${hidden} not shown`}
+            </Button>
+          </div>
+        )}
 
         <PhotoCredits pages={allPages} />
       </div>
