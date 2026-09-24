@@ -4,7 +4,7 @@ import { designTreeSchema, whyNotASection, type DesignTree } from "../design/sch
 import { pageflyFromTree } from "../design/toPagefly";
 import { loadSkills } from "../ai/skills";
 import { getProvider } from "../ai/provider";
-import { outsideScripts, splitSections } from "./fromHtmlSkill";
+import { bandMarkup, pageScripts, splitSections } from "./fromHtmlSkill";
 import { featuresInTree, missingFeatures, retryNote, NATIVE_FEATURES, type NativeFeature } from "./nativeFeatures";
 import { pageScriptFor } from "./pageScript";
 
@@ -752,7 +752,8 @@ export async function pageflyFromHtmlLive(
 
   const head = headOf(html);
   const props = customProps(head);
-  const bands = splitSections(html);
+  /* Stripped of script, which the page call owns in full. */
+  const bands = splitSections(html).map(bandMarkup);
 
   const usage = { input: 0, output: 0, cached: 0, reasoning: 0 };
   const failures: { index: number; reason: string }[] = [];
@@ -902,7 +903,9 @@ export async function pageflyFromHtmlLive(
 
      AND IT COSTS NOTHING WHEN THERE IS NOTHING TO DO: a mockup that wrote no
      script outside its bands makes no call. */
-  const scripts = outsideScripts(html);
+  /* EVERY script in the document, not only the ones outside the bands —
+     see `pageScripts`. The bands are handed their markup without it. */
+  const scripts = pageScripts(html);
   const native = NATIVE_FEATURES.filter((f) => featuresInTree(sections).has(f)) as NativeFeature[];
   const page = await pageScriptFor(scripts, { native, classes: keptClasses(sections), signal });
   usage.input += page.usage.input;

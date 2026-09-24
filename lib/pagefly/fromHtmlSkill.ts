@@ -118,19 +118,48 @@ export function splitSections(html: string): string[] {
    collecting it here would send it twice and ask the page-script pass to
    re-emit what the bands have already seen.
    ========================================================================== */
-export function outsideScripts(html: string): string[] {
-  const body = /<body[^>]*>([\s\S]*)<\/body>/i.exec(html)?.[1] ?? html;
+/** `<script>…</script>` with its contents, anywhere in a document. */
+const SCRIPT_TAG = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
 
-  /* The bands are removed from the body rather than the scripts searched for
-     outside them: a band's own inline script is already in the band, and a
-     second copy on the page would run it twice. */
-  let rest = body;
-  for (const band of splitSections(html)) rest = rest.replace(band, "");
+/**
+ * EVERY inline script in the document, in order.
+ *
+ * ONE OWNER FOR A PAGE'S BEHAVIOUR, and that is the whole point of this
+ * function. Script used to be collected from the body alone and with the bands
+ * subtracted, which left two gaps that lost bytes in silence:
+ *
+ *   · a mockup that arms its own reveals from the `<head>` — one line before
+ *     any markup — lost that line before anything could weigh whether it
+ *     mattered;
+ *   · script INSIDE a section was left for the band call to carry as a
+ *     `custom` node, capped at 1500 characters and only if the model chose to.
+ *
+ * Both reach the page call now, and `bandMarkup` takes the script back out of
+ * the band before the band is transcribed — so nothing is lost and nothing is
+ * registered twice. A byte that never arrives cannot be in the answer, so no
+ * check downstream saves it and no log mentions it: the page just sits still.
+ *
+ * `src=` is skipped. There is nothing to carry and nothing to rewrite.
+ */
+export function pageScripts(html: string): string[] {
+  const out: string[] = [];
+  for (const m of html.matchAll(SCRIPT_TAG)) {
+    if (/\ssrc\s*=/i.test(m[1])) continue;
+    const js = m[2].trim();
+    if (js) out.push(js);
+  }
+  return out;
+}
 
-  return outermost(rest, ["script"])
-    .filter((tag) => !/\ssrc\s*=/i.test(tag.slice(0, tag.indexOf(">") + 1)))
-    .map((tag) => tag.replace(/^<script\b[^>]*>/i, "").replace(/<\/script>\s*$/i, "").trim())
-    .filter((js) => js !== "");
+/**
+ * One band, as the transcriber should see it: markup, no script.
+ *
+ * The page call owns every line of JavaScript on the page. Leaving a copy in
+ * the band would register the same listener twice — and two listeners on one
+ * hover is not twice the animation, it is a flicker.
+ */
+export function bandMarkup(band: string): string {
+  return band.replace(SCRIPT_TAG, "");
 }
 
 /** The body with its top-level `<header>` and `<footer>` removed. */

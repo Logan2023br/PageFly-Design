@@ -14,8 +14,9 @@ import type { NativeFeature } from "./nativeFeatures";
 
    WHAT IT IS GIVEN
 
-     · the scripts the bands did not carry — `outsideScripts`, which is the
-       9.1 KB that used to be dropped in silence on every Hexwood page
+     · EVERY inline script in the document — `pageScripts`. Not the ones
+       outside the bands: all of them, head included, because this is the one
+       place a page's behaviour is owned
      · the features that came back NATIVE, so it deletes its own version of them
      · the class names that survived the export, because those are the only
        selectors that still address anything
@@ -42,6 +43,46 @@ import type { NativeFeature } from "./nativeFeatures";
    script was a reveal observer and a tab bar has nothing left to do once both
    are native. An empty answer is a correct answer and costs the page nothing.
    ========================================================================== */
+
+/**
+ * Why this answer may not ship, or null.
+ *
+ * THE PROMPT IS NOT THE ENFORCEMENT. Every rule in `SYSTEM` is a sentence to a
+ * model; these are checks, because each is something that reaches a merchant's
+ * live storefront if the model simply did not comply. One match drops the WHOLE
+ * script — which is the point, and also why a false positive here is expensive
+ * in a way a false positive usually is not.
+ *
+ * Exported so it can be tested without a model call. It was not, and one of
+ * these rules was firing on every page that toggles a class.
+ */
+export function rejectReason(text: string): string | null {
+  const banned =
+    /\b(eval|Function\s*\(|fetch\s*\(|XMLHttpRequest|document\.cookie|localStorage|sessionStorage|location\s*=|location\.(href|replace|assign))/;
+  if (banned.test(text)) return "the rewritten script reached outside the page";
+
+  /* BOTH SPELLINGS, because the first version only knew the CSS one and a
+     model writes the other: `el.style.display = "none"` is the same sentence
+     as `display:none` and was walking straight past the check. */
+  const hides =
+    /(display|visibility)\s*:\s*(none|hidden)/i.test(text) ||
+    /\.style\s*\.\s*(display|visibility)\s*=/.test(text) ||
+    /setProperty\s*\(\s*["'](display|visibility)["']/.test(text) ||
+    /\.hidden\s*=\s*(true|1)\b/.test(text) ||
+    /* NOT `classList.remove`, AND THAT IS THE WHOLE NOTE. This read
+       `\.(remove|removeChild)\s*\(`, and `classList.remove("is-open")` ends in
+       `.remove(`. A hover that adds a class on enter and drops it on leave —
+       which is every hover anybody writes — came back as "hides part of the
+       page", and the page shipped with no behaviour at all: no parallax, no
+       cursor-following photograph, no hotspots, no back-to-top. `el.remove()`
+       and `parent.removeChild(el)` do take a node out; a class list's does
+       not, and neither does a Set's or a Map's. */
+    /(?<!classList)\.remove\s*\(/.test(text) ||
+    /\.removeChild\s*\(/.test(text);
+  if (hides) return "the rewritten script hides part of the page";
+
+  return null;
+}
 
 const SYSTEM = [
   "You rewrite one page's JavaScript so it keeps working after the page has been",
@@ -156,6 +197,17 @@ export async function pageScriptFor(
       });
       usage.input += answer.usage.input;
       usage.output += answer.usage.output;
+      /* A CEILING IS NOT AN ANSWER. This was never read, so a rewrite that ran
+         out of budget mid-function shipped as half a script — and half a script
+         is a syntax error, which takes the whole customJS file down with it:
+         the reveal observer, every custom block's script, all of it. A page
+         with no motion beats a page whose every script is dead. */
+      if (answer.truncated)
+        return {
+          js: "",
+          reason: `the rewritten script ran out of budget at ${answer.usage.output} tokens`,
+          usage,
+        };
       text = unfence(answer.text);
     } catch (err) {
       return { js: "", reason: (err as Error).message.slice(0, 160), usage };
@@ -164,21 +216,8 @@ export async function pageScriptFor(
     if (text === "") return { js: "", usage };
     if (text.includes("<")) continue;
 
-    /* THE PROMPT IS NOT THE ENFORCEMENT. Every rule above is a sentence to a
-       model; these three are checks, because each one is something that reaches
-       a merchant's live storefront if the model simply did not comply. */
-    const banned = /\b(eval|Function\s*\(|fetch\s*\(|XMLHttpRequest|document\.cookie|localStorage|sessionStorage|location\s*=|location\.(href|replace|assign))/;
-    if (banned.test(text)) return { js: "", reason: "the rewritten script reached outside the page", usage };
-    /* BOTH SPELLINGS, because the first version only knew the CSS one and a
-       model writes the other: `el.style.display = "none"` is the same sentence
-       as `display:none` and was walking straight past the check. */
-    const hides =
-      /(display|visibility)\s*:\s*(none|hidden)/i.test(text) ||
-      /\.style\s*\.\s*(display|visibility)\s*=/.test(text) ||
-      /setProperty\s*\(\s*["'](display|visibility)["']/.test(text) ||
-      /\.hidden\s*=\s*(true|1)\b/.test(text) ||
-      /\.(remove|removeChild)\s*\(/.test(text);
-    if (hides) return { js: "", reason: "the rewritten script hides part of the page", usage };
+    const why = rejectReason(text);
+    if (why) return { js: "", reason: why, usage };
 
     const wrapped = wrapPageJs(text);
     return wrapped ? { js: wrapped, usage } : { js: "", reason: "nothing left to run", usage };
