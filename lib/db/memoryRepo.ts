@@ -870,8 +870,19 @@ export function createMemoryRepo(file: string): Repo {
       /* A store counts as having built only where a page row exists — the same
          rule the proof feed uses, and for the same reason: a run that claimed
          pages with nothing behind it delivered nothing. */
+      /* THE STORE FIGURES TAKE THE COUNTRY AND NOT THE WINDOW — the same rule
+         the SQL side states at length. A country is a property of a store, so
+         narrowing by it asks the same question of fewer stores; a window is
+         not, and "how many built this week" gets its own figure rather than
+         redefining "how many stores do we have". */
+      const stores = data.stores.filter((st) => country === null || (st.country?.trim() || "unknown") === country);
       const everBuilt = new Set(
-        data.runs.filter((r) => data.runPages.some((p) => p.runId === r.id)).map((r) => r.domain),
+        data.runs
+          .filter((r) => data.runPages.some((p) => p.runId === r.id) && inCountry(r.domain))
+          .map((r) => r.domain),
+      );
+      const builtHere = new Set(
+        runs.filter((r) => data.runPages.some((p) => p.runId === r.id)).map((r) => r.domain),
       );
 
       const geo = new Map<string, { stores: Set<string>; pages: number }>();
@@ -916,12 +927,11 @@ export function createMemoryRepo(file: string): Repo {
 
       return buildStats(
         {
-          allowed_stores: data.stores.length,
-          active_stores: data.stores.filter((s) => s.lastSeenAt).length,
-          registered_stores: data.stores.filter(
-            (s) => s.userType === REGISTER_USER_TYPE,
-          ).length,
+          allowed_stores: stores.length,
+          active_stores: stores.filter((st) => st.lastSeenAt).length,
+          registered_stores: stores.filter((st) => st.userType === REGISTER_USER_TYPE).length,
           built_stores: everBuilt.size,
+          built_stores_window: builtHere.size,
           total_runs: runs.length,
           total_pages: pages.length,
           total_tokens: runs.reduce((sum, r) => sum + r.tokens, 0),

@@ -116,6 +116,10 @@ export function StatsView({ stats: initial }: { stats: AdminStats }) {
         ? "last 24 hours"
         : `last ${days} days`;
 
+  /* Whether any slice at all is in force, which decides if the store tile
+     shows its windowed line. */
+  const windowed = day !== null || days !== 0;
+
   /* What the priced rows add up to — a floor under the real bill. */
   const knownCost = spend.rows.reduce((t, r) => t + (r.costUsd ?? 0), 0);
 
@@ -224,16 +228,44 @@ export function StatsView({ stats: initial }: { stats: AdminStats }) {
             public form" — a number that moves for reasons nobody acts on, and
             it sat where the far more useful split belongs: of the stores that
             signed in, how many got as far as building anything. */}
+        {/* THE SELF-REGISTERED TILE IS GONE. It answered "came through the
+            public form" — a number that moves for reasons nobody acts on, and
+            it sat where the far more useful split belongs: of the stores that
+            signed in, how many got as far as building anything.
+
+            THE COUNTRY NARROWS IT; THE WINDOW DOES NOT. A country is a
+            property of a store, so picking one asks the same question of
+            fewer stores — and this tile reading 70 whichever country was
+            picked is exactly what got reported. A window is not a property of
+            a store: "70 stores" over one day would be a different question, so
+            it gets its own line rather than redefining this one. */}
         <StatTile
           icon="Users"
           label="Stores using it"
           value={stats.activeStores}
-          footnote={`${n(stats.builtStores)} built · ${n(stats.idleStores)} signed in only`}
+          footnote={
+            `${n(stats.builtStores)} built · ${n(stats.idleStores)} signed in only` +
+            (windowed ? ` · ${n(stats.builtStoresInWindow)} built in ${window}` : "")
+          }
           ratio={stats.activeStores ? stats.builtStores / stats.activeStores : undefined}
           breakdown={{
             rows: [
+              ...(windowed
+                ? [
+                    {
+                      label: `Built in ${window}`,
+                      value: n(stats.builtStoresInWindow),
+                      note: stats.activeStores
+                        ? `${Math.round((stats.builtStoresInWindow / stats.activeStores) * 100)}% of signed in`
+                        : undefined,
+                      ratio: stats.activeStores
+                        ? stats.builtStoresInWindow / stats.activeStores
+                        : 0,
+                    },
+                  ]
+                : []),
               {
-                label: "Built at least one page",
+                label: "Built at least one page, ever",
                 value: n(stats.builtStores),
                 note: stats.activeStores
                   ? `${Math.round((stats.builtStores / stats.activeStores) * 100)}% of signed in`

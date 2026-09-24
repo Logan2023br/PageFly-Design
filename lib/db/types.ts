@@ -286,6 +286,15 @@ export type AdminStats = {
   builtStores: number;
   /** signed in, never built — `activeStores - builtStores` */
   idleStores: number;
+  /**
+   * Of those, how many built inside the window being shown.
+   *
+   * ITS OWN FIGURE RATHER THAN A WINDOWED `builtStores`. "How many stores do
+   * we have" is a standing fact and would read as a collapse every morning
+   * under a one-day window; "how many built this week" is the other question.
+   * One number answering both is how the tile came to look stuck.
+   */
+  builtStoresInWindow: number;
   /** what kind of pages were built, commonest first */
   pageTypes: { type: string; pages: number }[];
   /** where the stores are, by pages built */

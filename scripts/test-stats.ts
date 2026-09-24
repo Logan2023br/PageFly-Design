@@ -76,6 +76,12 @@ async function main(): Promise<void> {
     { domain: "f.myshopify.com", country: null, lastSeenAt: ago(1), blocked: false,
       email: null, storeName: null, shopifyPlan: null, currentPlan: null, daysUsed: null,
       userType: null, status: null, pageLimit: 30, firstSeenAt: null },
+    /* Built once, long ago, and never since — the only store that makes the
+       standing figure and the windowed one differ. Without it the two agree by
+       accident and the guard below proves nothing. */
+    { domain: "g.myshopify.com", country: "JP", lastSeenAt: ago(40), blocked: false,
+      email: null, storeName: null, shopifyPlan: null, currentPlan: null, daysUsed: null,
+      userType: null, status: null, pageLimit: 30, firstSeenAt: null },
     /* On the list, never signed in. */
     { domain: "d.myshopify.com", country: null, lastSeenAt: null, blocked: false,
       email: null, storeName: null, shopifyPlan: null, currentPlan: null, daysUsed: null,
@@ -96,6 +102,7 @@ async function main(): Promise<void> {
   await run("r-old", "a.myshopify.com", ago(40), ["home", "home", "faq"], 9_000);
 
   /* The two halves of the absent country, on the same day. */
+  await run("r-lapsed", "g.myshopify.com", ago(40), ["home"], 100);
   await run("r-blank", "e.myshopify.com", ago(2), ["home"], 100);
   await run("r-null", "f.myshopify.com", ago(2), ["home"], 100);
 
@@ -111,7 +118,7 @@ async function main(): Promise<void> {
   const week = await repo.stats({ days: 7 });
   const all = await repo.stats({ days: 0 });
   ok("seven days counts only the recent pages", week.totalPages === 7, `${week.totalPages}`);
-  ok("all time counts every page", all.totalPages === 10, `${all.totalPages}`);
+  ok("all time counts every page", all.totalPages === 11, `${all.totalPages}`);
   ok(
     "AND THE TWO ARE DIFFERENT",
     week.totalPages !== all.totalPages,
@@ -136,10 +143,10 @@ async function main(): Promise<void> {
   );
 
   head("who is actually using it");
-  ok("five stores signed in", all.activeStores === 5, `${all.activeStores}`);
+  ok("six stores signed in", all.activeStores === 6, `${all.activeStores}`);
   ok(
     "ONLY TWO BUILT — a claim with no page rows is not a build",
-    all.builtStores === 4,
+    all.builtStores === 5,
     `${all.builtStores}; c.myshopify.com claimed 3 pages and recorded none`,
   );
   ok("and the rest are signed in only", all.idleStores === 1, `${all.idleStores}`);
@@ -252,6 +259,55 @@ async function main(): Promise<void> {
   head("and the two filters compose");
   const both = await repo.stats({ day: theDay, country: "VN" });
   ok("day and country together", both.totalPages === 3, `${both.totalPages}`);
+
+  head("AND THE STORE TILE OBEYS THE FILTER TOO");
+  /* Reported from the live screen: every country showed 70 stores. The tile
+     was built from `count(*) from stores` with nothing attached, so it was the
+     one figure on a filtered screen that answered a different question — and a
+     number that does not move when the filter moves reads as a stuck number,
+     not as a deliberate all-time total. */
+  const vnStores = await repo.stats({ days: 0, country: "VN" });
+  ok(
+    "signed-in stores are the country's",
+    vnStores.activeStores === 1,
+    `${vnStores.activeStores} — only a.myshopify.com is VN`,
+  );
+  ok(
+    "NOT EVERYBODY'S",
+    vnStores.activeStores !== all.activeStores,
+    `${vnStores.activeStores} vs ${all.activeStores} — the live bug was these being equal`,
+  );
+  ok("the beta list narrows too", vnStores.allowedStores === 1, `${vnStores.allowedStores}`);
+  ok("and so does who built", vnStores.builtStores === 1, `${vnStores.builtStores}`);
+
+  const usStores = await repo.stats({ days: 0, country: "US" });
+  ok(
+    "another country is another set",
+    usStores.activeStores === 2 && usStores.builtStores === 1,
+    `${usStores.activeStores} signed in, ${usStores.builtStores} built — c never built`,
+  );
+  ok(
+    "the parts still add up inside the filter",
+    usStores.builtStores + usStores.idleStores === usStores.activeStores,
+  );
+
+  head("and the window gets its own row rather than moving that one");
+  /* Two questions, not one. "How many stores do we have" is a standing fact
+     and would read as a collapse under a one-day window; "how many built in
+     this window" is the windowed question, and it gets its own figure instead
+     of quietly redefining the first. */
+  const wideBuilt = (await repo.stats({ days: 0 })).builtStores;
+  const weekBuilt = (await repo.stats({ days: 7 })).builtStoresInWindow;
+  const oldBuilt = (await repo.stats({ day: ago(40).slice(0, 10) })).builtStoresInWindow;
+  ok("the standing figure ignores the window", (await repo.stats({ days: 7 })).builtStores === wideBuilt,
+     `${wideBuilt}`);
+  ok("the windowed one does not", weekBuilt === 4, `${weekBuilt} built in the last 7 days`);
+  ok("a day forty days back is a different set", oldBuilt === 2, `${oldBuilt} — a and g`);
+  ok(
+    "AND THE TWO ARE NOT THE SAME NUMBER",
+    weekBuilt !== wideBuilt,
+    "one figure answering both questions is how the tile got stuck in the first place",
+  );
 
   console.log(bad === 0 ? "\nall good" : `\n${bad} failed`);
   rmSync(dir, { recursive: true, force: true });

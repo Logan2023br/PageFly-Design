@@ -1403,23 +1403,37 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
          that is not on UTC.
          ================================================================== */
       const COUNTRY_OF = `coalesce(nullif(trim(s.country), ''), 'unknown')`;
+      /* The same predicate where the row IS the store and there is no alias. */
+      const COUNTRY_BARE = `coalesce(nullif(trim(country), ''), 'unknown')`;
 
-      /** Builds a WHERE clause and the exact list of values it refers to. */
+      /**
+       * Builds a WHERE clause and the exact list of values it refers to.
+       *
+       * `lead` is what already occupies the low slots in that statement, so the
+       * numbering here continues from it rather than colliding with it.
+       */
       const filter = (opts: { country: boolean; lead?: unknown[] }) => {
-        const vals: unknown[] = [...(opts.lead ?? [])];
+        const lead = opts.lead ?? [];
+        const vals: unknown[] = [];
         const parts: string[] = [];
+        const slot = () => lead.length + vals.length;
         if (day !== null) {
           vals.push(day);
-          parts.push(`to_char(r.created_at at time zone 'UTC', 'YYYY-MM-DD') = $${vals.length}`);
+          parts.push(`to_char(r.created_at at time zone 'UTC', 'YYYY-MM-DD') = $${slot()}`);
         } else if (n > 0) {
           /* An integer coerced above, so it carries nothing but a number. */
           parts.push(`r.created_at > now() - interval '${n} days'`);
         }
         if (opts.country && country !== null) {
           vals.push(country);
-          parts.push(`${COUNTRY_OF} = $${vals.length}`);
+          parts.push(`${COUNTRY_OF} = $${slot()}`);
         }
-        return { where: parts.length ? `where ${parts.join(" and ")}` : "", parts, vals };
+        return {
+          where: parts.length ? `where ${parts.join(" and ")}` : "",
+          parts,
+          vals: [...lead, ...vals],
+          own: vals,
+        };
       };
 
       /* A join only the country predicate needs; harmless and always present
@@ -1428,17 +1442,43 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       const withStore = `left join stores s on s.domain = r.domain`;
 
       const main = filter({ country: true });
-      const totalsF = filter({ country: true, lead: [REGISTER_USER_TYPE] });
       const geoF = filter({ country: false });
+
+      /* ------------------------------------------------------------------
+         THE STORE FIGURES TAKE THE COUNTRY AND NOT THE WINDOW.
+
+         A country is a property of a store, so narrowing by it asks the same
+         question of fewer stores — which is what the screen was reported for:
+         every country showed 70, because these counted `from stores` with
+         nothing attached.
+
+         A window is NOT a property of a store. "70 stores" under a one-day
+         filter is a different question, and it gets `built_stores_window`
+         rather than quietly redefining the standing figure.
+
+         Slots here: $1 the register type, $2 the country if there is one, and
+         the day after that.
+         ------------------------------------------------------------------ */
+      const lead: unknown[] = [REGISTER_USER_TYPE, ...(country === null ? [] : [country])];
+      const storeWhere = country === null ? "" : `where ${COUNTRY_BARE} = $2`;
+      const storeAnd = country === null ? "" : `and ${COUNTRY_BARE} = $2`;
+      const builtWhere = country === null ? "" : `where ${COUNTRY_OF} = $2`;
+      const totalsF = filter({ country: true, lead });
 
       const [totals, reviews, daily, types, spend, legacy, geo] = await Promise.all([
         db.query(
           `select
-             (select count(*)::int from stores)                                as allowed_stores,
-             (select count(*)::int from stores where last_seen_at is not null) as active_stores,
-             (select count(*)::int from stores where user_type = $1)           as registered_stores,
+             (select count(*)::int from stores ${storeWhere})                  as allowed_stores,
+             (select count(*)::int from stores
+               where last_seen_at is not null ${storeAnd})                     as active_stores,
+             (select count(*)::int from stores
+               where user_type = $1 ${storeAnd})                               as registered_stores,
              (select count(distinct r.domain)::int
-                from runs r join run_pages p on p.run_id = r.id)               as built_stores,
+                from runs r join run_pages p on p.run_id = r.id ${withStore}
+                ${builtWhere})                                                 as built_stores,
+             (select count(distinct r.domain)::int
+                from runs r join run_pages p on p.run_id = r.id ${withStore}
+                ${totalsF.where})                                              as built_stores_window,
              (select count(*)::int from runs r ${withStore} ${totalsF.where})   as total_runs,
              (select count(p.page_id)::int
                 from runs r join run_pages p on p.run_id = r.id ${withStore} ${totalsF.where})
@@ -1594,6 +1634,7 @@ export function buildStats(
     activeStores: active,
     builtStores: built,
     idleStores: active - built,
+    builtStoresInWindow: Math.min(Number(totals.built_stores_window ?? 0), built),
     totalRuns: Number(totals.total_runs ?? 0),
     totalPages: Number(totals.total_pages ?? 0),
     totalTokens: Number(totals.total_tokens ?? 0),
