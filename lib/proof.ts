@@ -43,6 +43,25 @@ export type ProofItem =
  * The suffix is dropped first: `bright-candles.myshopify.com` is one store's
  * name plus a platform's, and the platform's half is the same on every row.
  */
+/**
+ * Raises the first LETTER, and nothing else.
+ *
+ * Most names reach the card in lower case: `storeName` is usually null and the
+ * fallback is the domain, which Shopify stores lower-cased. So the corner read
+ * `brig***` and `quie***` beside the one store that happened to have a
+ * capitalised name on file — a card that looks unfinished rather than one that
+ * looks anonymous, which is the opposite of what the masking is for.
+ *
+ * The first LETTER rather than the first character, because a name beginning
+ * on a digit (`3d-prints`) has nothing to raise in position zero, and
+ * `toUpperCase` on a digit is a silent no-op that would leave that row alone.
+ * And exactly one letter: a sentence somebody typed is theirs, and raising all
+ * of it would be shouting on their behalf.
+ */
+function upperFirst(s: string): string {
+  return s.replace(/^([^\p{L}]*)(\p{L})/u, (_, lead: string, c: string) => lead + c.toUpperCase());
+}
+
 export function mask(name: string): string {
   const stem = name
     .trim()
@@ -53,7 +72,7 @@ export function mask(name: string): string {
   if (!stem) return "***";
   /* A name shorter than the window is not padded up to it — `Jo***` says what
      it can and nothing more. */
-  return `${stem.slice(0, 4)}***`;
+  return `${upperFirst(stem.slice(0, 4))}***`;
 }
 
 /** Shown in full or not at all: a sentence cut mid-word reads as a fault. */
@@ -85,7 +104,7 @@ export async function proofFeed(): Promise<ProofItem[]> {
         kind: "review",
         who,
         stars: s.review.stars,
-        said: said.length > MAX_SAID ? `${said.slice(0, MAX_SAID).trimEnd()}…` : said,
+        said: upperFirst(said.length > MAX_SAID ? `${said.slice(0, MAX_SAID).trimEnd()}…` : said),
       });
 
     /* And what they did, which is the commoner row: most stores build and

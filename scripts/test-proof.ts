@@ -49,14 +49,21 @@ function check(ok: boolean, label: string, detail = ""): void {
 const head = (s: string) => console.log(`\n${s}`);
 
 async function main(): Promise<void> {
-  head("a name is cut to four characters and the rest is gone");
+  head("a name is cut to four characters, the rest is gone, and it opens in caps");
+  /* MOST NAMES ARRIVE LOWERCASE. `storeName` is often null and the fallback is
+     the domain, which Shopify writes in lower case — so before this the corner
+     read `brig***` and `quie***`, a card that looks unfinished next to the one
+     store that happened to have a capitalised name on file. */
   const cases: [string, string][] = [
-    ["bright-candles.myshopify.com", "brig***"],
-    ["fl.myshopify.com", "fl***"],
+    ["bright-candles.myshopify.com", "Brig***"],
+    ["fl.myshopify.com", "Fl***"],
     ["Northwind Supply", "Nort***"],
-    ["jo", "jo***"],
+    ["jo", "Jo***"],
     ["", "***"],
     ["https://Acme-Goods.myshopify.com", "Acme***"],
+    /* A name that opens on a digit has no letter to raise there; the first one
+       it does have is the one that gets it. */
+    ["3d-prints.myshopify.com", "3D-p***"],
   ];
   for (const [input, want] of cases)
     check(mask(input) === want, `${JSON.stringify(input)} → ${want}`, mask(input));
@@ -116,7 +123,7 @@ async function main(): Promise<void> {
   await repo.saveReview({
     domain: "bright-candles.myshopify.com",
     stars: 5,
-    comment: "Took an afternoon off my week.",
+    comment: "took an afternoon off my week.",
     createdAt: new Date().toISOString(),
     forwarded: false,
   });
@@ -152,6 +159,22 @@ async function main(): Promise<void> {
     feed.every((i) => /^.{1,4}\*\*\*$/.test(i.who)),
     "and every name in it is masked, not just the ones with a review",
     feed.map((i) => i.who).join(" "),
+  );
+
+  head("and a sentence opens in caps too");
+  /* The same unfinished look, in the half of the card that carries the words.
+     Reviews are typed in a box at the end of a build and arrive however the
+     merchant typed them. */
+  const quote = feed.find((i) => i.kind === "review");
+  check(
+    quote?.kind === "review" && quote.said.startsWith("T"),
+    "a review typed in lower case is shown with its first letter raised",
+    quote?.kind === "review" ? quote.said : "no review row",
+  );
+  check(
+    quote?.kind === "review" && quote.said.endsWith("off my week."),
+    "AND THE REST OF THE SENTENCE IS UNTOUCHED",
+    "raising the first letter must not mean upper-casing the sentence",
   );
 
   head("a rating with no sentence is a number, and the strip already has those");
