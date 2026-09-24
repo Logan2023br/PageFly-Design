@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ProofItem } from "@/lib/proof";
+import { tintFor } from "@/lib/tint";
 
 /* ==========================================================================
    ONE MERCHANT AT A TIME, IN THE CORNER.
@@ -43,11 +44,15 @@ const GAP_MS = 22_000;
 /** The slide, matched to the CSS transition below. */
 const SLIDE_MS = 420;
 
-function Stars({ n }: { n: number }) {
+function Stars({ n, color }: { n: number; color: string }) {
+  const full = Math.max(0, Math.min(5, n));
   return (
-    <span aria-label={`${n} out of 5`} className="text-[12px] leading-none tracking-[.08em] text-pf-primary">
-      {"★".repeat(Math.max(0, Math.min(5, n)))}
-      <span className="text-pf-faint">{"★".repeat(Math.max(0, 5 - n))}</span>
+    <span aria-label={`${n} out of 5`} className="text-[11px] leading-none tracking-[.06em]">
+      {/* THE STARS WERE `pf-primary` — #6b2ff7 on a #100b26 card is 2.1:1, a
+          rating nobody can count. They take the card's own tint now, which is
+          chosen light enough to read (see lib/tint.ts). */}
+      <span style={{ color }}>{"\u2605".repeat(full)}</span>
+      <span className="text-pf-faint">{"\u2605".repeat(5 - full)}</span>
     </span>
   );
 }
@@ -159,6 +164,12 @@ function ProofToastView({ items }: { items: ProofItem[] }) {
 
   if (items.length === 0 || item === null) return null;
 
+  /* ONE HUE PER MERCHANT, AND IT DRESSES THE WHOLE CARD. The disc, the wash
+     behind it, the edge and the one figure that matters all come from the same
+     stop, so a card reads as belonging to a store rather than as the corner
+     redrawing itself. Derived from the masked name, so it is stable. */
+  const tint = tintFor(item.who);
+
   return (
     <div
       /* `aria-live` polite and not a dialog: it is read after whatever the
@@ -171,6 +182,16 @@ function ProofToastView({ items }: { items: ProofItem[] }) {
           transform: inView ? "translateX(0)" : "translateX(calc(-100% - 1.5rem))",
           opacity: inView ? 1 : 0,
           transition: `transform ${SLIDE_MS}ms cubic-bezier(.22,1,.36,1), opacity ${SLIDE_MS}ms ease`,
+          /* Over the OPAQUE ground, not instead of it — see the note below. A
+             wash from the corner the eye enters at, fading out before it
+             reaches the text. */
+          backgroundImage: `radial-gradient(115% 95% at 0% 0%, ${tint.from}2e 0%, ${tint.from}0f 38%, transparent 66%)`,
+          borderColor: `${tint.to}33`,
+          boxShadow: [
+            "inset 0 1px 0 0 rgba(255,255,255,.07)",
+            "0 24px 60px -28px rgba(0,0,0,.92)",
+            `0 0 44px -20px ${tint.from}`,
+          ].join(", "),
         }}
         /* A GROUND OF ITS OWN, and `pf-card` is not one: it is
            `rgba(255,255,255,.035)` — a wash meant to lift a panel off the page
@@ -178,28 +199,50 @@ function ProofToastView({ items }: { items: ProofItem[] }) {
            it, including a photograph, and a card at three per cent of white
            over a photograph is a rectangle of blur with text in it. The page's
            own raised surface, opaque, is what a thing that covers something
-           else needs. */
-        className="pointer-events-auto flex w-[330px] items-start gap-3 rounded-2xl border border-pf-border-hi bg-pf-bg-alt p-3.5 shadow-[0_18px_48px_-24px_rgba(0,0,0,.85)] motion-reduce:transition-none"
+           else needs. The tint above is a background IMAGE, which composites
+           over that colour and never replaces it. */
+        className="group pointer-events-auto relative flex w-[334px] items-start gap-3 rounded-2xl border bg-pf-bg-alt p-4 motion-reduce:transition-none"
       >
-        <div className="grid size-9 shrink-0 place-items-center rounded-full bg-pf-card-hi text-[13px] font-semibold uppercase text-pf-muted">
+        <div
+          style={{
+            backgroundImage: `linear-gradient(140deg, ${tint.from} 0%, ${tint.to} 100%)`,
+            boxShadow: `0 6px 18px -8px ${tint.from}, inset 0 1px 0 0 rgba(255,255,255,.22)`,
+          }}
+          aria-hidden
+          /* The initials were `rgba(255,255,255,.06)` with muted text on it —
+             the largest block of colour on the card, and the least chosen. */
+          className="grid size-10 shrink-0 place-items-center rounded-full text-[13px] font-semibold uppercase tracking-[.02em] text-white"
+        >
           {item.who.slice(0, 2)}
         </div>
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 pr-4">
           {item.kind === "review" ? (
             <>
               <div className="flex items-center gap-2">
-                <span className="truncate text-[13px] font-semibold text-pf-text">{item.who}</span>
-                <Stars n={item.stars} />
+                <span className="truncate text-[13px] font-semibold tracking-[-.01em] text-pf-text">
+                  {item.who}
+                </span>
+                <Stars n={item.stars} color={tint.to} />
               </div>
-              <p className="mt-1 text-[13px] leading-snug text-pf-muted">“{item.said}”</p>
+              {/* The quote is the thing being offered, so it is body text and
+                  not the muted framing the other card needs. */}
+              <p className="mt-1.5 line-clamp-3 text-[13px] leading-[1.45] text-pf-body">
+                &ldquo;{item.said}&rdquo;
+              </p>
             </>
           ) : (
             <>
-              <span className="truncate text-[13px] font-semibold text-pf-text">{item.who}</span>
-              <p className="mt-1 text-[13px] leading-snug text-pf-muted">
+              <span className="truncate text-[13px] font-semibold tracking-[-.01em] text-pf-text">
+                {item.who}
+              </span>
+              <p className="mt-1.5 text-[13px] leading-[1.45] text-pf-muted">
                 built{" "}
-                <span className="font-semibold tabular-nums text-pf-text">
+                {/* THE FIGURE IS THE CARD. It was white and lost among three
+                    other white words; it carries the merchant's own hue now,
+                    which is the same accent the stars get on the other kind,
+                    so both shapes have exactly one coloured thing in them. */}
+                <span className="font-semibold tabular-nums" style={{ color: tint.to }}>
                   {item.pages} {item.pages === 1 ? "page" : "pages"}
                 </span>{" "}
                 with PageFly Design
@@ -212,9 +255,13 @@ function ProofToastView({ items }: { items: ProofItem[] }) {
           type="button"
           onClick={close}
           aria-label="Hide these"
-          className="-m-1 shrink-0 rounded-full p-1 text-pf-faint transition-colors hover:text-pf-text"
+          /* Out of the flow and out of the way. It held a column of its own
+             before, taking width from a quote that has three lines to live in;
+             and at full strength it was the highest-contrast mark on a card
+             that is not asking for anything. */
+          className="absolute right-2.5 top-2.5 rounded-full p-1 text-pf-faint opacity-50 transition-[opacity,color] hover:text-pf-body hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-80"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
             <path d="M18 6 6 18M6 6l12 12" />
           </svg>
         </button>
