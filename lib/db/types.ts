@@ -262,6 +262,29 @@ export type StatsQuery = {
   except?: string[];
 };
 
+/** How the Users table is ordered. Matching the picker above it. */
+export type StoreSort =
+  | "recent"
+  | "pages"
+  | "tokens"
+  | "rating"
+  | "domain"
+  | "registered";
+
+export type StoreQuery = {
+  limit: number;
+  offset: number;
+  /** matched against domain, email, store name, country, type and status */
+  search?: string;
+  sort?: StoreSort;
+};
+
+export type StorePage = {
+  rows: StoreSummary[];
+  /** every row the search matched, not the number on this page */
+  total: number;
+};
+
 export type AdminStats = {
   /** stores that have signed in at least once */
   activeStores: number;
@@ -760,6 +783,20 @@ export type Repo = {
 
   /* ---- admin ---- */
   listStoreSummaries(): Promise<StoreSummary[]>;
+  /**
+   * One page of the same list, narrowed and ordered BEFORE it is cut.
+   *
+   * The Users table used to receive every store and page them in the browser,
+   * which made the table cheap to draw and changed nothing about what was
+   * sent. Moving the cut to the database has one failure worse than the
+   * slowness it fixes: filter twenty-five rows in the browser and an operator
+   * typing a domain that is on page nine is told it does not exist. So the
+   * search and the sort travel with the page, and `total` is the number of
+   * MATCHES, not the number on screen.
+   */
+  listStoreSummariesPage(q: StoreQuery): Promise<StorePage>;
+  /** The two figures the Users header shows, without reading every row. */
+  countStores(): Promise<{ total: number; active: number }>;
   /** Best-effort: metering must never fail the request it is measuring. */
   recordModelCall(call: ModelCallRecord): Promise<void>;
   stats(q?: StatsQuery): Promise<AdminStats>;

@@ -72,6 +72,69 @@ function getPool(url: string): Pool {
  * the same absence there and two keys for it put two rows both reading
  * "Unplaced" on the live screen.
  */
+/* ==========================================================================
+   ONE STORE LIST, TWO CALLERS.
+
+   `listStoreSummaries` reads the whole thing; `listStoreSummariesPage` reads a
+   page with a search and a sort applied FIRST. They must select the same
+   columns and join the same tables, or the Users table and the proof feed
+   begin disagreeing about what a store is — so the select is written once and
+   the two differ only in what follows it.
+   ========================================================================== */
+const STORE_SUMMARY_SELECT = `select d.domain,
+                s.email, s.store_name, s.shopify_plan, s.current_plan,
+                s.days_used, s.country, s.user_type, s.status,
+                coalesce(s.page_limit, 0)   as page_limit,
+                s.first_seen_at, s.last_seen_at,
+                coalesce(s.blocked, false)  as blocked,
+                coalesce(r.run_count,0)  as run_count,
+                coalesce(p.pages_used,0) as pages_used,
+                coalesce(r.tokens,0)     as tokens,
+                r.last_run_at,
+                v.stars, v.comment, v.created_at as review_at
+           from (
+             select domain from stores
+             union
+             select domain from reviews
+           ) d
+           left join stores s on s.domain = d.domain
+           left join (
+             select domain, count(*)::int as run_count, sum(tokens)::int as tokens,
+                    max(created_at) as last_run_at
+               from runs group by domain
+           ) r on r.domain = d.domain
+           left join (
+             select r2.domain, count(*)::int as pages_used
+               from run_pages p2 join runs r2 on r2.id = p2.run_id
+              group by r2.domain
+           ) p on p.domain = d.domain
+           left join reviews v on v.domain = d.domain`;
+
+/** The orderings the Users table offers, as SQL. */
+const STORE_ORDER: Record<string, string> = {
+  /* Unrated stores go last rather than counting as zero — "no opinion" is not
+     the same as "hated it", and `nulls last` is that sentence in SQL. */
+  rating: "v.stars desc nulls last, d.domain",
+  pages: "coalesce(p.pages_used,0) desc, d.domain",
+  tokens: "coalesce(r.tokens,0) desc, d.domain",
+  domain: "d.domain asc",
+  /* A store that never signed in has no date and sorts last, which is what an
+     empty string would not do. */
+  registered: "s.first_seen_at desc nulls last, d.domain",
+  recent:
+    "coalesce(r.last_run_at, s.last_seen_at, v.created_at) desc nulls last, d.domain",
+};
+
+/** The columns a search reads. A null one simply never matches. */
+const STORE_SEARCH = [
+  "d.domain",
+  "s.email",
+  "s.store_name",
+  "s.country",
+  "s.user_type",
+  "s.status",
+];
+
 export function geoClause(
   geo: GeoFilter,
   nextParam: number,
@@ -382,6 +445,27 @@ export function createPostgresRepo(url: string, override?: Pool): Repo {
     lastSeenAt: iso(r.last_seen_at),
     blocked: Boolean(r.blocked),
   });
+
+  /** One row of `STORE_SUMMARY_SELECT`, as the app sees it. Beside `toStore`
+      and `iso` because it is built from both. */
+  const toSummary = (r: Record<string, unknown>): StoreSummary => {
+    const stars = r.stars === null || r.stars === undefined ? null : Number(r.stars);
+    return {
+      ...toStore(r),
+      runCount: Number(r.run_count ?? 0),
+      pagesUsed: Number(r.pages_used ?? 0),
+      tokens: Number(r.tokens ?? 0),
+      lastRunAt: iso(r.last_run_at),
+      review:
+        stars === null
+          ? null
+          : {
+              stars,
+              comment: (r.comment as string) ?? null,
+              createdAt: iso(r.review_at) ?? "",
+            },
+    };
+  };
 
   const toRun = (r: Record<string, unknown>): RunRecord => ({
     id: String(r.id),
@@ -1067,69 +1151,65 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       }
     },
 
+    async listStoreSummariesPage(q) {
+      await ready();
+
+      const limit = Math.min(500, Math.max(1, Math.floor(q.limit) || 25));
+      const offset = Math.max(0, Math.floor(q.offset) || 0);
+      const order = STORE_ORDER[q.sort ?? "recent"] ?? STORE_ORDER.recent;
+
+      const term = (q.search ?? "").trim();
+      /* The wildcards are added HERE so a `%` an operator typed is matched
+         rather than honoured. */
+      const like = term ? [`%${term.replace(/[%_\\]/g, (c) => `\\${c}`)}%`] : [];
+      const where = term
+        ? `where ${STORE_SEARCH.map(() => "").map((_, i) => STORE_SEARCH[i] + " ilike $1").join(" or ")}`
+        : "";
+
+      /* THE COUNT COMES BACK WITH THE ROWS. Two statements would be two trips
+         that can disagree — a store synced between them leaves a pager whose
+         last page is empty — and `count(*) over ()` is the number of MATCHES,
+         which is what a pager needs rather than the number on this page. */
+      const { rows } = await db.query(
+        `select *, count(*) over ()::int as match_count from (
+           ${STORE_SUMMARY_SELECT}
+           ${where}
+           order by ${order}
+         ) t
+         limit $${like.length + 1} offset $${like.length + 2}`,
+        [...like, limit, offset],
+      );
+
+      if (rows.length > 0)
+        return { rows: rows.map(toSummary), total: Number(rows[0].match_count) };
+
+      /* PAST THE END STILL KNOWS THE TOTAL. The caller has to be able to send
+         an operator back to a page that exists, and an empty window carries no
+         `count(*) over ()` to read it from. */
+      const counted = await db.query(
+        `select count(*)::int as n from (${STORE_SUMMARY_SELECT} ${where}) t`,
+        like,
+      );
+      return { rows: [], total: Number(counted.rows[0]?.n ?? 0) };
+    },
+
+    async countStores() {
+      await ready();
+      const { rows } = await db.query(
+        `select count(*)::int as total,
+                count(*) filter (where last_seen_at is not null)::int as active
+           from stores`,
+      );
+      return { total: Number(rows[0]?.total ?? 0), active: Number(rows[0]?.active ?? 0) };
+    },
+
     async listStoreSummaries() {
       await ready();
       const { rows } = await db.query(
-        /* Driven from every domain we hold anything about, not from `stores`
-           alone. The public feedback link records a rating for a domain that
-           may never have been in the sheet, and it deliberately does not write
-           to `stores` — that table is the sign-in allowlist. Joining from
-           `stores` would file those reviews somewhere nobody can read them.
-
-           `s.*` had to go with it: the store side is now nullable, so the
-           columns are named and the two that must not arrive as NULL —
-           page_limit and blocked — are given the values reviewOnlyStore()
-           gives them. */
-        `select d.domain,
-                s.email, s.store_name, s.shopify_plan, s.current_plan,
-                s.days_used, s.country, s.user_type, s.status,
-                coalesce(s.page_limit, 0)   as page_limit,
-                s.first_seen_at, s.last_seen_at,
-                coalesce(s.blocked, false)  as blocked,
-                coalesce(r.run_count,0)  as run_count,
-                coalesce(p.pages_used,0) as pages_used,
-                coalesce(r.tokens,0)     as tokens,
-                r.last_run_at,
-                v.stars, v.comment, v.created_at as review_at
-           from (
-             select domain from stores
-             union
-             select domain from reviews
-           ) d
-           left join stores s on s.domain = d.domain
-           left join (
-             select domain, count(*)::int as run_count, sum(tokens)::int as tokens,
-                    max(created_at) as last_run_at
-               from runs group by domain
-           ) r on r.domain = d.domain
-           left join (
-             select r2.domain, count(*)::int as pages_used
-               from run_pages p2 join runs r2 on r2.id = p2.run_id
-              group by r2.domain
-           ) p on p.domain = d.domain
-           left join reviews v on v.domain = d.domain
-          order by coalesce(r.last_run_at, s.last_seen_at, v.created_at)
-                   desc nulls last, d.domain`,
+        `${STORE_SUMMARY_SELECT}
+          order by ${STORE_ORDER.recent}`,
       );
-
-      return rows.map((r): StoreSummary => {
-        const stars = r.stars === null ? null : Number(r.stars);
-        return {
-          ...toStore(r),
-          runCount: Number(r.run_count ?? 0),
-          pagesUsed: Number(r.pages_used ?? 0),
-          tokens: Number(r.tokens ?? 0),
-          lastRunAt: iso(r.last_run_at),
-          review:
-            stars === null
-              ? null
-              : {
-                  stars,
-                  comment: (r.comment as string) ?? null,
-                  createdAt: iso(r.review_at) ?? "",
-                },
-        };
-      });
+      return rows.map(toSummary);
     },
 
     async recordEvents(events) {

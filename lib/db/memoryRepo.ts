@@ -540,6 +540,64 @@ export function createMemoryRepo(file: string): Repo {
       flush();
     },
 
+    /* THE SAME RULES AS THE SQL, in the other language — search and sort run
+       over the whole list BEFORE it is cut. Filtering after the slice tells an
+       operator that a store on page nine does not exist, which is a lying
+       screen rather than a slow one. */
+    async listStoreSummariesPage(q) {
+      const all = await this.listStoreSummaries();
+
+      const needle = (q.search ?? "").trim().toLowerCase();
+      const matched = needle
+        ? all.filter((st) =>
+            [st.domain, st.email, st.storeName, st.country, st.userType, st.status]
+              .filter(Boolean)
+              .some((v) => String(v).toLowerCase().includes(needle)),
+          )
+        : all;
+
+      const sorted = [...matched];
+      switch (q.sort) {
+        case "pages":
+          sorted.sort((a, b) => b.pagesUsed - a.pagesUsed || a.domain.localeCompare(b.domain));
+          break;
+        case "tokens":
+          sorted.sort((a, b) => b.tokens - a.tokens || a.domain.localeCompare(b.domain));
+          break;
+        case "rating":
+          /* Unrated last, not zero: "no opinion" is not "hated it". */
+          sorted.sort(
+            (a, b) =>
+              (b.review?.stars ?? -1) - (a.review?.stars ?? -1) ||
+              a.domain.localeCompare(b.domain),
+          );
+          break;
+        case "domain":
+          sorted.sort((a, b) => a.domain.localeCompare(b.domain));
+          break;
+        case "registered":
+          sorted.sort((a, b) => (b.firstSeenAt ?? "").localeCompare(a.firstSeenAt ?? ""));
+          break;
+        default:
+          /* `listStoreSummaries` already returns this order. */
+          break;
+      }
+
+      const limit = Math.min(500, Math.max(1, Math.floor(q.limit) || 25));
+      const offset = Math.max(0, Math.floor(q.offset) || 0);
+      /* `total` is the number of MATCHES, never the number on this page — a
+         pager built from the page size can only ever say "one page". */
+      return { rows: sorted.slice(offset, offset + limit), total: sorted.length };
+    },
+
+    async countStores() {
+      sync();
+      return {
+        total: data.stores.length,
+        active: data.stores.filter((st) => st.lastSeenAt).length,
+      };
+    },
+
     async listStoreSummaries() {
       sync();
       /* Every domain we hold anything about, not only the ones in the store

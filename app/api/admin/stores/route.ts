@@ -2,6 +2,7 @@ import { z } from "zod";
 import { DEFAULT_PAGE_LIMIT } from "@/lib/pageCatalog";
 import { findBuiltinStore } from "@/lib/allowlist";
 import { getRepo } from "@/lib/db";
+import type { StoreSort } from "@/lib/db/types";
 import { readAdminSession } from "@/lib/session";
 import { normalizeDomain } from "@/lib/sheet";
 
@@ -152,4 +153,43 @@ export async function DELETE(request: Request) {
     domain,
     blocked: builtin,
   } satisfies StoresResponse);
+}
+
+/* ==========================================================================
+   GET /api/admin/stores?page=1&size=25&q=&sort=recent
+
+   ONE PAGE, CUT BY THE DATABASE. The Users table used to receive every store
+   and page them in the browser, which made the table cheap to draw and changed
+   nothing about what was sent — fifteen hundred rows on every load.
+
+   The search and the sort travel with the request because they have to happen
+   BEFORE the cut: filtering a page in the browser tells an operator that a
+   store on page nine does not exist, which is a lying screen rather than a
+   slow one.
+   ========================================================================== */
+
+const SORTS = new Set(["recent", "pages", "tokens", "rating", "domain", "registered"]);
+
+export async function GET(req: Request): Promise<Response> {
+  if (!(await readAdminSession())) {
+    return Response.json({ error: "not signed in" }, { status: 401 });
+  }
+
+  const p = new URL(req.url).searchParams;
+  /* Clamped to the sizes the picker offers. A caller asking for everything is
+     the shape this endpoint exists to stop. */
+  const asked = Number(p.get("size") ?? 25);
+  const size = [25, 50, 100, 250].includes(asked) ? asked : 25;
+  const page = Math.max(1, Math.floor(Number(p.get("page") ?? 1)) || 1);
+  const sortRaw = p.get("sort") ?? "recent";
+  const sort = SORTS.has(sortRaw) ? (sortRaw as StoreSort) : "recent";
+  /* Long enough for a domain and an email; anything past that is not a search. */
+  const search = (p.get("q") ?? "").slice(0, 120);
+
+  const [list, counts] = await Promise.all([
+    getRepo().listStoreSummariesPage({ limit: size, offset: (page - 1) * size, search, sort }),
+    getRepo().countStores(),
+  ]);
+
+  return Response.json({ ...list, counts });
 }

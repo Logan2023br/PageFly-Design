@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { StoresResponse } from "@/app/api/admin/stores/route";
 import type { StoreSummary } from "@/lib/db";
 import { EditStore } from "./EditStore";
@@ -29,57 +29,73 @@ import {
 
 type SortKey = "recent" | "pages" | "tokens" | "rating" | "domain" | "registered";
 
-export function UsersTable({ stores }: { stores: StoreSummary[] }) {
+export function UsersTable({
+  initial,
+}: {
+  /** The first page, rendered on the server so the table is not empty at first
+      paint. Every page after it comes from `/api/admin/stores`. */
+  initial: { rows: StoreSummary[]; total: number };
+}) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("recent");
   const [editing, setEditing] = useState<StoreSummary | null>(null);
   const [size, setSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [page, setPage] = useState(1);
+  const [data, setData] = useState(initial);
 
-  const rows = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    const filtered = needle
-      ? stores.filter((s) =>
-          [s.domain, s.email, s.storeName, s.country, s.userType, s.status]
-            .filter(Boolean)
-            .some((v) => String(v).toLowerCase().includes(needle)),
-        )
-      : stores;
+  /* TYPING IS NOT A QUERY. A request per keystroke is fifteen hundred rows
+     scanned per letter; a quarter second of stillness is a search. */
+  const [term, setTerm] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setTerm(query.trim()), 250);
+    return () => clearTimeout(t);
+  }, [query]);
 
-    const sorted = [...filtered];
-    sorted.sort((a, b) => {
-      switch (sort) {
-        case "pages":
-          return b.pagesUsed - a.pagesUsed;
-        case "tokens":
-          return b.tokens - a.tokens;
-        case "rating":
-          /* Unrated stores go last rather than counting as zero — "no opinion"
-             is not the same as "hated it". */
-          return (b.review?.stars ?? -1) - (a.review?.stars ?? -1);
-        case "domain":
-          return a.domain.localeCompare(b.domain);
-        case "registered":
-          /* Stores that never signed in have no registration date; they sort last
-             rather than first, which is what an empty string would do. */
-          return (b.firstSeenAt ?? "").localeCompare(a.firstSeenAt ?? "");
-        default:
-          return (b.lastRunAt ?? b.lastSeenAt ?? "").localeCompare(
-            a.lastRunAt ?? a.lastSeenAt ?? "",
-          );
-      }
-    });
-    return sorted;
-  }, [stores, query, sort]);
+  /* BACK TO THE FIRST PAGE WHENEVER THE QUESTION CHANGES. A page number is
+     only meaningful against the list it was chosen from: on page 40, typing a
+     search that matches eleven stores asks the database for rows 976 to 1000
+     of eleven and gets an empty table under a filter that DID match — the
+     answer indistinguishable from "no results".
+
+     Adjusted during render, not in an effect. The effect version fetches the
+     stale page first and the lint refuses it; this never asks the wrong
+     question at all. */
+  const question = `${size}|${sort}|${term}`;
+  const [asked, setAsked] = useState(question);
+  if (asked !== question) {
+    setAsked(question);
+    setPage(1);
+  }
+
+  const ask = `page=${page}&size=${size}&sort=${sort}&q=${encodeURIComponent(term)}`;
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/admin/stores?${ask}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { rows: StoreSummary[]; total: number } | null) => {
+        if (!cancelled && d) setData(d);
+      })
+      .catch(() => {
+        /* The table keeps the rows it has rather than emptying. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ask]);
+
+  /* THE SERVER DID THE FILTERING AND THE ORDERING. Doing either here again
+     would be sorting twenty-five rows out of fifteen hundred — which looks
+     like it works and is wrong the moment the answer spans two pages. */
+  const rows = data.rows;
 
   /* CLAMPED ON EVERY RENDER, not on the change. The list shrinks from a search,
      a sort, a delete and a sync, and hooking one of those leaves the others —
      where the failure is an empty table under a filter that DID match, which
      reads as "no results" and is indistinguishable from the true answer. */
-  const pages = pageCount(rows.length, size);
-  const current = clampPage(page, rows.length, size);
-  const range = shownRange(current, size, rows.length);
-  const visible = rows.slice((current - 1) * size, current * size);
+  const pages = pageCount(data.total, size);
+  const current = clampPage(page, data.total, size);
+  const range = shownRange(current, size, data.total);
+  const visible = rows;
 
   return (
     <div className="grid gap-3">
@@ -115,7 +131,7 @@ export function UsersTable({ stores }: { stores: StoreSummary[] }) {
         </select>
 
         <span className="text-[12px] tabular-nums text-pf-muted">
-          {rows.length} of {stores.length}
+          {data.total.toLocaleString()} matching
         </span>
       </div>
 
@@ -125,7 +141,7 @@ export function UsersTable({ stores }: { stores: StoreSummary[] }) {
             <Icon name="Users" size={18} />
           </span>
           <p className="text-[13.5px] text-pf-muted">
-            {stores.length === 0
+            {term === "" && data.total === 0
               ? "No stores loaded yet — sync the sheet."
               : "Nothing matches that search."}
           </p>
@@ -267,7 +283,7 @@ export function UsersTable({ stores }: { stores: StoreSummary[] }) {
       {rows.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[12px] tabular-nums text-pf-muted">
-            {`Showing ${range.from.toLocaleString()}–${range.to.toLocaleString()} of ${rows.length.toLocaleString()}`}
+            {`Showing ${range.from.toLocaleString()}–${range.to.toLocaleString()} of ${data.total.toLocaleString()}`}
           </span>
 
           {pages > 1 && (
