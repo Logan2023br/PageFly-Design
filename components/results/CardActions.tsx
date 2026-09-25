@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { EV, track } from "@/lib/analytics";
 import type { PageMockup } from "@/lib/generate/types";
 import { useExport } from "./ExportProvider";
-import { actionLabel, type ExportState } from "./exportLabel";
+import { actionLabel, placeOf, type ExportState } from "./exportLabel";
 import { useAdminPage, useAdminView } from "./adminView";
 import { htmlFileName, htmlOfPage } from "./downloadHtml";
 import { ownPageId } from "@/lib/pagefly/pageId";
@@ -24,7 +24,7 @@ export const LOCKED_TOOLTIP =
   "This feature will be available in a future update.";
 
 export function CardActions({ page }: { page: PageMockup }) {
-  const { exportPagefly, exporting, exportingId } = useExport();
+  const { exportPagefly, queue } = useExport();
   /* Operators only. See `adminView.tsx` — false anywhere the provider is not. */
   const admin = useAdminView();
   const html = admin ? htmlOfPage(page) : null;
@@ -70,10 +70,21 @@ export function CardActions({ page }: { page: PageMockup }) {
     timer.current = setTimeout(() => setState("idle"), 2200);
   };
 
-  /* DISABLED BECAUSE THE STAGE IS SHARED; LABELLED BECAUSE THIS CARD ASKED.
-     One boolean did both, so pressing Export on one page made all seven say
-     "Exporting…" — the screen reporting work that was not happening to them. */
-  const label = actionLabel(state, exporting, exportingId === page.id);
+  /* ==========================================================================
+     THIS CARD'S OWN PLACE IN THE QUEUE, AND NOTHING ABOUT ANYONE ELSE'S.
+
+     It read a shared `exporting` boolean, which did two jobs badly. It made
+     every card say "Exporting…" when one was pressed, and — the reason this
+     changed — it DISABLED every other card until the first export finished, so
+     asking for three files meant standing over the screen for three rounds.
+
+     Now the only card this can disable is the one already in the queue, and it
+     is disabled because a second press is not a second file. Every other card
+     stays live: the press is accepted and the work is ordered behind whatever
+     is already running. See the note on the queue in `ExportProvider`.
+     ========================================================================== */
+  const place = placeOf(queue, page.id);
+  const label = actionLabel(state, place);
 
   return (
     <div /* WRAPS, because the row grew. Four controls do not fit across a card at
@@ -154,7 +165,7 @@ export function CardActions({ page }: { page: PageMockup }) {
           track(EV.pageExported, { scope: "one", count: 1, page_type: page.pageType });
           void onExport();
         }}
-        disabled={exporting}
+        disabled={place !== null}
         title="Download this page as a .pagefly file you can import into PageFly"
         className={`pointer-events-auto inline-flex items-center gap-1.5 whitespace-nowrap rounded-pf-md px-2.5 py-1.5 text-[11.5px] font-semibold shadow-pf-float backdrop-blur transition-colors duration-150 disabled:cursor-not-allowed ${
           state === "done"

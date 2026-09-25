@@ -16,6 +16,7 @@ import { announceExport } from "@/lib/pagefly/install";
 import { fileStem, pageFromBreakpoints, type Rendered } from "@/lib/pagefly/fromDom";
 import { createPreparer, keyForHtml } from "@/lib/pagefly/prepared";
 import { ownPageId } from "@/lib/pagefly/pageId";
+import { createExportQueue } from "./exportQueue";
 import { designTreeSchema, type DesignTree } from "@/lib/design/schema";
 import { pageflyFromTree } from "@/lib/design/toPagefly";
 import { MockupPage } from "../mockup/MockupPage";
@@ -32,13 +33,17 @@ import { useAdminDomain } from "./adminView";
 type ExportState = {
   exporting: boolean;
   /**
-   * The page an export is running for, when one is.
+   * Every page waiting to be exported, in the order it was asked for.
    *
-   * `exporting` alone made every card say "Exporting…" the moment any card was
-   * pressed. Blocking is shared — the stage is one node — but the label is
-   * this card's or nobody's.
+   * THE HEAD IS THE ONE RUNNING. A job is shifted off only once it has
+   * finished, so `queue[0]` is in progress and the rest are waiting — see
+   * `placeOf` in `./exportLabel`.
+   *
+   * IT REPLACED A SINGLE `exportingId`, which could only describe one press.
+   * With one id, a second click had nowhere to be recorded, so the screen
+   * refused it: every other card stayed disabled until the first finished.
    */
-  exportingId: string | null;
+  queue: string[];
   /** "3 of 8" while a batch runs */
   progress: string | null;
   error: string | null;
@@ -221,9 +226,42 @@ export function ExportProvider({ children }: { children: ReactNode }) {
      lookup is a 401 and every export reconverts from scratch. */
   const adminDomain = useAdminDomain();
   const [staged, setStaged] = useState<PageMockup | null>(null);
-  const [exporting, setExporting] = useState(false);
-  const [exportingId, setExportingId] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
+
+  /* ==========================================================================
+     ONE WORKER, A QUEUE IN FRONT OF IT — see `./exportQueue.ts`, which holds
+     the rules and the reasoning and is tested on its own.
+
+     HELD IN A REF, NOT BUILT EACH RENDER. The queue IS the in-flight work; a
+     new one per render would strand every job already in it, and the screen
+     polls. `useState` with an initialiser rather than `useRef(create(...))` so
+     the factory runs once rather than on every render and has its result
+     thrown away.
+
+     `setQueue` is the mirror the cards render from; the queue itself is the
+     truth. A second press in the same tick reads the queue's own list
+     synchronously, so it cannot be lost to a stale render value.
+     ========================================================================== */
+  const [queue, setQueue] = useState<string[]>([]);
+  const [jobs] = useState(() =>
+    createExportQueue(
+      (ids) => setQueue(ids),
+      /* The staged node is shared, so it is cleared when the LAST job is done
+         and not after each one — clearing between two queued exports would
+         unmount the surface the next one is about to measure. */
+      () => setStaged(null),
+    ),
+  );
+
+  const enqueue = useCallback(
+    (id: string, work: () => Promise<void>) => jobs.add(id, work),
+    [jobs],
+  );
+
+  /* Kept for the two batch buttons, which must stay disabled while anything is
+     in flight: they walk every visible page and would interleave with a queue
+     they did not start. A single card no longer reads this. */
+  const exporting = queue.length > 0;
   const [error, setError] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   /* One ref per breakpoint, in EXPORT_BREAKPOINTS order. */
@@ -351,109 +389,123 @@ export function ExportProvider({ children }: { children: ReactNode }) {
   }, [adminDomain]);
 
   const exportPagefly = useCallback(
-    async (page: PageMockup) => {
-      setExporting(true);
-      /* WHICH page, so one card can say "Exporting…" and the rest stay quiet.
-         They are all disabled either way — the stage is one node. */
-      setExportingId(page.id);
-      setError(null);
-      try {
-        await buildPagefly(page);
-      } catch (err) {
-        setError(
-          err instanceof Error
-            ? `Couldn't build the .pagefly file: ${err.message}`
-            : "Couldn't build the .pagefly file.",
-        );
-      } finally {
-        setStaged(null);
-        setExporting(false);
-        setExportingId(null);
-      }
-    },
-    [buildPagefly],
+    (page: PageMockup) =>
+      /* QUEUED, NOT RUN. The press is always accepted; the work waits its turn.
+         The promise settles when THIS page's file is built, which is what the
+         card awaits to choose between "Exported" and "Export failed".
+
+         NOTE THE RETHROW. The card reports its own outcome, so the error has
+         to reach it; the banner below is for the merchant who is not watching
+         that card. Swallowing it here left every failed export labelled
+         "Exported". */
+      enqueue(page.id, async () => {
+        setError(null);
+        try {
+          await buildPagefly(page);
+        } catch (err) {
+          setError(
+            err instanceof Error
+              ? `Couldn't build the .pagefly file: ${err.message}`
+              : "Couldn't build the .pagefly file.",
+          );
+          throw err;
+        }
+      }),
+    [buildPagefly, enqueue],
   );
 
+  /* ==========================================================================
+     THE BATCH IS THE QUEUE, FILLED IN ONE PRESS.
+
+     It used to walk the pages itself, awaiting `buildPagefly` in a loop. That
+     loop and the single-card queue would now be two workers over one staging
+     node — the exact collision the queue exists to prevent — and a merchant
+     who pressed Export all while one card was still converting would get two
+     pages measured into each other.
+
+     So it queues every page and waits for them, and the order falls out of the
+     queue rather than out of this function: anything already pressed runs
+     first, which is what was asked for.
+
+     PROGRESS IS COUNTED FROM COMPLETIONS, not from a loop index, because there
+     is no longer a loop here to be the index of.
+     ========================================================================== */
   const exportPageflyAll = useCallback(
     async (pages: PageMockup[]) => {
-      setExporting(true);
       setError(null);
       const failed: string[] = [];
-      try {
-        for (let i = 0; i < pages.length; i++) {
-          setProgress(`${i + 1} of ${pages.length}`);
-          try {
-            await buildPagefly(pages[i]);
-          } catch {
-            failed.push(pages[i].label);
-          }
-        }
-        if (failed.length) {
-          setError(
-            `${failed.length} of ${pages.length} page${failed.length === 1 ? "" : "s"} wouldn't export (${failed.join(", ")}). The rest downloaded.`,
-          );
-        }
-      } finally {
-        setStaged(null);
-        setProgress(null);
-        setExporting(false);
-        setExportingId(null);
-      }
+      let done = 0;
+      setProgress(`0 of ${pages.length}`);
+      await Promise.all(
+        pages.map((page) =>
+          enqueue(page.id, () => buildPagefly(page))
+            .catch(() => {
+              failed.push(page.label);
+            })
+            .finally(() => {
+              done += 1;
+              setProgress(`${done} of ${pages.length}`);
+            }),
+        ),
+      );
+      setProgress(null);
+      if (failed.length)
+        setError(
+          `${failed.length} of ${pages.length} page${failed.length === 1 ? "" : "s"} wouldn't export (${failed.join(", ")}). The rest downloaded.`,
+        );
     },
-    [buildPagefly],
+    [buildPagefly, enqueue],
   );
 
   const exportOne = useCallback(
-    async (page: PageMockup) => {
-      setExporting(true);
-      setExportingId(page.id);
-      setError(null);
-      try {
-        await capture(page);
-      } catch {
-        setError("That page wouldn't export. Try again, or download it from the preview.");
-      } finally {
-        setStaged(null);
-        setExporting(false);
-        setExportingId(null);
-      }
-    },
-    [capture],
+    (page: PageMockup) =>
+      /* THE SAME QUEUE AS THE .pagefly EXPORTS, on purpose: a PNG capture
+         stages into the same single node, so the two kinds of export cannot
+         run beside each other any more than two of one kind can. */
+      enqueue(page.id, async () => {
+        setError(null);
+        try {
+          await capture(page);
+        } catch (err) {
+          setError("That page wouldn't export. Try again, or download it from the preview.");
+          throw err;
+        }
+      }),
+    [capture, enqueue],
   );
 
+  /** The PNG batch, through the same queue and for the same reason. */
   const exportAll = useCallback(
     async (pages: PageMockup[]) => {
-      setExporting(true);
       setError(null);
       let failed = 0;
-      try {
-        for (let i = 0; i < pages.length; i++) {
-          setProgress(`${i + 1} of ${pages.length}`);
-          try {
-            await capture(pages[i]);
-          } catch {
-            failed += 1;
-          }
-        }
-        if (failed > 0) {
-          setError(
-            `${failed} of ${pages.length} page${failed === 1 ? "" : "s"} wouldn't export. The rest downloaded.`,
-          );
-        }
-      } finally {
-        setStaged(null);
-        setProgress(null);
-        setExporting(false);
-        setExportingId(null);
-      }
+      let done = 0;
+      setProgress(`0 of ${pages.length}`);
+      await Promise.all(
+        pages.map((page) =>
+          enqueue(page.id, () => capture(page))
+            .catch(() => {
+              failed += 1;
+            })
+            .finally(() => {
+              done += 1;
+              setProgress(`${done} of ${pages.length}`);
+            }),
+        ),
+      );
+      setProgress(null);
+      if (failed > 0)
+        setError(
+          `${failed} of ${pages.length} page${failed === 1 ? "" : "s"} wouldn't export. The rest downloaded.`,
+        );
     },
-    [capture],
+    [capture, enqueue],
   );
 
   const value = useMemo<ExportState>(
     () => ({
       exporting,
-      exportingId,
+      queue,
       progress,
       error,
       exportOne,
@@ -464,7 +516,7 @@ export function ExportProvider({ children }: { children: ReactNode }) {
     }),
     [
       exporting,
-      exportingId,
+      queue,
       progress,
       error,
       exportOne,

@@ -1,30 +1,24 @@
 /* ==========================================================================
-   ONE CARD IS EXPORTING; THE OTHERS ARE JUST WAITING.
+   ONE CARD IS EXPORTING; THE OTHERS ARE WAITING THEIR TURN.
 
        npx tsx scripts/test-export-label.ts
 
-   REPORTED: pressing Export on one page made every other card on the screen
-   say "Exporting…" too.
+   TWO REPORTS, ONE FILE.
 
-   `exporting` is one boolean on the provider, and every card read it. That
-   boolean is doing two different jobs and only one of them belongs to
-   everybody:
+   1. Pressing Export on one page made every other card say "Exporting…".
+   2. Pressing Export on one page stopped every other card being pressable at
+      all: "bấm export xong nó không cho export ở item khác".
 
-     BLOCKING IS SHARED, and correctly so. `capture` and `buildPagefly` both
-     stage the page into ONE offscreen surface — `setStaged(page)`, measured
-     through a single `stageRef` — so two exports at once fight over the same
-     node. Every button stays disabled while one runs.
+   The second is why the label now reads off a QUEUE rather than a boolean.
+   Blocking is real — `capture` and `buildPagefly` stage into one offscreen
+   node — but a shared resource wants a queue, not a locked screen.
 
-     THE LABEL IS NOT SHARED. "Exporting…" on a card that nobody pressed is the
-     screen reporting work that is not happening to that page, and a merchant
-     watching seven cards claim to be busy has no way to tell which download is
-     actually coming.
-
-   Nothing fails here either: the export works, the right file downloads. The
-   screen just says something untrue for a few seconds.
+   Neither bug fails anything: the export works and the right file downloads.
+   The screen just says something untrue, or refuses a press it could have
+   taken. So the assertions below are about what the merchant is TOLD.
    ========================================================================== */
 
-import { actionLabel } from "../components/results/exportLabel";
+import { actionLabel, placeOf } from "../components/results/exportLabel";
 
 let bad = 0;
 const ok = (name: string, cond: boolean, detail = "") => {
@@ -33,29 +27,63 @@ const ok = (name: string, cond: boolean, detail = "") => {
 };
 const head = (t: string) => console.log(`\n— ${t}`);
 
-head("while one card is exporting");
+/* Three cards, pressed in this order. The provider works the list from the
+   front, so "a" is converting and "b" and "c" are waiting. */
+const QUEUE = ["a", "b", "c"];
+
+head("where each card sits");
+ok("the head of the queue is the one running", placeOf(QUEUE, "a") === "running");
+ok("the one pressed second is waiting", placeOf(QUEUE, "b") === "queued");
+ok("and so is the third", placeOf(QUEUE, "c") === "queued");
+ok("a card nobody pressed is nowhere", placeOf(QUEUE, "d") === null);
+ok("nor is anything in an empty queue", placeOf([], "a") === null);
+
+head("what each card says");
 ok(
-  "the card that was pressed says so",
-  actionLabel("idle", true, true) === "Exporting…",
-  actionLabel("idle", true, true),
+  "the one converting says so",
+  actionLabel("idle", placeOf(QUEUE, "a")) === "Exporting…",
+  actionLabel("idle", placeOf(QUEUE, "a")),
 );
 ok(
-  "AND THE OTHERS DO NOT",
-  actionLabel("idle", true, false) === "Export",
-  `${actionLabel("idle", true, false)} — this is the reported bug`,
+  "THE WAITING ONES DO NOT CLAIM TO BE CONVERTING",
+  actionLabel("idle", placeOf(QUEUE, "b")) !== "Exporting…",
+  `${actionLabel("idle", placeOf(QUEUE, "b"))} — seven cards claiming to convert was the first bug`,
+);
+ok(
+  "they say the press landed",
+  actionLabel("idle", placeOf(QUEUE, "b")) === "Queued",
+  actionLabel("idle", placeOf(QUEUE, "b")),
+);
+ok(
+  "AND A CARD NOBODY PRESSED STILL OFFERS TO EXPORT",
+  actionLabel("idle", placeOf(QUEUE, "d")) === "Export",
+  `${actionLabel("idle", placeOf(QUEUE, "d"))} — this is the reported bug`,
 );
 
 head("nothing exporting");
-ok("every card offers to export", actionLabel("idle", false, false) === "Export");
-ok("including the last one pressed", actionLabel("idle", false, true) === "Export");
+ok("every card offers to export", actionLabel("idle", null) === "Export");
 
 head("the outcome belongs to one card only");
-/* `done` and `failed` are per-card state already; they must not be reachable
-   for a card that was never pressed, and they outrank the busy flag on the one
-   that was — the file has arrived, whatever else is still running. */
-ok("done outranks busy", actionLabel("done", true, true) === "Exported");
-ok("failed outranks busy", actionLabel("failed", true, true) === "Export failed");
-ok("done on an idle screen", actionLabel("done", false, true) === "Exported");
+/* `done` and `failed` are per-card state already; they outrank the queue on
+   the card that was pressed — the file has arrived, whatever else is still
+   running behind it. */
+ok("done outranks the queue", actionLabel("done", "running") === "Exported");
+ok("failed outranks the queue", actionLabel("failed", "running") === "Export failed");
+ok("done while another card runs", actionLabel("done", null) === "Exported");
+
+head("the queue is an order, and the order is the promise");
+/* "ưu tiên những cái item bấm trước sẽ chạy trước" — first pressed, first run.
+   A queue that reported its head as anything but position 0 would run them in
+   an order the labels do not describe. */
+const pressed = ["first", "second", "third"];
+ok(
+  "only one card is ever `running`",
+  pressed.filter((id) => placeOf(pressed, id) === "running").length === 1,
+);
+ok(
+  "and it is the one pressed first",
+  placeOf(pressed, "first") === "running",
+);
 
 console.log(bad === 0 ? "\nall good" : `\n${bad} failed`);
 process.exit(bad === 0 ? 0 : 1);
