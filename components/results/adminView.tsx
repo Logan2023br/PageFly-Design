@@ -29,10 +29,33 @@ import { createContext, useContext, type ReactNode } from "react";
  */
 export type AdminPages = Map<string, { runId: string; hidden: boolean }>;
 
-const AdminViewContext = createContext<AdminPages | null>(null);
+type AdminScope = { domain: string; pages: AdminPages };
 
-export function AdminView({ pages, children }: { pages: AdminPages; children: ReactNode }) {
-  return <AdminViewContext.Provider value={pages}>{children}</AdminViewContext.Provider>;
+const AdminViewContext = createContext<AdminScope | null>(null);
+
+export function AdminView({
+  domain,
+  pages,
+  children,
+}: {
+  /** The store being looked at. An operator has no merchant session, so this
+      is what lets a stored `.pagefly` be found instead of rebuilt. */
+  domain: string;
+  pages: AdminPages;
+  children: ReactNode;
+}) {
+  /* A fresh object each render would remount everything below on every parent
+     render; keyed on the values so identity follows them. */
+  return (
+    <AdminViewContext.Provider key={domain} value={{ domain, pages }}>
+      {children}
+    </AdminViewContext.Provider>
+  );
+}
+
+/** The store an operator is looking at, or null for a merchant. */
+export function useAdminDomain(): string | null {
+  return useContext(AdminViewContext)?.domain ?? null;
 }
 
 /** True only inside an `<AdminView>`. */
@@ -42,5 +65,5 @@ export function useAdminView(): boolean {
 
 /** Where this page lives and how it stands, or null outside the admin. */
 export function useAdminPage(pageId: string): { runId: string; hidden: boolean } | null {
-  return useContext(AdminViewContext)?.get(pageId) ?? null;
+  return useContext(AdminViewContext)?.pages.get(pageId) ?? null;
 }

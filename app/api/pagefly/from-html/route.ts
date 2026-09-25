@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { pageflyFromHtmlSkill } from "@/lib/pagefly/fromHtmlSkill";
 import { pageflyFromHtmlLive } from "@/lib/pagefly/htmlToTree";
+import { currentAccount } from "@/lib/account";
+import { getRepo } from "@/lib/db";
+import { keyForHtml } from "@/lib/pagefly/prepared";
+import { ownerFor } from "@/lib/pagefly/fileScope";
+import { readAdminSession } from "@/lib/session";
 import { flushMeter, withMeter } from "@/lib/ai/meter";
 
 /* ==========================================================================
@@ -28,6 +33,10 @@ export async function POST(req: Request): Promise<Response> {
     html?: unknown;
     name?: unknown;
     bg?: unknown;
+    /** the page this document belongs to, so the result can be filed */
+    pageId?: unknown;
+    /** the store it belongs to — an operator names one; a merchant cannot */
+    domain?: unknown;
     ink?: unknown;
     fontBody?: unknown;
     accent?: unknown;
@@ -88,6 +97,37 @@ export async function POST(req: Request): Promise<Response> {
        that freezes the process on return would otherwise drop them. */
     await flushMeter();
     const bytes = new Uint8Array(await built.blob.arrayBuffer());
+
+    /* ==================================================================
+       AND KEEP IT. This route converted and threw the answer away, so the
+       only stored files were the ones `prebuild` made when a deck was
+       saved — and anything it missed, or anything an operator exported,
+       was reconverted from scratch on every single click: about two
+       minutes and twenty cents of model time, each time, for bytes that
+       had already been produced.
+
+       Filed under the same `(domain, key)` the reader looks in, so the
+       next click is a download. Best effort: the merchant asked for a
+       file and has one, and a storage failure must not turn that into an
+       error.
+       ================================================================== */
+    const pageId = typeof body.pageId === "string" ? body.pageId : "";
+    const owner = ownerFor({
+      session: (await currentAccount())?.domain ?? null,
+      admin: Boolean(await readAdminSession()),
+      asked: typeof body.domain === "string" ? body.domain : null,
+    });
+    if (owner && pageId)
+      await getRepo()
+        .savePageFile({
+          domain: owner,
+          key: keyForHtml(pageId, html),
+          bytes,
+          filename: built.filename,
+          createdAt: new Date().toISOString(),
+        })
+        .catch(() => {});
+
 
     /* CACHED, NOT JUST TOTAL. The input is mostly the same stylesheet, sent
        once per band; whether the vendor served it from its own cache is a

@@ -18,6 +18,7 @@ import { createPreparer, keyForHtml } from "@/lib/pagefly/prepared";
 import { designTreeSchema, type DesignTree } from "@/lib/design/schema";
 import { pageflyFromTree } from "@/lib/design/toPagefly";
 import { MockupPage } from "../mockup/MockupPage";
+import { useAdminDomain } from "./adminView";
 
 /* ==========================================================================
    PNG export.
@@ -88,6 +89,10 @@ type Built = { blob: Blob; filename: string };
 async function pageflyFromHtmlViaSkill(
   page: PageMockup,
   html: string,
+  /** An operator's store, so the built file is filed under it rather than
+      thrown away — see `lib/pagefly/fileScope.ts`. Null for a merchant, whose
+      own session already says which store this is. */
+  domain: string | null,
 ): Promise<Built | null> {
   const name = fileStem(page);
   try {
@@ -100,6 +105,11 @@ async function pageflyFromHtmlViaSkill(
       body: JSON.stringify({
         html,
         name,
+        /* Both are for STORING the answer, not for making it. Without them the
+           route converts and discards, which is how every export here cost a
+           fresh two minutes of model time. */
+        pageId: page.id,
+        ...(domain ? { domain } : {}),
         bg: page.tokens.bg,
         ink: page.tokens.ink,
         fontBody: page.tokens.fontBody,
@@ -131,9 +141,10 @@ const EXPORT_WIDTH = 1440;
    opens the preview overlay and mounts again when they close it, and work
    thrown away on the way through is a minute the merchant pays for twice.
    ========================================================================== */
-const prepared = createPreparer<{ page: PageMockup; html: string }, Built | null>(
-  ({ page, html }) => pageflyFromHtmlViaSkill(page, html),
-);
+const prepared = createPreparer<
+  { page: PageMockup; html: string; domain: string | null },
+  Built | null
+>(({ page, html, domain }) => pageflyFromHtmlViaSkill(page, html, domain));
 
 /**
  * The file this page was already converted into, when the server has it.
@@ -144,10 +155,17 @@ const prepared = createPreparer<{ page: PageMockup; html: string }, Built | null
  * yet" — the build may still be running, or it may have failed — and the caller
  * converts on demand, which is what every click did before this existed.
  */
-async function storedPagefly(page: PageMockup, html: string): Promise<Built | null> {
+async function storedPagefly(
+  page: PageMockup,
+  html: string,
+  domain: string | null,
+): Promise<Built | null> {
   try {
     const res = await fetch(
-      `/api/pagefly/file?key=${encodeURIComponent(keyForHtml(page.id, html))}`,
+      `/api/pagefly/file?key=${encodeURIComponent(keyForHtml(page.id, html))}` +
+        /* An operator has no merchant session, so without this the lookup is
+           a 401 and every click reconverts. */
+        (domain ? `&domain=${encodeURIComponent(domain)}` : ""),
     );
     if (!res.ok) return null;
     const blob = await res.blob();
@@ -195,6 +213,10 @@ function iconMarkup(stage: HTMLElement | null, name: string): string | null {
 }
 
 export function ExportProvider({ children }: { children: ReactNode }) {
+  /* NULL FOR A MERCHANT, whose own session already says which store this is.
+     An operator has no merchant session, so without this every stored file
+     lookup is a 401 and every export reconverts from scratch. */
+  const adminDomain = useAdminDomain();
   const [staged, setStaged] = useState<PageMockup | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportingId, setExportingId] = useState<string | null>(null);
@@ -285,7 +307,7 @@ export function ExportProvider({ children }: { children: ReactNode }) {
          built once on the server when the deck is saved, and kept. This is a
          download, not a conversion — no model call, no minute of waiting, and
          no second bill for a page that has already been converted. */
-      const ready = await storedPagefly(page, html);
+      const ready = await storedPagefly(page, html, adminDomain);
       if (ready) {
         downloadBlob(ready.blob, ready.filename);
         announceExport();
@@ -297,7 +319,7 @@ export function ExportProvider({ children }: { children: ReactNode }) {
          file and gets it. `prepared` keeps a second click from racing a second
          conversion of the same document. */
       const built = await prepared
-        .start(keyForHtml(page.id, html), { page, html }, { now: true })
+        .start(keyForHtml(page.id, html), { page, html, domain: adminDomain }, { now: true })
         .catch(() => null);
       if (built) {
         downloadBlob(built.blob, built.filename);
@@ -322,7 +344,8 @@ export function ExportProvider({ children }: { children: ReactNode }) {
     const { blob, filename } = pageFromBreakpoints(renders, page, EXPORT_WIDTH);
     downloadBlob(blob, filename);
     announceExport();
-  }, []);
+    /* `adminDomain` decides both the lookup and where the result is filed. */
+  }, [adminDomain]);
 
   const exportPagefly = useCallback(
     async (page: PageMockup) => {

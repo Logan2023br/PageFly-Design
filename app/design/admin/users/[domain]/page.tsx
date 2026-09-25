@@ -76,6 +76,7 @@ export default async function AdminStorePagesPage({
       {/* Every page this store has, with the run it belongs to — hiding is
           addressed by both, because a page id is only unique within a run. */}
       <AdminView
+        domain={store.domain}
         pages={
           new Map(
             runs.flatMap((r) =>

@@ -1,5 +1,7 @@
 import { currentAccount } from "@/lib/account";
 import { getRepo } from "@/lib/db";
+import { ownerFor } from "@/lib/pagefly/fileScope";
+import { readAdminSession } from "@/lib/session";
 
 /* ==========================================================================
    GET /api/pagefly/file?key=…   the file this page was already converted into
@@ -10,21 +12,29 @@ import { getRepo } from "@/lib/db";
    results screen before it has finished, so the caller treats an absence as
    "not yet" and converts on demand, exactly as it did before any of this.
 
-   SCOPED TO THE SIGNED-IN STORE. The key is a hash of a document and is not
-   guessable, but "not guessable" is not an access rule. A store may fetch only
-   what was built for it.
+   SCOPED, AND `lib/pagefly/fileScope.ts` DECIDES HOW. The key is a hash of a
+   document and is not guessable, but "not guessable" is not an access rule. A
+   store may fetch only what was built for it; an operator may name a store,
+   which is what makes the admin's export free rather than a fresh conversion
+   on every click. A merchant naming one changes nothing.
    ========================================================================== */
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request): Promise<Response> {
-  const account = await currentAccount();
-  if (!account) return new Response("Not signed in.", { status: 401 });
+  const url = new URL(req.url);
+  const [account, admin] = await Promise.all([currentAccount(), readAdminSession()]);
+  const owner = ownerFor({
+    session: account?.domain ?? null,
+    admin: Boolean(admin),
+    asked: url.searchParams.get("domain"),
+  });
+  if (!owner) return new Response("Not signed in.", { status: 401 });
 
-  const key = new URL(req.url).searchParams.get("key");
+  const key = url.searchParams.get("key");
   if (!key) return new Response("no key", { status: 400 });
 
-  const file = await getRepo().getPageFile(account.domain, key);
+  const file = await getRepo().getPageFile(owner, key);
   if (!file) return new Response("not built yet", { status: 404 });
 
   return new Response(new Uint8Array(file.bytes), {
