@@ -57,6 +57,7 @@ function when(iso: string): { day: string; time: string } {
 export function TileDetail({
   event,
   part,
+  slice,
   days,
   day,
   only = [],
@@ -65,6 +66,8 @@ export function TileDetail({
   event: string;
   /** One value of the event's parameter — see `StatTile.part`. */
   part?: string;
+  /** One value of the event's SECOND parameter — see `StatTile.slice`. */
+  slice?: string;
   days: number;
   /** The day the screen is showing, or null for the whole window. The tile
       above was counted over exactly this range, so the rows must be too. */
@@ -98,6 +101,7 @@ export function TileDetail({
       `/api/admin/analytics/detail?event=${encodeURIComponent(event)}` +
         `&days=${days}&tz=${tz}${day ? `&day=${day}` : ""}` +
         (part ? `&part=${encodeURIComponent(part)}` : "") +
+        (slice ? `&slice=${encodeURIComponent(slice)}` : "") +
         (only.length > 0 ? `&country=${only.join(",")}` : "") +
         (except.length > 0 ? `&exclude=${except.join(",")}` : ""),
     )
@@ -125,7 +129,7 @@ export function TileDetail({
     return () => {
       live = false;
     };
-  }, [event, part, days, day, only, except]);
+  }, [event, part, slice, days, day, only, except]);
 
   const total = rows.reduce((a, r) => a + r.count, 0);
 
@@ -250,7 +254,7 @@ export function TileDetail({
                               key={k}
                               className="rounded-pf-sm border border-pf-border px-1.5 py-0.5 text-[11px] text-pf-body"
                             >
-                              <span className="text-pf-faint">{k}</span> {String(v)}
+                              <span className="text-pf-faint">{k}</span> {propText(k, v)}
                             </span>
                           ))}
                         {Object.keys(h.props).length === 0 && (
@@ -347,4 +351,28 @@ export function TileDetail({
       </Panel>
     </motion.div>
   );
+}
+
+/* ==========================================================================
+   A PARAMETER AS THE READER WOULD SAY IT.
+
+   BY THE NAME, NOT BY THE EVENT. `184` in a column of chips is a number
+   somebody has to decide the unit of, and the chip's own label — `seconds` —
+   is the unit, sitting right there unused. Anything called `seconds` or ending
+   `_seconds` is a duration whatever fired it, so a later event that measures
+   one gets the same reading without a line here.
+
+   EVERYTHING ELSE IS PRINTED AS IT ARRIVED. A props bag is the event's own
+   vocabulary and this panel exists to show it; a formatter that guessed at
+   values rather than at named units would hide the thing somebody opened the
+   panel to see.
+   ========================================================================== */
+function propText(key: string, value: unknown): string {
+  if (!/^(.*_)?seconds$/.test(key)) return String(value);
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return String(value);
+  if (n < 60) return `${Math.round(n)}s`;
+  const m = Math.floor(n / 60);
+  /* Padded, so a column of these lines up as times rather than as decimals. */
+  return `${m}m ${String(Math.round(n - m * 60)).padStart(2, "0")}s`;
 }

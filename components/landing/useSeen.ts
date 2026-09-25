@@ -22,10 +22,45 @@ import { EV, track, type LandingSection } from "@/lib/analytics";
    wrong one is a decision made on a lie.
    ========================================================================== */
 export function useSeen<T extends HTMLElement>(section: LandingSection) {
+  return useReached<T>(() => track(EV.landingSection, { section }));
+}
+
+/* ==========================================================================
+   THE SAME ONCE-PER-VISIT OBSERVATION, WITHOUT THE EVENT BAKED IN.
+
+   LIFTED OUT OF `useSeen` RATHER THAN COPIED BESIDE IT. The showcase needed
+   the identical rule for a different question — did this set get read to its
+   last card — and the whole of the reasoning above applies to that answer
+   unchanged: once per visit not once per crossing, and silence rather than a
+   lie when there is no observer. A second copy is a second place for the
+   threshold and the `fired` guard to drift, and the drift would be invisible:
+   both versions would still count something.
+
+   THE THRESHOLD IS A PARAMETER because a sentinel is not a section. A section
+   is tall and a third of it entering the viewport means it was reached; a
+   zero-height marker at the end of a row has no area at all, so any threshold
+   above zero is one it can never satisfy — the count would simply stay at zero
+   and read as nobody ever scrolling that far.
+   ========================================================================== */
+export function useReached<T extends HTMLElement>(fire: () => void, threshold = 0.34) {
   const ref = useRef<T | null>(null);
   /* A ref rather than state: this must not re-render anything, and the guard
      has to survive the render that would otherwise reset it. */
   const fired = useRef(false);
+  /* HELD IN A REF, AND NOT IN THE DEPENDENCY LIST. The caller writes the
+     callback inline, so it is a new function on every render — as a dependency
+     it would tear down and rebuild the observer each time, and an observer
+     rebuilt after the element is already on screen fires again. The guard
+     would catch that, which is worse: it would look like it worked. */
+  const latest = useRef(fire);
+  /* Written in an effect rather than during render — a ref assigned on the
+     render pass is a write React has not committed yet, and the lint says so.
+     Seeded by `useRef(fire)` above, so the first callback is already the right
+     one before this ever runs. No dependency list on purpose: it must track
+     every render, which is the whole point of holding it. */
+  useEffect(() => {
+    latest.current = fire;
+  });
 
   useEffect(() => {
     const node = ref.current;
@@ -37,15 +72,15 @@ export function useSeen<T extends HTMLElement>(section: LandingSection) {
         for (const entry of entries) {
           if (!entry.isIntersecting || fired.current) continue;
           fired.current = true;
-          track(EV.landingSection, { section });
+          latest.current();
           io.disconnect();
         }
       },
-      { threshold: 0.34 },
+      { threshold },
     );
     io.observe(node);
     return () => io.disconnect();
-  }, [section]);
+  }, [threshold]);
 
   return ref;
 }

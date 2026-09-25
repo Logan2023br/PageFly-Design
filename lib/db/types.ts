@@ -767,6 +767,20 @@ export type Repo = {
      */
     part?: string | null,
     geo?: GeoFilter,
+    /**
+     * A SECOND parameter to narrow by, when one slice is not a row.
+     *
+     * `part` cuts by the one key the detail table named, which was enough while
+     * every openable tile was one event with one interesting parameter. The
+     * showcase is not: a page row there is one page type OF one set, and
+     * narrowing by page type alone puts three stores' readings in a panel that
+     * claims to be about one.
+     *
+     * THE KEY IS STILL NOT THE CALLER'S TO INVENT. It comes from
+     * `lib/analytics/detail`, the same table `propKey` comes from, and only the
+     * value travels on a query string — bound, never interpolated.
+     */
+    slice?: { key: string; value: string } | null,
   ): Promise<EventByStore[]>;
 
   /**
@@ -786,6 +800,8 @@ export type Repo = {
     part?: string | null,
     limit?: number,
     geo?: GeoFilter,
+    /** See `eventsByStore`. */
+    slice?: { key: string; value: string } | null,
   ): Promise<EventHit[]>;
 
   /**
@@ -796,6 +812,34 @@ export type Repo = {
    * and no way back to the others.
    */
   countriesSeen(from: string, to: string): Promise<CountryCount[]>;
+
+  /**
+   * One event's rows, grouped by chosen parameters, with a numeric parameter
+   * SUMMED rather than grouped by.
+   *
+   * WHY THIS IS NOT `countEvents` WITH A FILTER. That method groups by the
+   * whole props bag on purpose — it is what lets a parameter nobody wrote this
+   * query for still split the counts. The property is fatal for a duration:
+   * `design_showcase_page_viewed` carries how many seconds a page was open, so
+   * grouping by props turns one figure into one group per distinct second, and
+   * "the average read was 41 seconds" is not recoverable from four hundred
+   * groups of one.
+   *
+   * `groupKeys` are the parameters that stay categories — `["set",
+   * "page_type"]` for the showcase. `numKey` is the one that is added up. A row
+   * whose `numKey` is missing or not a number contributes to `count` and not to
+   * `total`, which is what makes `total / count` wrong and `total / measured`
+   * right — both are returned for that reason.
+   */
+  sumEventProp(
+    name: string,
+    groupKeys: string[],
+    numKey: string,
+    from: string,
+    to: string,
+    geo?: GeoFilter,
+  ): Promise<PropSum[]>;
+
 
   /* ---- admin ---- */
   listStoreSummaries(): Promise<StoreSummary[]>;
@@ -984,4 +1028,28 @@ export type EventCount = {
    * Zero before anybody signs in, because `domain` is null until then.
    */
   stores: number;
+};
+
+/* ==========================================================================
+   ONE GROUP OF PRESSES, WITH A NUMBER ADDED UP ACROSS THEM.
+
+   `measured` IS SEPARATE FROM `count` AND THAT IS THE WHOLE POINT. The events
+   arrive from a browser and the parameter is optional on the wire, so some
+   rows in any group will have no number on them — an old build still in
+   somebody's tab, a value that failed the ingest filter. Divide `total` by
+   `count` and every one of those silently drags the average towards zero;
+   divide by `measured` and the average is of the rows that actually carried a
+   reading, with `count - measured` visible as the gap it is.
+   ========================================================================== */
+export type PropSum = {
+  /** the `groupKeys`, in the order they were asked for; null where absent */
+  keys: (string | null)[];
+  /** rows in this group, whether or not they carried the number */
+  count: number;
+  /** distinct browsers in this group */
+  visitors: number;
+  /** rows that carried a usable number */
+  measured: number;
+  /** those rows' numbers, added */
+  total: number;
 };

@@ -100,6 +100,15 @@ export async function GET(request: Request) {
       ? partParam
       : null;
 
+  /* THE KEY IS THE TABLE'S, THE VALUE IS THE CALLER'S — see `sliceProp`. A
+     tile whose spec names no second key gets none, however the query string is
+     written. */
+  const sliceParam = url.searchParams.get("slice");
+  const slice =
+    spec.sliceProp && sliceParam && sliceParam.length > 0 && sliceParam.length <= 120
+      ? { key: spec.sliceProp, value: sliceParam }
+      : null;
+
   let rows: DetailRow[];
   let hits: EventHit[];
   try {
@@ -117,6 +126,7 @@ export async function GET(request: Request) {
         spec.groupProp ?? null,
         part,
         geo,
+        slice,
       ),
       getRepo().recentEvents(
         event,
@@ -126,6 +136,7 @@ export async function GET(request: Request) {
         part,
         FEED,
         geo,
+        slice,
       ),
     ]);
   } catch {

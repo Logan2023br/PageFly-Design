@@ -67,6 +67,18 @@ export function TileGeo({
   );
 }
 
+/**
+ * The country filter the screen is under.
+ *
+ * Exported for anything that opens a `TileDetail` WITHOUT a `StatTile` around
+ * it — the showcase table's rows do, where the thing pressed is a row and not
+ * a tile. Without this that panel would take the context's default of "no
+ * filter" and quietly show every country under a heading that says one.
+ */
+export function useTileGeo() {
+  return useContext(GeoContext);
+}
+
 export function StatTile({
   icon,
   label,
@@ -78,6 +90,7 @@ export function StatTile({
   hint,
   event,
   part,
+  slice,
   days,
   day,
   only,
@@ -145,6 +158,12 @@ export function StatTile({
    * list that does not match the number above it.
    */
   part?: string;
+  /**
+   * One value of the event's SECOND parameter, for a tile that is a slice of
+   * two things at once — a page type OF a set. Ignored unless
+   * `lib/analytics/detail` names a `sliceProp` for the event.
+   */
+  slice?: string;
   /** The window the screen is showing, passed to the drill-down unchanged. */
   days?: number;
   /** And the day within it, when one is picked. */
@@ -307,9 +326,10 @@ export function StatTile({
            does not re-fetch, so the key is what makes a filter change reach an
            already-open one. The country filter is in it for the same reason the
            day is. */
-        key={`${event}-${part ?? "all"}-${days ?? 30}-${day ?? "all"}-${geoOnly.join()}-${geoExcept.join()}`}
+        key={`${event}-${part ?? "all"}-${slice ?? "all"}-${days ?? 30}-${day ?? "all"}-${geoOnly.join()}-${geoExcept.join()}`}
         event={event}
         part={part}
+        slice={slice}
         days={days ?? 30}
         day={day}
         only={geoOnly}

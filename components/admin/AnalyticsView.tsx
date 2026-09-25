@@ -1,20 +1,23 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import type {
   AnalyticsResponse,
   AnalyticsView as View,
+  CollectionSet,
   PageBlock,
   SharedBlock,
   Slice,
 } from "@/app/api/admin/analytics/route";
+import { EV } from "@/lib/analytics";
 import { compareViews, type Change, type Comparison } from "@/lib/analytics/compare";
 import type { IconName } from "@/lib/icons";
 import { CountUp, Icon, Panel } from "../ui";
 import { countryLabel } from "@/lib/countries";
 import type { CountryCount } from "@/lib/db/types";
-import { StatTile, TileGeo, TileGroup, TileRow } from "./StatTile";
+import { StatTile, TileGeo, TileGroup, TileRow, useTileGeo } from "./StatTile";
+import { TileDetail } from "./TileDetail";
 import { DayStrip } from "./DayStrip";
 
 /* ==========================================================================
@@ -68,6 +71,21 @@ const RESULT_COLOR: Record<string, string> = {
 const RANGES = [7, 30, 90] as const;
 
 export function AnalyticsView() {
+  /* ==========================================================================
+     WHICH HALF OF THE SCREEN IS SHOWING.
+
+     ABOVE THE FILTERS, NOT INSIDE THEM. The window, the day and the countries
+     apply to both halves and are the same question on either — so they sit
+     above the switch and survive crossing it. A reader who has narrowed to
+     Germany and the 24th and presses Collection pages is still looking at
+     Germany on the 24th, which is what makes the switch a view and not a
+     second screen.
+
+     AND IT CHANGES NOTHING ABOUT WHAT IS FETCHED. One response carries both;
+     splitting the request would make the switch cost a round trip and would
+     put the two halves on different windows the moment one of them polled.
+     ========================================================================== */
+  const [tab, setTab] = useState<"design" | "collections">("design");
   const [days, setDays] = useState<number>(30);
   /* The day being read, or null for the whole window. Kept beside `days` rather
      than replacing it: the strip of days is always drawn from the window, so
@@ -188,6 +206,28 @@ export function AnalyticsView() {
        is seven chances to miss one, and the miss is invisible. */
     <TileGeo only={only} except={except}>
     <div className="grid gap-4">
+      {/* ONE ROW, TWO VIEWS, and the filters below belong to both. */}
+      <div className="flex items-center gap-1 self-start rounded-pf-md border border-pf-border p-0.5">
+        {(
+          [
+            ["design", "PageFly Design"],
+            ["collections", "Collection pages"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            aria-pressed={tab === id}
+            className={`rounded-pf-sm px-3.5 py-1.5 text-[12.5px] font-semibold transition-colors ${
+              tab === id ? "bg-pf-primary text-white" : "text-pf-muted hover:text-pf-text"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* Filters in one row above the charts, which is where somebody looks
           for them — and the only control here, because a date range is the
           only question this screen has more than one answer to. */}
@@ -360,7 +400,7 @@ export function AnalyticsView() {
         </Panel>
       )}
 
-      {view && view.empty && (
+      {view && view.empty && tab === "design" && (
         <Panel className="p-8 text-center">
           <p className="text-[13px] text-pf-muted">
             {view.day
@@ -373,7 +413,11 @@ export function AnalyticsView() {
         </Panel>
       )}
 
-      {view && !view.empty && (
+      {view && tab === "collections" && (
+        <Collections sets={view.collections} days={view.days} day={view.day} />
+      )}
+
+      {view && !view.empty && tab === "design" && (
         <>
           {/* ABOVE THE NUMBERS, not below them. A reader who has pressed
               Compare is asking one question — what changed — and the answer
@@ -1174,5 +1218,343 @@ function CompareBlock({ now, before }: { now: View; before: View }) {
         />
       </div>
     </section>
+  );
+}
+
+/* ==========================================================================
+   THE COLLECTION PAGES, AS THEIR OWN SCREEN.
+
+   WHY A TAB AND NOT A SECTION. Everything above is filed by screen, and every
+   figure below fires from ONE screen — the landing page. Appended there, the
+   showcase would be a tenth block a reader scrolls past nine others to reach,
+   under a country filter and a day strip that belong to all ten. So the
+   filters stay where they are, above both tabs, and only what they filter
+   changes. A reader who picks Germany and the 24th keeps both when they cross
+   over.
+
+   THE SET IS THE UNIT AND THE PAGE TYPE IS THE UNIT UNDER IT. Three stores
+   each have a page called Home; the whole argument the showcase makes is that
+   those three Homes are unalike, so a figure that adds them up is a figure
+   about nothing.
+
+   FIVE TILES, AND THEY ARE NOT FIVE VERSIONS OF ONE NUMBER:
+
+     Took all 7      a decision — somebody planning what to do with them
+     Read to the end the only one that is not a press, and the denominator
+                     the other four should be read against
+     Pages opened    interest, one card at a time
+     Pages taken     the same decision as the first, one page at a time
+     Average read    how long a page held somebody, which no count can say
+
+   THEY SHARE A HAIRLINE SCALE WITH EACH OTHER AND NOT WITH THE NEXT SET, so
+   the bars compare the five measures of one store rather than ranking the
+   three stores — which the numbers themselves already do, in a column.
+   ========================================================================== */
+function Collections({
+  sets,
+  days,
+  day,
+}: {
+  sets: CollectionSet[];
+  days: number;
+  day: string | null;
+}) {
+  const nothing = sets.every(
+    (s) => s.setExports + s.reachedEnd + s.opens + s.pageExports + s.reads === 0,
+  );
+
+  return (
+    <>
+      <div className="mt-2 border-t border-pf-border pt-6">
+        <h2 className="font-display text-[16px] font-semibold tracking-[-0.02em] text-pf-text">
+          Collection pages
+        </h2>
+        <p className="mt-0.5 text-[11.5px] text-pf-muted">
+          The finished stores on the front door, counted one at a time. Every
+          figure here is under the same window and the same countries as the
+          other tab.
+        </p>
+      </div>
+
+      {nothing && (
+        <Panel className="p-8 text-center">
+          <p className="text-[13px] text-pf-muted">
+            {day
+              ? `Nobody touched the collections on ${day}.`
+              : `Nobody touched the collections in the last ${days} days.`}
+          </p>
+          <p className="mt-1 text-[11.5px] text-pf-faint">
+            The sets are listed below with their figures at zero, which is not
+            the same as them being missing.
+          </p>
+        </Panel>
+      )}
+
+      {sets.map((set) => (
+        <CollectionBlock key={set.id} set={set} days={days} day={day} />
+      ))}
+
+      <p className="px-1 text-[11px] leading-relaxed text-pf-faint">
+        <strong className="font-semibold text-pf-muted">Read to the end</strong>{" "}
+        counts once per visit, not once per crossing — scrolling back up and
+        down again is one read.{" "}
+        <strong className="font-semibold text-pf-muted">Average read</strong> is
+        over the openings that reported a duration, and a page closed inside a
+        second reports none: the reading count beside it says how many did. A
+        tab left open is capped at an hour so one abandoned window cannot carry
+        an average.
+      </p>
+    </>
+  );
+}
+
+/**
+ * How long, as a reader would say it.
+ *
+ * `short` for a column, where the row already says what is being measured and
+ * the words would only repeat the heading seven times.
+ */
+function readLength(seconds: number | null, short = false): string {
+  if (seconds === null) return short ? "—" : "no readings yet";
+  const tail = short ? "" : " on a page";
+  if (seconds < 60) return `${Math.round(seconds)}s${tail}`;
+  const m = Math.floor(seconds / 60);
+  return `${m}m ${String(Math.round(seconds - m * 60)).padStart(2, "0")}s${tail}`;
+}
+
+function CollectionBlock({
+  set,
+  days,
+  day,
+}: {
+  set: CollectionSet;
+  days: number;
+  day: string | null;
+}) {
+  /* The five tiles share a scale with each other, so the hairlines compare the
+     measures of THIS set. `1` as the floor keeps a set with nothing recorded
+     from dividing by zero. */
+  const top = Math.max(set.setExports, set.reachedEnd, set.opens, set.pageExports, 1);
+
+  return (
+    <section className="grid gap-3">
+      <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+        <h3 className="text-[13.5px] font-semibold text-pf-text">{set.name}</h3>
+        <code className="rounded-pf-sm bg-pf-bg-deep px-1.5 py-0.5 font-mono text-[11px] text-pf-muted">
+          {set.id}
+        </code>
+        <span className="text-[11.5px] text-pf-muted">{set.size} pages</span>
+        <p className="w-full text-[11.5px] leading-snug text-pf-muted">{set.blurb}</p>
+      </div>
+
+      {/* FIVE ACROSS, NOT THE SHARED FOUR. `TileRow` is four to a row because
+          that is what the screens above have, and five tiles in it left
+          Average read alone on a second row under three empty columns — which
+          reads as a tile that failed to load rather than as the fifth measure.
+          None of the five can go: they are the five things asked of a set, and
+          the labels here are short enough to hold a narrower column. */}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <StatTile
+          icon="Download"
+          label={`Took all ${set.size}`}
+          value={set.setExports}
+          footnote={
+            set.setExportVisitors > 0 && set.setExportVisitors !== set.setExports
+              ? `at least ${set.setExportVisitors.toLocaleString()} ${
+                  set.setExportVisitors === 1 ? "person" : "people"
+                }`
+              : "the whole set as one file"
+          }
+          ratio={set.setExports / top}
+          hint={`Export all ${set.size} pages, on the ${set.name} row of the showcase\n${EV.showcaseSetDownloaded}`}
+          event={EV.showcaseSetDownloaded}
+          part={set.id}
+          days={days}
+          day={day}
+        />
+        <StatTile
+          icon="Eye"
+          label="Read to the end"
+          value={set.reachedEnd}
+          footnote={
+            set.reachedEnd > 0
+              ? `${Math.round((set.setExports / set.reachedEnd) * 100)}% of them took the set`
+              : "nobody has reached the last card"
+          }
+          ratio={set.reachedEnd / top}
+          hint={`The last card of the ${set.name} row came into view — once per visit\n${EV.showcaseSetScrolled}`}
+          event={EV.showcaseSetScrolled}
+          part={set.id}
+          days={days}
+          day={day}
+        />
+        <StatTile
+          icon="Maximize"
+          label="Pages opened"
+          value={set.opens}
+          footnote="cards opened into the viewer"
+          ratio={set.opens / top}
+          hint={`Opening one of the ${set.name} cards full-screen\n${EV.galleryOpened}`}
+          event={EV.galleryOpened}
+          slice={set.id}
+          days={days}
+          day={day}
+        />
+        <StatTile
+          icon="Download"
+          label="Pages taken"
+          value={set.pageExports}
+          footnote={
+            set.opens > 0
+              ? `${Math.round((set.pageExports / set.opens) * 100)}% of the pages opened`
+              : "single pages taken from the viewer"
+          }
+          ratio={set.pageExports / top}
+          hint={`The .pagefly behind one ${set.name} page, taken from the viewer\n${EV.showcaseFileDownloaded}`}
+          event={EV.showcaseFileDownloaded}
+          slice={set.id}
+          days={days}
+          day={day}
+        />
+        <StatTile
+          icon="Clock"
+          label="Average read"
+          value={Math.round(set.seconds ?? 0)}
+          footnote={
+            set.reads > 0
+              ? `seconds · over ${set.reads.toLocaleString()} ${set.reads === 1 ? "reading" : "readings"}`
+              : "seconds · nothing measured yet"
+          }
+          hint={`How long a ${set.name} page stayed open, averaged\n${EV.showcasePageViewed}`}
+          event={EV.showcasePageViewed}
+          slice={set.id}
+          days={days}
+          day={day}
+        />
+      </div>
+
+      <PageTypeTable set={set} days={days} day={day} />
+    </section>
+  );
+}
+
+/* ==========================================================================
+   THE PAGE TYPES OF ONE SET, AS ROWS RATHER THAN AS TILES.
+
+   SEVEN PAGES TIMES THREE NUMBERS IS TWENTY-ONE TILES PER SET, sixty-three on
+   the screen, and the comparison somebody wants is down a column — is Home
+   opened more than Contact — which a grid of boxes is the wrong shape for. A
+   table puts the seven in one column and the reader's eye does the rest.
+
+   A ROW IS THE BUTTON. The question under every one of these numbers is the
+   same as under a tile — who, how long, from where — so the row opens the same
+   panel a tile does, narrowed to this page type AND this set. That second
+   narrowing is the whole reason `slice` exists: all three sets have a Home.
+   ========================================================================== */
+function PageTypeTable({
+  set,
+  days,
+  day,
+}: {
+  set: CollectionSet;
+  days: number;
+  day: string | null;
+}) {
+  const [open, setOpen] = useState<string | null>(null);
+  /* Rendered outside a `StatTile`, so the context has to be read by hand —
+     see `useTileGeo`. */
+  const geo = useTileGeo();
+  const peak = Math.max(...set.pages.map((p) => p.opens), 1);
+
+  /* ONE SET OF WIDTHS, USED BY THE HEADING AND BY EVERY ROW. Written as a
+     `<table>` first, which put the headings in real table cells and the values
+     in a flex row inside one `colSpan` cell — two different layout algorithms
+     sizing what has to be one column. The headings would have sat over nothing
+     in particular, and only at some widths. `shrink-0` because a flex child
+     with a width is still allowed to shrink below it. */
+  const COLS = ["w-24 shrink-0", "w-24 shrink-0", "w-32 shrink-0"] as const;
+
+  return (
+    <Panel className="overflow-hidden">
+      <div className="flex items-center border-b border-pf-border px-4 py-2.5 text-[11px] text-pf-faint">
+        <span className="flex-1">Page</span>
+        <span className={`${COLS[0]} text-right`}>Opened</span>
+        <span className={`${COLS[1]} text-right`}>Taken</span>
+        <span className={`${COLS[2]} text-right`}>Average read</span>
+        <span className="w-8 shrink-0" />
+      </div>
+
+      {set.pages.map((page) => {
+        const showing = open === page.slug;
+        return (
+          <Fragment key={page.slug}>
+            <button
+              type="button"
+              onClick={() => setOpen(showing ? null : page.slug)}
+              aria-expanded={showing}
+              className={`flex w-full cursor-pointer items-center border-t border-pf-border/60 px-4 text-left transition-colors hover:bg-pf-bg-deep ${
+                showing ? "bg-pf-bg-deep" : ""
+              }`}
+            >
+              <span className="relative min-w-0 flex-1 py-2.5">
+                <span className="block truncate text-[12.5px] font-medium text-pf-text">
+                  {page.label}
+                </span>
+                {/* The hairline a tile carries, on a row: opens against the
+                    most-opened page of THIS set, so the shape of the set is
+                    seen as well as read. */}
+                <span
+                  aria-hidden
+                  className="absolute inset-x-0 bottom-0.5 block h-px bg-pf-primary/45"
+                  style={{ width: `${(page.opens / peak) * 100}%` }}
+                />
+              </span>
+              <span className={`${COLS[0]} py-2.5 text-right text-[12px] tabular-nums text-pf-body`}>
+                {page.opens.toLocaleString()}
+              </span>
+              <span className={`${COLS[1]} py-2.5 text-right text-[12px] tabular-nums text-pf-body`}>
+                {page.exports.toLocaleString()}
+              </span>
+              <span className={`${COLS[2]} py-2.5 text-right text-[12px] tabular-nums`}>
+                {page.seconds === null ? (
+                  <span className="text-pf-faint">—</span>
+                ) : (
+                  <span className="text-pf-body">{readLength(page.seconds, true)}</span>
+                )}
+                {page.reads > 0 && (
+                  <span className="block text-[10.5px] text-pf-faint">
+                    {page.reads.toLocaleString()} {page.reads === 1 ? "reading" : "readings"}
+                  </span>
+                )}
+              </span>
+              {/* Rotated rather than swapped for a second icon: the arrow
+                  turning is the same object moving, which is what an expander
+                  is. */}
+              <span
+                className={`w-8 shrink-0 py-2.5 text-right text-pf-faint transition-transform duration-150 ${
+                  showing ? "rotate-180" : ""
+                }`}
+              >
+                <Icon name="ChevronDown" size={13} />
+              </span>
+            </button>
+
+            {showing && (
+              <div className="border-t border-pf-border/60">
+                <TileDetail
+                  event={EV.showcasePageViewed}
+                  part={page.slug}
+                  slice={set.id}
+                  days={days}
+                  day={day}
+                  only={geo.only}
+                  except={geo.except}
+                />
+              </div>
+            )}
+          </Fragment>
+        );
+      })}
+    </Panel>
   );
 }

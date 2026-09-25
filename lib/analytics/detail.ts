@@ -59,6 +59,19 @@ export type DetailSpec = {
   unit: string;
   /** What `propKey` measures, for the column heading. */
   partLabel: string;
+  /**
+   * A SECOND parameter the caller may narrow by, named here rather than sent.
+   *
+   * Every tile on the analytics screen was one event with one interesting
+   * parameter until the showcase, where a row is one page type OF one set —
+   * and `propKey` alone cannot say that. Naming the key here keeps the rule
+   * the file header states: the route reads what it may cut by out of a table
+   * it does not own, and only the VALUE ever arrives on a query string.
+   *
+   * Absent means the tile takes no second cut, and a `slice` sent for it is
+   * ignored rather than trusted.
+   */
+  sliceProp?: string;
 };
 
 export const DETAIL_OF: Record<string, DetailSpec> = {
@@ -140,6 +153,22 @@ export const DETAIL_OF: Record<string, DetailSpec> = {
   [EV.showcaseFileDownloaded]: { propKey: "page_type", unit: "store", partLabel: "page" },
   [EV.showcaseFrameChanged]: { propKey: "frame", unit: "store", partLabel: "width" },
   [EV.showcaseSetDownloaded]: { propKey: "set", unit: "store", partLabel: "store" },
+  [EV.showcaseSetScrolled]: { propKey: "set", unit: "store", partLabel: "store" },
+  /* SPLIT BY PAGE, NOT BY DURATION. `seconds` is on every one of these rows and
+     is the obvious-looking choice, and it would produce one part per reading —
+     a breakdown with as many rows as presses is not a breakdown. The feed
+     beside it shows each duration against the visitor and the country that
+     produced it, which is where an individual reading belongs; the average is
+     on the tile. */
+  [EV.showcasePageViewed]: {
+    propKey: "page_type",
+    unit: "store",
+    partLabel: "page",
+    /* So one page row opens onto ITS set's readings. Three sets have a page
+       called Home; narrowed by page type alone, the panel behind Hexwood's
+       Home row would be every store's Home. */
+    sliceProp: "set",
+  },
 
   /* The gate's own two page views, which had no drill-down either — so "who
      reached the form today" was unanswerable while "who submitted it" was not. */

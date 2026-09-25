@@ -13,7 +13,7 @@ import {
 import { Icon } from "../ui";
 import { PageThumb, PageViewer } from "./PagePreview";
 import { SectionHead } from "./SectionHead";
-import { useSeen } from "./useSeen";
+import { useReached, useSeen } from "./useSeen";
 
 /* ==========================================================================
    TWO STORES, SEVEN PAGES EACH, AND THE SECOND SET IS THE ARGUMENT.
@@ -310,77 +310,7 @@ export function Showcase({ place = "landing" }: { place?: "landing" | "building"
         </div>
 
         {shown.map((set, at) => (
-          <div key={set.id} className={at === 0 ? "mt-9 w-full" : "mt-14 w-full"}>
-            {/* THE SET IS NAMED ABOVE ITS ROW. Both stores have a page called
-                Home, so a grid of fourteen cards with no headings is fourteen
-                cards a reader has to sort by eye. The rule and the name do that
-                for them, and the blurb says what the look is so the contrast is
-                stated rather than left to be noticed. */}
-            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-pf-border pt-5">
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <h3 className="font-display text-[18px] font-semibold tracking-[-0.011em] text-pf-text">
-                  {set.name}
-                </h3>
-                <p className="text-[13px] text-pf-faint">{set.blurb}</p>
-              </div>
-              {/* BESIDE THE SET'S NAME, because that is what it exports. In the
-                  toolbar of an opened page it would be a third download button
-                  arguing with the one already there, which takes a single
-                  page. */}
-              <ExportSet set={set} from={place} />
-            </div>
-
-            {/* FOUR ACROSS ON A DESKTOP, and the card is 3:4 — so a column of a
-                1,200px row is 282px wide and 376 tall, which is a page you can
-                read the shape of. Two across on a tablet, one on a phone: three
-                3:4 cards at 400px would be 120px each, a thumbnail of a
-                thumbnail. Seven into four leaves a short last row, which is the
-                right way round — stretching three cards across four columns to
-                avoid it reads as a layout bug. */}
-            <ul className="mt-5 grid w-full grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {set.pages.map((page) => (
-                <li key={page.slug}>
-                  <figure className="group relative m-0 overflow-hidden rounded-pf-card border border-pf-border bg-pf-card shadow-pf-card transition-colors hover:border-pf-primary-hi/50">
-                    <span className="relative block aspect-[3/4]">
-                      {/* Fourteen of these are below the fold at load — see `PageThumb`. */}
-                      <PageThumb set={set} page={page} lazy />
-                    </span>
-
-                    {/* Over the thumbnail only, so the caption below stays
-                        selectable text — and so the page's own buttons inside
-                        the iframe are never wrapped in one of ours. */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        track(EV.galleryOpened, {
-                          page_type: page.slug,
-                          set: set.id,
-                          from: place,
-                        });
-                        setOpen({ set, page });
-                      }}
-                      aria-label={`Open the ${set.name} ${page.label} page`}
-                      className="absolute inset-x-0 top-0 z-10 block aspect-[3/4] w-full cursor-pointer"
-                    />
-
-                    <span className="pointer-events-none absolute inset-x-0 top-0 z-20 flex aspect-[3/4] items-end justify-center gap-1.5 bg-gradient-to-t from-pf-bg/85 to-transparent pb-3 text-[11.5px] font-semibold text-pf-text opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                      <Icon name="Maximize" size={12} />
-                      Open the page
-                    </span>
-
-                    <figcaption className="border-t border-pf-border px-3.5 py-3">
-                      <span className="block text-[13.5px] font-semibold text-pf-text">
-                        {page.label}
-                      </span>
-                      <span className="mt-0.5 block text-[12px] leading-snug text-pf-faint">
-                        {page.blurb}
-                      </span>
-                    </figcaption>
-                  </figure>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <SetBlock key={set.id} set={set} first={at === 0} from={place} onOpen={setOpen} />
         ))}
 
         {/* ==================================================================
@@ -426,5 +356,114 @@ export function Showcase({ place = "landing" }: { place?: "landing" | "building"
         />
       )}
     </section>
+  );
+}
+
+/* ==========================================================================
+   ONE SET, AND THE REASON IT IS ITS OWN COMPONENT.
+
+   It was inline in the map above until the showcase had to report whether a
+   set was read to its last card. That answer needs an observer, an observer
+   needs a hook, and a hook cannot be called from inside a `.map` — so the
+   alternative was one observer for all three sets, which cannot say WHICH set
+   was reached, and that is the whole of the question.
+   ========================================================================== */
+function SetBlock({
+  set,
+  first,
+  from,
+  onOpen,
+}: {
+  set: ShowcaseSet;
+  first: boolean;
+  from: string;
+  onOpen: (open: { set: ShowcaseSet; page: ShowcasePage }) => void;
+}) {
+  /* ZERO, because what this observes is a zero-height marker — see the note on
+     `useReached`. A third of nothing is never a third. */
+  const end = useReached<HTMLDivElement>(
+    () => track(EV.showcaseSetScrolled, { set: set.id, pages: set.pages.length, from }),
+    0,
+  );
+
+  return (
+          <div className={first ? "mt-9 w-full" : "mt-14 w-full"}>
+            {/* THE SET IS NAMED ABOVE ITS ROW. Both stores have a page called
+                Home, so a grid of fourteen cards with no headings is fourteen
+                cards a reader has to sort by eye. The rule and the name do that
+                for them, and the blurb says what the look is so the contrast is
+                stated rather than left to be noticed. */}
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-pf-border pt-5">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <h3 className="font-display text-[18px] font-semibold tracking-[-0.011em] text-pf-text">
+                  {set.name}
+                </h3>
+                <p className="text-[13px] text-pf-faint">{set.blurb}</p>
+              </div>
+              {/* BESIDE THE SET'S NAME, because that is what it exports. In the
+                  toolbar of an opened page it would be a third download button
+                  arguing with the one already there, which takes a single
+                  page. */}
+              <ExportSet set={set} from={from} />
+            </div>
+
+            {/* FOUR ACROSS ON A DESKTOP, and the card is 3:4 — so a column of a
+                1,200px row is 282px wide and 376 tall, which is a page you can
+                read the shape of. Two across on a tablet, one on a phone: three
+                3:4 cards at 400px would be 120px each, a thumbnail of a
+                thumbnail. Seven into four leaves a short last row, which is the
+                right way round — stretching three cards across four columns to
+                avoid it reads as a layout bug. */}
+            <ul className="mt-5 grid w-full grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              {set.pages.map((page) => (
+                <li key={page.slug}>
+                  <figure className="group relative m-0 overflow-hidden rounded-pf-card border border-pf-border bg-pf-card shadow-pf-card transition-colors hover:border-pf-primary-hi/50">
+                    <span className="relative block aspect-[3/4]">
+                      {/* Fourteen of these are below the fold at load — see `PageThumb`. */}
+                      <PageThumb set={set} page={page} lazy />
+                    </span>
+
+                    {/* Over the thumbnail only, so the caption below stays
+                        selectable text — and so the page's own buttons inside
+                        the iframe are never wrapped in one of ours. */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        track(EV.galleryOpened, {
+                          page_type: page.slug,
+                          set: set.id,
+                          from,
+                        });
+                        onOpen({ set, page });
+                      }}
+                      aria-label={`Open the ${set.name} ${page.label} page`}
+                      className="absolute inset-x-0 top-0 z-10 block aspect-[3/4] w-full cursor-pointer"
+                    />
+
+                    <span className="pointer-events-none absolute inset-x-0 top-0 z-20 flex aspect-[3/4] items-end justify-center gap-1.5 bg-gradient-to-t from-pf-bg/85 to-transparent pb-3 text-[11.5px] font-semibold text-pf-text opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                      <Icon name="Maximize" size={12} />
+                      Open the page
+                    </span>
+
+                    <figcaption className="border-t border-pf-border px-3.5 py-3">
+                      <span className="block text-[13.5px] font-semibold text-pf-text">
+                        {page.label}
+                      </span>
+                      <span className="mt-0.5 block text-[12px] leading-snug text-pf-faint">
+                        {page.blurb}
+                      </span>
+                    </figcaption>
+                  </figure>
+                </li>
+              ))}
+            </ul>
+
+            {/* AFTER THE LAST CARD, NOT ON IT. A marker below the grid is
+                reached when the grid has been passed, which is what "read the
+                whole set" means; the last card entering the viewport happens
+                while three of its four neighbours are still below the fold on a
+                phone, where the grid is one column. */}
+            <div ref={end} aria-hidden className="h-px w-full" />
+          </div>
   );
 }

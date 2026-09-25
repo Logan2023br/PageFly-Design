@@ -757,6 +757,63 @@ export function createMemoryRepo(file: string): Repo {
       }));
     },
 
+    /* THE SAME RULE AS THE SQL, AND IT HAS TO BE. See the contract in
+       `./types.ts`. The two drivers are two implementations of every rule in
+       here and they have drifted before, so the shared test runs this one and
+       the recorded statement side by side rather than trusting that two people
+       read the same paragraph the same way.
+
+       `Number(…)` RATHER THAN A TYPEOF CHECK, to match the SQL's regex: an
+       event arriving over the wire may carry `"41"` as a string — JSON is what
+       the browser sent and `props` is untyped — and postgres's `->>` erases the
+       difference before its own test. A driver that counted the string and a
+       driver that did not would disagree on the same file. */
+    async sumEventProp(name, groupKeys, numKey, from, to, geo = null) {
+      sync();
+      const by = new Map<
+        string,
+        { keys: (string | null)[]; count: number; visitors: Set<string>; measured: number; total: number }
+      >();
+
+      for (const e of data.events) {
+        if (e.name !== name) continue;
+        if (e.createdAt < from || e.createdAt >= to) continue;
+        if (!geoAllows(e.country ?? null, geo)) continue;
+
+        const props = e.props ?? {};
+        const keys = groupKeys.map((k) => {
+          const v = (props as Record<string, unknown>)[k];
+          return v === null || v === undefined ? null : String(v);
+        });
+        const id = JSON.stringify(keys);
+        const hit =
+          by.get(id) ?? { keys, count: 0, visitors: new Set<string>(), measured: 0, total: 0 };
+        hit.count++;
+        hit.visitors.add(e.visitorId);
+
+        const raw = (props as Record<string, unknown>)[numKey];
+        const n =
+          raw === null || raw === undefined || raw === "" || typeof raw === "boolean"
+            ? NaN
+            : Number(raw);
+        if (Number.isFinite(n)) {
+          hit.measured++;
+          hit.total += n;
+        }
+        by.set(id, hit);
+      }
+
+      return [...by.values()]
+        .map((b) => ({
+          keys: b.keys,
+          count: b.count,
+          visitors: b.visitors.size,
+          measured: b.measured,
+          total: b.total,
+        }))
+        .sort((a, b) => b.count - a.count);
+    },
+
     async countEventsByDay(from, to, offsetMinutes, geo = null) {
       sync();
       const by = new Map<string, { events: number; visitors: Set<string> }>();
@@ -779,7 +836,7 @@ export function createMemoryRepo(file: string): Repo {
         .sort((a, b) => a.date.localeCompare(b.date));
     },
 
-    async recentEvents(name, from, to, propKey = null, part = null, limit = 200, geo = null) {
+    async recentEvents(name, from, to, propKey = null, part = null, limit = 200, geo = null, slice = null) {
       sync();
       const hits = [];
       for (const e of data.events) {
@@ -789,6 +846,13 @@ export function createMemoryRepo(file: string): Repo {
         if (part !== null && propKey) {
           const v = (e.props as Record<string, unknown>)[propKey];
           if (v === undefined || v === null || String(v) !== part) continue;
+        }
+        /* The SAME second cut the SQL makes, and the two must agree — this
+           driver and that one are two readings of one paragraph. See `slice`
+           on the Repo interface. */
+        if (slice) {
+          const v = (e.props as Record<string, unknown>)[slice.key];
+          if (v === undefined || v === null || String(v) !== slice.value) continue;
         }
         hits.push({
           id: e.id,
@@ -805,7 +869,7 @@ export function createMemoryRepo(file: string): Repo {
       return hits.slice(0, Math.min(1000, Math.max(1, limit)));
     },
 
-    async eventsByStore(name, from, to, propKey, groupProp = null, part = null, geo = null) {
+    async eventsByStore(name, from, to, propKey, groupProp = null, part = null, geo = null, slice = null) {
       sync();
       /* Keyed by the domain as written, with `null` kept as its own key rather
          than folded into the empty string — "signed out" and "a store called
@@ -830,6 +894,13 @@ export function createMemoryRepo(file: string): Repo {
         if (part !== null && propKey) {
           const v = (e.props as Record<string, unknown>)[propKey];
           if (v === undefined || v === null || String(v) !== part) continue;
+        }
+        /* The SAME second cut the SQL makes, and the two must agree — this
+           driver and that one are two readings of one paragraph. See `slice`
+           on the Repo interface. */
+        if (slice) {
+          const v = (e.props as Record<string, unknown>)[slice.key];
+          if (v === undefined || v === null || String(v) !== slice.value) continue;
         }
 
         /* The column, unless a parameter was named. The gate fires before there

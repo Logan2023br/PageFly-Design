@@ -222,6 +222,44 @@ export function PageViewer({
     };
   }, [onClose]);
 
+  /* ==========================================================================
+     HOW LONG THIS PAGE WAS OPEN, REPORTED WHEN IT CLOSES.
+
+     `design_gallery_opened` already counts the opening, and an opening on its
+     own cannot tell a page that was studied from one that was opened and shut
+     — which on a screen whose whole job is to be looked at is the measure that
+     matters most.
+
+     FIRED FROM THE CLEANUP, WHICH IS THE ONE PLACE EVERY EXIT PASSES THROUGH.
+     There are four ways out of this panel — Escape, the close button, the
+     backdrop, and picking another page from underneath — and a handler on each
+     is three chances to miss one. React unmounts the panel however it went.
+
+     ROUNDED TO A WHOLE SECOND AND CAPPED AT AN HOUR. A tab left open over
+     lunch is not a read, and one 9,000-second row would drag an average built
+     from thirty honest ones past every real figure in the table.
+
+     A NEW TIMER FOR EACH PAGE, because `page.slug` and `set.id` are in the
+     dependencies: opening a second page from the same panel closes the first
+     one's reading and starts its own, rather than attributing the whole
+     sitting to whichever page happened to be last.
+     ========================================================================== */
+  useEffect(() => {
+    const opened = Date.now();
+    return () => {
+      const seconds = Math.min(3600, Math.round((Date.now() - opened) / 1000));
+      /* Nothing to say about a panel that was shut before a second passed, and
+         a pile of zeroes would pull every average down. */
+      if (seconds < 1) return;
+      track(EV.showcasePageViewed, {
+        page_type: page.slug,
+        set: set.id,
+        seconds,
+        from,
+      });
+    };
+  }, [set.id, page.slug, from]);
+
   return (
     <div
       role="dialog"

@@ -1306,6 +1306,83 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       }));
     },
 
+    /* ==========================================================================
+       SEE THE CONTRACT IN `lib/db/types.ts` FOR WHY THIS IS NOT `countEvents`.
+
+       EVERY PARAMETER SLOT IS ALLOCATED BY THE SAME COUNTER, in the order the
+       SQL is assembled. This file has been down the other road: a handful of
+       statements sharing one hand-numbered `params` array put the analytics
+       screen on a 500 with "bind message supplies 1 parameters, but prepared
+       statement requires 0". A counter that hands out its own slot cannot get
+       out of step with the array it is pushing into.
+
+       THE JSON KEYS ARE BOUND, NOT INTERPOLATED. `props->>$1` takes the key as
+       a value, so a group key is data all the way down and never has to be
+       trusted or escaped — which matters because these keys reach here from a
+       screen that may one day let somebody choose them.
+
+       THE NUMBER IS TESTED BEFORE IT IS CAST. `->>` yields text, and one row
+       carrying "fast" instead of 41 would abort the whole statement with an
+       invalid-input error — an outage caused by one browser sending one bad
+       value. The regex decides membership, and the same regex decides which
+       rows `measured` counts, so the average is over exactly the rows that
+       contributed to the total.
+       ========================================================================== */
+    async sumEventProp(name, groupKeys, numKey, from, to, geo = null) {
+      await ready();
+
+      const params: unknown[] = [];
+      const p = (v: unknown) => {
+        params.push(v);
+        return `$${params.length}`;
+      };
+
+      /* Built first so their slots come first — the assembly order below IS the
+         parameter order, and nothing else keeps the two in step. */
+      const cols = groupKeys.map((k, i) => `props->>${p(k)} as k${i}`);
+      const num = p(numKey);
+      const numeric = `props->>${num} ~ '^-?[0-9]+(\\.[0-9]+)?$'`;
+      const fromAt = p(from);
+      const toAt = p(to);
+      const forName = p(name);
+      /* LAST, AND NOTHING MAY TAKE A SLOT AFTER IT. `geoClause` is told the
+         next free number and numbers its own placeholders up from there, but it
+         pushes nothing into `params` — its values are appended at the call
+         below. Allocate anything else afterwards and that allocation takes a
+         slot `geoClause` has already spoken for, which is the shape of the bug
+         that put this screen on a 500. */
+      const where = geoClause(geo, params.length + 1);
+
+      const select = [
+        ...cols,
+        "count(*)::int as n",
+        "count(distinct visitor_id)::int as v",
+        `count(*) filter (where ${numeric})::int as m`,
+        `coalesce(sum(case when ${numeric} then (props->>${num})::numeric else 0 end), 0)::float8 as t`,
+      ].join(", ");
+
+      const { rows } = await db.query(
+        `select ${select}
+           from events
+          where name = ${forName}
+            and created_at >= ${fromAt} and created_at < ${toAt}${where.sql}
+          ${groupKeys.length > 0 ? `group by ${groupKeys.map((_, i) => i + 1).join(", ")}` : ""}
+          order by n desc`,
+        [...params, ...where.params],
+      );
+
+      return rows.map((r) => ({
+        keys: groupKeys.map((_, i) => {
+          const v = r[`k${i}`];
+          return v === null || v === undefined ? null : String(v);
+        }),
+        count: Number(r.n),
+        visitors: Number(r.v),
+        measured: Number(r.m),
+        total: Number(r.t),
+      }));
+    },
+
     async countEventTotals(from, to, geo = null) {
       await ready();
       const where = geoClause(geo, 3);
@@ -1358,9 +1435,12 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       }));
     },
 
-    async recentEvents(name, from, to, propKey = null, part = null, limit = 200, geo = null) {
+    async recentEvents(name, from, to, propKey = null, part = null, limit = 200, geo = null, slice = null) {
       await ready();
       const where = geoClause(geo, 7);
+      /* After the geo clause, for the reason given in `eventsByStore`. */
+      const sk = `$${7 + where.params.length}`;
+      const sv = `$${8 + where.params.length}`;
       /* ORDERED AND CAPPED IN THE DATABASE. Fetching the window and slicing it
          here would read every row of a busy event to keep the last two hundred,
          and — worse — `limit` without `order by` returns an arbitrary slice, so
@@ -1375,10 +1455,21 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
         `select id, props, visitor_id, domain, country, created_at
            from events
           where name = $1 and created_at >= $2 and created_at < $3
-            and ($5::text is null or props->>$4 = $5)${where.sql}
+            and ($5::text is null or props->>$4 = $5)
+            and (${sk}::text is null or props->>${sk} = ${sv})${where.sql}
           order by created_at desc
           limit $6`,
-        [name, from, to, propKey, part, Math.min(1000, Math.max(1, limit)), ...where.params],
+        [
+          name,
+          from,
+          to,
+          propKey,
+          part,
+          Math.min(1000, Math.max(1, limit)),
+          ...where.params,
+          slice?.key ?? null,
+          slice?.value ?? null,
+        ],
       );
 
       return rows.map((r) => ({
@@ -1391,9 +1482,16 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       }));
     },
 
-    async eventsByStore(name, from, to, propKey, groupProp = null, part = null, geo = null) {
+    async eventsByStore(name, from, to, propKey, groupProp = null, part = null, geo = null, slice = null) {
       await ready();
       const where = geoClause(geo, 7);
+      /* AFTER THE GEO CLAUSE, because that clause numbers its own placeholders
+         from wherever it is told to start and pushes nothing into the array —
+         so its values are appended below and anything allocated before them
+         would be read in the wrong order. See the long note on `sumEventProp`;
+         this is the same trap in the same file. */
+      const sk = `$${7 + where.params.length}`;
+      const sv = `$${8 + where.params.length}`;
       /* GROUPED BY DOMAIN AND BY THE PARAMETER AT ONCE, then folded into one
          row per store here. Two queries would be one round trip more and would
          have to agree with each other about the window; one grouping cannot
@@ -1414,9 +1512,10 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
                 max(created_at)                 as last_at
            from events
           where name = $1 and created_at >= $2 and created_at < $3
-            and ($6::text is null or props->>$4 = $6)${where.sql}
+            and ($6::text is null or props->>$4 = $6)
+            and (${sk}::text is null or props->>${sk} = ${sv})${where.sql}
           group by 1, props->>$4`,
-        [name, from, to, propKey, groupProp, part, ...where.params],
+        [name, from, to, propKey, groupProp, part, ...where.params, slice?.key ?? null, slice?.value ?? null],
       );
 
       type Acc = {

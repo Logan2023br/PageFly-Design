@@ -23,6 +23,7 @@
    ========================================================================== */
 
 import type { Pool } from "pg";
+import type { GeoFilter } from "../lib/db/types";
 import { createPostgresRepo } from "../lib/db/postgresRepo";
 
 let bad = 0;
@@ -128,6 +129,81 @@ async function main(): Promise<void> {
     !asked.some((a) => a.text.includes("2026-09-22") || a.text.includes("'VN'")),
     "a filter concatenated into SQL is the other way this goes wrong",
   );
+
+  /* ==========================================================================
+     AND THE SAME CHECK ON `sumEventProp`, WHICH IS THE SECOND PLACE IN THIS
+     FILE THAT HANDS OUT ITS OWN SLOTS.
+
+     It allocates from a counter, then asks `geoClause` to number its
+     placeholders from the next free one — so anything allocated AFTER that
+     call silently takes a number the geo clause has already claimed. The first
+     draft did exactly that with the event name, and under a country filter it
+     sent six values for a statement whose highest slot was five: the identical
+     shape of the outage at the top of this file, in a method written years
+     after it.
+
+     The group keys vary the count, which is the point — one key and two keys
+     put `geoClause` at different starting numbers, and a bug that only shows at
+     one of them is a bug that ships.
+     ========================================================================== */
+  const SUM_SHAPES: { name: string; keys: string[]; geo: GeoFilter }[] = [
+    { name: "two keys, no filter", keys: ["set", "page_type"], geo: null },
+    { name: "one key, no filter", keys: ["set"], geo: null },
+    { name: "no keys at all", keys: [], geo: null },
+    { name: "two keys, one country", keys: ["set", "page_type"], geo: { only: ["VN"] } },
+    { name: "one key, one country", keys: ["set"], geo: { only: ["VN"] } },
+    { name: "no keys, one country", keys: [], geo: { only: ["VN"] } },
+    { name: "two keys, a country out", keys: ["set", "page_type"], geo: { except: ["VN"] } },
+    { name: "one key, the unplaced", keys: ["set"], geo: { only: ["unknown"] } },
+    { name: "two keys, in and out", keys: ["set", "page_type"], geo: { only: ["VN"], except: ["US"] } },
+  ];
+
+  for (const shape of SUM_SHAPES) {
+    head(`sumEventProp — ${shape.name}`);
+    const rec = recorder();
+    const repo = createPostgresRepo("postgres://unused/x", rec.pool);
+
+    try {
+      await repo.sumEventProp(
+        "design_showcase_page_viewed",
+        shape.keys,
+        "seconds",
+        "2026-09-01T00:00:00.000Z",
+        "2026-09-25T00:00:00.000Z",
+        shape.geo,
+      );
+    } catch (err) {
+      ok("sumEventProp() completed", false, (err as Error)?.message);
+      continue;
+    }
+
+    ok("it issued one statement", rec.asked.length === 1, `${rec.asked.length}`);
+    for (const a of rec.asked) {
+      const { max, used } = placeholders(a.text);
+      ok(
+        "the statement matches its own parameter list",
+        max === a.values.length,
+        `$${max} is the highest slot but ${a.values.length} value(s) were sent`,
+      );
+      let gapped = 0;
+      for (let i = 1; i <= max; i++) if (!used.has(i)) gapped++;
+      ok("and it skips no slot", gapped === 0);
+
+      /* A key spliced into the text instead of bound would work and would be an
+         injection the moment a key comes off a query string. */
+      ok(
+        "the group keys are bound, not spliced",
+        shape.keys.every((k) => a.values.includes(k)) &&
+          !shape.keys.some((k) => a.text.includes(`'${k}'`)),
+        JSON.stringify(a.values),
+      );
+      ok(
+        "and it groups by as many columns as it was given keys",
+        (a.text.match(/group by ([^\n]*)/)?.[1]?.split(",").length ?? 0) === shape.keys.length,
+        a.text.match(/group by ([^\n]*)/)?.[1] ?? "no group by",
+      );
+    }
+  }
 
   console.log(bad === 0 ? "\nall good" : `\n${bad} failed`);
   process.exit(bad === 0 ? 0 : 1);

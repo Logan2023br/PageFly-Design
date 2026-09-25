@@ -7,7 +7,9 @@ import type {
   EventCount,
   EventTotal,
   GeoFilter,
+  PropSum,
 } from "@/lib/db/types";
+import { SHOWCASE_SETS } from "@/lib/showcasePages";
 
 /* ==========================================================================
    GET /api/admin/analytics?days=30
@@ -70,6 +72,63 @@ export type AnalyticsView = {
   shared: SharedBlock[];
   /** the raw grouped rows, for the table view under the charts */
   rows: EventCount[];
+  /** the showcase sets, counted one by one — see `CollectionSet` */
+  collections: CollectionSet[];
+};
+
+/* ==========================================================================
+   ONE SHOWCASE SET, COUNTED.
+
+   WHY THIS IS NOT A `PageBlock`. The blocks above are filed by SCREEN, and
+   every one of these events fires from the same screen — the landing page.
+   Folded in there, "exports" is one number over three sets and answers the
+   question nobody has: the sets exist to be compared against each other, and
+   the comparison is the measurement.
+
+   SO THE SET IS THE ROW AND THE PAGE TYPE IS THE ROW UNDER IT. Every event
+   here already carried `set` and `page_type` — they were being summed away by
+   a screen that had no place to put them, not missing.
+
+   `seconds` IS NULL RATHER THAN ZERO WHEN NOTHING WAS MEASURED, and the
+   distinction is the whole reason the field is nullable. Zero is a real
+   reading — pages closed instantly — and a set nobody has opened yet would
+   otherwise report the fastest average on the screen.
+   ========================================================================== */
+export type CollectionPageStat = {
+  slug: string;
+  label: string;
+  /** times the card was opened into the viewer */
+  opens: number;
+  /** times this one page's .pagefly was taken */
+  exports: number;
+  /** readings that carried a duration */
+  reads: number;
+  /** mean seconds across those readings, or null when there were none */
+  seconds: number | null;
+};
+
+export type CollectionSet = {
+  id: string;
+  name: string;
+  blurb: string;
+  /** how many pages the set has, so "all 7" is not hardcoded anywhere */
+  size: number;
+  /** the whole set taken as one file */
+  setExports: number;
+  /** distinct browsers that did it */
+  setExportVisitors: number;
+  /** readers who reached the last card of this set */
+  reachedEnd: number;
+  reachedEndVisitors: number;
+  /** every card opened, across the set */
+  opens: number;
+  /** every single page taken, across the set */
+  pageExports: number;
+  /** readings that carried a duration, across the set */
+  reads: number;
+  /** mean seconds across the set, or null */
+  seconds: number | null;
+  pages: CollectionPageStat[];
 };
 
 /** Everything measured on one screen. */
@@ -539,11 +598,12 @@ export async function GET(request: Request) {
   let prevRows: EventCount[] = [];
   let prevTotals: EventTotal[] = [];
   let countries: CountryCount[] = [];
+  let dwell: PropSum[] = [];
   try {
     /* Two shapes of the same window: grouped by name and parameters for the
        breakdowns, and by name alone for the distinct counts, which cannot be
        derived from the first. */
-    [rows, totals, daily, countries] = await Promise.all([
+    [rows, totals, daily, countries, dwell] = await Promise.all([
       getRepo().countEvents(from.toISOString(), to.toISOString(), geo),
       getRepo().countEventTotals(from.toISOString(), to.toISOString(), geo),
       /* Over the STRIP's range, not the window's — see `stripFrom`. */
@@ -553,6 +613,19 @@ export async function GET(request: Request) {
          to the others. Over the strip's range so the chips cover the same span
          the day picker does. */
       getRepo().countriesSeen(stripFrom.toISOString(), stripTo.toISOString()),
+      /* ONE MORE QUERY, AND IT CANNOT BE FOLDED INTO `countEvents`. A duration
+         has to be summed; that method groups by the whole props bag, which
+         would split this event into one group per distinct second. See the
+         note on `sumEventProp`. Filtered by the same `geo` as everything else,
+         so picking a country narrows the average as well as the counts. */
+      getRepo().sumEventProp(
+        EV.showcasePageViewed,
+        ["set", "page_type"],
+        "seconds",
+        from.toISOString(),
+        to.toISOString(),
+        geo,
+      ),
     ]);
     /* Only when asked. Two more queries on every load would be paid by every
        reader who never presses Compare, and this screen already polls. */
@@ -568,7 +641,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const view = buildView(rows, totals, from, to, days, daily, day);
+  const view = buildView(rows, totals, from, to, days, daily, day, dwell);
   /* No strip and no day on the comparison: it is the window before this one,
      and the reader is comparing totals rather than picking a day out of it. */
   const previous = compare ? buildView(prevRows, prevTotals, prevFrom, prevTo, days) : undefined;
@@ -599,6 +672,92 @@ export async function GET(request: Request) {
  * the funnel would gain a step on one side and not the other, and the
  * comparison would report a change nobody made.
  */
+/* ==========================================================================
+   THE SHOWCASE SETS, COUNTED ONE BY ONE.
+
+   DRIVEN BY `SHOWCASE_SETS`, NOT BY THE EVENTS. A fourth set added to that
+   file appears here with zeroes the moment it ships, which is the reading
+   somebody wants on launch day — "nobody has touched it yet" is an answer, and
+   an absent row is not. Building the list from the events instead would also
+   put a set that was renamed last month on the screen for another thirty days
+   under its old id.
+
+   AND A PAGE THAT NEVER APPEARS IN THE EVENTS STILL GETS A ROW, for the same
+   reason: a page type with no opens at all is the single most useful row in
+   the table, and it is exactly the row a fold over the events cannot produce.
+
+   `visitors` IS NOT SUMMED ANYWHERE HERE. The grouped rows carry a distinct
+   count per props bag, so adding two of them counts one person twice — see the
+   note on `people()`. The two figures that do report visitors take them from a
+   single group each, which is a number the database actually computed.
+   ========================================================================== */
+function collections(rows: EventCount[], dwell: PropSum[]): CollectionSet[] {
+  /* `keys` is `[set, page_type]`, in the order they were asked for — see the
+     `sumEventProp` call in the handler. */
+  const reading = (setId: string, slug: string | null) =>
+    dwell
+      .filter((d) => d.keys[0] === setId && (slug === null || d.keys[1] === slug))
+      .reduce((a, b) => ({ reads: a.reads + b.measured, total: a.total + b.total }), {
+        reads: 0,
+        total: 0,
+      });
+
+  /* NULL, NOT ZERO, when there is nothing to average. See the type. */
+  const mean = (r: { reads: number; total: number }) =>
+    r.reads === 0 ? null : Math.round((r.total / r.reads) * 10) / 10;
+
+  const countIn = (name: string, setId: string, slug?: string) =>
+    sum(
+      rows,
+      name,
+      (p) => p.set === setId && (slug === undefined || p.page_type === slug),
+    );
+
+  /* One group, so this visitor count is one the database computed rather than
+     a sum of overlapping sets. A set exported from two screens — the landing
+     page and the showcase page — is two groups, and the larger is a floor; it
+     is reported as such rather than added. */
+  const visitorsIn = (name: string, setId: string) =>
+    rows
+      .filter((r) => r.name === name && r.props.set === setId)
+      .reduce((a, b) => Math.max(a, b.visitors), 0);
+
+  return SHOWCASE_SETS.map((set) => {
+    const pages = set.pages.map((page) => {
+      const read = reading(set.id, page.slug);
+      return {
+        slug: page.slug,
+        label: page.label,
+        opens: countIn(EV.galleryOpened, set.id, page.slug),
+        exports: countIn(EV.showcaseFileDownloaded, set.id, page.slug),
+        reads: read.reads,
+        seconds: mean(read),
+      };
+    });
+
+    const whole = reading(set.id, null);
+
+    return {
+      id: set.id,
+      name: set.name,
+      blurb: set.blurb,
+      size: set.pages.length,
+      setExports: countIn(EV.showcaseSetDownloaded, set.id),
+      setExportVisitors: visitorsIn(EV.showcaseSetDownloaded, set.id),
+      reachedEnd: countIn(EV.showcaseSetScrolled, set.id),
+      reachedEndVisitors: visitorsIn(EV.showcaseSetScrolled, set.id),
+      /* Summed from the per-page figures rather than counted again over the
+         whole set: two routes to one number is two numbers the day somebody
+         changes one of them. */
+      opens: pages.reduce((a, b) => a + b.opens, 0),
+      pageExports: pages.reduce((a, b) => a + b.exports, 0),
+      reads: whole.reads,
+      seconds: mean(whole),
+      pages,
+    };
+  });
+}
+
 function buildView(
   rows: EventCount[],
   totals: EventTotal[],
@@ -610,6 +769,11 @@ function buildView(
      beside tiles from this one would be a chart of the wrong thing. */
   daily: DayCount[] = [],
   day: string | null = null,
+  /* PASSED IN RATHER THAN DERIVED FROM `rows`, and it cannot be otherwise: a
+     duration is summed, and `rows` is grouped by the whole props bag — see the
+     note on `sumEventProp`. Defaulted to empty so the comparison window, which
+     does not ask for it, still builds. */
+  dwell: PropSum[] = [],
 ): AnalyticsView {
   /* ==========================================================================
      THE FUNNEL, and why these steps.
@@ -1061,6 +1225,7 @@ function buildView(
     pages,
     shared,
     rows: [...rows].sort((a, b) => b.count - a.count).slice(0, 200),
+    collections: collections(rows, dwell),
   };
 
   return view;

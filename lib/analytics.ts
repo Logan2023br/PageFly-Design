@@ -280,6 +280,33 @@ export const EV = {
    * decision would be the same number.
    */
   showcaseSetDownloaded: "design_showcase_set_downloaded",
+  /**
+   * A set read all the way to its last card.
+   *
+   * THE ONLY MEASURE HERE THAT IS NOT A PRESS. Every other figure on the
+   * showcase counts somebody deciding to do something; this one counts them
+   * getting to the end of the row, which is the difference between a set that
+   * was scrolled past and a set that was looked at. Fired ONCE per set per
+   * page-load — a reader who scrolls down, back up and down again reached the
+   * end once, and counting three would make bouncing look like interest.
+   */
+  showcaseSetScrolled: "design_showcase_set_scrolled",
+  /**
+   * One sample page closed, with how long it was open.
+   *
+   * `seconds` IS ON THE EVENT AND IS NOT A GROUPING KEY. Every other parameter
+   * in this file is a category — which page, which set, which frame — and the
+   * analytics query groups by the whole props bag, so a parameter holding a
+   * duration would split one figure into one group per distinct second. The
+   * admin screen sums it with `sumEventProp` instead, which is the method that
+   * exists for exactly this and reads it by name rather than by grouping.
+   *
+   * Fired on CLOSE rather than on open, because the number is not known until
+   * then — `design_gallery_opened` already counts the opening. A reader who
+   * leaves the tab with the viewer still up is flushed by the `pagehide`
+   * handler above, so the long views are not the ones that go missing.
+   */
+  showcasePageViewed: "design_showcase_page_viewed",
 
   signinViewed: "design_signin_viewed",
   signinSubmitted: "design_signin_submitted",
