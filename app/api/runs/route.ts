@@ -57,7 +57,7 @@ export type RunSummary = {
   tokens: number;
   sell: string;
   styleLabel: string;
-  pages: { pageId: string; pageType: string; label: string; index: number }[];
+  pages: { pageId: string; pageType: string; label: string; index: number; hidden: boolean }[];
 };
 
 export type RunsResponse =
@@ -89,6 +89,7 @@ export async function GET() {
         pageType: p.pageType,
         label: p.label,
         index: p.index,
+        hidden: p.hidden === true,
       })),
     })),
   } satisfies RunsResponse);

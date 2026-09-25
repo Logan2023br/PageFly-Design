@@ -100,10 +100,15 @@ ok(
 );
 
 const ctx = readFileSync("components/results/adminView.tsx", "utf8");
+/* THE VALUE, NOT THE SPELLING. This read `createContext(false)` and broke the
+   day the context grew from a flag into a map — a change that kept the gate
+   shut. What matters is that the default is a CLOSED one, whatever shape the
+   context has. */
+const dflt = /createContext\s*(?:<[^>]*>)?\s*\(\s*([^)]*?)\s*\)/.exec(ctx)?.[1];
 ok(
-  "THE DEFAULT IS FALSE",
-  /createContext(<[^>]*>)?\(\s*false\s*\)/.test(ctx),
-  "a gate that is open by default is a gate nobody notices is open",
+  "THE DEFAULT IS A CLOSED GATE",
+  dflt === "false" || dflt === "null",
+  `${dflt} — a gate that is open by default is a gate nobody notices is open`,
 );
 
 console.log(bad === 0 ? "\nall good" : `\n${bad} failed`);

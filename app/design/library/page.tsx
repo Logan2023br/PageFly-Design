@@ -46,6 +46,7 @@ export default async function LibraryPage() {
       pageType: p.pageType,
       label: p.label,
       index: p.index,
+      hidden: p.hidden === true,
     })),
   }));
 

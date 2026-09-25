@@ -19,13 +19,28 @@ import { createContext, useContext, type ReactNode } from "react";
    default is a gate nobody notices is open.
    ========================================================================== */
 
-const AdminViewContext = createContext(false);
+/**
+ * Which run a page belongs to, and whether it is hidden.
+ *
+ * A card is handed a `PageMockup` and nothing else, and hiding is addressed by
+ * `(runId, pageId)` — page ids are only unique WITHIN a run, which is exactly
+ * what the primary key on `run_pages` says. So the mapping travels with the
+ * gate rather than being guessed from the page.
+ */
+export type AdminPages = Map<string, { runId: string; hidden: boolean }>;
 
-export function AdminView({ children }: { children: ReactNode }) {
-  return <AdminViewContext.Provider value={true}>{children}</AdminViewContext.Provider>;
+const AdminViewContext = createContext<AdminPages | null>(null);
+
+export function AdminView({ pages, children }: { pages: AdminPages; children: ReactNode }) {
+  return <AdminViewContext.Provider value={pages}>{children}</AdminViewContext.Provider>;
 }
 
 /** True only inside an `<AdminView>`. */
 export function useAdminView(): boolean {
-  return useContext(AdminViewContext);
+  return useContext(AdminViewContext) !== null;
+}
+
+/** Where this page lives and how it stands, or null outside the admin. */
+export function useAdminPage(pageId: string): { runId: string; hidden: boolean } | null {
+  return useContext(AdminViewContext)?.get(pageId) ?? null;
 }

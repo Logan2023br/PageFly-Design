@@ -60,6 +60,7 @@ export default async function AdminStorePagesPage({
       pageType: p.pageType,
       label: p.label,
       index: p.index,
+      hidden: p.hidden === true,
     })),
   }));
 
@@ -72,8 +73,18 @@ export default async function AdminStorePagesPage({
       {/* THE ONE PLACE THE GATE IS OPEN. Everything inside may offer an
           operator the mockup's own HTML; the merchant's own Library renders the
           same component without this and gets nothing. */}
-      <AdminView>
-        <LibraryContent runs={runs} ownerLabel={store.storeName || store.domain} />
+      {/* Every page this store has, with the run it belongs to — hiding is
+          addressed by both, because a page id is only unique within a run. */}
+      <AdminView
+        pages={
+          new Map(
+            runs.flatMap((r) =>
+              r.pages.map((p) => [p.pageId, { runId: r.id, hidden: p.hidden }] as const),
+            ),
+          )
+        }
+      >
+        <LibraryContent runs={runs} ownerLabel={store.storeName || store.domain} admin />
       </AdminView>
     </AdminShell>
   );

@@ -6,7 +6,7 @@ import { EV, track } from "@/lib/analytics";
 import type { PageMockup } from "@/lib/generate/types";
 import { useExport } from "./ExportProvider";
 import { actionLabel, type ExportState } from "./exportLabel";
-import { useAdminView } from "./adminView";
+import { useAdminPage, useAdminView } from "./adminView";
 import { htmlFileName, htmlOfPage } from "./downloadHtml";
 import { Icon } from "../ui";
 
@@ -27,6 +27,13 @@ export function CardActions({ page }: { page: PageMockup }) {
   /* Operators only. See `adminView.tsx` — false anywhere the provider is not. */
   const admin = useAdminView();
   const html = admin ? htmlOfPage(page) : null;
+  /* Where this page lives, so it can be addressed by run AND id — a page id is
+     only unique within its run. Null for a merchant. */
+  const at = useAdminPage(page.id);
+  /* OPTIMISTIC, and deliberately so. The server is silent about a page it does
+     not hold, so there is no answer worth waiting for; the card shows the new
+     state at once and the next load carries the truth. */
+  const [hidden, setHidden] = useState(at?.hidden ?? false);
   const [state, setState] = useState<ExportState>("idle");
   const [tip, setTip] = useState(false);
   /* The tooltip normally sits above the button. If the card has been scrolled
@@ -67,6 +74,37 @@ export function CardActions({ page }: { page: PageMockup }) {
 
   return (
     <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex items-start justify-between gap-2 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
+      {/* ---- hide from the merchant · operators only ----
+           A toggle, not a delete: the row stays so this can be undone, and a
+           hidden page stops counting against the store's allowance. */}
+      {at && (
+        <button
+          type="button"
+          onClick={() => {
+            const next = !hidden;
+            setHidden(next);
+            void fetch("/api/admin/pages", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ runId: at.runId, pageId: page.id, hidden: next }),
+            }).catch(() => setHidden(!next));
+          }}
+          title={
+            hidden
+              ? "Hidden from the merchant and not counted against their pages — press to show it again"
+              : "Hide from the merchant: they stop seeing it and it stops costing them a page"
+          }
+          className={`pointer-events-auto inline-flex items-center gap-1.5 rounded-pf-md px-2.5 py-1.5 text-[11.5px] font-semibold shadow-pf-float backdrop-blur transition-colors duration-150 ${
+            hidden
+              ? "bg-pf-warn text-pf-bg"
+              : "bg-pf-bg/85 text-pf-body hover:bg-pf-primary hover:text-white"
+          }`}
+        >
+          <Icon name={hidden ? "Lock" : "Eye"} size={13} />
+          {hidden ? "Hidden" : "Hide"}
+        </button>
+      )}
+
       {/* ---- download the mockup's own html · operators only ----
            The document every later step is derived from, and the only thing
            that says what the export was supposed to produce. A page with no

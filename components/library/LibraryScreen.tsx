@@ -47,6 +47,28 @@ type Deck = {
     it is checked for the shape the renderer needs before being trusted — a run
     written by an older version, or a truncated row, falls back to a replay rather
     than crashing the page it is meant to show. */
+/**
+ * The snapshot minus the pages an operator hid.
+ *
+ * Matched by id against the page rows, which are where the flag lives — the
+ * snapshot is a blob written at build time and knows nothing about it. A page
+ * with no row is KEPT: an unknown page is not a hidden one, and dropping it
+ * would lose work over a bookkeeping gap.
+ */
+function hideFrom(
+  snapshot: PageMockup[] | null,
+  rows: RunSummary["pages"],
+  admin: boolean,
+): PageMockup[] | null {
+  if (admin || !snapshot) return snapshot;
+  const hidden = new Set(rows.filter((p) => p.hidden).map((p) => p.pageId));
+  if (hidden.size === 0) return snapshot;
+  const kept = snapshot.filter((p) => !hidden.has(p.id));
+  /* An empty deck reads as a broken build; `null` is the shape the caller
+     already handles for "nothing usable here". */
+  return kept.length > 0 ? kept : null;
+}
+
 function usableSnapshot(value: unknown): PageMockup[] | null {
   if (!Array.isArray(value) || value.length === 0) return null;
   const ok = value.every((p) => {
@@ -65,9 +87,15 @@ function usableSnapshot(value: unknown): PageMockup[] | null {
 export function LibraryContent({
   runs,
   ownerLabel,
+  admin = false,
 }: {
   runs: RunSummary[];
   ownerLabel?: string;
+  /**
+   * An operator is looking, so hidden pages are drawn — marked — rather than
+   * dropped. Nobody can unhide what has disappeared from their own screen.
+   */
+  admin?: boolean;
 }) {
   const loadLibrary = useStore((s) => s.loadLibrary);
   usePreviewDefaults();
@@ -88,11 +116,15 @@ export function LibraryContent({
         id: run.id,
         brief: decoded.payload.brief,
         variants: decoded.payload.variants,
-        snapshot: usableSnapshot(run.snapshot),
+        /* HIDDEN PAGES LEAVE HERE, for a merchant. The switch is an
+           operator's decision about one page and this is where it takes
+           effect on their side; the admin keeps them so the decision can be
+           undone. */
+        snapshot: hideFrom(usableSnapshot(run.snapshot), run.pages, admin),
       });
     }
     return { decks: out, unreadable: bad };
-  }, [runs]);
+  }, [runs, admin]);
 
   /* Rebuilt on mount. Nothing is set synchronously here: setting state inside an
      effect cascades a render, and none of this needs to happen before the first

@@ -148,7 +148,9 @@ export function createMemoryRepo(file: string): Repo {
     ...run,
     pages: data.runPages
       .filter((p) => p.runId === run.id)
-      .sort((a, b) => a.index - b.index),
+      .sort((a, b) => a.index - b.index)
+      /* Rows written before hiding existed have no flag; absent means shown. */
+      .map((p) => ({ ...p, hidden: p.hidden === true })),
   });
 
   return {
@@ -265,7 +267,20 @@ export function createMemoryRepo(file: string): Repo {
 
     async pagesUsed(domain) {
       sync();
-      return pagesOf(domain).length;
+      /* HIDDEN PAGES DO NOT COUNT — the same rule as the SQL. This is what
+         `canBuild` measures against, so one that still counted would tell a
+         merchant they were out of room over a page nobody can show them. */
+      return pagesOf(domain).filter((p) => p.hidden !== true).length;
+    },
+
+    async setPageHidden(runId, pageId, hidden) {
+      sync();
+      const page = data.runPages.find((p) => p.runId === runId && p.pageId === pageId);
+      /* Silently nothing when the page is not there: an operator clicking
+         twice, or a row already gone, is not worth a failed request. */
+      if (!page) return;
+      page.hidden = hidden;
+      flush();
     },
 
     async lastRunAt(domain) {

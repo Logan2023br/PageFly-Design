@@ -224,6 +224,11 @@ create table if not exists run_pages (
   primary key (run_id, page_id)
 );
 
+/* Added after the first release, so an existing table needs it too. Hiding is
+   an operator's decision about one page: it leaves the row in place, keeps the
+   page out of the merchant's Library, and stops it costing a slot. */
+alter table run_pages add column if not exists hidden boolean not null default false;
+
 create table if not exists page_files (
   domain     text not null,
   key        text not null,
@@ -696,7 +701,8 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
                 coalesce(
                   json_agg(
                     json_build_object('pageId',p.page_id,'pageType',p.page_type,
-                                      'label',p.label,'index',p.idx)
+                                      'label',p.label,'index',p.idx,
+                                      'hidden',coalesce(p.hidden,false))
                     order by p.idx
                   ) filter (where p.page_id is not null),
                   '[]'
@@ -735,15 +741,26 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       };
     },
 
+    async setPageHidden(runId, pageId, hidden) {
+      await ready();
+      await db.query(
+        `update run_pages set hidden = $3 where run_id = $1 and page_id = $2`,
+        [runId, pageId, hidden],
+      );
+    },
+
     async pagesUsed(domain) {
       await ready();
       /* Counted from run_pages rather than summing runs.page_count: the page
          rows are what the Library actually shows, so the quota and the Library
          can never disagree. */
       const { rows } = await db.query(
+        /* HIDDEN PAGES DO NOT COUNT. This is what `canBuild` is measured
+           against, so a hidden page that still counted would tell a merchant
+           they were out of room over a page nobody can show them. */
         `select count(*)::int as n
            from run_pages p join runs r on r.id = p.run_id
-          where r.domain = $1`,
+          where r.domain = $1 and p.hidden = false`,
         [domain],
       );
       return Number(rows[0]?.n ?? 0);

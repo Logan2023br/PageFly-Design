@@ -126,6 +126,14 @@ export type RunPageRecord = {
   pageType: string;
   label: string;
   index: number;
+  /**
+   * Hidden by an operator: not shown to the merchant, and not charged for.
+   *
+   * A TOGGLE, NOT A DELETE. The row stays so it can come back — nobody can
+   * unhide what has disappeared. The admin still sees it, marked, for the same
+   * reason.
+   */
+  hidden?: boolean;
 };
 
 /* ==========================================================================
@@ -601,7 +609,15 @@ export type Repo = {
   saveRun(run: RunRecord, pages: RunPageRecord[]): Promise<void>;
   listRuns(domain: string): Promise<(RunRecord & { pages: RunPageRecord[] })[]>;
   getRun(id: string): Promise<(RunRecord & { pages: RunPageRecord[] }) | null>;
+  /** Pages that count against the allowance — hidden ones do not. */
   pagesUsed(domain: string): Promise<number>;
+  /**
+   * Hide or unhide one page.
+   *
+   * Silent when the page is not there: an operator clicking twice, or a row
+   * already removed, is not an error worth a failed request.
+   */
+  setPageHidden(runId: string, pageId: string, hidden: boolean): Promise<void>;
   /** ISO of the store's most recent run, or null. Drives the review timer. */
   lastRunAt(domain: string): Promise<string | null>;
 
