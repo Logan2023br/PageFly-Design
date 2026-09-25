@@ -76,7 +76,12 @@ export function CardActions({ page }: { page: PageMockup }) {
   const label = actionLabel(state, exporting, exportingId === page.id);
 
   return (
-    <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex items-start justify-between gap-2 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
+    <div /* WRAPS, because the row grew. Four controls do not fit across a card at
+         the narrow end of the grid, and a `flex` that cannot wrap makes the
+         labels break inside the buttons instead — "Import to editor" came out
+         three lines tall and still overhung the card. Wrapping moves whole
+         buttons to a second line and leaves every label on one. */
+      className="pointer-events-none absolute inset-x-2 top-2 z-20 flex flex-wrap items-start gap-1.5 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
       {/* ---- hide from the merchant · operators only ----
            A toggle, not a delete: the row stays so this can be undone, and a
            hidden page stops counting against the store's allowance. */}
@@ -97,7 +102,7 @@ export function CardActions({ page }: { page: PageMockup }) {
               ? "Hidden from the merchant and not counted against their pages — press to show it again"
               : "Hide from the merchant: they stop seeing it and it stops costing them a page"
           }
-          className={`pointer-events-auto inline-flex items-center gap-1.5 rounded-pf-md px-2.5 py-1.5 text-[11.5px] font-semibold shadow-pf-float backdrop-blur transition-colors duration-150 ${
+          className={`pointer-events-auto inline-flex items-center gap-1.5 whitespace-nowrap rounded-pf-md px-2.5 py-1.5 text-[11.5px] font-semibold shadow-pf-float backdrop-blur transition-colors duration-150 ${
             hidden
               ? "bg-pf-warn text-pf-bg"
               : "bg-pf-bg/85 text-pf-body hover:bg-pf-primary hover:text-white"
@@ -128,7 +133,7 @@ export function CardActions({ page }: { page: PageMockup }) {
             setTimeout(() => URL.revokeObjectURL(url), 0);
           }}
           title="Download HTML — the mockup this page was built as"
-          className="pointer-events-auto inline-flex items-center gap-1.5 rounded-pf-md bg-pf-bg/85 px-2.5 py-1.5 text-[11.5px] font-semibold text-pf-body shadow-pf-float backdrop-blur transition-colors duration-150 hover:bg-pf-primary hover:text-white"
+          className="pointer-events-auto inline-flex items-center gap-1.5 whitespace-nowrap rounded-pf-md bg-pf-bg/85 px-2.5 py-1.5 text-[11.5px] font-semibold text-pf-body shadow-pf-float backdrop-blur transition-colors duration-150 hover:bg-pf-primary hover:text-white"
         >
           <Icon name="FileText" size={13} />
           HTML
@@ -151,7 +156,7 @@ export function CardActions({ page }: { page: PageMockup }) {
         }}
         disabled={exporting}
         title="Download this page as a .pagefly file you can import into PageFly"
-        className={`pointer-events-auto inline-flex items-center gap-1.5 rounded-pf-md px-2.5 py-1.5 text-[11.5px] font-semibold shadow-pf-float backdrop-blur transition-colors duration-150 disabled:cursor-not-allowed ${
+        className={`pointer-events-auto inline-flex items-center gap-1.5 whitespace-nowrap rounded-pf-md px-2.5 py-1.5 text-[11.5px] font-semibold shadow-pf-float backdrop-blur transition-colors duration-150 disabled:cursor-not-allowed ${
           state === "done"
             ? "bg-pf-success text-pf-bg"
             : state === "failed"
@@ -176,7 +181,8 @@ export function CardActions({ page }: { page: PageMockup }) {
           aria-disabled rather than the disabled attribute, because a disabled
           button stops firing pointer events in some browsers and the whole
           point of this control right now is its hover message. */}
-      <div className="pointer-events-auto relative">
+      {/* Right while it fits, and on its own line when it does not. */}
+      <div className="pointer-events-auto relative ml-auto">
         <button
           ref={lockRef}
           type="button"
@@ -186,7 +192,7 @@ export function CardActions({ page }: { page: PageMockup }) {
           onMouseLeave={() => setTip(false)}
           onFocus={openTip}
           onBlur={() => setTip(false)}
-          className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-pf-md bg-pf-bg/70 px-2.5 py-1.5 text-[11.5px] font-semibold text-pf-faint shadow-pf-float backdrop-blur transition-colors duration-150 hover:text-pf-muted"
+          className="inline-flex cursor-not-allowed items-center gap-1.5 whitespace-nowrap rounded-pf-md bg-pf-bg/70 px-2.5 py-1.5 text-[11.5px] font-semibold text-pf-faint shadow-pf-float backdrop-blur transition-colors duration-150 hover:text-pf-muted"
         >
           <Icon name="Lock" size={12} />
           Import to editor
