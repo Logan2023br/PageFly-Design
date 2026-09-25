@@ -15,6 +15,7 @@ import { downloadBlob } from "@/lib/pagefly/builder";
 import { announceExport } from "@/lib/pagefly/install";
 import { fileStem, pageFromBreakpoints, type Rendered } from "@/lib/pagefly/fromDom";
 import { createPreparer, keyForHtml } from "@/lib/pagefly/prepared";
+import { ownPageId } from "@/lib/pagefly/pageId";
 import { designTreeSchema, type DesignTree } from "@/lib/design/schema";
 import { pageflyFromTree } from "@/lib/design/toPagefly";
 import { MockupPage } from "../mockup/MockupPage";
@@ -108,7 +109,9 @@ async function pageflyFromHtmlViaSkill(
         /* Both are for STORING the answer, not for making it. Without them the
            route converts and discards, which is how every export here cost a
            fresh two minutes of model time. */
-        pageId: page.id,
+        /* The page's OWN id — the Library prefixes it with the run, and
+           `prebuild` filed the answer under the plain one. */
+        pageId: ownPageId(page),
         ...(domain ? { domain } : {}),
         bg: page.tokens.bg,
         ink: page.tokens.ink,
@@ -162,7 +165,7 @@ async function storedPagefly(
 ): Promise<Built | null> {
   try {
     const res = await fetch(
-      `/api/pagefly/file?key=${encodeURIComponent(keyForHtml(page.id, html))}` +
+      `/api/pagefly/file?key=${encodeURIComponent(keyForHtml(ownPageId(page), html))}` +
         /* An operator has no merchant session, so without this the lookup is
            a 401 and every click reconverts. */
         (domain ? `&domain=${encodeURIComponent(domain)}` : ""),
@@ -319,7 +322,7 @@ export function ExportProvider({ children }: { children: ReactNode }) {
          file and gets it. `prepared` keeps a second click from racing a second
          conversion of the same document. */
       const built = await prepared
-        .start(keyForHtml(page.id, html), { page, html, domain: adminDomain }, { now: true })
+        .start(keyForHtml(ownPageId(page), html), { page, html, domain: adminDomain }, { now: true })
         .catch(() => null);
       if (built) {
         downloadBlob(built.blob, built.filename);

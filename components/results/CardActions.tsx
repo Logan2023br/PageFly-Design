@@ -8,6 +8,7 @@ import { useExport } from "./ExportProvider";
 import { actionLabel, type ExportState } from "./exportLabel";
 import { useAdminPage, useAdminView } from "./adminView";
 import { htmlFileName, htmlOfPage } from "./downloadHtml";
+import { ownPageId } from "@/lib/pagefly/pageId";
 import { Icon } from "../ui";
 
 /* ==========================================================================
@@ -29,7 +30,9 @@ export function CardActions({ page }: { page: PageMockup }) {
   const html = admin ? htmlOfPage(page) : null;
   /* Where this page lives, so it can be addressed by run AND id — a page id is
      only unique within its run. Null for a merchant. */
-  const at = useAdminPage(page.id);
+  /* Keyed by the page rows, which hold the plain id; the Library hands this
+     component the prefixed one. */
+  const at = useAdminPage(ownPageId(page));
   /* OPTIMISTIC, and deliberately so. The server is silent about a page it does
      not hold, so there is no answer worth waiting for; the card shows the new
      state at once and the next load carries the truth. */
@@ -86,7 +89,7 @@ export function CardActions({ page }: { page: PageMockup }) {
             void fetch("/api/admin/pages", {
               method: "POST",
               headers: { "content-type": "application/json" },
-              body: JSON.stringify({ runId: at.runId, pageId: page.id, hidden: next }),
+              body: JSON.stringify({ runId: at.runId, pageId: ownPageId(page), hidden: next }),
             }).catch(() => setHidden(!next));
           }}
           title={
