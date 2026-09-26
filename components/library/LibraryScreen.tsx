@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { InstallPageFlyButton } from "../pagefly/InstallPageFly";
 import type { Account } from "@/lib/account";
+import { hideFrom } from "./hidePages";
 import type { Brief } from "@/lib/validation";
 import type { PageMockup } from "@/lib/generate/types";
 import { decodeRunPayload } from "@/lib/runPayload";
@@ -47,28 +48,6 @@ type Deck = {
     it is checked for the shape the renderer needs before being trusted — a run
     written by an older version, or a truncated row, falls back to a replay rather
     than crashing the page it is meant to show. */
-/**
- * The snapshot minus the pages an operator hid.
- *
- * Matched by id against the page rows, which are where the flag lives — the
- * snapshot is a blob written at build time and knows nothing about it. A page
- * with no row is KEPT: an unknown page is not a hidden one, and dropping it
- * would lose work over a bookkeeping gap.
- */
-function hideFrom(
-  snapshot: PageMockup[] | null,
-  rows: RunSummary["pages"],
-  admin: boolean,
-): PageMockup[] | null {
-  if (admin || !snapshot) return snapshot;
-  const hidden = new Set(rows.filter((p) => p.hidden).map((p) => p.pageId));
-  if (hidden.size === 0) return snapshot;
-  const kept = snapshot.filter((p) => !hidden.has(p.id));
-  /* An empty deck reads as a broken build; `null` is the shape the caller
-     already handles for "nothing usable here". */
-  return kept.length > 0 ? kept : null;
-}
-
 function usableSnapshot(value: unknown): PageMockup[] | null {
   if (!Array.isArray(value) || value.length === 0) return null;
   const ok = value.every((p) => {

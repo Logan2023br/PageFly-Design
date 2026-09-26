@@ -653,7 +653,20 @@ export const useStore = create<State & Actions>((set, get) => ({
       for (const run of runs) {
         if (signal.aborted) return;
 
-        if (run.snapshot && run.snapshot.length > 0) {
+        /* ==================================================================
+           PRESENT BEATS NON-EMPTY, and the difference is a model call.
+
+           This read `run.snapshot.length > 0`, so a run whose every page an
+           operator had hidden fell through to `generatePages` below and was
+           REBUILT from the brief — new copy, new design, pages nobody had
+           approved, shown in place of the ones that were meant to disappear.
+           That is the opposite of what the Hidden button says it does.
+
+           `null` is the only answer that means "this run has nothing saved";
+           an empty array means "it was read, and everything in it is hidden",
+           which must draw nothing. See `hideFrom` in `components/library`.
+           ================================================================== */
+        if (Array.isArray(run.snapshot)) {
           /* `runId` rather than splitting the id on `::` later. That convention
              has two writers and no readers — it exists so ids do not collide
              across runs, not as an encoding — and the first reader would break
