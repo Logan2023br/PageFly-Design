@@ -4,6 +4,13 @@ import Link from "next/link";
 import { SHOWCASE_SETS } from "@/lib/showcasePages";
 import { Icon } from "../ui";
 import { PageThumb } from "../landing/PagePreview";
+import { ExportSet } from "../landing/Showcase";
+
+/* Over the card's picture, so it is the first thing on the card — and a sibling
+   of the card's link rather than inside it, since a button inside an <a> is
+   invalid and a press on it would also navigate. */
+const DOWNLOAD =
+  "inline-flex items-center gap-1.5 rounded-pf-md bg-pf-primary px-3 py-2 text-[12.5px] font-semibold text-white shadow-pf-button transition-colors hover:bg-pf-primary-hi disabled:opacity-60";
 
 /* ==========================================================================
    EVERY SET, ONE CARD EACH.
@@ -30,7 +37,7 @@ export function SetList() {
 
       <ul className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {SHOWCASE_SETS.map((set) => (
-          <li key={set.id}>
+          <li key={set.id} className="relative">
             <Link
               href={`/collection-pages/${set.id}`}
               className="group flex h-full flex-col overflow-hidden rounded-pf-card border border-pf-border bg-pf-card shadow-pf-card transition-colors hover:border-pf-primary-hi/50"
@@ -66,6 +73,14 @@ export function SetList() {
                 </span>
               </span>
             </Link>
+            <div className="absolute right-3 top-3 z-10">
+              <ExportSet
+                set={set}
+                from="collection_pages"
+                label={`Download free · ${set.pages.length} pages`}
+                className={DOWNLOAD}
+              />
+            </div>
           </li>
         ))}
       </ul>

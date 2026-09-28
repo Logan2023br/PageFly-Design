@@ -104,7 +104,19 @@ function download(bytes: Uint8Array, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function ExportSet({ set, from }: { set: ShowcaseSet; from: string }) {
+export function ExportSet({
+  set,
+  from,
+  label,
+  className,
+}: {
+  set: ShowcaseSet;
+  from: string;
+  /** the idle wording; the gallery's own when omitted */
+  label?: string;
+  /** replaces the gallery's outline style, for a placement that needs a louder one */
+  className?: string;
+}) {
   const [state, setState] = useState<"idle" | "working" | "failed">("idle");
 
   const run = async () => {
@@ -135,14 +147,17 @@ function ExportSet({ set, from }: { set: ShowcaseSet; from: string }) {
       type="button"
       onClick={() => void run()}
       disabled={state === "working"}
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-pf-md border border-pf-border-hi px-3 py-1.5 text-[12.5px] font-semibold text-pf-body transition-colors hover:border-pf-primary-hi hover:text-pf-text disabled:opacity-60"
+      className={
+        className ??
+        "inline-flex shrink-0 items-center gap-1.5 rounded-pf-md border border-pf-border-hi px-3 py-1.5 text-[12.5px] font-semibold text-pf-body transition-colors hover:border-pf-primary-hi hover:text-pf-text disabled:opacity-60"
+      }
     >
       <Icon name={state === "failed" ? "CircleAlert" : "Download"} size={13} />
       {state === "working"
         ? "Preparing…"
         : state === "failed"
           ? "Try again"
-          : `Export free all ${set.pages.length}`}
+          : (label ?? `Export free all ${set.pages.length}`)}
     </button>
   );
 }

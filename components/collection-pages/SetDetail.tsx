@@ -5,6 +5,7 @@ import { useState } from "react";
 import { SHOWCASE_SETS, type ShowcasePage } from "@/lib/showcasePages";
 import { Icon } from "../ui";
 import { PageThumb, PageViewer } from "../landing/PagePreview";
+import { ExportSet } from "../landing/Showcase";
 
 /* ==========================================================================
    ONE SET, EVERY PAGE, AND EACH OPENS FULL SIZE.
@@ -34,7 +35,12 @@ export function SetDetail({ setId }: { setId: string }) {
           </h1>
           <p className="mt-3 text-[15px] leading-relaxed text-pf-muted">{set.blurb}</p>
         </div>
-        <span className="text-[13px] font-medium text-pf-faint">{set.pages.length} pages</span>
+        <ExportSet
+          set={set}
+          from="collection_pages"
+          label={`Download free · all ${set.pages.length} pages`}
+          className="inline-flex min-h-11 items-center gap-2 rounded-pf-md bg-pf-primary px-5 py-2.5 text-[14px] font-semibold text-white shadow-pf-button transition-colors hover:bg-pf-primary-hi disabled:opacity-60"
+        />
       </div>
 
       {/* Other sets, one press away, so moving between them does not mean going
