@@ -125,6 +125,30 @@ const STORE_ORDER: Record<string, string> = {
     "coalesce(r.last_run_at, s.last_seen_at, v.created_at) desc nulls last, d.domain",
 };
 
+/* ==========================================================================
+   THE THREE STATES A STORE CAN BE IN, AS SQL.
+
+   A TABLE, NOT A STRING THE CALLER BUILDS. The value arrives on a query
+   string; looked up here it can only ever be one of three fixed clauses, so
+   there is nothing to escape and nothing an operator could type that becomes
+   SQL. Same posture as `STORE_ORDER` above.
+
+   NO PARAMETERS IN ANY OF THEM, deliberately. Every clause is written out of
+   columns alone, so adding a filter cannot shift the numbering of `$1` and the
+   limit/offset slots after it — which is the shape of the bug that put the
+   admin screen on a 500 once already.
+
+   `pages_used` HERE COUNTS HIDDEN PAGES TOO, because it is the column the
+   table's own Pages figure is drawn from and a filter that disagreed with the
+   number beside it would be worse than either. A store whose only pages an
+   operator has hidden still built them.
+   ========================================================================== */
+const STORE_FILTER: Record<string, string> = {
+  built: "coalesce(p.pages_used,0) > 0",
+  signedin: "s.last_seen_at is not null and coalesce(p.pages_used,0) = 0",
+  idle: "s.last_seen_at is null",
+};
+
 /** The columns a search reads. A null one simply never matches. */
 const STORE_SEARCH = [
   "d.domain",
@@ -1179,9 +1203,15 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       /* The wildcards are added HERE so a `%` an operator typed is matched
          rather than honoured. */
       const like = term ? [`%${term.replace(/[%_\\]/g, (c) => `\\${c}`)}%`] : [];
-      const where = term
-        ? `where ${STORE_SEARCH.map(() => "").map((_, i) => STORE_SEARCH[i] + " ilike $1").join(" or ")}`
-        : "";
+      /* BOTH NARROWINGS, JOINED BY `and`. The search is a free phrase and takes
+         the one parameter; the filter is a lookup and takes none — see
+         `STORE_FILTER`. An unknown filter value narrows nothing rather than
+         erroring: it reaches here off a query string. */
+      const parts: string[] = [];
+      if (term) parts.push(`(${STORE_SEARCH.map((c) => `${c} ilike $1`).join(" or ")})`);
+      const byState = q.filter ? STORE_FILTER[q.filter] : undefined;
+      if (byState) parts.push(`(${byState})`);
+      const where = parts.length ? `where ${parts.join(" and ")}` : "";
 
       /* THE COUNT COMES BACK WITH THE ROWS. Two statements would be two trips
          that can disagree — a store synced between them leaves a pager whose

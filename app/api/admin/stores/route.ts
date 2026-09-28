@@ -2,7 +2,7 @@ import { z } from "zod";
 import { DEFAULT_PAGE_LIMIT } from "@/lib/pageCatalog";
 import { findBuiltinStore } from "@/lib/allowlist";
 import { getRepo } from "@/lib/db";
-import type { StoreSort } from "@/lib/db/types";
+import type { StoreFilter, StoreSort } from "@/lib/db/types";
 import { readAdminSession } from "@/lib/session";
 import { normalizeDomain } from "@/lib/sheet";
 
@@ -169,6 +169,7 @@ export async function DELETE(request: Request) {
    ========================================================================== */
 
 const SORTS = new Set(["recent", "pages", "tokens", "rating", "domain", "registered"]);
+const FILTERS = new Set(["built", "signedin", "idle"]);
 
 export async function GET(req: Request): Promise<Response> {
   if (!(await readAdminSession())) {
@@ -185,9 +186,20 @@ export async function GET(req: Request): Promise<Response> {
   const sort = SORTS.has(sortRaw) ? (sortRaw as StoreSort) : "recent";
   /* Long enough for a domain and an email; anything past that is not a search. */
   const search = (p.get("q") ?? "").slice(0, 120);
+  /* Checked against the three, not passed through. Anything else is read as
+     "no filter" rather than refused: it arrives on a query string, and a
+     stale bookmark should show the table, not an error. */
+  const filterRaw = p.get("filter") ?? "";
+  const filter = FILTERS.has(filterRaw) ? (filterRaw as StoreFilter) : null;
 
   const [list, counts] = await Promise.all([
-    getRepo().listStoreSummariesPage({ limit: size, offset: (page - 1) * size, search, sort }),
+    getRepo().listStoreSummariesPage({
+      limit: size,
+      offset: (page - 1) * size,
+      search,
+      sort,
+      filter,
+    }),
     getRepo().countStores(),
   ]);
 

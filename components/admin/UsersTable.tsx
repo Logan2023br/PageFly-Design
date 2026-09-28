@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { StoresResponse } from "@/app/api/admin/stores/route";
 import type { StoreSummary } from "@/lib/db";
+import type { StoreFilter } from "@/lib/db/types";
 import { EditStore } from "./EditStore";
 import { Icon, Panel } from "../ui";
 import {
@@ -29,6 +30,18 @@ import {
 
 type SortKey = "recent" | "pages" | "tokens" | "rating" | "domain" | "registered";
 
+/* The three buttons, their labels as the operator asked for them, and what
+   each one means in one line for the hover. */
+const FILTER_TABS: readonly (readonly [StoreFilter, string, string])[] = [
+  ["built", "Store đã build", "Pages lớn hơn 0 — đã dựng được ít nhất một trang"],
+  [
+    "signedin",
+    "Store chỉ đăng nhập",
+    "Đã đăng nhập nhưng chưa build trang nào",
+  ],
+  ["idle", "Store không sử dụng", "Chưa đăng nhập lần nào"],
+] as const;
+
 export function UsersTable({
   initial,
 }: {
@@ -41,6 +54,8 @@ export function UsersTable({
   const [editing, setEditing] = useState<StoreSummary | null>(null);
   const [size, setSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [page, setPage] = useState(1);
+  /* Null is "every store", which is the table this screen has always been. */
+  const [filter, setFilter] = useState<StoreFilter | null>(null);
   const [data, setData] = useState(initial);
 
   /* TYPING IS NOT A QUERY. A request per keystroke is fifteen hundred rows
@@ -60,14 +75,16 @@ export function UsersTable({
      Adjusted during render, not in an effect. The effect version fetches the
      stale page first and the lint refuses it; this never asks the wrong
      question at all. */
-  const question = `${size}|${sort}|${term}`;
+  const question = `${size}|${sort}|${term}|${filter ?? ""}`;
   const [asked, setAsked] = useState(question);
   if (asked !== question) {
     setAsked(question);
     setPage(1);
   }
 
-  const ask = `page=${page}&size=${size}&sort=${sort}&q=${encodeURIComponent(term)}`;
+  const ask =
+    `page=${page}&size=${size}&sort=${sort}&q=${encodeURIComponent(term)}` +
+    (filter ? `&filter=${filter}` : "");
   useEffect(() => {
     let cancelled = false;
     fetch(`/api/admin/stores?${ask}`)
@@ -133,6 +150,49 @@ export function UsersTable({
         <span className="text-[12px] tabular-nums text-pf-muted">
           {data.total.toLocaleString()} matching
         </span>
+      </div>
+
+      {/* ==================================================================
+          THE THREE STATES, AS A ROW OF BUTTONS.
+
+          A TOGGLE, NOT A RADIO GROUP. Pressing the one already chosen turns
+          it off and the table is every store again — otherwise the only way
+          back from a filter is to remember which of three it was.
+
+          THEY NARROW WHAT THE DATABASE SENDS, not what the browser draws.
+          The table is paged server-side, so filtering the twenty-five rows on
+          screen would leave "3 matching" over a table whose other matches sit
+          on page nine. See `StoreFilter` in `lib/db/types.ts`.
+          ================================================================== */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {FILTER_TABS.map(([id, label, hint]) => {
+          const on = filter === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setFilter(on ? null : id)}
+              aria-pressed={on}
+              title={hint}
+              className={`rounded-pf-pill border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                on
+                  ? "border-pf-primary-hi bg-pf-primary text-white"
+                  : "border-pf-border text-pf-muted hover:border-pf-primary-hi/50 hover:text-pf-text"
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
+        {filter && (
+          <button
+            type="button"
+            onClick={() => setFilter(null)}
+            className="ml-1 text-[12px] text-pf-faint underline-offset-2 hover:text-pf-text hover:underline"
+          >
+            Bỏ lọc
+          </button>
+        )}
       </div>
 
       {rows.length === 0 ? (

@@ -205,6 +205,73 @@ async function main(): Promise<void> {
     }
   }
 
+  /* ==========================================================================
+     AND THE USERS TABLE, which grew a filter beside its search.
+
+     TWO NARROWINGS SHARING ONE STATEMENT. The search is a free phrase and
+     takes `$1`; the filter is a lookup in a fixed table and takes none. The
+     failure this guards is the one at the top of this file in a new place: a
+     filter that quietly consumed a slot would shift `limit` and `offset` by
+     one, and the screen would 500 the moment somebody pressed a button.
+
+     The filter value is also checked for NOT being spliced into the text —
+     it reaches the repo off a query string.
+     ========================================================================== */
+  const PAGE_SHAPES: { name: string; q: Record<string, unknown> }[] = [
+    { name: "no search, no filter", q: { limit: 25, offset: 0 } },
+    { name: "search only", q: { limit: 25, offset: 0, search: "acme" } },
+    { name: "filter only · built", q: { limit: 25, offset: 0, filter: "built" } },
+    { name: "filter only · signedin", q: { limit: 25, offset: 0, filter: "signedin" } },
+    { name: "filter only · idle", q: { limit: 25, offset: 0, filter: "idle" } },
+    { name: "both", q: { limit: 25, offset: 0, search: "acme", filter: "built" } },
+    { name: "both, page nine", q: { limit: 50, offset: 400, search: "acme", filter: "idle" } },
+    { name: "both, sorted", q: { limit: 25, offset: 0, search: "acme", filter: "signedin", sort: "pages" } },
+    { name: "an unknown filter", q: { limit: 25, offset: 0, filter: "nonsense" } },
+  ];
+
+  for (const shape of PAGE_SHAPES) {
+    head(`listStoreSummariesPage — ${shape.name}`);
+    const rec = recorder();
+    const repo = createPostgresRepo("postgres://unused/x", rec.pool);
+
+    try {
+      await repo.listStoreSummariesPage(shape.q as never);
+    } catch (err) {
+      ok("it completed", false, (err as Error)?.message);
+      continue;
+    }
+
+    let mismatched = 0;
+    let gapped = 0;
+    for (const a of rec.asked) {
+      const { max, used } = placeholders(a.text);
+      if (max !== a.values.length) {
+        mismatched++;
+        console.log(
+          `    ✗ $${max} is the highest slot but ${a.values.length} value(s) were sent`,
+        );
+      }
+      for (let i = 1; i <= max; i++) if (!used.has(i)) gapped++;
+    }
+    ok("every statement matches its own parameter list", mismatched === 0);
+    ok("and none skips a slot", gapped === 0);
+
+    /* The filter is a lookup, so it must appear in NO statement as text. */
+    const raw = String(shape.q.filter ?? "");
+    if (raw)
+      ok(
+        "the filter value is never spliced into the SQL",
+        !rec.asked.some((a) => a.text.includes(raw)),
+        raw,
+      );
+    if (shape.q.search)
+      ok(
+        "and the search phrase is bound, not spliced",
+        rec.asked.every((a) => !a.text.includes(String(shape.q.search))) &&
+          rec.asked.some((a) => a.values.some((v) => String(v).includes("acme"))),
+      );
+  }
+
   console.log(bad === 0 ? "\nall good" : `\n${bad} failed`);
   process.exit(bad === 0 ? 0 : 1);
 }

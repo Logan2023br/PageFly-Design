@@ -279,12 +279,32 @@ export type StoreSort =
   | "domain"
   | "registered";
 
+/* ==========================================================================
+   WHICH STORES THE USERS TABLE IS SHOWING.
+
+   THREE STATES THAT DO NOT OVERLAP, and that is the point of them being
+   three: every store on the list is in exactly one, so the three buttons
+   partition the table rather than offering three overlapping views of it.
+
+     built      it has pages — somebody got all the way through
+     signedin   it signed in and built nothing — the gap worth chasing
+     idle       it never signed in at all
+
+   `signedin` CARRIES "AND BUILT NOTHING", which the label says in one word —
+   "chỉ đăng nhập", only signed in. Read as "has signed in" alone it would
+   contain every built store as well, and a button that is a superset of the
+   button beside it answers no question either of them was added for.
+   ========================================================================== */
+export type StoreFilter = "built" | "signedin" | "idle";
+
 export type StoreQuery = {
   limit: number;
   offset: number;
   /** matched against domain, email, store name, country, type and status */
   search?: string;
   sort?: StoreSort;
+  /** one of the three states above, or absent for all of them */
+  filter?: StoreFilter | null;
 };
 
 export type StorePage = {

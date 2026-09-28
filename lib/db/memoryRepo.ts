@@ -571,7 +571,20 @@ export function createMemoryRepo(file: string): Repo {
           )
         : all;
 
-      const sorted = [...matched];
+      /* THE SAME THREE STATES THE SQL DEFINES, and they have to agree — this
+         driver and that one are two readings of one paragraph, and they have
+         drifted before. See `StoreFilter` in `./types.ts`.
+
+         `signedin` is "signed in AND built nothing", not "signed in": the
+         label says only. */
+      const state = (st: StoreSummary) =>
+        st.pagesUsed > 0 ? "built" : st.lastSeenAt ? "signedin" : "idle";
+      const narrowed =
+        q.filter && ["built", "signedin", "idle"].includes(q.filter)
+          ? matched.filter((st) => state(st) === q.filter)
+          : matched;
+
+      const sorted = [...narrowed];
       switch (q.sort) {
         case "pages":
           sorted.sort((a, b) => b.pagesUsed - a.pagesUsed || a.domain.localeCompare(b.domain));
