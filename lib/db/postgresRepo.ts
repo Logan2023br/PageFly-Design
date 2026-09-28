@@ -16,7 +16,7 @@ import type {
   TrainingSummary,
 } from "./types";
 import { REGISTER_USER_TYPE } from "./types";
-import type { ModelSpendRow } from "./types";
+import type { ModelSpendRow, StoreFilter } from "./types";
 
 /* ==========================================================================
    Postgres. Works unchanged against Vercel Postgres, Neon and Supabase — they
@@ -1209,35 +1209,63 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
          erroring: it reaches here off a query string. */
       const parts: string[] = [];
       if (term) parts.push(`(${STORE_SEARCH.map((c) => `${c} ilike $1`).join(" or ")})`);
+      /* The button counts read the search alone — see `StorePage.byState`. */
+      const searched = parts.length ? `where ${parts.join(" and ")}` : "";
       const byState = q.filter ? STORE_FILTER[q.filter] : undefined;
       if (byState) parts.push(`(${byState})`);
       const where = parts.length ? `where ${parts.join(" and ")}` : "";
+
+      /* One pass over the searched list, a count per state. The SAME clauses
+         as the filter, so a button's number is the total its table shows —
+         evaluated inside the summary select, since they name its aliases. */
+      /* Aliased by position, not by name, so no filter value ever appears in
+         the SQL text — `test-stats-sql` holds that line. */
+      const stateKeys = Object.keys(STORE_FILTER) as StoreFilter[];
+      const flags = stateKeys
+        .map((k, i) => `(${STORE_FILTER[k]}) as f${i}`)
+        .join(", ");
+      const states = db.query(
+        `select ${stateKeys.map((_, i) => `count(*) filter (where f${i})::int as n${i}`).join(", ")}
+           from (${STORE_SUMMARY_SELECT.replace(/^select /, `select ${flags}, `)} ${searched}) t`,
+        like,
+      );
 
       /* THE COUNT COMES BACK WITH THE ROWS. Two statements would be two trips
          that can disagree — a store synced between them leaves a pager whose
          last page is empty — and `count(*) over ()` is the number of MATCHES,
          which is what a pager needs rather than the number on this page. */
-      const { rows } = await db.query(
-        `select *, count(*) over ()::int as match_count from (
-           ${STORE_SUMMARY_SELECT}
-           ${where}
-           order by ${order}
-         ) t
-         limit $${like.length + 1} offset $${like.length + 2}`,
-        [...like, limit, offset],
-      );
+      const [{ rows }, counted] = await Promise.all([
+        db.query(
+          `select *, count(*) over ()::int as match_count from (
+             ${STORE_SUMMARY_SELECT}
+             ${where}
+             order by ${order}
+           ) t
+           limit $${like.length + 1} offset $${like.length + 2}`,
+          [...like, limit, offset],
+        ),
+        states,
+      ]);
+      const c = counted.rows[0] ?? {};
+      const perState = Object.fromEntries(
+        stateKeys.map((k, i) => [k, Number(c[`n${i}`] ?? 0)]),
+      ) as Record<StoreFilter, number>;
 
       if (rows.length > 0)
-        return { rows: rows.map(toSummary), total: Number(rows[0].match_count) };
+        return {
+          rows: rows.map(toSummary),
+          total: Number(rows[0].match_count),
+          byState: perState,
+        };
 
       /* PAST THE END STILL KNOWS THE TOTAL. The caller has to be able to send
          an operator back to a page that exists, and an empty window carries no
          `count(*) over ()` to read it from. */
-      const counted = await db.query(
+      const total = await db.query(
         `select count(*)::int as n from (${STORE_SUMMARY_SELECT} ${where}) t`,
         like,
       );
-      return { rows: [], total: Number(counted.rows[0]?.n ?? 0) };
+      return { rows: [], total: Number(total.rows[0]?.n ?? 0), byState: perState };
     },
 
     async countStores() {

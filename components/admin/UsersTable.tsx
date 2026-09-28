@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { StoresResponse } from "@/app/api/admin/stores/route";
 import type { StoreSummary } from "@/lib/db";
-import type { StoreFilter } from "@/lib/db/types";
+import type { StoreFilter, StorePage } from "@/lib/db/types";
 import { EditStore } from "./EditStore";
 import { Icon, Panel } from "../ui";
 import {
@@ -47,7 +47,7 @@ export function UsersTable({
 }: {
   /** The first page, rendered on the server so the table is not empty at first
       paint. Every page after it comes from `/api/admin/stores`. */
-  initial: { rows: StoreSummary[]; total: number };
+  initial: StorePage;
 }) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("recent");
@@ -89,7 +89,7 @@ export function UsersTable({
     let cancelled = false;
     fetch(`/api/admin/stores?${ask}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d: { rows: StoreSummary[]; total: number } | null) => {
+      .then((d: StorePage | null) => {
         if (!cancelled && d) setData(d);
       })
       .catch(() => {
@@ -181,6 +181,13 @@ export function UsersTable({
               }`}
             >
               {label}
+              {/* The search narrows these; the filter does not — see
+                  `StorePage.byState`. */}
+              <span
+                className={`ml-1.5 tabular-nums ${on ? "text-white/75" : "text-pf-faint"}`}
+              >
+                {(data.byState?.[id] ?? 0).toLocaleString()}
+              </span>
             </button>
           );
         })}

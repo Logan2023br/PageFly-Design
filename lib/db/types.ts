@@ -311,6 +311,13 @@ export type StorePage = {
   rows: StoreSummary[];
   /** every row the search matched, not the number on this page */
   total: number;
+  /**
+   * How many stores the SEARCH matched in each of the three states, ignoring
+   * the filter — the number printed on each button. Ignoring the filter is the
+   * point: the buttons are how an operator picks one, so pressing "built" must
+   * not turn the other two into zeros.
+   */
+  byState: Record<StoreFilter, number>;
 };
 
 export type AdminStats = {

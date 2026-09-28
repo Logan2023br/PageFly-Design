@@ -188,6 +188,29 @@ async function main(): Promise<void> {
     (await page("idle", "b1.")).total === 0,
   );
 
+  /* ---- the number on each button ---------------------------------------- */
+  head("each button's count");
+  const want = { built: built.total, signedin: signed.total, idle: idle.total };
+  ok(
+    "matches the table that button shows",
+    JSON.stringify(all.byState) === JSON.stringify(want),
+    `${JSON.stringify(all.byState)} vs ${JSON.stringify(want)}`,
+  );
+  /* Pressing one must not zero the other two — the counts are how an
+     operator decides which to press next. */
+  ok(
+    "and does not change when a filter is on",
+    JSON.stringify(built.byState) === JSON.stringify(want) &&
+      JSON.stringify(idle.byState) === JSON.stringify(want),
+    JSON.stringify(built.byState),
+  );
+  const found = await page("idle", "b1.");
+  ok(
+    "but DOES follow the search",
+    found.byState.built === 1 && found.byState.signedin === 0 && found.byState.idle === 0,
+    JSON.stringify(found.byState),
+  );
+
   head("an unknown filter value");
   /* It arrives on a query string; a stale bookmark should show the table. */
   ok(

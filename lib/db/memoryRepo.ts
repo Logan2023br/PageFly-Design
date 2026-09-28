@@ -583,6 +583,8 @@ export function createMemoryRepo(file: string): Repo {
         q.filter && ["built", "signedin", "idle"].includes(q.filter)
           ? matched.filter((st) => state(st) === q.filter)
           : matched;
+      const byState = { built: 0, signedin: 0, idle: 0 };
+      for (const st of matched) byState[state(st)]++;
 
       const sorted = [...narrowed];
       switch (q.sort) {
@@ -615,7 +617,7 @@ export function createMemoryRepo(file: string): Repo {
       const offset = Math.max(0, Math.floor(q.offset) || 0);
       /* `total` is the number of MATCHES, never the number on this page — a
          pager built from the page size can only ever say "one page". */
-      return { rows: sorted.slice(offset, offset + limit), total: sorted.length };
+      return { rows: sorted.slice(offset, offset + limit), total: sorted.length, byState };
     },
 
     async countStores() {
