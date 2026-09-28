@@ -11,9 +11,11 @@ import { normalizeDomain } from "@/lib/storeForm";
    VISIBLE, PAID set can be ordered, and the name and price are read from the
    set here rather than trusted from the form.
 
-   `website` is a honeypot. People never see the field; a form-filling bot
-   fills in every field it finds, and its order is accepted and dropped so it
-   has no reason to try again.
+   NO HONEYPOT. There was one — a hidden `website` field whose orders were
+   answered "received" and dropped — and a browser's autofill filled it in, so
+   a real buyer was told their order had arrived while nothing was stored. An
+   order that is silently lost is worse than a spam order an operator cancels,
+   and every order here is read by a person before anything happens.
    ========================================================================== */
 
 export const dynamic = "force-dynamic";
@@ -23,7 +25,6 @@ const schema = z.object({
   domain: z.string().trim().min(1, "Enter your store domain.").max(200),
   name: z.string().trim().min(1, "Enter your name.").max(120),
   email: z.string().trim().max(200).email("That email does not look right."),
-  website: z.string().max(200).optional(),
 });
 
 export async function POST(request: Request) {
@@ -34,7 +35,6 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  if (parsed.data.website) return Response.json({ ok: true });
 
   const domain = normalizeDomain(parsed.data.domain);
   if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(domain)) {

@@ -11,11 +11,13 @@ export function CollectionsTabs({
   sets,
   missing,
   orders: initialOrders,
+  ordersError,
   tab: initialTab,
 }: {
   sets: CollectionSetRecord[];
   missing: string[];
   orders: CollectionOrderRecord[];
+  ordersError: string | null;
   tab: "sets" | "orders";
 }) {
   const [tab, setTab] = useState(initialTab);
@@ -62,7 +64,7 @@ export function CollectionsTabs({
       {tab === "sets" ? (
         <CollectionSetsAdmin initial={sets} missing={missing} />
       ) : (
-        <CollectionOrders orders={orders} onChange={setOrders} />
+        <CollectionOrders orders={orders} onChange={setOrders} loadError={ordersError} />
       )}
     </div>
   );

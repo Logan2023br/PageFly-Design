@@ -15,9 +15,17 @@ export default async function AdminCollectionsPage(props: PageProps<"/design/adm
   if (!(await readAdminSession())) return <AdminLogin />;
   const { tab } = await props.searchParams;
   const repo = getRepo();
-  const [sets, orders] = await Promise.all([
+  /* A failed read of the orders is SAID, not drawn as "No orders yet" — an
+     empty list and an unreadable one must never look the same. */
+  const [sets, read] = await Promise.all([
     repo.listCollectionSets().catch(() => []),
-    repo.listCollectionOrders().catch(() => []),
+    repo.listCollectionOrders().then(
+      (orders) => ({ orders, error: null }),
+      (err: unknown) => {
+        console.error("[collection-pages] orders", err);
+        return { orders: [], error: "The orders could not be read — reload to try again." };
+      },
+    ),
   ]);
 
   return (
@@ -29,7 +37,8 @@ export default async function AdminCollectionsPage(props: PageProps<"/design/adm
       <CollectionsTabs
         sets={sets}
         missing={missingBuiltIns(sets)}
-        orders={orders}
+        orders={read.orders}
+        ordersError={read.error}
         tab={tab === "orders" ? "orders" : "sets"}
       />
     </AdminShell>

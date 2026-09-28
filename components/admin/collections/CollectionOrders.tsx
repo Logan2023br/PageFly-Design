@@ -26,8 +26,10 @@ type Filter = "all" | CollectionOrderStatus;
 export function CollectionOrders({
   orders: initial,
   onChange,
+  loadError = null,
 }: {
   orders: CollectionOrderRecord[];
+  loadError?: string | null;
   onChange?: (orders: CollectionOrderRecord[]) => void;
 }) {
   const [orders, setOrders] = useState(initial);
@@ -50,6 +52,15 @@ export function CollectionOrders({
 
   const shown = filter === "all" ? orders : orders.filter((o) => o.status === filter);
   const count = (f: Filter) => (f === "all" ? orders.length : orders.filter((o) => o.status === f).length);
+
+  if (loadError) {
+    return (
+      <Panel className="flex items-center gap-2 border-pf-danger/40 p-4 text-[13.5px] text-pf-danger">
+        <Icon name="CircleAlert" size={16} />
+        {loadError}
+      </Panel>
+    );
+  }
 
   if (orders.length === 0) {
     return (

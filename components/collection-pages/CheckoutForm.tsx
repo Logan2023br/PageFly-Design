@@ -26,8 +26,6 @@ export function CheckoutForm({ set }: { set: PublicCollectionSet }) {
   const [domain, setDomain] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  /* The honeypot — see the orders route. */
-  const [website, setWebsite] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -40,7 +38,7 @@ export function CheckoutForm({ set }: { set: PublicCollectionSet }) {
       const res = await fetch("/api/collection-pages/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ set: set.id, domain, name, email, website }),
+        body: JSON.stringify({ set: set.id, domain, name, email }),
       });
       const body = (await res.json().catch(() => null)) as { ok: boolean; error?: string } | null;
       if (body?.ok) {
@@ -136,7 +134,7 @@ export function CheckoutForm({ set }: { set: PublicCollectionSet }) {
         {/* ---- the form ---- */}
         <form
           onSubmit={(e) => void submit(e)}
-          className="relative grid gap-5 rounded-pf-card border border-pf-border bg-pf-card p-5 shadow-pf-card sm:p-6"
+          className="grid gap-5 rounded-pf-card border border-pf-border bg-pf-card p-5 shadow-pf-card sm:p-6"
         >
           <div>
             <h2 className="text-[17px] font-semibold text-pf-text">Your details</h2>
@@ -186,17 +184,6 @@ export function CheckoutForm({ set }: { set: PublicCollectionSet }) {
               address.
             </span>
           </label>
-
-          {/* Off-screen rather than display:none, which some bots skip. */}
-          <input
-            tabIndex={-1}
-            aria-hidden
-            autoComplete="off"
-            value={website}
-            onChange={(e) => setWebsite(e.target.value)}
-            name="website"
-            className="absolute -left-[9999px] h-0 w-0 opacity-0"
-          />
 
           {error && (
             <p role="alert" className="text-[13.5px] text-pf-danger">
