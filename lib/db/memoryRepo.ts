@@ -645,7 +645,9 @@ export function createMemoryRepo(file: string): Repo {
 
     async listCollectionOrders() {
       sync();
-      return [...data.collectionOrders].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      return [...data.collectionOrders]
+        .map((o) => ({ ...o, note: o.note ?? null }))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     },
 
     async setCollectionOrderStatus(id, status) {

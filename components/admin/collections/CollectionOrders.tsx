@@ -124,6 +124,11 @@ export function CollectionOrders({
                 <td className="px-4 py-3">
                   <span className="font-semibold text-pf-text">{o.setName}</span>
                   <span className="block text-[12px] text-pf-faint">{formatPrice(o.priceCents) ?? "—"}</span>
+                  {o.note && (
+                    <span className="mt-1 block max-w-[320px] whitespace-pre-wrap text-[12px] text-pf-muted">
+                      {o.note}
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <a

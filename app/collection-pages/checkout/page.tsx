@@ -16,7 +16,14 @@ export const metadata = { title: "Checkout — PageFly Design" };
 export const dynamic = "force-dynamic";
 
 export default async function CheckoutPage(props: PageProps<"/collection-pages/checkout">) {
-  const { set: raw } = await props.searchParams;
+  const { set: raw, request } = await props.searchParams;
+  if (request === "custom") {
+    return (
+      <CollectionShell>
+        <CheckoutForm set={null} />
+      </CollectionShell>
+    );
+  }
   const slug = Array.isArray(raw) ? raw[0] : raw;
   const record = slug ? await getRepo().getCollectionSetBySlug(slug).catch(() => null) : null;
 

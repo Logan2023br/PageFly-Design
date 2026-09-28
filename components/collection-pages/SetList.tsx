@@ -4,6 +4,7 @@ import Link from "next/link";
 import { pagesLabel, type PublicCollectionSet } from "@/lib/collectionPages";
 import { Icon } from "../ui";
 import { PageThumb } from "../landing/PagePreview";
+import { PromoCards } from "./PromoCards";
 import { SetAction } from "./SetAction";
 
 /* ==========================================================================
@@ -37,10 +38,6 @@ export function SetList({ sets }: { sets: PublicCollectionSet[] }) {
         </p>
       </div>
 
-      {sets.length === 0 && (
-        <p className="mt-12 text-[15px] text-pf-muted">No sets are published yet — check back soon.</p>
-      )}
-
       {free.length > 0 && (
         <Group
           eyebrow="Free to download"
@@ -50,15 +47,16 @@ export function SetList({ sets }: { sets: PublicCollectionSet[] }) {
         />
       )}
 
-      {paid.length > 0 && (
-        <Group
-          eyebrow="Premium templates"
-          title="Premium page sets"
-          sub="Fuller stores with more pages and more polish. Preview every page for free — when you buy, we check your order and send the files to your email."
-          sets={paid}
-          premium
-        />
-      )}
+      {/* Always drawn: with no premium set yet, the section still carries the
+          two ways to get a store that is not here. */}
+      <Group
+        eyebrow="Premium templates"
+        title="Premium page sets"
+        sub="Fuller stores with more pages and more polish. Preview every page for free — when you buy, we check your order and send the files to your email."
+        sets={paid}
+        premium
+        extra={<PromoCards />}
+      />
     </>
   );
 }
@@ -69,12 +67,15 @@ function Group({
   sub,
   sets,
   premium = false,
+  extra,
 }: {
   eyebrow: string;
   title: string;
   sub: string;
   sets: PublicCollectionSet[];
   premium?: boolean;
+  /** cards after the sets, in the same grid */
+  extra?: React.ReactNode;
 }) {
   return (
     <section className="mt-14 border-t border-pf-border pt-10 first-of-type:mt-12">
@@ -93,9 +94,11 @@ function Group({
           </h2>
           <p className="mt-2 text-[14.5px] leading-relaxed text-pf-muted">{sub}</p>
         </div>
-        <span className="text-[13px] font-medium text-pf-faint">
-          {sets.length} {sets.length === 1 ? "set" : "sets"}
-        </span>
+        {sets.length > 0 && (
+          <span className="text-[13px] font-medium text-pf-faint">
+            {sets.length} {sets.length === 1 ? "set" : "sets"}
+          </span>
+        )}
       </div>
 
       <ul className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -156,6 +159,7 @@ function Group({
             </div>
           </li>
         ))}
+        {extra}
       </ul>
     </section>
   );

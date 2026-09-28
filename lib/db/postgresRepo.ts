@@ -471,6 +471,8 @@ create table if not exists collection_orders (
   updated_at  timestamptz not null default now()
 );
 create index if not exists collection_orders_created on collection_orders (created_at desc);
+/* Custom-template requests arrived after the table did. */
+alter table collection_orders add column if not exists note text;
 `;
 
 /* The page columns WITHOUT the files — a size is all a listing needs. */
@@ -1314,9 +1316,9 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       await ready();
       await db.query(
         `insert into collection_orders
-           (id, set_id, set_slug, set_name, price_cents, domain, name, email, status, created_at, updated_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-        [o.id, o.setId, o.setSlug, o.setName, o.priceCents, o.domain, o.name, o.email, o.status, o.createdAt, o.updatedAt],
+           (id, set_id, set_slug, set_name, price_cents, domain, name, email, note, status, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [o.id, o.setId, o.setSlug, o.setName, o.priceCents, o.domain, o.name, o.email, o.note, o.status, o.createdAt, o.updatedAt],
       );
     },
 
@@ -1335,6 +1337,7 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
           domain: String(r.domain),
           name: String(r.name),
           email: String(r.email),
+          note: (r.note as string) ?? null,
           status: r.status === "confirmed" || r.status === "cancelled" ? r.status : "pending",
           createdAt: iso(r.created_at) ?? "",
           updatedAt: iso(r.updated_at) ?? "",

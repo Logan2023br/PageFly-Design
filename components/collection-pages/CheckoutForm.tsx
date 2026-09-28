@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { pagesLabel, type PublicCollectionSet } from "@/lib/collectionPages";
+import { CUSTOM_REQUEST, pagesLabel, type PublicCollectionSet } from "@/lib/collectionPages";
 import { Icon } from "../ui";
 import { PageThumb } from "../landing/PagePreview";
 
@@ -22,7 +22,13 @@ import { PageThumb } from "../landing/PagePreview";
 const FIELD =
   "w-full rounded-pf-md border border-pf-border bg-pf-bg-deep px-3.5 py-2.5 text-[14.5px] text-pf-text outline-none transition-colors placeholder:text-pf-faint focus:border-pf-primary-hi";
 
-export function CheckoutForm({ set }: { set: PublicCollectionSet }) {
+/**
+ * `set` is what is being bought; null is a custom-template request, which is
+ * the same form with one more field — what the buyer wants made.
+ */
+export function CheckoutForm({ set }: { set: PublicCollectionSet | null }) {
+  const custom = set === null;
+  const [note, setNote] = useState("");
   const [domain, setDomain] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -38,7 +44,13 @@ export function CheckoutForm({ set }: { set: PublicCollectionSet }) {
       const res = await fetch("/api/collection-pages/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ set: set.id, domain, name, email }),
+        body: JSON.stringify({
+          set: set?.id ?? CUSTOM_REQUEST.slug,
+          domain,
+          name,
+          email,
+          ...(custom ? { note } : {}),
+        }),
       });
       const body = (await res.json().catch(() => null)) as { ok: boolean; error?: string } | null;
       if (body?.ok) {
@@ -63,8 +75,17 @@ export function CheckoutForm({ set }: { set: PublicCollectionSet }) {
           We’ve received your details
         </h1>
         <p className="text-[15.5px] leading-relaxed text-pf-muted">
-          Thank you for choosing <span className="font-semibold text-pf-text">{set.name}</span>. We
-          will check your order and send a confirmation email to{" "}
+          {set ? (
+            <>
+              Thank you for choosing <span className="font-semibold text-pf-text">{set.name}</span>.
+              We will check your order and send a confirmation email to{" "}
+            </>
+          ) : (
+            <>
+              Thank you for your template request. We will review it and send a confirmation email
+              with the next steps to{" "}
+            </>
+          )}
           <span className="font-semibold text-pf-text">{email}</span>.
         </p>
         <p className="text-[13.5px] text-pf-faint">
@@ -84,19 +105,20 @@ export function CheckoutForm({ set }: { set: PublicCollectionSet }) {
   return (
     <>
       <Link
-        href={`/collection-pages/${set.id}`}
+        href={set ? `/collection-pages/${set.id}` : "/collection-pages"}
         className="inline-flex items-center gap-1.5 text-[13.5px] font-medium text-pf-muted transition-colors hover:text-pf-text"
       >
         <Icon name="ArrowLeft" size={14} />
-        Back to {set.name}
+        {set ? `Back to ${set.name}` : "Back to all sets"}
       </Link>
 
       <h1 className="mt-6 font-display text-[32px] font-bold leading-[1.1] tracking-[-0.02em] text-pf-text sm:text-[40px]">
-        Checkout
+        {set ? "Checkout" : "Pre-order a template"}
       </h1>
 
       <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         {/* ---- the item ---- */}
+        {set ? (
         <div className="overflow-hidden rounded-pf-card border border-pf-warn/25 bg-pf-card shadow-pf-card">
           {set.pages[0] && (
             <span className="relative block aspect-[4/3] overflow-hidden">
@@ -130,6 +152,9 @@ export function CheckoutForm({ set }: { set: PublicCollectionSet }) {
             </p>
           </div>
         </div>
+        ) : (
+          <CustomSummary />
+        )}
 
         {/* ---- the form ---- */}
         <form
@@ -142,6 +167,21 @@ export function CheckoutForm({ set }: { set: PublicCollectionSet }) {
               Tell us where the pages should go and how to reach you.
             </p>
           </div>
+
+          {custom && (
+            <label className="grid gap-1.5">
+              <span className="text-[13px] font-semibold text-pf-body">The template you want</span>
+              <textarea
+                required
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                rows={5}
+                maxLength={2000}
+                placeholder="What you sell, the look you are after, the pages you need — and a store or two you like, if you have them."
+                className={`${FIELD} resize-y`}
+              />
+            </label>
+          )}
 
           <label className="grid gap-1.5">
             <span className="text-[13px] font-semibold text-pf-body">Store domain</span>
@@ -196,13 +236,62 @@ export function CheckoutForm({ set }: { set: PublicCollectionSet }) {
             disabled={state === "sending"}
             className="inline-flex min-h-12 items-center justify-center gap-2 rounded-pf-md bg-pf-primary px-6 text-[15px] font-semibold text-white shadow-pf-button transition-colors hover:bg-pf-primary-hi disabled:opacity-60"
           >
-            {state === "sending" ? "Sending…" : `Confirm order${set.price ? ` · ${set.price}` : ""}`}
+            {state === "sending"
+              ? "Sending…"
+              : set
+                ? `Confirm order${set.price ? ` · ${set.price}` : ""}`
+                : "Send my request"}
           </button>
           <p className="-mt-2 text-center text-[12.5px] text-pf-faint">
-            Nothing is charged now. We will review your order and email you the next steps.
+            {set
+              ? "Nothing is charged now. We will review your order and email you the next steps."
+              : "Nothing is charged now. We will reply with a quote and a delivery date."}
           </p>
         </form>
       </div>
     </>
+  );
+}
+
+/** The left column of a custom request: what the buyer is asking for. */
+function CustomSummary() {
+  const steps = [
+    ["MessageSquare", "Tell us the store", "What you sell, the style, and the pages you need."],
+    ["Mail", "We reply with a quote", "A price and a date, sent to the email you give us."],
+    ["Package", "Get your page set", "Delivered as PageFly files, ready to import."],
+  ] as const;
+  return (
+    <div className="relative overflow-hidden rounded-pf-card border border-pf-warn/25 bg-pf-card p-6 shadow-pf-card">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-16 -top-16 size-64 rounded-full bg-pf-warn/15 blur-3xl"
+      />
+      <p className="relative flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-pf-warn">
+        <Icon name="Sparkles" size={12} />
+        Made to order
+      </p>
+      <h2 className="relative mt-2 font-display text-[22px] font-bold text-pf-text">
+        A template built for your store
+      </h2>
+      <p className="relative mt-2 text-[14px] leading-relaxed text-pf-muted">
+        Don’t see the look you want? Describe it and our designers will build a full page set to
+        match — same quality as the premium sets above.
+      </p>
+      <ol className="relative mt-6 grid gap-4">
+        {steps.map(([icon, title, body], i) => (
+          <li key={title} className="flex gap-3">
+            <span className="grid size-9 shrink-0 place-items-center rounded-pf-md border border-pf-warn/30 bg-pf-warn/10 text-pf-warn">
+              <Icon name={icon} size={16} />
+            </span>
+            <span>
+              <span className="block text-[14px] font-semibold text-pf-text">
+                {i + 1}. {title}
+              </span>
+              <span className="block text-[13px] text-pf-faint">{body}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }

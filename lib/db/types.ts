@@ -692,6 +692,8 @@ export type CollectionOrderRecord = {
   domain: string;
   name: string;
   email: string;
+  /** a custom-template request says what it wants here; a set order has none */
+  note: string | null;
   status: CollectionOrderStatus;
   createdAt: string;
   updatedAt: string;

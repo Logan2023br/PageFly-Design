@@ -26,7 +26,7 @@ export const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /* `checkout` is a page of its own: /collection-pages/checkout. A set with that
    URL would be unreachable behind it. */
-export const RESERVED_SET_SLUGS = new Set(["checkout"]);
+export const RESERVED_SET_SLUGS = new Set(["checkout", "custom"]);
 
 /* `all` is the whole-set download: `/api/collection-pages/<set>/all.pagefly`. */
 export const RESERVED_PAGE_SLUGS = new Set(["all"]);
@@ -65,6 +65,10 @@ export function formatPrice(cents: number | null): string | null {
 
 /** "1 page", "7 pages". */
 export const pagesLabel = (n: number) => `${n} ${n === 1 ? "page" : "pages"}`;
+
+/** The custom-template request: an order with no set behind it. */
+export const CUSTOM_REQUEST = { slug: "custom", name: "Custom template request" } as const;
+export const customRequestUrl = "/collection-pages/checkout?request=custom";
 
 /** Where a paid set's Buy button goes. */
 export const checkoutUrl = (setSlug: string) =>
