@@ -36,6 +36,11 @@ import { AccessBadge, FIELD, FIELD_LABEL, Segmented, VisibilityBadge, api } from
 
 type Upload = { key: string; name: string; state: "waiting" | "sending" | "done" | "failed"; error?: string };
 
+/** The kind a file name says it is, by extension alone — what a drop onto one
+    page's box needs, since there the name no longer has to match the page. */
+const kindOf = (name: string): CollectionFileKind | null =>
+  /\.pagefly$/i.test(name) ? "pagefly" : /\.html?$/i.test(name) ? "html" : null;
+
 const toPrice = (cents: number | null) => (cents === null ? "" : String(cents / 100));
 
 export function CollectionSetEditor({ initial }: { initial: CollectionSetRecord }) {
@@ -111,7 +116,7 @@ export function CollectionSetEditor({ initial }: { initial: CollectionSetRecord 
       const read = forced ?? readFileName(file.name);
       if (!read) {
         rejected.push({ key, name: file.name, state: "failed", error: "Only .html and .pagefly files." });
-      } else if (forced && readFileName(file.name)?.kind !== forced.kind) {
+      } else if (forced && kindOf(file.name) !== forced.kind) {
         rejected.push({ key, name: file.name, state: "failed", error: `Expected a .${forced.kind} file.` });
       } else if (file.size > MAX_FILE_BYTES) {
         rejected.push({ key, name: file.name, state: "failed", error: "Over 4 MB." });
@@ -180,6 +185,16 @@ export function CollectionSetEditor({ initial }: { initial: CollectionSetRecord 
     return res.ok;
   };
 
+  const [adding, setAdding] = useState(false);
+  const [newLabel, setNewLabel] = useState("");
+  const addPage = async () => {
+    if (!newLabel.trim()) return;
+    if (await pageCall("new", { method: "POST", body: JSON.stringify({ label: newLabel }) })) {
+      setNewLabel("");
+      setAdding(false);
+    }
+  };
+
   const movePage = (at: number, by: -1 | 1) => {
     const ids = set.pages.map((p) => p.id);
     const to = at + by;
@@ -245,9 +260,14 @@ export function CollectionSetEditor({ initial }: { initial: CollectionSetRecord 
                 {previewable} with a preview · {downloadable} with a .pagefly · the order here is the order on the public page
               </p>
             </div>
-            <Button icon="Upload" size="sm" onClick={() => pick(null)}>
-              Add files
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" icon="Plus" size="sm" onClick={() => setAdding(true)}>
+                New page
+              </Button>
+              <Button icon="Upload" size="sm" onClick={() => pick(null)}>
+                Add files
+              </Button>
+            </div>
           </div>
 
           <input
@@ -277,10 +297,36 @@ export function CollectionSetEditor({ initial }: { initial: CollectionSetRecord 
               Drop .html and .pagefly files here
             </span>
             <span className="text-[12px] text-pf-faint">
-              Paired by name — <code>home.html</code> + <code>home.pagefly</code> is one page. A name
-              that matches a page replaces its file. Up to 4 MB each.
+              Here, files are paired by name — <code>home.html</code> + <code>home.pagefly</code> is
+              one page. Names that differ? Drop each file into its box on the page instead. Up to 4 MB
+              each.
             </span>
           </button>
+
+          {adding && (
+            <Panel className="flex flex-wrap items-center gap-2 p-3">
+              <input
+                autoFocus
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void addPage();
+                  if (e.key === "Escape") setAdding(false);
+                }}
+                placeholder="Page name, e.g. Home"
+                className={`${FIELD} min-w-0 flex-1`}
+              />
+              <Button size="sm" onClick={() => void addPage()} disabled={!newLabel.trim() || busyPage === "new"}>
+                {busyPage === "new" ? "Adding…" : "Add page"}
+              </Button>
+              <Button size="sm" variant="quiet" onClick={() => setAdding(false)}>
+                Cancel
+              </Button>
+              <p className="basis-full text-[12px] text-pf-faint">
+                Then drop its .html and .pagefly into the two boxes on the page — any file name works there.
+              </p>
+            </Panel>
+          )}
 
           {uploads.length > 0 && (
             <Panel className="grid gap-1 p-3">
@@ -335,6 +381,7 @@ export function CollectionSetEditor({ initial }: { initial: CollectionSetRecord 
                 onMove={(by) => movePage(at, by)}
                 onDelete={() => removePage(page)}
                 onReplace={(kind) => pick({ slug: page.slug, kind })}
+                onDropFile={(kind, files) => void send(files.slice(0, 1), { slug: page.slug, kind })}
                 onSave={(patch) =>
                   pageCall(page.id, {
                     method: "PATCH",
@@ -504,6 +551,7 @@ function PageRow({
   onMove,
   onDelete,
   onReplace,
+  onDropFile,
   onSave,
 }: {
   setSlug: string;
@@ -515,6 +563,7 @@ function PageRow({
   onMove: (by: -1 | 1) => void;
   onDelete: () => void;
   onReplace: (kind: CollectionFileKind) => void;
+  onDropFile: (kind: CollectionFileKind, files: File[]) => void;
   onSave: (patch: Partial<Pick<CollectionPageMeta, "label" | "slug" | "blurb">>) => Promise<boolean>;
 }) {
   const [label, setLabel] = useState(page.label);
@@ -578,6 +627,18 @@ function PageRow({
           <button
             type="button"
             onClick={() => onReplace("html")}
+            /* The empty preview is a drop target too — it is where the eye
+               goes looking for "put the page here". */
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const files = Array.from(e.dataTransfer.files);
+              if (files.length) onDropFile("html", files);
+            }}
             className="grid aspect-[3/4] w-[88px] shrink-0 place-items-center rounded-pf-md border border-dashed border-pf-border px-2 text-center text-[11px] text-pf-faint transition-colors hover:border-pf-border-hi hover:text-pf-text"
           >
             Add an .html preview
@@ -616,13 +677,20 @@ function PageRow({
             aria-label="Page description"
             className={FIELD}
           />
-          <div className="flex flex-wrap items-center gap-1.5">
-            <FileChip kind="html" size={page.htmlSize} onReplace={() => onReplace("html")} note="not shown" />
-            <FileChip
+          <div className="grid gap-2 sm:grid-cols-2">
+            <FileZone
+              kind="html"
+              size={page.htmlSize}
+              missing="Not shown until it has one"
+              onPick={() => onReplace("html")}
+              onDrop={(files) => onDropFile("html", files)}
+            />
+            <FileZone
               kind="pagefly"
               size={page.pageflySize}
-              onReplace={() => onReplace("pagefly")}
-              note={free ? "no download" : "none held"}
+              missing={free ? "Nothing to download yet" : "No file held for buyers"}
+              onPick={() => onReplace("pagefly")}
+              onDrop={(files) => onDropFile("pagefly", files)}
             />
           </div>
         </div>
@@ -640,33 +708,75 @@ function PageRow({
   );
 }
 
-function FileChip({
+/* ==========================================================================
+   ONE FILE OF ONE PAGE — a box it can be dropped into.
+
+   THE BOX DECIDES WHERE THE FILE GOES, NOT ITS NAME. Dropping on the list
+   pairs files by name; dropping here attaches the file to this page whatever
+   it is called, because an export named `export-pages-2026-9-28.pagefly` and a
+   preview named `velvetcrypt-home.html` are the same page and nothing in their
+   names says so. The drop stops here, so the list does not also take it.
+   ========================================================================== */
+function FileZone({
   kind,
   size,
-  onReplace,
-  note,
+  missing,
+  onPick,
+  onDrop,
 }: {
   kind: CollectionFileKind;
   size: number | null;
-  onReplace: () => void;
-  /** what a missing file costs, said on the chip */
-  note: string;
+  /** what a missing file costs */
+  missing: string;
+  onPick: () => void;
+  onDrop: (files: File[]) => void;
 }) {
+  const [over, setOver] = useState(false);
   const has = size !== null;
+  const name = kind === "html" ? "HTML preview" : ".pagefly file";
+
   return (
     <button
       type="button"
-      onClick={onReplace}
-      title={has ? `Replace the .${kind}` : `Upload the .${kind}`}
-      className={`group inline-flex items-center gap-1.5 rounded-pf-pill border px-2.5 py-1 text-[11.5px] font-medium transition-colors ${
-        has
-          ? "border-pf-border text-pf-muted hover:border-pf-border-hi hover:text-pf-text"
-          : "border-pf-warn/40 text-pf-warn hover:bg-pf-warn/10"
+      onClick={onPick}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setOver(true);
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setOver(false);
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length) onDrop(files);
+      }}
+      title={has ? `Drop or choose a file to replace the ${name}` : `Drop or choose the ${name}`}
+      className={`flex items-center gap-2.5 rounded-pf-md border px-3 py-2.5 text-left transition-colors ${
+        over
+          ? "border-pf-primary-hi bg-pf-primary/15"
+          : has
+            ? "border-pf-border bg-pf-bg-deep hover:border-pf-border-hi"
+            : "border-dashed border-pf-warn/50 bg-pf-warn/5 hover:bg-pf-warn/10"
       }`}
     >
-      <Icon name={has ? (kind === "html" ? "FileText" : "Package") : "CircleAlert"} size={12} />
-      .{kind} · {has ? formatBytes(size) : `missing — ${note}`}
-      <span className="hidden text-pf-primary-hi group-hover:inline">{has ? "Replace" : "Upload"}</span>
+      <span
+        className={`grid size-8 shrink-0 place-items-center rounded-pf-sm ${
+          has ? "bg-pf-success/10 text-pf-success" : "bg-pf-warn/10 text-pf-warn"
+        }`}
+      >
+        <Icon name={over ? "Upload" : has ? (kind === "html" ? "FileText" : "Package") : "Upload"} size={15} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[12.5px] font-semibold text-pf-text">
+          {name}
+          {has && <span className="ml-1.5 font-normal text-pf-faint">{formatBytes(size)}</span>}
+        </span>
+        <span className={`block truncate text-[11.5px] ${has ? "text-pf-faint" : "text-pf-warn"}`}>
+          {over ? "Drop to upload" : has ? "Drop a new file to replace" : `Drop .${kind} here · ${missing}`}
+        </span>
+      </span>
     </button>
   );
 }

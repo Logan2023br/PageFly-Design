@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { RESERVED_PAGE_SLUGS, slugify } from "@/lib/collectionPages";
+import { newId } from "@/lib/collectionPagesServer";
 import { getRepo } from "@/lib/db";
 import type { CollectionSetResponse } from "../route";
 import { fail, failFrom, firstIssue, guard, pageSlug } from "../../shared";
@@ -6,6 +8,7 @@ import { fail, failFrom, firstIssue, guard, pageSlug } from "../../shared";
 /* ==========================================================================
    /api/admin/collection-pages/<id>/pages
 
+   POST    a new, empty page — its files are dropped onto it after  { label }
    PATCH   one page's label, blurb or URL          { page, slug, label, blurb }
    PUT     the order of the pages                   { ids }
    DELETE  one page and both its files              ?page=<pageId>
@@ -49,6 +52,40 @@ export async function PATCH(request: Request, ctx: Ctx) {
       label: parsed.data.label,
       blurb: parsed.data.blurb,
       position: page.position,
+    });
+  } catch (err) {
+    return failFrom(err);
+  }
+  return answer(id);
+}
+
+export async function POST(request: Request, ctx: Ctx) {
+  const denied = await guard();
+  if (denied) return denied;
+  const { id } = await ctx.params;
+  const parsed = z
+    .object({ label: z.string().trim().min(1, "The page name is empty.").max(60) })
+    .safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return fail(firstIssue(parsed.error));
+
+  const repo = getRepo();
+  const set = await repo.getCollectionSet(id);
+  if (!set) return fail("That set no longer exists.", 404);
+
+  /* A free URL from the name: `about`, then `about-2`, `about-3`… so adding a
+     second page with a name already used is not an error to fix first. */
+  const base = slugify(parsed.data.label) || "page";
+  const taken = new Set(set.pages.map((p) => p.slug));
+  let slug = RESERVED_PAGE_SLUGS.has(base) ? `${base}-page` : base;
+  for (let n = 2; taken.has(slug); n++) slug = `${base}-${n}`;
+
+  try {
+    await repo.saveCollectionPage(id, {
+      id: newId(),
+      slug,
+      label: parsed.data.label,
+      blurb: "",
+      position: Math.max(0, ...set.pages.map((p) => p.position)) + 1,
     });
   } catch (err) {
     return failFrom(err);
