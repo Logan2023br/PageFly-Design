@@ -10,12 +10,14 @@ import type {
   RunRecord,
   StoreRecord,
   StoreSummary,
+  CollectionPageMeta,
+  CollectionSetRecord,
   TrainingImage,
   TrainingSection,
   TrainingSectionSummary,
   TrainingSummary,
 } from "./types";
-import { REGISTER_USER_TYPE } from "./types";
+import { CollectionSlugTakenError, REGISTER_USER_TYPE } from "./types";
 import type { ModelSpendRow, StoreFilter } from "./types";
 
 /* ==========================================================================
@@ -422,7 +424,77 @@ update training_items
        from jsonb_array_elements_text(images) as v
    )
  where jsonb_array_length(images) > 0 and jsonb_typeof(images -> 0) = 'string';
+
+/* The sets on /collection-pages. Pages carry their two files in the row — see
+   CollectionSetRecord — and go with their set. */
+create table if not exists collection_sets (
+  id          text primary key,
+  slug        text not null unique,
+  name        text not null,
+  blurb       text not null default '',
+  visible     boolean not null default true,
+  access      text not null default 'free',
+  price_cents integer,
+  buy_url     text,
+  position    integer not null default 0,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+create table if not exists collection_pages (
+  set_id     text not null references collection_sets (id) on delete cascade,
+  id         text not null,
+  slug       text not null,
+  label      text not null,
+  blurb      text not null default '',
+  position   integer not null default 0,
+  html       bytea,
+  pagefly    bytea,
+  updated_at timestamptz not null default now(),
+  primary key (set_id, id),
+  unique (set_id, slug)
+);
 `;
+
+/* The page columns WITHOUT the files — a size is all a listing needs. */
+const COLLECTION_PAGE_SELECT = `select set_id, id, slug, label, blurb, position, updated_at,
+  octet_length(html) as html_size, octet_length(pagefly) as pagefly_size
+  from collection_pages`;
+
+function toCollectionSet(
+  r: Record<string, unknown>,
+  pages: Record<string, unknown>[],
+): CollectionSetRecord {
+  const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : String(v ?? ""));
+  const size = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+  return {
+    id: String(r.id),
+    slug: String(r.slug),
+    name: String(r.name),
+    blurb: String(r.blurb ?? ""),
+    visible: Boolean(r.visible),
+    access: r.access === "paid" ? "paid" : "free",
+    priceCents: r.price_cents === null || r.price_cents === undefined ? null : Number(r.price_cents),
+    buyUrl: (r.buy_url as string) ?? null,
+    position: Number(r.position ?? 0),
+    createdAt: iso(r.created_at),
+    updatedAt: iso(r.updated_at),
+    pages: pages
+      .filter((p) => String(p.set_id) === String(r.id))
+      .map(
+        (p): CollectionPageMeta => ({
+          id: String(p.id),
+          slug: String(p.slug),
+          label: String(p.label),
+          blurb: String(p.blurb ?? ""),
+          position: Number(p.position ?? 0),
+          htmlSize: size(p.html_size),
+          pageflySize: size(p.pagefly_size),
+          updatedAt: iso(p.updated_at),
+        }),
+      ),
+  };
+}
 
 /**
  * Builds the driver.
@@ -1085,6 +1157,140 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
         [id],
       );
       return (rowCount ?? 0) > 0;
+    },
+
+    /* ---- collection pages ---- */
+    async listCollectionSets() {
+      await ready();
+      const [sets, pages] = await Promise.all([
+        db.query(`select * from collection_sets order by position, created_at`),
+        db.query(COLLECTION_PAGE_SELECT + ` order by position, updated_at`),
+      ]);
+      return sets.rows.map((r) => toCollectionSet(r, pages.rows));
+    },
+
+    async getCollectionSet(id) {
+      await ready();
+      const { rows } = await db.query(`select * from collection_sets where id = $1`, [id]);
+      if (!rows[0]) return null;
+      const pages = await db.query(
+        COLLECTION_PAGE_SELECT + ` where set_id = $1 order by position, updated_at`,
+        [id],
+      );
+      return toCollectionSet(rows[0], pages.rows);
+    },
+
+    async getCollectionSetBySlug(slug) {
+      await ready();
+      const { rows } = await db.query(`select * from collection_sets where slug = $1`, [slug]);
+      if (!rows[0]) return null;
+      const pages = await db.query(
+        COLLECTION_PAGE_SELECT + ` where set_id = $1 order by position, updated_at`,
+        [rows[0].id],
+      );
+      return toCollectionSet(rows[0], pages.rows);
+    },
+
+    async saveCollectionSet(set) {
+      await ready();
+      try {
+        await db.query(
+          `insert into collection_sets
+             (id, slug, name, blurb, visible, access, price_cents, buy_url, position)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           on conflict (id) do update set
+             slug = excluded.slug, name = excluded.name, blurb = excluded.blurb,
+             visible = excluded.visible, access = excluded.access,
+             price_cents = excluded.price_cents, buy_url = excluded.buy_url,
+             position = excluded.position, updated_at = now()`,
+          [
+            set.id, set.slug, set.name, set.blurb, set.visible, set.access,
+            set.priceCents, set.buyUrl, set.position,
+          ],
+        );
+      } catch (err) {
+        /* 23505 is a unique violation, and the only unique column besides the
+           key is the slug. */
+        if ((err as { code?: string }).code === "23505") throw new CollectionSlugTakenError(set.slug);
+        throw err;
+      }
+    },
+
+    async deleteCollectionSet(id) {
+      await ready();
+      const { rowCount } = await db.query(`delete from collection_sets where id = $1`, [id]);
+      return (rowCount ?? 0) > 0;
+    },
+
+    async orderCollectionSets(ids) {
+      await ready();
+      await db.query(
+        `update collection_sets s set position = o.i
+           from unnest($1::text[]) with ordinality as o(id, i)
+          where s.id = o.id`,
+        [ids],
+      );
+    },
+
+    async saveCollectionPage(setId, page) {
+      await ready();
+      try {
+        await db.query(
+          `insert into collection_pages (set_id, id, slug, label, blurb, position)
+           values ($1,$2,$3,$4,$5,$6)
+           on conflict (set_id, id) do update set
+             slug = excluded.slug, label = excluded.label, blurb = excluded.blurb,
+             position = excluded.position, updated_at = now()`,
+          [setId, page.id, page.slug, page.label, page.blurb, page.position],
+        );
+      } catch (err) {
+        if ((err as { code?: string }).code === "23505") throw new CollectionSlugTakenError(page.slug);
+        throw err;
+      }
+      await db.query(`update collection_sets set updated_at = now() where id = $1`, [setId]);
+    },
+
+    async deleteCollectionPage(setId, pageId) {
+      await ready();
+      const { rowCount } = await db.query(
+        `delete from collection_pages where set_id = $1 and id = $2`,
+        [setId, pageId],
+      );
+      await db.query(`update collection_sets set updated_at = now() where id = $1`, [setId]);
+      return (rowCount ?? 0) > 0;
+    },
+
+    async orderCollectionPages(setId, ids) {
+      await ready();
+      await db.query(
+        `update collection_pages p set position = o.i
+           from unnest($2::text[]) with ordinality as o(id, i)
+          where p.set_id = $1 and p.id = o.id`,
+        [setId, ids],
+      );
+    },
+
+    async putCollectionFile(setId, pageId, kind, bytes) {
+      await ready();
+      /* The column name is chosen from a closed union, never from input. */
+      const column = kind === "html" ? "html" : "pagefly";
+      await db.query(
+        `update collection_pages set ${column} = $3, updated_at = now()
+          where set_id = $1 and id = $2`,
+        [setId, pageId, Buffer.from(bytes)],
+      );
+      await db.query(`update collection_sets set updated_at = now() where id = $1`, [setId]);
+    },
+
+    async getCollectionFile(setId, pageId, kind) {
+      await ready();
+      const column = kind === "html" ? "html" : "pagefly";
+      const { rows } = await db.query(
+        `select ${column} as bytes from collection_pages where set_id = $1 and id = $2`,
+        [setId, pageId],
+      );
+      const bytes = rows[0]?.bytes as Buffer | null | undefined;
+      return bytes ? new Uint8Array(bytes) : null;
     },
 
     async createJob(job) {

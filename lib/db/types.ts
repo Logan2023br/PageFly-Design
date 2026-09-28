@@ -608,6 +608,73 @@ export type TrainingSectionSummary = {
  * a grid of cards needs exactly one image per card to draw. The full set is
  * fetched for the one reference being opened.
  */
+/* ==========================================================================
+   COLLECTION PAGES — the sets on /collection-pages, managed from admin.
+
+   A set is one store's worth of pages; each page is PageFly's own preview HTML
+   and the .pagefly it is a picture of. Both files live in the row, for the
+   reason Training Design gives: this app runs on two drivers and a disk that
+   is not part of the deploy, and a row that carries its own files cannot be
+   separated from them.
+
+   THE LISTING NEVER CARRIES THE BYTES. Sizes only — a set's page is drawn
+   from metadata and each file is fetched by its own URL, so a list of twenty
+   sets does not read twenty megabytes to draw twenty cards.
+   ========================================================================== */
+
+export type CollectionFileKind = "html" | "pagefly";
+
+export type CollectionPageMeta = {
+  /** internal and stable; the slug can be renamed without breaking a reference */
+  id: string;
+  /** url-safe, unique within its set: `/api/collection-pages/<set>/<slug>.html` */
+  slug: string;
+  label: string;
+  blurb: string;
+  position: number;
+  /** bytes, or null when that file has not been uploaded */
+  htmlSize: number | null;
+  pageflySize: number | null;
+  updatedAt: string;
+};
+
+export type CollectionSetRecord = {
+  id: string;
+  /** url-safe, unique: `/collection-pages/<slug>` */
+  slug: string;
+  name: string;
+  blurb: string;
+  /** false keeps it off the public page; an admin can still preview it */
+  visible: boolean;
+  /**
+   * FREE is downloadable by anyone. PAID shows every preview and hands over no
+   * file: the button goes to `buyUrl`, and the file routes refuse. There is no
+   * checkout in this app, so the sale happens wherever that link points.
+   */
+  access: "free" | "paid";
+  /** whole cents, so a price is never a float */
+  priceCents: number | null;
+  buyUrl: string | null;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+  pages: CollectionPageMeta[];
+};
+
+/** What an admin edits on a set; the pages are edited on their own. */
+export type CollectionSetInput = Omit<CollectionSetRecord, "createdAt" | "updatedAt" | "pages">;
+
+/** Thrown by either driver when a slug is already used, so a route can say
+    which field is wrong instead of answering 500. */
+export class CollectionSlugTakenError extends Error {
+  constructor(slug: string) {
+    super(`The URL "${slug}" is already used.`);
+    this.name = "CollectionSlugTakenError";
+  }
+}
+
+export type CollectionPageInput = Omit<CollectionPageMeta, "htmlSize" | "pageflySize" | "updatedAt">;
+
 export type TrainingSummary = {
   id: string;
   vertical: string;
@@ -717,6 +784,33 @@ export type Repo = {
   ): Promise<TrainingSection | null>;
   saveTrainingSection(item: TrainingSection): Promise<void>;
   deleteTrainingSection(id: string): Promise<boolean>;
+
+  /* ---- collection pages ---- */
+  /** every set, ordered, with page metadata and no file bytes */
+  listCollectionSets(): Promise<CollectionSetRecord[]>;
+  getCollectionSet(id: string): Promise<CollectionSetRecord | null>;
+  getCollectionSetBySlug(slug: string): Promise<CollectionSetRecord | null>;
+  /** insert or update by id; throws on a slug another set already has */
+  saveCollectionSet(set: CollectionSetInput): Promise<void>;
+  /** its pages and their files go with it */
+  deleteCollectionSet(id: string): Promise<boolean>;
+  /** rewrites `position` to the order given; ids not listed keep theirs */
+  orderCollectionSets(ids: string[]): Promise<void>;
+  /** insert or update a page's metadata, leaving its files alone */
+  saveCollectionPage(setId: string, page: CollectionPageInput): Promise<void>;
+  deleteCollectionPage(setId: string, pageId: string): Promise<boolean>;
+  orderCollectionPages(setId: string, ids: string[]): Promise<void>;
+  putCollectionFile(
+    setId: string,
+    pageId: string,
+    kind: CollectionFileKind,
+    bytes: Uint8Array,
+  ): Promise<void>;
+  getCollectionFile(
+    setId: string,
+    pageId: string,
+    kind: CollectionFileKind,
+  ): Promise<Uint8Array | null>;
 
   /* ---- stock photos ---- */
   getPhotos(queries: string[]): Promise<PhotoRecord[]>;

@@ -14,7 +14,7 @@ import { Icon } from "../ui";
    between the two should not feel like they changed products.
    ========================================================================== */
 
-export type AdminSection = "stats" | "users" | "analytics" | "training";
+export type AdminSection = "stats" | "users" | "analytics" | "training" | "collections";
 
 const NAV: { id: AdminSection; label: string; href: string; icon: IconName }[] = [
   { id: "stats", label: "Thống kê", href: "/design/admin", icon: "ChartColumn" },
@@ -33,6 +33,12 @@ const NAV: { id: AdminSection; label: string; href: string; icon: IconName }[] =
     label: "Training Design",
     href: "/design/admin/training",
     icon: "Images",
+  },
+  {
+    id: "collections",
+    label: "Collection pages",
+    href: "/design/admin/collections",
+    icon: "LayoutGrid",
   },
 ];
 

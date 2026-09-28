@@ -1,16 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { SHOWCASE_SETS } from "@/lib/showcasePages";
+import type { PublicCollectionSet } from "@/lib/collectionPages";
 import { Icon } from "../ui";
 import { PageThumb } from "../landing/PagePreview";
-import { ExportSet } from "../landing/Showcase";
-
-/* Over the card's picture, so it is the first thing on the card — and a sibling
-   of the card's link rather than inside it, since a button inside an <a> is
-   invalid and a press on it would also navigate. */
-const DOWNLOAD =
-  "inline-flex items-center gap-1.5 rounded-pf-md bg-pf-primary px-3 py-2 text-[12.5px] font-semibold text-white shadow-pf-button transition-colors hover:bg-pf-primary-hi disabled:opacity-60";
+import { SetAction } from "./SetAction";
 
 /* ==========================================================================
    EVERY SET, ONE CARD EACH.
@@ -19,7 +13,7 @@ const DOWNLOAD =
    merchant would meet the store by — and the chips under it name the rest, so
    what pressing it opens is stated before it is pressed.
    ========================================================================== */
-export function SetList() {
+export function SetList({ sets }: { sets: PublicCollectionSet[] }) {
   return (
     <>
       <div className="max-w-[720px]">
@@ -35,8 +29,12 @@ export function SetList() {
         </p>
       </div>
 
+      {sets.length === 0 && (
+        <p className="mt-12 text-[15px] text-pf-muted">No sets are published yet — check back soon.</p>
+      )}
+
       <ul className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {SHOWCASE_SETS.map((set) => (
+        {sets.map((set) => (
           <li key={set.id} className="relative">
             <Link
               href={`/collection-pages/${set.id}`}
@@ -55,6 +53,7 @@ export function SetList() {
                     {set.name}
                   </span>
                   <span className="shrink-0 text-[12px] font-medium text-pf-faint">
+                    {set.access === "paid" ? `${set.price ?? "Paid"} · ` : "Free · "}
                     {set.pages.length} pages
                   </span>
                 </span>
@@ -73,13 +72,11 @@ export function SetList() {
                 </span>
               </span>
             </Link>
+            {/* Over the card's picture, and a sibling of the card's link
+                rather than inside it: a link inside a link is invalid, and a
+                press on it would also navigate. */}
             <div className="absolute right-3 top-3 z-10">
-              <ExportSet
-                set={set}
-                from="collection_pages"
-                label={`Download free · ${set.pages.length} pages`}
-                className={DOWNLOAD}
-              />
+              <SetAction set={set} />
             </div>
           </li>
         ))}

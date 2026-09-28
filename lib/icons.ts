@@ -5,6 +5,7 @@
 
 import {
   ArrowDown,
+  ArrowUp,
   ArrowLeft,
   ArrowLeftRight,
   ArrowRight,
@@ -29,6 +30,7 @@ import {
   Crosshair,
   Download,
   Eye,
+  EyeOff,
   FileText,
   Files,
   Filter,
@@ -101,6 +103,7 @@ import {
 
 export const ICONS = {
   ArrowDown,
+  ArrowUp,
   ArrowLeft,
   ArrowLeftRight,
   ArrowRight,
@@ -125,6 +128,7 @@ export const ICONS = {
   Crosshair,
   Download,
   Eye,
+  EyeOff,
   FileText,
   Files,
   Filter,

@@ -47,6 +47,16 @@ export type ShowcasePage = {
   label: string;
   /** one line, shown under the card and in the viewer's toolbar */
   blurb: string;
+  /**
+   * Where the preview HTML is, when it is not under `public/showcase/`.
+   *
+   * The sets on /collection-pages are uploaded in admin and served from the
+   * database, so their files have a route rather than a path — and the thumb
+   * and the viewer are the same either way.
+   */
+  src?: string;
+  /** the .pagefly, likewise; null when it is not handed over (a paid set) */
+  file?: string | null;
 };
 
 export type ShowcaseSet = {
@@ -199,10 +209,10 @@ export const HERO_RAIL_PAGES: ShowcasePage[] = RAIL_SLUGS.flatMap(
 
 /** Where the rendered preview lives, under `public/`. */
 export function htmlFor(set: ShowcaseSet, page: ShowcasePage): string {
-  return `/showcase/${set.id}/${page.slug}.html`;
+  return page.src ?? `/showcase/${set.id}/${page.slug}.html`;
 }
 
 /** Where the importable file lives, under `public/`. */
 export function pageflyFor(set: ShowcaseSet, page: ShowcasePage): string {
-  return `/showcase/${set.id}/${page.slug}.pagefly`;
+  return page.file ?? `/showcase/${set.id}/${page.slug}.pagefly`;
 }

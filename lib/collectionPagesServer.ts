@@ -1,0 +1,138 @@
+import "server-only";
+
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { unzipSync } from "fflate";
+import { labelFromSlug } from "./collectionPages";
+import { getRepo } from "./db";
+import type { CollectionFileKind, CollectionSetRecord } from "./db/types";
+import { SHOWCASE_SETS } from "./showcasePages";
+
+/* ==========================================================================
+   Collection pages, the server half: what a file must be to be stored, and
+   the import of the three sets that ship in the repository.
+   ========================================================================== */
+
+export const newId = () => crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+
+/**
+ * Why these bytes are not the file they claim to be, or null when they are.
+ *
+ * Checked on the way IN, because the failure otherwise surfaces far from its
+ * cause: a .pagefly that is not a zip uploads fine and breaks a merchant's
+ * import in PageFly, where nothing points back here.
+ */
+export function rejectFile(kind: CollectionFileKind, bytes: Uint8Array): string | null {
+  if (bytes.length === 0) return "The file is empty.";
+  if (kind === "html") {
+    const head = new TextDecoder().decode(bytes.slice(0, 4096)).toLowerCase();
+    return /<(!doctype|html|head|body|div|section)/.test(head)
+      ? null
+      : "That does not look like an HTML page.";
+  }
+  try {
+    const entries = Object.keys(unzipSync(bytes));
+    return entries.some((n) => n.toLowerCase().endsWith(".json"))
+      ? null
+      : "That .pagefly holds no page — it has no .json entry.";
+  } catch {
+    return "That .pagefly is not a PageFly export (it is not a zip).";
+  }
+}
+
+/** Store one file on a set, creating the page when the slug is new. */
+export async function storeFile(
+  set: CollectionSetRecord,
+  slug: string,
+  kind: CollectionFileKind,
+  bytes: Uint8Array,
+): Promise<void> {
+  const repo = getRepo();
+  let page = set.pages.find((p) => p.slug === slug);
+  if (!page) {
+    const created = {
+      id: newId(),
+      slug,
+      label: labelFromSlug(slug),
+      blurb: "",
+      position: Math.max(0, ...set.pages.map((p) => p.position)) + 1,
+    };
+    await repo.saveCollectionPage(set.id, created);
+    page = { ...created, htmlSize: null, pageflySize: null, updatedAt: "" };
+    set.pages.push(page);
+  }
+  await repo.putCollectionFile(set.id, page.id, kind, bytes);
+}
+
+/* ==========================================================================
+   THE BUILT-IN SETS, COPIED IN.
+
+   Hexwood, Hollis & Rowe and Creature Feature live in `public/showcase/` for
+   the landing page. Importing copies them into the table so they are managed
+   like any other set — hidden, priced, edited — without touching the landing
+   gallery, which keeps reading the repository.
+
+   FROM DISK FIRST, THEN OVER HTTP. On a VPS and in development `public/` is
+   right there. On a serverless host it may not be in the function's bundle,
+   and the same files are served at the site's own origin.
+
+   ONLY WHAT IS MISSING. A set whose slug already exists is left alone, so a
+   second press cannot overwrite an edit and a deleted one can be brought back.
+   ========================================================================== */
+export async function importBuiltInSets(origin: string): Promise<string[]> {
+  const repo = getRepo();
+  const existing = new Set((await repo.listCollectionSets()).map((s) => s.slug));
+  const last = Math.max(0, ...(await repo.listCollectionSets()).map((s) => s.position));
+  const added: string[] = [];
+
+  const read = async (path: string): Promise<Uint8Array | null> => {
+    try {
+      return new Uint8Array(await readFile(join(process.cwd(), "public", path)));
+    } catch {
+      try {
+        const res = await fetch(new URL(path, origin));
+        return res.ok ? new Uint8Array(await res.arrayBuffer()) : null;
+      } catch {
+        return null;
+      }
+    }
+  };
+
+  for (const [i, built] of SHOWCASE_SETS.entries()) {
+    if (existing.has(built.id)) continue;
+    const id = newId();
+    await repo.saveCollectionSet({
+      id,
+      slug: built.id,
+      name: built.name,
+      blurb: built.blurb,
+      visible: true,
+      access: "free",
+      priceCents: null,
+      buyUrl: null,
+      position: last + i + 1,
+    });
+    for (const [at, page] of built.pages.entries()) {
+      const pageId = newId();
+      await repo.saveCollectionPage(id, {
+        id: pageId,
+        slug: page.slug,
+        label: page.label,
+        blurb: page.blurb,
+        position: at + 1,
+      });
+      for (const kind of ["html", "pagefly"] as const) {
+        const bytes = await read(`showcase/${built.id}/${page.slug}.${kind}`);
+        if (bytes) await repo.putCollectionFile(id, pageId, kind, bytes);
+      }
+    }
+    added.push(built.name);
+  }
+  return added;
+}
+
+/** Built-in sets not yet in the table — what the import button offers. */
+export function missingBuiltIns(sets: CollectionSetRecord[]): string[] {
+  const have = new Set(sets.map((s) => s.slug));
+  return SHOWCASE_SETS.filter((s) => !have.has(s.id)).map((s) => s.name);
+}

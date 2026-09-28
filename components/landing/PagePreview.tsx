@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { EV, track } from "@/lib/analytics";
 import {
   htmlFor,
@@ -198,12 +198,17 @@ export function PageViewer({
   page,
   from,
   onClose,
+  action,
 }: {
   set: ShowcaseSet;
   page: ShowcasePage;
   from: string;
   onClose: () => void;
+  /** replaces the Download link — a paid set offers its buy button there */
+  action?: ReactNode;
 }) {
+  /* `null` on the page means no file is handed over — see ShowcasePage.file. */
+  const file = page.file === null ? null : pageflyFor(set, page);
   const [frame, setFrame] = useState<FrameId>("desktop");
   const width = FRAMES.find((f) => f.id === frame)?.width ?? null;
 
@@ -312,8 +317,9 @@ export function PageViewer({
           {/* THE FILE ITSELF, offered where the claim is made. The page on screen
               is a render of exactly these bytes, so "is this real" is answered by
               taking it rather than by a sentence. */}
+{action ?? (file && (
           <a
-            href={pageflyFor(set, page)}
+            href={file}
             /* Prefixed with the set, because a merchant who takes one from each
                store ends up with two files called `home.pagefly`. */
             download={`${set.id}-${page.slug}.pagefly`}
@@ -325,6 +331,7 @@ export function PageViewer({
             <Icon name="Download" size={13} />
             Download .pagefly
           </a>
+          ))}
           <button
             type="button"
             onClick={onClose}

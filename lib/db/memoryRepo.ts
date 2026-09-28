@@ -1,6 +1,6 @@
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { buildStats } from "./postgresRepo";
-import { REGISTER_USER_TYPE, reviewOnlyStore } from "./types";
+import { CollectionSlugTakenError, REGISTER_USER_TYPE, reviewOnlyStore } from "./types";
 import type {
   ModelCallRecord,
   ModelSpendRow,
@@ -15,6 +15,9 @@ import type {
   RunRecord,
   StoreRecord,
   StoreSummary,
+  CollectionPageMeta,
+  CollectionSetInput,
+  CollectionSetRecord,
   TrainingItem,
   TrainingSection,
   TrainingSectionSummary,
@@ -54,6 +57,13 @@ type Shape = {
   trainingSections: TrainingSection[];
   events: EventRecord[];
   modelCalls: ModelCallRecord[];
+  /* Files as base64 for the same reason `pageFiles` are. */
+  collectionSets: (CollectionSetInput & { createdAt: string; updatedAt: string })[];
+  collectionPages: (Omit<CollectionPageMeta, "htmlSize" | "pageflySize"> & {
+    setId: string;
+    html: string | null;
+    pagefly: string | null;
+  })[];
 };
 
 /* The same rule as `geoClause` in the postgres repo, in the other language —
@@ -70,7 +80,7 @@ function geoAllows(country: string | null, geo: GeoFilter): boolean {
   return true;
 }
 
-const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], pageFiles: [], photos: [], jobs: [], training: [], trainingSections: [], events: [], modelCalls: [] };
+const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], pageFiles: [], photos: [], jobs: [], training: [], trainingSections: [], events: [], modelCalls: [], collectionSets: [], collectionPages: [] };
 
 /** The map key for "no store". A domain can never contain a space, so this
     cannot collide with one — and unlike a NUL it survives grep and an editor. */
@@ -96,6 +106,8 @@ export function createMemoryRepo(file: string): Repo {
         jobs: parsed.jobs ?? [],
         events: parsed.events ?? [],
         modelCalls: parsed.modelCalls ?? [],
+        collectionSets: parsed.collectionSets ?? [],
+        collectionPages: parsed.collectionPages ?? [],
         training: parsed.training ?? [],
         /* Absent in a file written before section references existed. Rows
            written before `vertical` existed read as the shared filing, which is
@@ -138,6 +150,29 @@ export function createMemoryRepo(file: string): Repo {
       writable = false;
     }
   }
+
+  /** A set as the Repo contract has it: pages ordered, files reduced to sizes. */
+  const collectionWithPages = (set: Shape["collectionSets"][number]): CollectionSetRecord => ({
+    ...set,
+    pages: data.collectionPages
+      .filter((p) => p.setId === set.id)
+      .sort((a, b) => a.position - b.position || a.updatedAt.localeCompare(b.updatedAt))
+      .map((p) => ({
+        id: p.id,
+        slug: p.slug,
+        label: p.label,
+        blurb: p.blurb,
+        position: p.position,
+        updatedAt: p.updatedAt,
+        htmlSize: p.html ? Buffer.from(p.html, "base64").length : null,
+        pageflySize: p.pagefly ? Buffer.from(p.pagefly, "base64").length : null,
+      })),
+  });
+
+  const touchSet = (setId: string, at: string) => {
+    const set = data.collectionSets.find((s) => s.id === setId);
+    if (set) set.updatedAt = at;
+  };
 
   const pagesOf = (domain: string) => {
     const ids = new Set(data.runs.filter((r) => r.domain === domain).map((r) => r.id));
@@ -493,6 +528,110 @@ export function createMemoryRepo(file: string): Repo {
       if (data.trainingSections.length === before) return false;
       flush();
       return true;
+    },
+
+    /* ---- collection pages ---- */
+    async listCollectionSets() {
+      sync();
+      return [...data.collectionSets]
+        .sort((a, b) => a.position - b.position || a.createdAt.localeCompare(b.createdAt))
+        .map(collectionWithPages);
+    },
+
+    async getCollectionSet(id) {
+      sync();
+      const set = data.collectionSets.find((s) => s.id === id);
+      return set ? collectionWithPages(set) : null;
+    },
+
+    async getCollectionSetBySlug(slug) {
+      sync();
+      const set = data.collectionSets.find((s) => s.slug === slug);
+      return set ? collectionWithPages(set) : null;
+    },
+
+    async saveCollectionSet(set) {
+      sync();
+      if (data.collectionSets.some((s) => s.slug === set.slug && s.id !== set.id)) {
+        throw new CollectionSlugTakenError(set.slug);
+      }
+      const now = new Date().toISOString();
+      const at = data.collectionSets.findIndex((s) => s.id === set.id);
+      if (at >= 0) data.collectionSets[at] = { ...data.collectionSets[at], ...set, updatedAt: now };
+      else data.collectionSets.push({ ...set, createdAt: now, updatedAt: now });
+      flush();
+    },
+
+    async deleteCollectionSet(id) {
+      sync();
+      const before = data.collectionSets.length;
+      data.collectionSets = data.collectionSets.filter((s) => s.id !== id);
+      data.collectionPages = data.collectionPages.filter((p) => p.setId !== id);
+      if (data.collectionSets.length === before) return false;
+      flush();
+      return true;
+    },
+
+    async orderCollectionSets(ids) {
+      sync();
+      ids.forEach((id, i) => {
+        const set = data.collectionSets.find((s) => s.id === id);
+        if (set) set.position = i + 1;
+      });
+      flush();
+    },
+
+    async saveCollectionPage(setId, page) {
+      sync();
+      const siblings = data.collectionPages.filter((p) => p.setId === setId);
+      if (siblings.some((p) => p.slug === page.slug && p.id !== page.id)) {
+        throw new CollectionSlugTakenError(page.slug);
+      }
+      const now = new Date().toISOString();
+      const row = data.collectionPages.find((p) => p.setId === setId && p.id === page.id);
+      if (row) Object.assign(row, page, { updatedAt: now });
+      else data.collectionPages.push({ ...page, setId, html: null, pagefly: null, updatedAt: now });
+      touchSet(setId, now);
+      flush();
+    },
+
+    async deleteCollectionPage(setId, pageId) {
+      sync();
+      const before = data.collectionPages.length;
+      data.collectionPages = data.collectionPages.filter(
+        (p) => !(p.setId === setId && p.id === pageId),
+      );
+      if (data.collectionPages.length === before) return false;
+      touchSet(setId, new Date().toISOString());
+      flush();
+      return true;
+    },
+
+    async orderCollectionPages(setId, ids) {
+      sync();
+      ids.forEach((id, i) => {
+        const page = data.collectionPages.find((p) => p.setId === setId && p.id === id);
+        if (page) page.position = i + 1;
+      });
+      flush();
+    },
+
+    async putCollectionFile(setId, pageId, kind, bytes) {
+      sync();
+      const page = data.collectionPages.find((p) => p.setId === setId && p.id === pageId);
+      if (!page) return;
+      const now = new Date().toISOString();
+      page[kind] = Buffer.from(bytes).toString("base64");
+      page.updatedAt = now;
+      touchSet(setId, now);
+      flush();
+    },
+
+    async getCollectionFile(setId, pageId, kind) {
+      sync();
+      const page = data.collectionPages.find((p) => p.setId === setId && p.id === pageId);
+      const b64 = page?.[kind];
+      return b64 ? new Uint8Array(Buffer.from(b64, "base64")) : null;
     },
 
     async createJob(job) {
