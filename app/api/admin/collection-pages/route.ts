@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { slugify } from "@/lib/collectionPages";
+import { RESERVED_SET_SLUGS, slugify } from "@/lib/collectionPages";
 import { missingBuiltIns, newId } from "@/lib/collectionPagesServer";
 import { getRepo } from "@/lib/db";
 import type { CollectionSetRecord } from "@/lib/db/types";
-import { fail, failFrom, firstIssue, guard, slug } from "./shared";
+import { fail, failFrom, firstIssue, guard, setSlug } from "./shared";
 
 /* ==========================================================================
    /api/admin/collection-pages
@@ -30,7 +30,7 @@ export async function GET() {
 
 const createSchema = z.object({
   name: z.string().trim().min(1, "The name is empty.").max(80),
-  slug: slug.optional(),
+  slug: setSlug.optional(),
 });
 
 export async function POST(request: Request) {
@@ -42,10 +42,12 @@ export async function POST(request: Request) {
   const repo = getRepo();
   const sets = await repo.listCollectionSets();
   const id = newId();
+  const derived = slugify(parsed.data.name) || id;
+  const slug = parsed.data.slug ?? (RESERVED_SET_SLUGS.has(derived) ? `${derived}-set` : derived);
   try {
     await repo.saveCollectionSet({
       id,
-      slug: parsed.data.slug ?? (slugify(parsed.data.name) || id),
+      slug,
       name: parsed.data.name,
       blurb: "",
       /* HIDDEN FROM BIRTH. A new set has no pages yet, and a visible empty set

@@ -64,7 +64,7 @@ export function CollectionSetEditor({ initial }: { initial: CollectionSetRecord 
     draft.blurb !== saved_.blurb ||
     draft.visible !== saved_.visible ||
     draft.access !== saved_.access ||
-    (draft.access === "paid" && (priceCents !== saved_.priceCents || (draft.buyUrl ?? "") !== (saved_.buyUrl ?? "")));
+    (draft.access === "paid" && priceCents !== saved_.priceCents);
 
   const previewable = set.pages.filter((p) => p.htmlSize !== null).length;
   const downloadable = set.pages.filter((p) => p.pageflySize !== null).length;
@@ -87,7 +87,7 @@ export function CollectionSetEditor({ initial }: { initial: CollectionSetRecord 
         /* A free set keeps no price: switching back to paid later starts from
            an empty field rather than from a number nobody re-checked. */
         priceCents: draft.access === "paid" ? priceCents : null,
-        buyUrl: draft.access === "paid" ? draft.buyUrl : null,
+        buyUrl: null,
       }),
     });
     setSaving(false);
@@ -425,7 +425,7 @@ export function CollectionSetEditor({ initial }: { initial: CollectionSetRecord 
               <p className="text-[12px] text-pf-faint">
                 {draft.access === "free"
                   ? "Anyone can download every page and the whole set."
-                  : "Previews stay open; the files are held back and the button goes to your buy link."}
+                  : "Previews stay open; the files are held back and the button goes to checkout."}
               </p>
             </div>
 
@@ -444,18 +444,10 @@ export function CollectionSetEditor({ initial }: { initial: CollectionSetRecord 
                     />
                   </div>
                 </label>
-                <label className="grid gap-1.5">
-                  <span className={FIELD_LABEL}>Buy link</span>
-                  <input
-                    value={draft.buyUrl ?? ""}
-                    onChange={(e) => setDraft({ ...draft, buyUrl: e.target.value })}
-                    placeholder="https://… checkout, product page or contact form"
-                    className={FIELD}
-                  />
-                  <p className="text-[12px] text-pf-faint">
-                    There is no checkout in this app — the Buy button opens this link.
-                  </p>
-                </label>
+                <p className="text-[12px] text-pf-faint">
+                  Buyers fill in a checkout form with their store, name and email. Their orders
+                  land under Orders on the Collection pages screen for you to confirm by email.
+                </p>
               </>
             )}
 

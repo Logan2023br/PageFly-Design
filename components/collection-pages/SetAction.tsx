@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { EV, track } from "@/lib/analytics";
-import type { PublicCollectionSet } from "@/lib/collectionPages";
+import { checkoutUrl, pagesLabel, type PublicCollectionSet } from "@/lib/collectionPages";
 import { Icon } from "../ui";
 
 /* ==========================================================================
@@ -10,8 +11,8 @@ import { Icon } from "../ui";
    FREE: the whole set as one .pagefly — PageFly's own multi-page export,
    combined on the server — so a merchant imports once rather than seven times.
 
-   PAID: the price, and a link to wherever the sale happens. The file routes
-   refuse a paid set, so this is not a hidden download behind a label.
+   PAID: the price, and the way to the checkout form. The file routes refuse a
+   paid set, so this is not a hidden download behind a label.
    ========================================================================== */
 
 export function SetAction({
@@ -28,18 +29,14 @@ export function SetAction({
   const count = set.pages.length;
 
   if (set.access === "paid") {
-    if (!set.buyUrl) return null;
     return (
-      <a
-        href={set.buyUrl}
-        target="_blank"
-        rel="noopener noreferrer"
+      <Link
+        href={checkoutUrl(set.id)}
         className={`${cls} bg-pf-warn font-semibold text-pf-ink shadow-pf-button transition-opacity hover:opacity-90`}
       >
         <Icon name="ShoppingCart" size={size === "lg" ? 15 : 13} />
-        Buy {size === "lg" ? `all ${count} pages` : "set"}
-        {set.price ? ` · ${set.price}` : ""}
-      </a>
+        {set.price ? `Buy for ${set.price}` : "Buy this set"}
+      </Link>
     );
   }
 
@@ -54,7 +51,9 @@ export function SetAction({
       className={`${cls} bg-pf-primary font-semibold text-white shadow-pf-button transition-colors hover:bg-pf-primary-hi`}
     >
       <Icon name="Download" size={size === "lg" ? 15 : 13} />
-      {size === "lg" ? `Download free · all ${count} pages` : `Download free · ${count} pages`}
+      {size === "lg" && count > 1
+        ? `Download free · all ${pagesLabel(count)}`
+        : `Download free · ${pagesLabel(count)}`}
     </a>
   );
 }

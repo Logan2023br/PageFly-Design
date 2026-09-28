@@ -1,6 +1,6 @@
 import { AdminLogin } from "@/components/admin/AdminLogin";
 import { AdminShell } from "@/components/admin/AdminShell";
-import { CollectionSetsAdmin } from "@/components/admin/collections/CollectionSetsAdmin";
+import { CollectionsTabs } from "@/components/admin/collections/CollectionsTabs";
 import { missingBuiltIns } from "@/lib/collectionPagesServer";
 import { getRepo } from "@/lib/db";
 import { readAdminSession } from "@/lib/session";
@@ -11,9 +11,14 @@ import { readAdminSession } from "@/lib/session";
 export const metadata = { title: "Collection pages — PageFly Design Admin" };
 export const dynamic = "force-dynamic";
 
-export default async function AdminCollectionsPage() {
+export default async function AdminCollectionsPage(props: PageProps<"/design/admin/collections">) {
   if (!(await readAdminSession())) return <AdminLogin />;
-  const sets = await getRepo().listCollectionSets().catch(() => []);
+  const { tab } = await props.searchParams;
+  const repo = getRepo();
+  const [sets, orders] = await Promise.all([
+    repo.listCollectionSets().catch(() => []),
+    repo.listCollectionOrders().catch(() => []),
+  ]);
 
   return (
     <AdminShell
@@ -21,7 +26,12 @@ export default async function AdminCollectionsPage() {
       title="Collection pages"
       subtitle="The page sets on /collection-pages — what is listed, in what order, and whether it is free"
     >
-      <CollectionSetsAdmin initial={sets} missing={missingBuiltIns(sets)} />
+      <CollectionsTabs
+        sets={sets}
+        missing={missingBuiltIns(sets)}
+        orders={orders}
+        tab={tab === "orders" ? "orders" : "sets"}
+      />
     </AdminShell>
   );
 }

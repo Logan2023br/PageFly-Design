@@ -24,6 +24,10 @@ export function slugify(text: string): string {
 
 export const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+/* `checkout` is a page of its own: /collection-pages/checkout. A set with that
+   URL would be unreachable behind it. */
+export const RESERVED_SET_SLUGS = new Set(["checkout"]);
+
 /* `all` is the whole-set download: `/api/collection-pages/<set>/all.pagefly`. */
 export const RESERVED_PAGE_SLUGS = new Set(["all"]);
 
@@ -59,6 +63,13 @@ export function formatPrice(cents: number | null): string | null {
   return `$${Number.isInteger(dollars) ? dollars : dollars.toFixed(2)}`;
 }
 
+/** "1 page", "7 pages". */
+export const pagesLabel = (n: number) => `${n} ${n === 1 ? "page" : "pages"}`;
+
+/** Where a paid set's Buy button goes. */
+export const checkoutUrl = (setSlug: string) =>
+  `/collection-pages/checkout?set=${encodeURIComponent(setSlug)}`;
+
 export function formatBytes(n: number | null): string {
   if (n === null) return "—";
   if (n < 1024) return `${n} B`;
@@ -89,7 +100,6 @@ export function collectionFileUrl(
 export type PublicCollectionSet = ShowcaseSet & {
   access: "free" | "paid";
   price: string | null;
-  buyUrl: string | null;
   /** the whole set as one import, or null when it is not handed over */
   download: string | null;
   visible: boolean;
@@ -119,7 +129,6 @@ export function toPublicSet(set: CollectionSetRecord): PublicCollectionSet {
     pages,
     access: set.access,
     price: formatPrice(set.priceCents),
-    buyUrl: set.buyUrl,
     download: downloadable
       ? `/api/collection-pages/${set.slug}/all.pagefly?v=${Date.parse(set.updatedAt) || 0}`
       : null,

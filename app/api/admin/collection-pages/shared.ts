@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { RESERVED_PAGE_SLUGS, SLUG_RE } from "@/lib/collectionPages";
+import { RESERVED_PAGE_SLUGS, RESERVED_SET_SLUGS, SLUG_RE } from "@/lib/collectionPages";
 import { CollectionSlugTakenError } from "@/lib/db/types";
 import { readAdminSession } from "@/lib/session";
 
@@ -30,6 +30,10 @@ export const slug = z
   .max(60)
   .regex(SLUG_RE, "The URL may use a–z, 0–9 and dashes only.");
 
+export const setSlug = slug.refine((s) => !RESERVED_SET_SLUGS.has(s), {
+  message: "That URL is reserved.",
+});
+
 export const pageSlug = slug.refine((s) => !RESERVED_PAGE_SLUGS.has(s), {
   message: "That URL is reserved.",
 });
@@ -37,7 +41,7 @@ export const pageSlug = slug.refine((s) => !RESERVED_PAGE_SLUGS.has(s), {
 export const settings = z
   .object({
     name: z.string().trim().min(1, "The name is empty.").max(80),
-    slug,
+    slug: setSlug,
     blurb: z.string().trim().max(300).default(""),
     visible: z.boolean(),
     access: z.enum(["free", "paid"]),
@@ -51,12 +55,9 @@ export const settings = z
       .refine((v) => v === null || /^https?:\/\//i.test(v), "The buy link must start with http."),
   })
   .superRefine((v, ctx) => {
-    /* A paid set with no way to pay is a set nobody can have. */
+    /* A paid set with no price has nothing to show on its Buy button. */
     if (v.access === "paid" && (v.priceCents === null || v.priceCents <= 0)) {
       ctx.addIssue({ code: "custom", path: ["priceCents"], message: "A paid set needs a price." });
-    }
-    if (v.access === "paid" && !v.buyUrl) {
-      ctx.addIssue({ code: "custom", path: ["buyUrl"], message: "A paid set needs a buy link." });
     }
   });
 

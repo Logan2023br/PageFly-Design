@@ -15,6 +15,7 @@ import type {
   RunRecord,
   StoreRecord,
   StoreSummary,
+  CollectionOrderRecord,
   CollectionPageMeta,
   CollectionSetInput,
   CollectionSetRecord,
@@ -64,6 +65,7 @@ type Shape = {
     html: string | null;
     pagefly: string | null;
   })[];
+  collectionOrders: CollectionOrderRecord[];
 };
 
 /* The same rule as `geoClause` in the postgres repo, in the other language —
@@ -80,7 +82,7 @@ function geoAllows(country: string | null, geo: GeoFilter): boolean {
   return true;
 }
 
-const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], pageFiles: [], photos: [], jobs: [], training: [], trainingSections: [], events: [], modelCalls: [], collectionSets: [], collectionPages: [] };
+const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], pageFiles: [], photos: [], jobs: [], training: [], trainingSections: [], events: [], modelCalls: [], collectionSets: [], collectionPages: [], collectionOrders: [] };
 
 /** The map key for "no store". A domain can never contain a space, so this
     cannot collide with one — and unlike a NUL it survives grep and an editor. */
@@ -108,6 +110,7 @@ export function createMemoryRepo(file: string): Repo {
         modelCalls: parsed.modelCalls ?? [],
         collectionSets: parsed.collectionSets ?? [],
         collectionPages: parsed.collectionPages ?? [],
+        collectionOrders: parsed.collectionOrders ?? [],
         training: parsed.training ?? [],
         /* Absent in a file written before section references existed. Rows
            written before `vertical` existed read as the shared filing, which is
@@ -632,6 +635,27 @@ export function createMemoryRepo(file: string): Repo {
       const page = data.collectionPages.find((p) => p.setId === setId && p.id === pageId);
       const b64 = page?.[kind];
       return b64 ? new Uint8Array(Buffer.from(b64, "base64")) : null;
+    },
+
+    async createCollectionOrder(order) {
+      sync();
+      data.collectionOrders.push(order);
+      flush();
+    },
+
+    async listCollectionOrders() {
+      sync();
+      return [...data.collectionOrders].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    },
+
+    async setCollectionOrderStatus(id, status) {
+      sync();
+      const order = data.collectionOrders.find((o) => o.id === id);
+      if (!order) return false;
+      order.status = status;
+      order.updatedAt = new Date().toISOString();
+      flush();
+      return true;
     },
 
     async createJob(job) {

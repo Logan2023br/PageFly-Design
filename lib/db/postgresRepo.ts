@@ -10,6 +10,7 @@ import type {
   RunRecord,
   StoreRecord,
   StoreSummary,
+  CollectionOrderRecord,
   CollectionPageMeta,
   CollectionSetRecord,
   TrainingImage,
@@ -454,6 +455,22 @@ create table if not exists collection_pages (
   primary key (set_id, id),
   unique (set_id, slug)
 );
+
+/* No foreign key to the set: an order outlives the set it was for. */
+create table if not exists collection_orders (
+  id          text primary key,
+  set_id      text not null,
+  set_slug    text not null,
+  set_name    text not null,
+  price_cents integer,
+  domain      text not null,
+  name        text not null,
+  email       text not null,
+  status      text not null default 'pending',
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+create index if not exists collection_orders_created on collection_orders (created_at desc);
 `;
 
 /* The page columns WITHOUT the files — a size is all a listing needs. */
@@ -1291,6 +1308,47 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       );
       const bytes = rows[0]?.bytes as Buffer | null | undefined;
       return bytes ? new Uint8Array(bytes) : null;
+    },
+
+    async createCollectionOrder(o) {
+      await ready();
+      await db.query(
+        `insert into collection_orders
+           (id, set_id, set_slug, set_name, price_cents, domain, name, email, status, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [o.id, o.setId, o.setSlug, o.setName, o.priceCents, o.domain, o.name, o.email, o.status, o.createdAt, o.updatedAt],
+      );
+    },
+
+    async listCollectionOrders() {
+      await ready();
+      const { rows } = await db.query(
+        `select * from collection_orders order by created_at desc limit 1000`,
+      );
+      return rows.map(
+        (r): CollectionOrderRecord => ({
+          id: String(r.id),
+          setId: String(r.set_id),
+          setSlug: String(r.set_slug),
+          setName: String(r.set_name),
+          priceCents: r.price_cents === null ? null : Number(r.price_cents),
+          domain: String(r.domain),
+          name: String(r.name),
+          email: String(r.email),
+          status: r.status === "confirmed" || r.status === "cancelled" ? r.status : "pending",
+          createdAt: iso(r.created_at) ?? "",
+          updatedAt: iso(r.updated_at) ?? "",
+        }),
+      );
+    },
+
+    async setCollectionOrderStatus(id, status) {
+      await ready();
+      const { rowCount } = await db.query(
+        `update collection_orders set status = $2, updated_at = now() where id = $1`,
+        [id, status],
+      );
+      return (rowCount ?? 0) > 0;
     },
 
     async createJob(job) {

@@ -673,6 +673,30 @@ export class CollectionSlugTakenError extends Error {
   }
 }
 
+/**
+ * A request to buy a paid set, from /collection-pages/checkout.
+ *
+ * NOT A PAYMENT. There is no checkout provider behind this app: the buyer
+ * leaves their store, name and email, an operator checks the order and writes
+ * back. The set's name and price are copied in, so an order still says what
+ * was asked for after the set is renamed, repriced or deleted.
+ */
+export type CollectionOrderStatus = "pending" | "confirmed" | "cancelled";
+
+export type CollectionOrderRecord = {
+  id: string;
+  setId: string;
+  setSlug: string;
+  setName: string;
+  priceCents: number | null;
+  domain: string;
+  name: string;
+  email: string;
+  status: CollectionOrderStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type CollectionPageInput = Omit<CollectionPageMeta, "htmlSize" | "pageflySize" | "updatedAt">;
 
 export type TrainingSummary = {
@@ -811,6 +835,10 @@ export type Repo = {
     pageId: string,
     kind: CollectionFileKind,
   ): Promise<Uint8Array | null>;
+  createCollectionOrder(order: CollectionOrderRecord): Promise<void>;
+  /** newest first */
+  listCollectionOrders(): Promise<CollectionOrderRecord[]>;
+  setCollectionOrderStatus(id: string, status: CollectionOrderStatus): Promise<boolean>;
 
   /* ---- stock photos ---- */
   getPhotos(queries: string[]): Promise<PhotoRecord[]>;
