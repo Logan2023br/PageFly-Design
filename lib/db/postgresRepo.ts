@@ -1354,6 +1354,27 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       return (rowCount ?? 0) > 0;
     },
 
+    async collectionDownloads(eventNames) {
+      await ready();
+      const { rows } = await db.query(
+        `select props->>'set' as set, count(distinct visitor_id)::int as n
+           from events
+          where name = any($1::text[]) and props ? 'set'
+          group by 1`,
+        [eventNames],
+      );
+      return Object.fromEntries(rows.map((r) => [String(r.set), Number(r.n)]));
+    },
+
+    async collectionPurchases() {
+      await ready();
+      const { rows } = await db.query(
+        `select set_id, count(*)::int as n from collection_orders
+          where status = 'confirmed' group by 1`,
+      );
+      return Object.fromEntries(rows.map((r) => [String(r.set_id), Number(r.n)]));
+    },
+
     async createJob(job) {
       await ready();
       await db.query(

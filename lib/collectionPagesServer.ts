@@ -3,6 +3,7 @@ import "server-only";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { unzipSync } from "fflate";
+import { EV } from "./analytics";
 import { labelFromSlug } from "./collectionPages";
 import { getRepo } from "./db";
 import type { CollectionFileKind, CollectionSetRecord } from "./db/types";
@@ -135,4 +136,32 @@ export async function importBuiltInSets(origin: string): Promise<string[]> {
 export function missingBuiltIns(sets: CollectionSetRecord[]): string[] {
   const have = new Set(sets.map((s) => s.slug));
   return SHOWCASE_SETS.filter((s) => !have.has(s.id)).map((s) => s.name);
+}
+
+/* ==========================================================================
+   THE NUMBERS ON THE CARDS.
+
+   Downloads are read from the analytics events already recorded — a whole-set
+   download or a single page, from this page or the landing gallery — so the
+   count carries the history from before this page existed, and it counts
+   people rather than presses. Purchases are confirmed orders, because an
+   order nobody has checked yet is not a sale.
+
+   HELD FOR A MINUTE. The page is rendered per request and the downloads query
+   reads the events table; a number on a card does not need to be fresher than
+   that, and the table should not be scanned on every visit.
+   ========================================================================== */
+type Stats = { downloads: Record<string, number>; purchases: Record<string, number> };
+let cached: { at: number; stats: Stats } | null = null;
+
+export async function collectionStats(): Promise<Stats> {
+  if (cached && Date.now() - cached.at < 60_000) return cached.stats;
+  const repo = getRepo();
+  const [downloads, purchases] = await Promise.all([
+    repo.collectionDownloads([EV.showcaseSetDownloaded, EV.showcaseFileDownloaded]).catch(() => ({})),
+    repo.collectionPurchases().catch(() => ({})),
+  ]);
+  const stats = { downloads, purchases };
+  cached = { at: Date.now(), stats };
+  return stats;
 }

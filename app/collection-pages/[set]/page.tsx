@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { CollectionShell } from "@/components/collection-pages/Shell";
 import { SetDetail } from "@/components/collection-pages/SetDetail";
 import { toPublicSet } from "@/lib/collectionPages";
+import { collectionStats } from "@/lib/collectionPagesServer";
 import { getRepo } from "@/lib/db";
 import { readAdminSession } from "@/lib/session";
 
@@ -33,7 +34,7 @@ export default async function CollectionSetPage(props: PageProps<"/collection-pa
 
   return (
     <CollectionShell>
-      <SetDetail set={toPublicSet(record)} others={others} preview={preview} />
+      <SetDetail set={toPublicSet(record, await collectionStats())} others={others} preview={preview} />
     </CollectionShell>
   );
 }

@@ -275,7 +275,15 @@ function CustomSummary() {
       </h2>
       <p className="relative mt-2 text-[14px] leading-relaxed text-pf-muted">
         Don’t see the look you want? Describe it and our designers will build a full page set to
-        match — same quality as the premium sets above.
+        match — same quality as the premium sets.
+      </p>
+      <p className="relative mt-4 flex items-start gap-2 rounded-pf-md border border-pf-warn/30 bg-pf-warn/10 px-3 py-2.5 text-[13px] leading-snug text-pf-text">
+        <Icon name="ShieldCheck" size={15} className="mt-px shrink-0 text-pf-warn" />
+        <span>
+          <span className="font-semibold">Guaranteed unique.</span> Your set is designed from scratch
+          for your store and never reused — it will not match any other template, here or anywhere
+          else.
+        </span>
       </p>
       <ol className="relative mt-6 grid gap-4">
         {steps.map(([icon, title, body], i) => (

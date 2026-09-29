@@ -841,6 +841,14 @@ export type Repo = {
   /** newest first */
   listCollectionOrders(): Promise<CollectionOrderRecord[]>;
   setCollectionOrderStatus(id: string, status: CollectionOrderStatus): Promise<boolean>;
+  /**
+   * How many PEOPLE took each set, by set slug: distinct visitors behind the
+   * given download events whose `set` prop names it. People, not presses —
+   * one visitor pressing Download seven times is one download.
+   */
+  collectionDownloads(eventNames: string[]): Promise<Record<string, number>>;
+  /** confirmed orders per set id — what "purchases" means on the public page */
+  collectionPurchases(): Promise<Record<string, number>>;
 
   /* ---- stock photos ---- */
   getPhotos(queries: string[]): Promise<PhotoRecord[]>;

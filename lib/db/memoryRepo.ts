@@ -660,6 +660,28 @@ export function createMemoryRepo(file: string): Repo {
       return true;
     },
 
+    async collectionDownloads(eventNames) {
+      sync();
+      const names = new Set(eventNames);
+      const people = new Map<string, Set<string>>();
+      for (const e of data.events) {
+        const set = e.props?.set;
+        if (!names.has(e.name) || typeof set !== "string") continue;
+        if (!people.has(set)) people.set(set, new Set());
+        people.get(set)!.add(e.visitorId);
+      }
+      return Object.fromEntries([...people].map(([set, v]) => [set, v.size]));
+    },
+
+    async collectionPurchases() {
+      sync();
+      const out: Record<string, number> = {};
+      for (const o of data.collectionOrders) {
+        if (o.status === "confirmed") out[o.setId] = (out[o.setId] ?? 0) + 1;
+      }
+      return out;
+    },
+
     async createJob(job) {
       sync();
       data.jobs.push({ ...job });

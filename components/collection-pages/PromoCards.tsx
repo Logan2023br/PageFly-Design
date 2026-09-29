@@ -28,7 +28,8 @@ export function PromoCards() {
           tone="warm"
           eyebrow="Made to order"
           title="Pre-order your template"
-          body="Can’t find your style? Tell us what you sell and the look you want — we’ll design a full page set to match."
+          body="Tell us what you sell and the look you want. We design a full page set that is yours alone — guaranteed not to match any other template."
+          badge="100% unique design"
           cta="Request a template"
           art={<ArtRequest />}
         />
@@ -73,8 +74,11 @@ function PromoCard({
   body,
   cta,
   art,
+  badge,
 }: {
   href: string;
+  /** a promise worth pinning to the picture */
+  badge?: string;
   tone: keyof typeof TONES;
   eyebrow: string;
   title: string;
@@ -98,7 +102,19 @@ function PromoCard({
         className="pfd-grid pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-60"
       />
 
-      <span className="relative block aspect-[4/3] overflow-hidden">{art}</span>
+      <span className="relative block aspect-[4/3] overflow-hidden">
+        {art}
+        {badge && (
+          <span
+            className={`absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-pf-pill border bg-pf-bg/80 px-2.5 py-1 text-[11.5px] font-semibold backdrop-blur ${t.text} ${
+              tone === "warm" ? "border-pf-warn/40" : "border-pf-primary-hi/40"
+            }`}
+          >
+            <Icon name="ShieldCheck" size={12} />
+            {badge}
+          </span>
+        )}
+      </span>
 
       <span className="relative flex flex-1 flex-col border-t border-pf-border/70 px-4 py-4">
         <span className={`flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.08em] ${t.text}`}>

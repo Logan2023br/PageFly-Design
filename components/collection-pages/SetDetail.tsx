@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { pagesLabel, type PublicCollectionSet } from "@/lib/collectionPages";
+import { countLabel, pagesLabel, type PublicCollectionSet } from "@/lib/collectionPages";
 import type { ShowcasePage } from "@/lib/showcasePages";
 import { Icon } from "../ui";
 import { PageThumb, PageViewer } from "../landing/PagePreview";
@@ -51,6 +51,7 @@ export function SetDetail({
           <p className="mt-3 text-[15px] leading-relaxed text-pf-muted">{set.blurb}</p>
           <p className="mt-2 text-[13px] font-medium text-pf-faint">
             {pagesLabel(set.pages.length)} ·{" "}
+            {countLabel(set) ? `${countLabel(set)} · ` : ""}
             {set.access === "paid"
               ? `${set.price ?? "Paid"} — preview every page free; the files are sent when you buy`
               : "Free to download and use"}

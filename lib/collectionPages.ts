@@ -107,9 +107,22 @@ export type PublicCollectionSet = ShowcaseSet & {
   /** the whole set as one import, or null when it is not handed over */
   download: string | null;
   visible: boolean;
+  /** people who downloaded it (free) or confirmed orders (paid) */
+  count: number;
 };
 
-export function toPublicSet(set: CollectionSetRecord): PublicCollectionSet {
+/** "1,234 downloads" / "3 purchases", or null for a set nobody has taken yet. */
+export function countLabel(set: PublicCollectionSet): string | null {
+  if (set.count <= 0) return null;
+  const n = set.count.toLocaleString("en-US");
+  if (set.access === "paid") return `${n} ${set.count === 1 ? "purchase" : "purchases"}`;
+  return `${n} ${set.count === 1 ? "download" : "downloads"}`;
+}
+
+export function toPublicSet(
+  set: CollectionSetRecord,
+  stats?: { downloads: Record<string, number>; purchases: Record<string, number> },
+): PublicCollectionSet {
   const free = set.access === "free";
   const pages: ShowcasePage[] = set.pages
     .filter((p) => p.htmlSize !== null)
@@ -137,5 +150,7 @@ export function toPublicSet(set: CollectionSetRecord): PublicCollectionSet {
       ? `/api/collection-pages/${set.slug}/all.pagefly?v=${Date.parse(set.updatedAt) || 0}`
       : null,
     visible: set.visible,
+    count:
+      (free ? stats?.downloads[set.slug] : stats?.purchases[set.id]) ?? 0,
   };
 }

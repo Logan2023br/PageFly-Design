@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { pagesLabel, type PublicCollectionSet } from "@/lib/collectionPages";
+import { countLabel, pagesLabel, type PublicCollectionSet } from "@/lib/collectionPages";
 import { Icon } from "../ui";
 import { PageThumb } from "../landing/PagePreview";
 import { PromoCards } from "./PromoCards";
@@ -134,8 +134,9 @@ function Group({
                     {pagesLabel(set.pages.length)}
                   </span>
                 </span>
+                <SetCount set={set} />
                 {set.blurb && (
-                  <span className="mt-1 block text-[13px] leading-snug text-pf-faint">
+                  <span className="mt-1.5 block text-[13px] leading-snug text-pf-faint">
                     {set.blurb}
                   </span>
                 )}
@@ -162,5 +163,26 @@ function Group({
         {extra}
       </ul>
     </section>
+  );
+}
+
+/* ==========================================================================
+   HOW MANY PEOPLE HAVE TAKEN IT — real numbers, see `collectionStats`.
+
+   A set nobody has taken yet says "New" rather than "0 downloads": a zero on
+   a card reads as "nobody wants this", when all it means is "just arrived".
+   ========================================================================== */
+export function SetCount({ set }: { set: PublicCollectionSet }) {
+  const label = countLabel(set);
+  const paid = set.access === "paid";
+  return (
+    <span
+      className={`mt-1 flex items-center gap-1.5 text-[12.5px] font-medium ${
+        label ? "text-pf-body" : paid ? "text-pf-warn" : "text-pf-primary-hi"
+      }`}
+    >
+      <Icon name={label ? (paid ? "ShoppingBag" : "Download") : "Sparkles"} size={13} />
+      {label ?? (paid ? "New release" : "New")}
+    </span>
   );
 }
