@@ -51,6 +51,12 @@ function uid(): string {
  */
 let fallbackId: string | null = null;
 
+/** This browser's analytics id — for a record that should sit beside its events. */
+export function analyticsVisitorId(): string | null {
+  if (typeof window === "undefined") return null;
+  return visitorId();
+}
+
 function visitorId(): string {
   try {
     const stored = window.localStorage.getItem(VISITOR_KEY);
@@ -379,6 +385,12 @@ export const EV = {
   cpCheckoutFailed: "design_cp_checkout_failed",
   /** one of the two cards after the premium sets */
   cpPromoClicked: "design_cp_promo_clicked",
+  /** a free Download pressed, opening the form; `page` is empty for the whole set */
+  cpGateOpened: "design_cp_gate_opened",
+  /** the form accepted — a lead was stored and the download button shown */
+  cpLeadSubmitted: "design_cp_lead_submitted",
+  /** the form refused or could not send, with the reason it showed */
+  cpLeadFailed: "design_cp_lead_failed",
 } as const;
 
 /** Where a shared element was mounted. One list, so a typo at a call site is a
@@ -404,4 +416,7 @@ export type Surface =
   | "topbar_register"
   | "topbar_design"
   | "topbar_library"
-  | "topbar_feedback";
+  | "topbar_feedback"
+  /* After a free set is downloaded from /collection-pages — the file is
+     useless without PageFly, so this is where installing is the next step. */
+  | "collection_pages";

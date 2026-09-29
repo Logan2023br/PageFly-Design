@@ -2,6 +2,7 @@ import { EV } from "./analytics";
 import { CUSTOM_REQUEST } from "./collectionPages";
 import type {
   CollectionEventRow,
+  CollectionLeadRecord,
   CollectionOrderRecord,
   CollectionSetRecord,
   DayCount,
@@ -51,6 +52,8 @@ export type CpSetRow = {
   medianRead: number | null;
   /** free: whole-set downloads + single pages, and the people behind either */
   downloads: { sets: number; pages: number; people: number };
+  /** download forms filled in for this set */
+  leads: number;
   buys: Count;
   checkouts: Count;
   orders: number;
@@ -62,6 +65,14 @@ export type CpSetRow = {
 };
 
 export type CpSlice = { key: string; n: number; people: number };
+
+/** `metric` is what the step opens into — see `collectionHits`. */
+export type FunnelStep = {
+  label: string;
+  value: number;
+  unit: "people" | "orders" | "leads";
+  metric: string;
+};
 
 export type CpView = {
   days: number;
@@ -83,10 +94,16 @@ export type CpView = {
     customRequests: number;
     revenueCents: number;
     pendingCents: number;
+    /** the download form: presses on Download, leads stored, Install PageFly presses */
+    gateOpened: Count;
+    leads: number;
+    leadPeople: number;
+    installs: Count;
   };
   funnels: {
-    free: { label: string; value: number; unit: "people" | "orders" }[];
-    paid: { label: string; value: number; unit: "people" | "orders" }[];
+    free: FunnelStep[];
+    paid: FunnelStep[];
+    gate: FunnelStep[];
   };
   sets: CpSetRow[];
   frames: CpSlice[];
@@ -166,6 +183,8 @@ export function buildCollectionView(input: {
   events: CollectionEventRow[];
   /** every order ever; filtered to the window here */
   orders: CollectionOrderRecord[];
+  /** recent leads; filtered to the window here */
+  leads: CollectionLeadRecord[];
   sets: CollectionSetRecord[];
   days: number;
   day: string | null;
@@ -194,6 +213,7 @@ export function buildCollectionView(input: {
   const inWindow = (iso: string) =>
     input.day ? dayKey(iso, tz) === input.day : iso >= input.from && iso < input.to;
   const orders = input.orders.filter((o) => inWindow(o.createdAt));
+  const leads = input.leads.filter((l) => inWindow(l.createdAt));
 
   const is = (name: string) => (r: CollectionEventRow) => r.name === name;
   const setOf = (r: CollectionEventRow) => str(r.props.set);
@@ -261,6 +281,7 @@ export function buildCollectionView(input: {
       opens,
       medianRead: median(reads(mine)),
       downloads: { sets: wholeSets, pages: singlePages, people: downloaders.size },
+      leads: leads.filter((l) => l.setSlug === slug).length,
       buys: count(ev, (r) => is(EV.cpBuyClicked)(r) && mine(r)),
       checkouts: count(ev, (r) => is(EV.cpCheckoutViewed)(r) && mine(r)),
       orders: myOrders.length,
@@ -283,6 +304,8 @@ export function buildCollectionView(input: {
   const paidSlugs = new Set(setRows.filter((s) => s.access === "paid").map((s) => s.slug));
 
   const listPeople = peopleWhere(ev, is(EV.cpListViewed));
+  const isInstall = (r: CollectionEventRow) =>
+    r.name === EV.pageflyInstallClicked && r.props.surface === "collection_pages";
   const download = (r: CollectionEventRow) =>
     is(EV.showcaseSetDownloaded)(r) || is(EV.showcaseFileDownloaded)(r);
 
@@ -304,36 +327,44 @@ export function buildCollectionView(input: {
     pendingCents: setOrders
       .filter((o) => o.status === "pending")
       .reduce((a, o) => a + (o.priceCents ?? 0), 0),
+    gateOpened: count(ev, is(EV.cpGateOpened)),
+    leads: leads.length,
+    leadPeople: peopleWhere(ev, is(EV.cpLeadSubmitted)).size,
+    installs: count(ev, isInstall),
   };
 
   /* ---- funnels, in people (the last two paid steps are orders) ---- */
   const funnels: CpView["funnels"] = {
     free: [
-      { label: "Visited the list", value: listPeople.size, unit: "people" },
+      { label: "Visited the list", value: listPeople.size, unit: "people", metric: "list" },
       {
         label: "Opened a free set",
         value: peopleWhere(ev, (r) => is(EV.cpSetViewed)(r) && freeSlugs.has(setOf(r))).size,
         unit: "people",
+        metric: "free_set",
       },
       {
         label: "Opened a preview",
         value: peopleWhere(ev, (r) => is(EV.cpPageOpened)(r) && freeSlugs.has(setOf(r))).size,
         unit: "people",
+        metric: "free_open",
       },
       {
         label: "Downloaded",
         value: peopleWhere(ev, (r) => download(r) && freeSlugs.has(setOf(r))).size,
         unit: "people",
+        metric: "downloads",
       },
     ],
     paid: [
-      { label: "Visited the list", value: listPeople.size, unit: "people" },
+      { label: "Visited the list", value: listPeople.size, unit: "people", metric: "list" },
       {
         label: "Opened a premium set",
         value: peopleWhere(ev, (r) => is(EV.cpSetViewed)(r) && paidSlugs.has(setOf(r))).size,
         unit: "people",
+        metric: "paid_set",
       },
-      { label: "Pressed Buy", value: overview.buys.people, unit: "people" },
+      { label: "Pressed Buy", value: overview.buys.people, unit: "people", metric: "buys" },
       {
         label: "Saw checkout",
         value: peopleWhere(
@@ -341,9 +372,21 @@ export function buildCollectionView(input: {
           (r) => is(EV.cpCheckoutViewed)(r) && setOf(r) !== CUSTOM_REQUEST.slug,
         ).size,
         unit: "people",
+        metric: "checkout",
       },
-      { label: "Sent an order", value: setOrders.length, unit: "orders" },
-      { label: "Confirmed", value: confirmedAll.length, unit: "orders" },
+      { label: "Sent an order", value: setOrders.length, unit: "orders", metric: "orders" },
+      { label: "Confirmed", value: confirmedAll.length, unit: "orders", metric: "confirmed" },
+    ],
+    gate: [
+      { label: "Pressed Download", value: overview.gateOpened.people, unit: "people", metric: "gate_opened" },
+      { label: "Filled in the form", value: overview.leadPeople, unit: "people", metric: "lead_submitted" },
+      {
+        label: "Took the file",
+        value: peopleWhere(ev, download).size,
+        unit: "people",
+        metric: "downloads",
+      },
+      { label: "Pressed Install PageFly", value: overview.installs.people, unit: "people", metric: "installs" },
     ],
   };
 
@@ -410,4 +453,220 @@ export function buildCollectionView(input: {
     ),
     checkoutFailures: slices(ev, is(EV.cpCheckoutFailed), (r) => str(r.props.reason)),
   };
+}
+
+/* ==========================================================================
+   "WHO, AND WHEN" — WHAT A TILE OPENS INTO.
+
+   Every tile, funnel step and breakdown row on the screen names a `metric`;
+   this turns one into the list of what happened, newest first: the time, the
+   country, the store when a PageFly Design session was signed in, and the
+   store and email from the download form when that browser filled one in.
+
+   THE SAME PREDICATES AS THE COUNTS. A list built from a second copy of the
+   rules would drift from the number above it the first time either changed,
+   and a tile reading 12 that opens onto 9 rows is a screen nobody trusts.
+   ========================================================================== */
+
+export type CpHit = {
+  at: string;
+  country: string | null;
+  /** the signed-in store, from the session */
+  store: string | null;
+  /** what the download form said for this browser, when it filled one in */
+  lead: { domain: string; email: string } | null;
+  visitor: string | null;
+  /** what happened, in words */
+  what: string;
+  /** the set, and the page within it */
+  set: string | null;
+  page: string | null;
+  /** the one extra fact worth a column: seconds read, width, button, reason */
+  detail: string | null;
+};
+
+const WHAT: Record<string, string> = {
+  [EV.cpListViewed]: "Viewed the list",
+  [EV.cpSetViewed]: "Viewed a set",
+  [EV.cpSectionSeen]: "Scrolled to a row",
+  [EV.cpPageOpened]: "Opened a preview",
+  [EV.showcasePageViewed]: "Read a preview",
+  [EV.showcaseFrameChanged]: "Changed preview width",
+  [EV.showcaseSetDownloaded]: "Downloaded the whole set",
+  [EV.showcaseFileDownloaded]: "Downloaded one page",
+  [EV.cpBuyClicked]: "Pressed Buy",
+  [EV.cpCheckoutViewed]: "Saw the checkout",
+  [EV.cpCheckoutFailed]: "Checkout refused",
+  [EV.cpPromoClicked]: "Pressed a promo card",
+  [EV.cpGateOpened]: "Pressed Download",
+  [EV.cpLeadSubmitted]: "Filled in the download form",
+  [EV.cpLeadFailed]: "Download form refused",
+  [EV.pageflyInstallClicked]: "Pressed Install PageFly",
+};
+
+function detailOf(r: CollectionEventRow): string | null {
+  const p = r.props;
+  if (r.name === EV.showcasePageViewed) return typeof p.seconds === "number" ? `${p.seconds}s` : null;
+  if (r.name === EV.showcaseFrameChanged) return str(p.frame) || null;
+  if (r.name === EV.cpBuyClicked) return [str(p.place), str(p.price)].filter(Boolean).join(" · ") || null;
+  if (r.name === EV.cpGateOpened) return str(p.place) || null;
+  if (r.name === EV.cpCheckoutFailed || r.name === EV.cpLeadFailed) return str(p.reason) || null;
+  if (r.name === EV.cpPromoClicked) return str(p.card) || null;
+  if (r.name === EV.cpSectionSeen) return str(p.section) || null;
+  if (r.name === EV.cpListViewed || r.name === EV.cpSetViewed || r.name === EV.cpCheckoutViewed) {
+    const bits = [str(p.entry), str(p.ref), str(p.screen)].filter(Boolean);
+    return bits.join(" · ") || null;
+  }
+  return null;
+}
+
+/** The metrics a screen element can open, and the rows each one means. */
+export function collectionHits(input: {
+  metric: string;
+  /** narrows a breakdown to one of its rows: the row's key */
+  key: string | null;
+  /** narrows to one set, by slug */
+  set: string | null;
+  events: CollectionEventRow[];
+  orders: CollectionOrderRecord[];
+  leads: CollectionLeadRecord[];
+  sets: CollectionSetRecord[];
+  day: string | null;
+  from: string;
+  to: string;
+  tz: number;
+  limit: number;
+}): { hits: CpHit[]; total: number } | null {
+  const { metric, key, tz } = input;
+  const inWindow = (iso: string) =>
+    input.day ? dayKey(iso, tz) === input.day : iso >= input.from && iso < input.to;
+  const ev = input.events.filter((e) => inWindow(e.createdAt));
+  const names = new Map(input.sets.map((s) => [s.slug, s]));
+  const free = new Set(input.sets.filter((s) => s.access === "free").map((s) => s.slug));
+  const paid = new Set(input.sets.filter((s) => s.access === "paid").map((s) => s.slug));
+  const setOf = (r: CollectionEventRow) => str(r.props.set);
+  const bySet = (slug: string) => !input.set || slug === input.set;
+  const pageLabel = (setSlug: string, page: string) =>
+    names.get(setSlug)?.pages.find((p) => p.slug === page)?.label ?? page;
+
+  /* The latest lead per browser, so a row can say who it was. */
+  const leadOf = new Map<string, CollectionLeadRecord>();
+  for (const l of [...input.leads].sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
+    if (l.visitorId) leadOf.set(l.visitorId, l);
+  }
+
+  const done = (hits: CpHit[]) => ({
+    hits: hits.sort((a, b) => b.at.localeCompare(a.at)).slice(0, input.limit),
+    total: hits.length,
+  });
+
+  /* ---- rows from the orders table ---- */
+  const orderMetrics: Record<string, (o: CollectionOrderRecord) => boolean> = {
+    orders: (o) => o.setSlug !== CUSTOM_REQUEST.slug,
+    confirmed: (o) => o.status === "confirmed" && o.setSlug !== CUSTOM_REQUEST.slug,
+    revenue: (o) => o.status === "confirmed" && o.setSlug !== CUSTOM_REQUEST.slug,
+    pending: (o) => o.status === "pending",
+    cancelled: (o) => o.status === "cancelled",
+    custom: (o) => o.setSlug === CUSTOM_REQUEST.slug,
+    all_orders: () => true,
+  };
+  if (orderMetrics[metric]) {
+    return done(
+      input.orders
+        .filter((o) => inWindow(o.createdAt) && orderMetrics[metric](o) && bySet(o.setSlug))
+        .map((o) => ({
+          at: o.createdAt,
+          country: null,
+          store: null,
+          lead: { domain: o.domain, email: o.email },
+          visitor: null,
+          what: o.setSlug === CUSTOM_REQUEST.slug ? "Sent a template request" : "Sent an order",
+          set: o.setName,
+          page: null,
+          detail:
+            [o.status === "pending" ? "new" : o.status, o.priceCents === null ? "" : `$${o.priceCents / 100}`, o.note ?? ""]
+              .filter(Boolean)
+              .join(" · ") || null,
+        })),
+    );
+  }
+
+  /* ---- rows from the leads table ---- */
+  if (metric === "leads") {
+    return done(
+      input.leads
+        .filter((l) => inWindow(l.createdAt) && bySet(l.setSlug))
+        .map((l) => ({
+          at: l.createdAt,
+          country: l.country,
+          store: null,
+          lead: { domain: l.domain, email: l.email },
+          visitor: l.visitorId,
+          what: l.pageSlug ? "Asked for one page" : "Asked for the whole set",
+          set: l.setName,
+          page: l.pageSlug ? pageLabel(l.setSlug, l.pageSlug) : null,
+          detail: null,
+        })),
+    );
+  }
+
+  /* ---- rows from events ---- */
+  const is = (name: string) => (r: CollectionEventRow) => r.name === name;
+  const download = (r: CollectionEventRow) =>
+    is(EV.showcaseSetDownloaded)(r) || is(EV.showcaseFileDownloaded)(r);
+  const view = (r: CollectionEventRow) => is(EV.cpListViewed)(r) || is(EV.cpSetViewed)(r);
+  const keyed = (name: string | ((r: CollectionEventRow) => boolean), prop: (r: CollectionEventRow) => string) =>
+    (r: CollectionEventRow) =>
+      (typeof name === "string" ? r.name === name : name(r)) && (key === null || prop(r) === key);
+
+  const EVENTS: Record<string, (r: CollectionEventRow) => boolean> = {
+    visitors: () => true,
+    list: is(EV.cpListViewed),
+    set_views: is(EV.cpSetViewed),
+    opens: is(EV.cpPageOpened),
+    reads: is(EV.showcasePageViewed),
+    downloads: download,
+    buys: is(EV.cpBuyClicked),
+    checkout: (r) => is(EV.cpCheckoutViewed)(r) && setOf(r) !== CUSTOM_REQUEST.slug,
+    gate_opened: is(EV.cpGateOpened),
+    lead_submitted: is(EV.cpLeadSubmitted),
+    lead_failed: keyed(EV.cpLeadFailed, (r) => str(r.props.reason)),
+    installs: (r) => is(EV.pageflyInstallClicked)(r) && r.props.surface === "collection_pages",
+    free_set: (r) => is(EV.cpSetViewed)(r) && free.has(setOf(r)),
+    free_open: (r) => is(EV.cpPageOpened)(r) && free.has(setOf(r)),
+    paid_set: (r) => is(EV.cpSetViewed)(r) && paid.has(setOf(r)),
+    sections: keyed(EV.cpSectionSeen, (r) => str(r.props.section)),
+    promo: keyed(EV.cpPromoClicked, (r) => str(r.props.card)),
+    buy_places: keyed(EV.cpBuyClicked, (r) => str(r.props.place)),
+    frames: keyed(EV.showcaseFrameChanged, (r) => str(r.props.frame)),
+    entries: keyed(view, (r) => str(r.props.entry) || "unknown"),
+    referrers: keyed((r) => view(r) && r.props.entry === "external", (r) => str(r.props.ref) || "unknown"),
+    countries: keyed(() => true, (r) => r.country ?? "Unplaced"),
+    screens: keyed(view, (r) => str(r.props.screen) || "unknown"),
+    checkout_failures: keyed(EV.cpCheckoutFailed, (r) => str(r.props.reason)),
+    page_opens: keyed(EV.cpPageOpened, (r) => str(r.props.page_type)),
+  };
+  const match = EVENTS[metric];
+  if (!match) return null;
+
+  return done(
+    ev
+      .filter((r) => match(r) && bySet(setOf(r)))
+      .map((r) => {
+        const lead = leadOf.get(r.visitorId);
+        const s = setOf(r);
+        const page = str(r.props.page_type) || str(r.props.page);
+        return {
+          at: r.createdAt,
+          country: r.country,
+          store: r.domain,
+          lead: lead ? { domain: lead.domain, email: lead.email } : null,
+          visitor: r.visitorId,
+          what: WHAT[r.name] ?? r.name,
+          set: s ? (names.get(s)?.name ?? (s === CUSTOM_REQUEST.slug ? "Custom request" : s)) : null,
+          page: s && page ? pageLabel(s, page) : null,
+          detail: detailOf(r),
+        };
+      }),
+  );
 }

@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { Fragment, useEffect, useState } from "react";
-import type { CpSetRow, CpSlice, CpView } from "@/lib/collectionAnalytics";
+import type { CpSetRow, CpSlice, CpView, FunnelStep } from "@/lib/collectionAnalytics";
 import { formatPrice } from "@/lib/collectionPages";
 import { countryLabel } from "@/lib/countries";
 import { Icon, Panel } from "../../ui";
 import { DayStrip } from "../DayStrip";
 import { StatTile, TileGroup, TileRow } from "../StatTile";
+import { HitFeed } from "./HitFeed";
 import { api } from "./shared";
 
 /* ==========================================================================
@@ -115,6 +116,10 @@ export function CollectionAnalytics() {
 
   const o = view?.overview;
   const window = day ? `on ${day}` : days === 0 ? "all time" : `over ${days} days`;
+  /* What every figure opens into — see `HitFeed`. */
+  const feed = (metric: string, title?: string) => (
+    <HitFeed query={{ metric }} days={days} day={day} title={title} />
+  );
 
   return (
     <div className="grid gap-6">
@@ -213,6 +218,7 @@ export function CollectionAnalytics() {
             <StatTile
               icon="Users"
               label="Visitors"
+              panel={feed("visitors", "Everything visitors did")}
               value={o.visitors}
               footnote="anyone who did anything on these pages"
               ratio={1}
@@ -221,6 +227,7 @@ export function CollectionAnalytics() {
             <StatTile
               icon="LayoutGrid"
               label="List views"
+              panel={feed("list")}
               value={o.listViews.n}
               footnote={`${people(o.listViews.people)} · ${pct(o.listViews.people, o.visitors)} of visitors`}
               ratio={ratio(o.listViews.people, o.visitors)}
@@ -232,22 +239,12 @@ export function CollectionAnalytics() {
               value={o.setViews.n}
               footnote={`${people(o.setViews.people)} · ${pct(o.setViews.people, o.visitors)} of visitors`}
               ratio={ratio(o.setViews.people, o.visitors)}
-              breakdown={{
-                rows: view.sets
-                  .filter((s) => s.views.n > 0)
-                  .sort((a, b) => b.views.people - a.views.people)
-                  .map((s) => ({
-                    label: s.name,
-                    value: String(s.views.n),
-                    note: people(s.views.people),
-                    ratio: ratio(s.views.people, o.setViews.people),
-                  })),
-                empty: "No set page was opened in this window.",
-              }}
+              panel={feed("set_views")}
             />
             <StatTile
               icon="Maximize"
               label="Previews opened"
+              panel={feed("opens")}
               value={o.opens.n}
               footnote={`${people(o.opens.people)} · median read ${secs(o.medianRead)}`}
               ratio={ratio(o.opens.people, o.setViews.people)}
@@ -259,29 +256,21 @@ export function CollectionAnalytics() {
               value={o.freeDownloads.people}
               footnote={`people · ${plural(o.freeDownloads.sets, "whole set")} + ${plural(o.freeDownloads.pages, "single page")}`}
               ratio={ratio(o.freeDownloads.people, o.visitors)}
-              breakdown={{
-                rows: view.sets
-                  .filter((s) => s.access === "free" && s.downloads.people > 0)
-                  .sort((a, b) => b.downloads.people - a.downloads.people)
-                  .map((s) => ({
-                    label: s.name,
-                    value: people(s.downloads.people),
-                    note: `${s.downloads.sets} sets · ${s.downloads.pages} pages`,
-                    ratio: ratio(s.downloads.people, o.freeDownloads.people),
-                  })),
-                empty: "Nothing was downloaded in this window.",
-              }}
+              panel={feed("downloads")}
             />
             <StatTile
-              icon="ShoppingCart"
-              label="Buy pressed"
-              value={o.buys.n}
-              footnote={`${people(o.buys.people)} on a premium set`}
-              ratio={ratio(o.buys.people, o.visitors)}
+              icon="Mail"
+              label="Leads collected"
+              value={o.leads}
+              footnote={`download forms · from ${people(o.gateOpened.people)} who pressed Download`}
+              ratio={ratio(o.leadPeople, o.gateOpened.people)}
+              panel={feed("leads", "Download forms filled in")}
+              hint="The store and email typed into the download form on a free set, stored before the file is offered."
             />
             <StatTile
               icon="ShoppingBag"
               label="Orders received"
+              panel={feed("orders")}
               value={o.ordersReceived}
               footnote={`orders · plus ${o.customRequests} custom ${o.customRequests === 1 ? "request" : "requests"}`}
               ratio={ratio(o.ordersReceived, o.buys.people)}
@@ -290,6 +279,7 @@ export function CollectionAnalytics() {
             <StatTile
               icon="Coins"
               label="Revenue confirmed"
+              panel={feed("revenue", "Confirmed orders")}
               value={Math.round(o.revenueCents / 100)}
               footnote={`USD · ${money(o.pendingCents)} waiting to be confirmed`}
               ratio={ratio(o.revenueCents, o.revenueCents + o.pendingCents)}
@@ -302,11 +292,19 @@ export function CollectionAnalytics() {
             title="Free funnel"
             note="From the list to a download, in people. A step can exceed the one above it when somebody lands straight on a set."
             steps={view.funnels.free}
+            feed={feed}
+          />
+          <Funnel
+            title="Download form"
+            note="From pressing Download on a free set to pressing Install PageFly after the file arrived, in people."
+            steps={view.funnels.gate}
+            feed={feed}
           />
           <Funnel
             title="Premium funnel"
             note="From the list to a confirmed order. The last two steps are orders, not people — the orders table has no visitor id."
             steps={view.funnels.paid}
+            feed={feed}
           />
 
           {/* ================= 3 · SET BY SET ================= */}
@@ -318,7 +316,7 @@ export function CollectionAnalytics() {
                 orders ÷ viewers for a premium one.
               </p>
             </div>
-            <SetTable sets={view.sets} />
+            <SetTable sets={view.sets} days={days} day={day} />
           </section>
 
           {/* ================= 4 · BEHAVIOUR ================= */}
@@ -332,7 +330,7 @@ export function CollectionAnalytics() {
             </div>
             <div className="grid gap-3 lg:grid-cols-2">
               <Breakdown
-                title="How far down the list"
+                title="How far down the list" metric="sections" keys={["free","premium","promo"]} days={days} day={day}
                 note="People who saw each row, of those who opened the list"
                 rows={[
                   { key: "Free page sets", n: view.sections.free, people: view.sections.free },
@@ -343,7 +341,7 @@ export function CollectionAnalytics() {
                 showPct
               />
               <Breakdown
-                title="Promo cards"
+                title="Promo cards" metric="promo" keys={["custom","build"]} days={days} day={day}
                 note="Presses on the two cards after the premium sets"
                 rows={[
                   { key: "Pre-order your template", ...view.promo.custom },
@@ -352,14 +350,14 @@ export function CollectionAnalytics() {
                 footer={`${view.promo.requestsSent} custom template ${view.promo.requestsSent === 1 ? "request" : "requests"} sent`}
               />
               <Breakdown
-                title="Which Buy button"
+                title="Which Buy button" metric="buy_places" days={days} day={day}
                 note="Where the press on Buy came from"
                 rows={view.buyPlaces}
                 labels={PLACE_LABELS}
                 empty="Nobody pressed Buy in this window."
               />
               <Breakdown
-                title="Preview widths"
+                title="Preview widths" metric="frames" days={days} day={day}
                 note="Switches to a width inside a page preview — it opens on desktop"
                 rows={view.frames}
                 labels={FRAME_LABELS}
@@ -389,6 +387,7 @@ export function CollectionAnalytics() {
               <StatTile
                 icon="Clock"
                 label="Waiting"
+                panel={feed("pending")}
                 value={view.orders.pending}
                 footnote="not answered yet"
                 ratio={ratio(view.orders.pending, view.orders.pending + view.orders.confirmed + view.orders.cancelled)}
@@ -397,6 +396,7 @@ export function CollectionAnalytics() {
               <StatTile
                 icon="CircleCheck"
                 label="Confirmed"
+                panel={feed("confirmed")}
                 value={view.orders.confirmed}
                 footnote={`${money(o.revenueCents)} confirmed`}
                 ratio={ratio(view.orders.confirmed, view.orders.pending + view.orders.confirmed + view.orders.cancelled)}
@@ -404,6 +404,7 @@ export function CollectionAnalytics() {
               <StatTile
                 icon="X"
                 label="Cancelled"
+                panel={feed("cancelled")}
                 value={view.orders.cancelled}
                 footnote="closed without a sale"
                 ratio={ratio(view.orders.cancelled, view.orders.pending + view.orders.confirmed + view.orders.cancelled)}
@@ -411,6 +412,7 @@ export function CollectionAnalytics() {
               <StatTile
                 icon="Clock"
                 label="Time to confirm"
+                panel={feed("confirmed")}
                 value={view.orders.medianHoursToConfirm ?? 0}
                 footnote={
                   view.orders.medianHoursToConfirm === null
@@ -458,10 +460,10 @@ export function CollectionAnalytics() {
               </p>
             </div>
             <div className="grid gap-3 lg:grid-cols-2">
-              <Breakdown title="How they arrived" rows={view.entries} labels={ENTRY_LABELS} empty="No visits recorded." byPeople />
-              <Breakdown title="Referring websites" note="For visits from another website" rows={view.referrers} empty="No visits from another website." byPeople />
+              <Breakdown title="How they arrived" metric="entries" days={days} day={day} rows={view.entries} labels={ENTRY_LABELS} empty="No visits recorded." byPeople />
+              <Breakdown title="Referring websites" metric="referrers" days={days} day={day} note="For visits from another website" rows={view.referrers} empty="No visits from another website." byPeople />
               <Breakdown
-                title="Countries"
+                title="Countries" metric="countries" days={days} day={day}
                 rows={view.countries.slice(0, 10)}
                 format={(k) => (k === "Unplaced" ? "Unplaced" : countryLabel(k))}
                 empty="No visits recorded."
@@ -469,7 +471,7 @@ export function CollectionAnalytics() {
                 unit="events"
                 footer={view.countries.length > 10 ? `+ ${view.countries.length - 10} more` : undefined}
               />
-              <Breakdown title="Screen size" rows={view.screens} labels={SCREEN_LABELS} empty="No visits recorded." byPeople />
+              <Breakdown title="Screen size" metric="screens" days={days} day={day} rows={view.screens} labels={SCREEN_LABELS} empty="No visits recorded." byPeople />
             </div>
           </section>
 
@@ -483,7 +485,7 @@ export function CollectionAnalytics() {
               </p>
             </div>
             <Breakdown
-              title="Messages shown"
+              title="Messages shown" metric="checkout_failures" days={days} day={day}
               rows={view.checkoutFailures}
               empty="The checkout has not refused anybody in this window."
               danger
@@ -509,12 +511,15 @@ function Funnel({
   title,
   note,
   steps,
+  feed,
 }: {
   title: string;
   note: string;
-  steps: { label: string; value: number; unit: "people" | "orders" }[];
+  steps: FunnelStep[];
+  feed: (metric: string, title?: string) => React.ReactNode;
 }) {
   const icons = ["LayoutGrid", "Eye", "Maximize", "Download", "ShoppingBag", "CircleCheck"] as const;
+  const gateIcons = ["Download", "Mail", "Package", "Rocket"] as const;
   return (
     <TileGroup title={title} note={note}>
       {steps.map((s, i) => {
@@ -523,8 +528,11 @@ function Funnel({
         return (
           <StatTile
             key={s.label}
+            panel={feed(s.metric, s.label)}
             icon={
-              title.startsWith("Premium") && i === 2
+              title === "Download form"
+                ? gateIcons[Math.min(i, gateIcons.length - 1)]
+                : title.startsWith("Premium") && i === 2
                 ? "ShoppingCart"
                 : title.startsWith("Premium") && i === 3
                   ? "ClipboardList"
@@ -563,6 +571,10 @@ function Breakdown({
   danger = false,
   footer,
   unit = "views",
+  metric,
+  keys,
+  days = 30,
+  day = null,
 }: {
   title: string;
   note?: string;
@@ -578,7 +590,14 @@ function Breakdown({
   footer?: string;
   /** what `n` counts when rows are ranked by people */
   unit?: string;
+  /** what a row opens into; rows are not pressable without one */
+  metric?: string;
+  /** each row's key for the feed, when the row's own key is a display label */
+  keys?: string[];
+  days?: number;
+  day?: string | null;
 }) {
+  const [picked, setPicked] = useState<number | null>(null);
   const top = total ?? Math.max(1, ...rows.map((r) => (byPeople ? r.people : r.n)));
   const nothing = rows.every((r) => r.n === 0);
   return (
@@ -589,10 +608,30 @@ function Breakdown({
         <p className="mt-3 text-[12px] text-pf-muted">{empty}</p>
       ) : (
         <div className="mt-3 grid gap-2.5">
-          {rows.map((r) => {
+          {rows.map((r, i) => {
             const v = byPeople || showPct ? r.people : r.n;
+            const on = picked === i;
             return (
-              <div key={r.key} className="grid gap-1">
+              <div
+                key={r.key}
+                role={metric ? "button" : undefined}
+                tabIndex={metric ? 0 : undefined}
+                aria-expanded={metric ? on : undefined}
+                onClick={metric ? () => setPicked(on ? null : i) : undefined}
+                onKeyDown={
+                  metric
+                    ? (e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setPicked(on ? null : i);
+                        }
+                      }
+                    : undefined
+                }
+                className={`grid gap-1 rounded-pf-sm ${
+                  metric ? "-mx-2 cursor-pointer px-2 py-1 transition-colors hover:bg-pf-card-hi/60" : ""
+                } ${on ? "bg-pf-card-hi/60" : ""}`}
+              >
                 <div className="flex items-baseline gap-3">
                   <span className="min-w-0 flex-1 truncate text-[12.5px] text-pf-body" title={r.key}>
                     {format ? format(r.key) : (labels?.[r.key] ?? r.key)}
@@ -621,12 +660,25 @@ function Breakdown({
         </div>
       )}
       {footer && <p className="mt-3 border-t border-pf-border pt-2 text-[11.5px] text-pf-muted">{footer}</p>}
+      {metric && !nothing && picked === null && (
+        <p className="mt-3 text-[11px] text-pf-faint">Press a row to see who, and when.</p>
+      )}
+      {metric && picked !== null && rows[picked] && (
+        <div className="mt-3">
+          <HitFeed
+            query={{ metric, key: keys?.[picked] ?? rows[picked].key }}
+            days={days}
+            day={day}
+            title={format ? format(rows[picked].key) : (labels?.[rows[picked].key] ?? rows[picked].key)}
+          />
+        </div>
+      )}
     </Panel>
   );
 }
 
 /* ---- set by set, each opening into its pages ---- */
-function SetTable({ sets }: { sets: CpSetRow[] }) {
+function SetTable({ sets, days, day }: { sets: CpSetRow[]; days: number; day: string | null }) {
   const [open, setOpen] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>("views");
   const rows = [...sets].sort((a, b) =>
@@ -701,7 +753,10 @@ function SetTable({ sets }: { sets: CpSetRow[] }) {
                   <Num main={s.opens.n} sub={people(s.opens.people)} />
                   <td className="px-3 py-3 text-right tabular-nums text-pf-body">{secs(s.medianRead)}</td>
                   {free ? (
-                    <Num main={s.downloads.people} sub={`${plural(s.downloads.sets, "set")} · ${plural(s.downloads.pages, "page")}`} />
+                    <Num
+                      main={s.downloads.people}
+                      sub={`${plural(s.downloads.sets, "set")} · ${plural(s.downloads.pages, "page")} · ${plural(s.leads, "lead")}`}
+                    />
                   ) : (
                     <td className="px-3 py-3 text-right text-pf-faint">—</td>
                   )}
@@ -733,6 +788,14 @@ function SetTable({ sets }: { sets: CpSetRow[] }) {
                   <tr className="border-b border-pf-border bg-pf-bg-deep/40">
                     <td colSpan={10} className="px-3 py-3">
                       <PageTable set={s} />
+                      <div className="mt-4 pl-6">
+                        <HitFeed
+                          query={{ metric: "visitors", set: s.slug }}
+                          days={days}
+                          day={day}
+                          title={`Everything that happened on ${s.name}`}
+                        />
+                      </div>
                     </td>
                   </tr>
                 )}

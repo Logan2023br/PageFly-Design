@@ -15,6 +15,7 @@ import type {
   RunRecord,
   StoreRecord,
   StoreSummary,
+  CollectionLeadRecord,
   CollectionOrderRecord,
   CollectionPageMeta,
   CollectionSetInput,
@@ -66,6 +67,7 @@ type Shape = {
     pagefly: string | null;
   })[];
   collectionOrders: CollectionOrderRecord[];
+  collectionLeads: CollectionLeadRecord[];
 };
 
 /* The same rule as `geoClause` in the postgres repo, in the other language —
@@ -82,7 +84,7 @@ function geoAllows(country: string | null, geo: GeoFilter): boolean {
   return true;
 }
 
-const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], pageFiles: [], photos: [], jobs: [], training: [], trainingSections: [], events: [], modelCalls: [], collectionSets: [], collectionPages: [], collectionOrders: [] };
+const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], pageFiles: [], photos: [], jobs: [], training: [], trainingSections: [], events: [], modelCalls: [], collectionSets: [], collectionPages: [], collectionOrders: [], collectionLeads: [] };
 
 /** The map key for "no store". A domain can never contain a space, so this
     cannot collide with one — and unlike a NUL it survives grep and an editor. */
@@ -111,6 +113,7 @@ export function createMemoryRepo(file: string): Repo {
         collectionSets: parsed.collectionSets ?? [],
         collectionPages: parsed.collectionPages ?? [],
         collectionOrders: parsed.collectionOrders ?? [],
+        collectionLeads: parsed.collectionLeads ?? [],
         training: parsed.training ?? [],
         /* Absent in a file written before section references existed. Rows
            written before `vertical` existed read as the shared filing, which is
@@ -689,7 +692,9 @@ export function createMemoryRepo(file: string): Repo {
           (e) =>
             e.createdAt >= from &&
             e.createdAt < to &&
-            (e.name.startsWith("design_cp_") || e.props?.from === "collection_pages"),
+            (e.name.startsWith("design_cp_") ||
+              e.props?.from === "collection_pages" ||
+              e.props?.surface === "collection_pages"),
         )
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
         .slice(0, limit)
@@ -697,9 +702,23 @@ export function createMemoryRepo(file: string): Repo {
           name: e.name,
           props: e.props ?? {},
           visitorId: e.visitorId,
+          domain: e.domain ?? null,
           country: e.country ?? null,
           createdAt: e.createdAt,
         }));
+    },
+
+    async createCollectionLead(lead) {
+      sync();
+      data.collectionLeads.push(lead);
+      flush();
+    },
+
+    async listCollectionLeads(limit) {
+      sync();
+      return [...data.collectionLeads]
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, limit);
     },
 
     async createJob(job) {

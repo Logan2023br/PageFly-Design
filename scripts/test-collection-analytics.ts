@@ -8,8 +8,13 @@
    than from events, and the funnel in people.
    ========================================================================== */
 import { EV } from "../lib/analytics";
-import { buildCollectionView } from "../lib/collectionAnalytics";
-import type { CollectionEventRow, CollectionOrderRecord, CollectionSetRecord } from "../lib/db/types";
+import { buildCollectionView, collectionHits } from "../lib/collectionAnalytics";
+import type {
+  CollectionEventRow,
+  CollectionLeadRecord,
+  CollectionOrderRecord,
+  CollectionSetRecord,
+} from "../lib/db/types";
 
 let bad = 0;
 function check(ok: boolean, label: string, detail: unknown = ""): void {
@@ -22,6 +27,7 @@ const e = (name: string, visitorId: string, props: Record<string, unknown> = {},
   name,
   props,
   visitorId,
+  domain: visitorId === "b" ? "signed-in.myshopify.com" : null,
   country,
   createdAt: at,
 });
@@ -44,7 +50,12 @@ const events: CollectionEventRow[] = [
   e(EV.showcasePageViewed, "a", { set: "free", page_type: "home", seconds: 10, ...CP }),
   e(EV.showcasePageViewed, "a", { set: "free", page_type: "home", seconds: 30, ...CP }),
   e(EV.showcaseFrameChanged, "a", { set: "free", page_type: "home", frame: "mobile", ...CP }),
+  e(EV.cpGateOpened, "a", { set: "free", page: "", place: "card" }),
+  e(EV.cpLeadSubmitted, "a", { set: "free", page: "" }),
   e(EV.showcaseSetDownloaded, "a", { set: "free", pages: 2, ...CP }),
+  e(EV.pageflyInstallClicked, "a", { surface: "collection_pages" }),
+  // an install press somewhere else in the product is not this screen's
+  e(EV.pageflyInstallClicked, "a", { surface: "results" }),
   e(EV.showcaseFileDownloaded, "a", { set: "free", page_type: "about", ...CP }),
   // b: list → paid set → buy on card → checkout → failed once; also promo
   e(EV.cpListViewed, "b", { entry: "direct", ref: "", screen: "mobile" }, "2026-09-21T10:00:00.000Z", "US"),
@@ -70,9 +81,15 @@ const orders: CollectionOrderRecord[] = [
   order("old", "paid", "confirmed", 6900, "2025-01-01T00:00:00.000Z", "2025-01-01T01:00:00.000Z"),
 ];
 
+const leads: CollectionLeadRecord[] = [
+  { id: "l1", setSlug: "free", setName: "Free Set", pageSlug: null, domain: "alpha.myshopify.com", email: "a@alpha.co", visitorId: "a", country: "VN", createdAt: T },
+  { id: "l0", setSlug: "free", setName: "Free Set", pageSlug: "about", domain: "old.myshopify.com", email: "old@x.co", visitorId: "z", country: null, createdAt: "2025-01-01T00:00:00.000Z" },
+];
+
 const v = buildCollectionView({
   events,
   orders,
+  leads,
   sets,
   days: 30,
   day: null,
@@ -125,12 +142,36 @@ check(v.countries.some((c) => c.key === "Unplaced"), "no country reads as Unplac
 check(v.checkoutFailures[0]?.key === "That email does not look right.", "checkout failures by message");
 check(v.orders.medianHoursToConfirm === 4, "hours from order to confirm", v.orders.medianHoursToConfirm);
 
+console.log("\nthe download form");
+check(v.overview.gateOpened.people === 1 && v.overview.leads === 1, "form opened and leads in the window", [v.overview.gateOpened, v.overview.leads]);
+check(v.overview.installs.n === 1, "only installs pressed from this section count", v.overview.installs);
+check(JSON.stringify(v.funnels.gate.map((s) => s.value)) === "[1,1,1,1]", "form funnel", v.funnels.gate.map((s) => s.value));
+check(free.leads === 1, "leads per set");
+
+console.log("\nwho, and when");
+const W = { day: null, from: "2026-09-01T00:00:00.000Z", to: "2026-10-01T00:00:00.000Z", tz: 0, limit: 300, events, orders, leads, sets, key: null, set: null };
+const opens = collectionHits({ ...W, metric: "opens" })!;
+check(opens.total === v.overview.opens.n, "a feed has as many rows as its tile counts", [opens.total, v.overview.opens.n]);
+check(opens.hits[0].lead?.email === "a@alpha.co", "an anonymous browser is named by the form it filled in", opens.hits[0].lead);
+const bRows = collectionHits({ ...W, metric: "buys" })!;
+check(bRows.hits[0].store === "signed-in.myshopify.com", "a signed-in store is named from the session");
+check(bRows.hits[0].country === "US", "rows carry the country");
+const leadRows = collectionHits({ ...W, metric: "leads" })!;
+check(leadRows.total === 1, "leads in the window only", leadRows.total);
+const pend = collectionHits({ ...W, metric: "pending" })!;
+check(pend.total === 2, "orders by status, custom requests included", pend.total);
+const promo = collectionHits({ ...W, metric: "promo", key: "build" })!;
+check(promo.total === 1 && collectionHits({ ...W, metric: "promo", key: "custom" })!.total === 0, "a breakdown row narrows by its key");
+const onSet = collectionHits({ ...W, metric: "visitors", set: "free" })!;
+check(onSet.hits.every((h) => h.set === "Free Set"), "a set's activity is that set's only");
+check(collectionHits({ ...W, metric: "nonsense" }) === null, "an unknown figure opens nothing");
+
 console.log("\na picked day");
-const one = buildCollectionView({ events, orders, sets, days: 30, day: "2026-09-21", from: "2026-09-01T00:00:00.000Z", to: "2026-10-01T00:00:00.000Z", tz: 0, truncated: false });
+const one = buildCollectionView({ events, orders, leads, sets, days: 30, day: "2026-09-21", from: "2026-09-01T00:00:00.000Z", to: "2026-10-01T00:00:00.000Z", tz: 0, truncated: false });
 check(one.overview.visitors === 1, "only that day's visitors", one.overview.visitors);
 check(one.overview.ordersReceived === 1, "only that day's orders", one.overview.ordersReceived);
 check(one.daily.length === 2, "the strip still shows the whole window", one.daily.length);
-const shifted = buildCollectionView({ events, orders, sets, days: 30, day: "2026-09-21", from: "2026-09-01T00:00:00.000Z", to: "2026-10-01T00:00:00.000Z", tz: 840, truncated: false });
+const shifted = buildCollectionView({ events, orders, leads, sets, days: 30, day: "2026-09-21", from: "2026-09-01T00:00:00.000Z", to: "2026-10-01T00:00:00.000Z", tz: 840, truncated: false });
 /* At UTC+14, 10:00Z on the 20th is midnight on the 21st (a, c, d) and b's
    10:00Z on the 21st has moved on to the 22nd. */
 check(shifted.overview.visitors === 3, "a day is the reader's day, not UTC's", shifted.overview.visitors);

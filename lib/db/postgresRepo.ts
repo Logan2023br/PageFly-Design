@@ -473,6 +473,20 @@ create table if not exists collection_orders (
 create index if not exists collection_orders_created on collection_orders (created_at desc);
 /* Custom-template requests arrived after the table did. */
 alter table collection_orders add column if not exists note text;
+
+/* The download form on free sets. No foreign key: a lead outlives its set. */
+create table if not exists collection_leads (
+  id         text primary key,
+  set_slug   text not null,
+  set_name   text not null,
+  page_slug  text,
+  domain     text not null,
+  email      text not null,
+  visitor_id text,
+  country    text,
+  created_at timestamptz not null default now()
+);
+create index if not exists collection_leads_created on collection_leads (created_at desc);
 `;
 
 /* The page columns WITHOUT the files — a size is all a listing needs. */
@@ -1378,10 +1392,12 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
     async collectionPageEvents(from, to, limit) {
       await ready();
       const { rows } = await db.query(
-        `select name, props, visitor_id, country, created_at
+        `select name, props, visitor_id, domain, country, created_at
            from events
           where created_at >= $1 and created_at < $2
-            and (left(name, 10) = 'design_cp_' or props->>'from' = 'collection_pages')
+            and (left(name, 10) = 'design_cp_'
+                 or props->>'from' = 'collection_pages'
+                 or props->>'surface' = 'collection_pages')
           order by created_at
           limit $3`,
         [from, to, limit],
@@ -1390,6 +1406,36 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
         name: String(r.name),
         props: (r.props as Record<string, unknown>) ?? {},
         visitorId: String(r.visitor_id),
+        domain: (r.domain as string) ?? null,
+        country: (r.country as string) ?? null,
+        createdAt: iso(r.created_at) ?? "",
+      }));
+    },
+
+    async createCollectionLead(l) {
+      await ready();
+      await db.query(
+        `insert into collection_leads
+           (id, set_slug, set_name, page_slug, domain, email, visitor_id, country, created_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [l.id, l.setSlug, l.setName, l.pageSlug, l.domain, l.email, l.visitorId, l.country, l.createdAt],
+      );
+    },
+
+    async listCollectionLeads(limit) {
+      await ready();
+      const { rows } = await db.query(
+        `select * from collection_leads order by created_at desc limit $1`,
+        [limit],
+      );
+      return rows.map((r) => ({
+        id: String(r.id),
+        setSlug: String(r.set_slug),
+        setName: String(r.set_name),
+        pageSlug: (r.page_slug as string) ?? null,
+        domain: String(r.domain),
+        email: String(r.email),
+        visitorId: (r.visitor_id as string) ?? null,
         country: (r.country as string) ?? null,
         createdAt: iso(r.created_at) ?? "",
       }));

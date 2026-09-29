@@ -1,5 +1,10 @@
 import { EV } from "@/lib/analytics";
-import { buildCollectionView, type CpView } from "@/lib/collectionAnalytics";
+import {
+  buildCollectionView,
+  collectionHits,
+  type CpHit,
+  type CpView,
+} from "@/lib/collectionAnalytics";
 import { getRepo } from "@/lib/db";
 import { guard } from "../shared";
 
@@ -13,7 +18,7 @@ import { guard } from "../shared";
 
      EV.cpListViewed  EV.cpSetViewed  EV.cpSectionSeen  EV.cpPageOpened
      EV.cpBuyClicked  EV.cpCheckoutViewed  EV.cpCheckoutFailed
-     EV.cpPromoClicked
+     EV.cpPromoClicked  EV.cpGateOpened  EV.cpLeadSubmitted  EV.cpLeadFailed
      EV.showcasePageViewed  EV.showcaseFrameChanged
      EV.showcaseFileDownloaded  EV.showcaseSetDownloaded
        (the last four only where they say from: "collection_pages")
@@ -30,6 +35,13 @@ const MAX_EVENTS = 200_000;
 export type CollectionAnalyticsResponse =
   | { ok: true; view: CpView }
   | { ok: false; error: string };
+
+/** `?hits=<metric>` — what one element of the screen opens into. */
+export type CollectionHitsResponse =
+  | { ok: true; hits: CpHit[]; total: number }
+  | { ok: false; error: string };
+
+const MAX_HITS = 300;
 
 export async function GET(request: Request) {
   const denied = await guard();
@@ -58,14 +70,42 @@ export async function GET(request: Request) {
 
   try {
     const repo = getRepo();
-    const [events, orders, sets] = await Promise.all([
+    const [events, orders, sets, leads] = await Promise.all([
       repo.collectionPageEvents(from.toISOString(), to.toISOString(), MAX_EVENTS),
       repo.listCollectionOrders(),
       repo.listCollectionSets(),
+      repo.listCollectionLeads(20_000),
     ]);
+
+    const metric = url.searchParams.get("hits");
+    if (metric) {
+      const result = collectionHits({
+        metric,
+        key: url.searchParams.get("key"),
+        set: url.searchParams.get("set"),
+        events,
+        orders,
+        leads,
+        sets,
+        day,
+        from: from.toISOString(),
+        to: to.toISOString(),
+        tz,
+        limit: MAX_HITS,
+      });
+      if (!result) {
+        return Response.json(
+          { ok: false, error: "That figure does not open." } satisfies CollectionHitsResponse,
+          { status: 400 },
+        );
+      }
+      return Response.json({ ok: true, ...result } satisfies CollectionHitsResponse);
+    }
+
     const view = buildCollectionView({
       events,
       orders,
+      leads,
       sets,
       days,
       day,
@@ -94,4 +134,7 @@ void [
   EV.cpCheckoutViewed,
   EV.cpCheckoutFailed,
   EV.cpPromoClicked,
+  EV.cpGateOpened,
+  EV.cpLeadSubmitted,
+  EV.cpLeadFailed,
 ];

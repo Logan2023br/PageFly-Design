@@ -96,6 +96,7 @@ export function StatTile({
   only,
   except,
   breakdown,
+  panel,
 }: {
   icon: IconName;
   label: string;
@@ -151,6 +152,12 @@ export function StatTile({
     empty?: string;
   };
   /**
+   * What the tile opens into when neither `event` nor `breakdown` says —
+   * drawn full width under the row, mounted only while open. The collection
+   * pages screen uses it for its own "who, and when" feed.
+   */
+  panel?: React.ReactNode;
+  /**
    * One value of the event's parameter, when this tile counts one slice of it.
    *
    * The five Install PageFly tiles are one event fired from five placements.
@@ -176,7 +183,7 @@ export function StatTile({
   const geo = useContext(GeoContext);
   const geoOnly = only ?? geo.only;
   const geoExcept = except ?? geo.except;
-  const canOpen = Boolean((event && DETAIL_OF[event]) || breakdown);
+  const canOpen = Boolean((event && DETAIL_OF[event]) || breakdown || panel);
   const [what, ...rest] = (hint ?? "").split("\n");
 
   return (
@@ -320,7 +327,17 @@ export function StatTile({
         </Panel>
       </motion.div>
     )}
-    {open && !breakdown && event && (
+    {open && !breakdown && panel && (
+      <motion.div
+        initial={{ opacity: 0, y: -4 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.16 }}
+        className="col-span-full"
+      >
+        {panel}
+      </motion.div>
+    )}
+    {open && !breakdown && !panel && event && (
       <TileDetail
         /* REMOUNTED when any of these change — the panel fetches on mount and
            does not re-fetch, so the key is what makes a filter change reach an

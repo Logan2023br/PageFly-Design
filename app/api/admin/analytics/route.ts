@@ -448,6 +448,7 @@ const SURFACES: Record<string, string> = {
   export_popup: "Popup after an export",
   landing_live: "Landing · Going live",
   topbar_landing: "Top bar · Landing",
+  collection_pages: "Collection pages · after a download",
   topbar_login: "Top bar · Sign in",
   topbar_register: "Top bar · Register",
   topbar_design: "Top bar · Design",

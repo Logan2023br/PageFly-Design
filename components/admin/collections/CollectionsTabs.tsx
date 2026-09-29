@@ -3,30 +3,35 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Icon } from "../../ui";
-import type { CollectionOrderRecord, CollectionSetRecord } from "@/lib/db/types";
+import type { CollectionLeadRecord, CollectionOrderRecord, CollectionSetRecord } from "@/lib/db/types";
+import { CollectionLeads } from "./CollectionLeads";
 import { CollectionOrders } from "./CollectionOrders";
 import { CollectionSetsAdmin } from "./CollectionSetsAdmin";
 
 /* Sets and the orders for them, one screen. The Orders tab counts what is
    still waiting, because that is the number somebody opens it to act on. */
+type Tab = "sets" | "orders" | "leads";
+
 export function CollectionsTabs({
   sets,
   missing,
   orders: initialOrders,
   ordersError,
+  leads,
   tab: initialTab,
 }: {
   sets: CollectionSetRecord[];
   missing: string[];
   orders: CollectionOrderRecord[];
   ordersError: string | null;
-  tab: "sets" | "orders";
+  leads: CollectionLeadRecord[];
+  tab: Tab;
 }) {
   const [tab, setTab] = useState(initialTab);
   const [orders, setOrders] = useState(initialOrders);
   const pending = orders.filter((o) => o.status === "pending").length;
 
-  const button = (id: "sets" | "orders", label: string, badge?: number) => (
+  const button = (id: Tab, label: string, badge?: number) => (
     <button
       type="button"
       role="tab"
@@ -34,7 +39,7 @@ export function CollectionsTabs({
       onClick={() => {
         setTab(id);
         /* In the URL, so a reload or a shared link lands on the same tab. */
-        window.history.replaceState(null, "", id === "orders" ? "?tab=orders" : "?");
+        window.history.replaceState(null, "", id === "sets" ? "?" : `?tab=${id}`);
       }}
       className={`flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-[13px] font-semibold transition-colors ${
         tab === id ? "bg-pf-primary text-white" : "text-pf-muted hover:text-pf-text"
@@ -63,6 +68,7 @@ export function CollectionsTabs({
         >
           {button("sets", "Sets")}
           {button("orders", "Orders", pending)}
+          {button("leads", `Leads · ${leads.length}`)}
         </div>
         {/* A screen of its own rather than a third tab: it has its own window,
             its own day and its own refresh, none of which mean anything to a
@@ -77,8 +83,10 @@ export function CollectionsTabs({
       </div>
       {tab === "sets" ? (
         <CollectionSetsAdmin initial={sets} missing={missing} />
-      ) : (
+      ) : tab === "orders" ? (
         <CollectionOrders orders={orders} onChange={setOrders} loadError={ordersError} />
+      ) : (
+        <CollectionLeads leads={leads} />
       )}
     </div>
   );

@@ -204,7 +204,8 @@ export function PageViewer({
   page: ShowcasePage;
   from: string;
   onClose: () => void;
-  /** replaces the Download link — a paid set offers its buy button there */
+  /** replaces the Download link — a paid set's buy button, a gated download;
+      `null` shows nothing there, `undefined` the plain link */
   action?: ReactNode;
 }) {
   /* `null` on the page means no file is handed over — see ShowcasePage.file. */
@@ -317,7 +318,7 @@ export function PageViewer({
           {/* THE FILE ITSELF, offered where the claim is made. The page on screen
               is a render of exactly these bytes, so "is this real" is answered by
               taking it rather than by a sentence. */}
-{action ?? (file && (
+{action !== undefined ? action : (file && (
           <a
             href={file}
             /* Prefixed with the set, because a merchant who takes one from each

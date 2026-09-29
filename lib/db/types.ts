@@ -703,6 +703,27 @@ export type CollectionEventRow = {
   name: string;
   props: Record<string, unknown>;
   visitorId: string;
+  /** the store, when a PageFly Design session was signed in */
+  domain: string | null;
+  country: string | null;
+  createdAt: string;
+};
+
+/**
+ * Somebody who filled in the download form on a free set: the store and the
+ * email they gave before the file was handed over. `visitorId` is the same
+ * random browser id the analytics events carry, which is how a lead is put
+ * beside what that browser did.
+ */
+export type CollectionLeadRecord = {
+  id: string;
+  setSlug: string;
+  setName: string;
+  /** the single page taken, or null for the whole set */
+  pageSlug: string | null;
+  domain: string;
+  email: string;
+  visitorId: string | null;
   country: string | null;
   createdAt: string;
 };
@@ -864,6 +885,9 @@ export type Repo = {
    * is hit is reported rather than silently short.
    */
   collectionPageEvents(from: string, to: string, limit: number): Promise<CollectionEventRow[]>;
+  createCollectionLead(lead: CollectionLeadRecord): Promise<void>;
+  /** newest first */
+  listCollectionLeads(limit: number): Promise<CollectionLeadRecord[]>;
 
   /* ---- stock photos ---- */
   getPhotos(queries: string[]): Promise<PhotoRecord[]>;

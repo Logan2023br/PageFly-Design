@@ -8,6 +8,7 @@ import { countLabel, pagesLabel, type PublicCollectionSet } from "@/lib/collecti
 import type { ShowcasePage } from "@/lib/showcasePages";
 import { Icon } from "../ui";
 import { PageThumb, PageViewer } from "../landing/PagePreview";
+import { DownloadGate } from "./DownloadGate";
 import { SetAction } from "./SetAction";
 
 /* ==========================================================================
@@ -27,6 +28,8 @@ export function SetDetail({
   preview?: boolean;
 }) {
   const [open, setOpen] = useState<ShowcasePage | null>(null);
+  /* A single page asked for from inside its preview. */
+  const [gate, setGate] = useState<ShowcasePage | null>(null);
 
   /* Not while an admin previews a hidden set — that is checking, not traffic. */
   useTrackOnce(preview ? "" : set.id, () => {
@@ -139,9 +142,24 @@ export function SetDetail({
           page={open}
           from="collection_pages"
           onClose={() => setOpen(null)}
-          action={set.access === "paid" ? <SetAction set={set} place="viewer" /> : undefined}
+          action={
+            set.access === "paid" ? (
+              <SetAction set={set} place="viewer" />
+            ) : open.file ? (
+              <button
+                type="button"
+                onClick={() => setGate(open)}
+                className="inline-flex items-center gap-1.5 rounded-pf-md border border-pf-border-hi px-3 py-1.5 text-[12.5px] font-semibold text-pf-body transition-colors hover:border-pf-primary-hi hover:text-pf-text"
+              >
+                <Icon name="Download" size={13} />
+                Download .pagefly
+              </button>
+            ) : null
+          }
         />
       )}
+
+      {gate && <DownloadGate set={set} page={gate} place="viewer" onClose={() => setGate(null)} />}
     </>
   );
 }

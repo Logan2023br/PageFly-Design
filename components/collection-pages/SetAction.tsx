@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { EV, track } from "@/lib/analytics";
 import { checkoutUrl, pagesLabel, type PublicCollectionSet } from "@/lib/collectionPages";
 import { Icon } from "../ui";
+import { DownloadGate } from "./DownloadGate";
 
 /* ==========================================================================
    THE ONE BUTTON A SET HAS, and which one it is depends on the set.
@@ -49,19 +51,38 @@ export function SetAction({
   }
 
   if (!set.download) return null;
+  return <FreeDownload set={set} cls={cls} size={size} place={place} count={count} />;
+}
+
+/* The free button opens the download form rather than handing over the file —
+   see `DownloadGate`. Its own component because it holds the open state. */
+function FreeDownload({
+  set,
+  cls,
+  size,
+  place,
+  count,
+}: {
+  set: PublicCollectionSet;
+  cls: string;
+  size: "sm" | "lg";
+  place: "card" | "detail" | "viewer";
+  count: number;
+}) {
+  const [open, setOpen] = useState(false);
   return (
-    <a
-      href={set.download}
-      download={`${set.id}.pagefly`}
-      onClick={() =>
-        track(EV.showcaseSetDownloaded, { set: set.id, pages: count, from: "collection_pages" })
-      }
-      className={`${cls} bg-pf-primary font-semibold text-white shadow-pf-button transition-colors hover:bg-pf-primary-hi`}
-    >
-      <Icon name="Download" size={size === "lg" ? 15 : 13} />
-      {size === "lg" && count > 1
-        ? `Download free · all ${pagesLabel(count)}`
-        : `Download free · ${pagesLabel(count)}`}
-    </a>
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={`${cls} bg-pf-primary font-semibold text-white shadow-pf-button transition-colors hover:bg-pf-primary-hi`}
+      >
+        <Icon name="Download" size={size === "lg" ? 15 : 13} />
+        {size === "lg" && count > 1
+          ? `Download free · all ${pagesLabel(count)}`
+          : `Download free · ${pagesLabel(count)}`}
+      </button>
+      {open && <DownloadGate set={set} page={null} place={place} onClose={() => setOpen(false)} />}
+    </>
   );
 }
