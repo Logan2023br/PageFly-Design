@@ -18,9 +18,12 @@ import { Icon } from "../ui";
 export function SetAction({
   set,
   size = "sm",
+  place,
 }: {
   set: PublicCollectionSet;
   size?: "sm" | "lg";
+  /** which of the three buttons this is, for the Buy press */
+  place: "card" | "detail" | "viewer";
 }) {
   const cls =
     size === "lg"
@@ -32,6 +35,9 @@ export function SetAction({
     return (
       <Link
         href={checkoutUrl(set.id)}
+        onClick={() =>
+          track(EV.cpBuyClicked, { set: set.id, place, price: set.price ?? "" })
+        }
         className={`${cls} bg-pf-warn font-semibold text-pf-ink shadow-pf-button transition-opacity hover:opacity-90`}
       >
         <Icon name="ShoppingCart" size={size === "lg" ? 15 : 13} />

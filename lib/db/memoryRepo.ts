@@ -682,6 +682,26 @@ export function createMemoryRepo(file: string): Repo {
       return out;
     },
 
+    async collectionPageEvents(from, to, limit) {
+      sync();
+      return data.events
+        .filter(
+          (e) =>
+            e.createdAt >= from &&
+            e.createdAt < to &&
+            (e.name.startsWith("design_cp_") || e.props?.from === "collection_pages"),
+        )
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+        .slice(0, limit)
+        .map((e) => ({
+          name: e.name,
+          props: e.props ?? {},
+          visitorId: e.visitorId,
+          country: e.country ?? null,
+          createdAt: e.createdAt,
+        }));
+    },
+
     async createJob(job) {
       sync();
       data.jobs.push({ ...job });

@@ -699,6 +699,14 @@ export type CollectionOrderRecord = {
   updatedAt: string;
 };
 
+export type CollectionEventRow = {
+  name: string;
+  props: Record<string, unknown>;
+  visitorId: string;
+  country: string | null;
+  createdAt: string;
+};
+
 export type CollectionPageInput = Omit<CollectionPageMeta, "htmlSize" | "pageflySize" | "updatedAt">;
 
 export type TrainingSummary = {
@@ -849,6 +857,13 @@ export type Repo = {
   collectionDownloads(eventNames: string[]): Promise<Record<string, number>>;
   /** confirmed orders per set id — what "purchases" means on the public page */
   collectionPurchases(): Promise<Record<string, number>>;
+  /**
+   * Every event from /collection-pages in a window, as rows: the `design_cp_*`
+   * names, and the shared viewer/download events that say
+   * `from: "collection_pages"`. Capped — this screen is small, and a cap that
+   * is hit is reported rather than silently short.
+   */
+  collectionPageEvents(from: string, to: string, limit: number): Promise<CollectionEventRow[]>;
 
   /* ---- stock photos ---- */
   getPhotos(queries: string[]): Promise<PhotoRecord[]>;

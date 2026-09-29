@@ -78,7 +78,15 @@ const APP = [join(ROOT, "app"), join(ROOT, "components"), join(ROOT, "lib")]
   .filter((f) => !f.includes(join("api", "admin")) && !f.includes(join("components", "admin")))
   .map((f) => ({ file: f.slice(ROOT.length + 1), text: code(readFileSync(f, "utf8")) }));
 
-const ROUTE = readFileSync(join(ROOT, "app/api/admin/analytics/route.ts"), "utf8");
+const MAIN_ROUTE = readFileSync(join(ROOT, "app/api/admin/analytics/route.ts"), "utf8");
+/* The /collection-pages events have a screen of their own — Admin →
+   Collection pages → Analytics — and "has a tile" means on either screen.
+   The lookup tables below are only ever in the main route. */
+const CP_ROUTE = readFileSync(
+  join(ROOT, "app/api/admin/collection-pages/analytics/route.ts"),
+  "utf8",
+);
+const ROUTE = MAIN_ROUTE;
 
 /* ==========================================================================
    ONE NAMED TABLE AT A TIME, NOT THE WHOLE FILE.
@@ -114,7 +122,8 @@ console.log("\nevery event reaches the analytics screen");
 for (const [key, name] of Object.entries(EV)) {
   /* The route names events as `EV.something`, never as the string, so that is
      what is looked for — a raw string in the route would be its own bug. */
-  check(new RegExp(`EV\\.${key}\\b`).test(ROUTE), `${name} has a tile`, `EV.${key}`);
+  const re = new RegExp(`EV\\.${key}\\b`);
+  check(re.test(MAIN_ROUTE) || re.test(CP_ROUTE), `${name} has a tile`, `EV.${key}`);
 }
 
 /* ==========================================================================

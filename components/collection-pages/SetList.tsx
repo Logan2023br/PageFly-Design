@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { EV, track } from "@/lib/analytics";
+import { entryFor, refHost, screenBucket, useSeenOnce, useTrackOnce } from "./cpTrack";
 import { countLabel, pagesLabel, type PublicCollectionSet } from "@/lib/collectionPages";
 import { Icon } from "../ui";
 import { PageThumb } from "../landing/PagePreview";
@@ -23,6 +25,15 @@ export function SetList({ sets }: { sets: PublicCollectionSet[] }) {
   const free = sets.filter((s) => s.access === "free");
   const paid = sets.filter((s) => s.access === "paid");
 
+  useTrackOnce("list", () =>
+    track(EV.cpListViewed, {
+      entry: entryFor("list"),
+      ref: refHost(),
+      screen: screenBucket(),
+      sets: sets.length,
+    }),
+  );
+
   return (
     <>
       <div className="max-w-[720px]">
@@ -44,6 +55,7 @@ export function SetList({ sets }: { sets: PublicCollectionSet[] }) {
           title="Free page sets"
           sub="Every page is yours to keep. Download a whole set in one file and import it straight into your PageFly editor — no cost, no sign-up."
           sets={free}
+          section="free"
         />
       )}
 
@@ -55,6 +67,7 @@ export function SetList({ sets }: { sets: PublicCollectionSet[] }) {
         sub="Fuller stores with more pages and more polish. Preview every page for free — when you buy, we check your order and send the files to your email."
         sets={paid}
         premium
+        section="premium"
         extra={<PromoCards />}
       />
     </>
@@ -68,6 +81,7 @@ function Group({
   sets,
   premium = false,
   extra,
+  section,
 }: {
   eyebrow: string;
   title: string;
@@ -76,9 +90,12 @@ function Group({
   premium?: boolean;
   /** cards after the sets, in the same grid */
   extra?: React.ReactNode;
+  /** reported once when the row scrolls into view */
+  section: "free" | "premium";
 }) {
+  const seen = useSeenOnce<HTMLElement>(() => track(EV.cpSectionSeen, { section }));
   return (
-    <section className="mt-14 border-t border-pf-border pt-10 first-of-type:mt-12">
+    <section ref={seen} className="mt-14 border-t border-pf-border pt-10 first-of-type:mt-12">
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
         <div className="max-w-[680px]">
           <p
@@ -156,7 +173,7 @@ function Group({
                 than inside it: a link inside a link is invalid, and a press on
                 it would also navigate. */}
             <div className="absolute right-3 top-3 z-10">
-              <SetAction set={set} />
+              <SetAction set={set} place="card" />
             </div>
           </li>
         ))}
@@ -186,3 +203,4 @@ export function SetCount({ set }: { set: PublicCollectionSet }) {
     </span>
   );
 }
+

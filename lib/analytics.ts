@@ -353,6 +353,32 @@ export const EV = {
      which it is, so whoever mounts it says. */
   pageflyInstallClicked: "design_pagefly_install_clicked",
   collectionExported: "design_collection_exported",
+  /* ------------------------------------------------------------------------
+     /collection-pages — the sets managed in Admin → Collection pages, read on
+     their own screen at /design/admin/collections/analytics.
+
+     Prefixed `cp_` so the whole screen can be read with one filter, and so none
+     of them lands in a tile on the main screen by sharing a name. The preview
+     viewer and the download buttons are shared with the landing gallery and
+     keep their existing names; they carry `from: "collection_pages"`, which is
+     what tells the two apart.
+     ------------------------------------------------------------------------ */
+  /** the list itself. `ref` is the referring host, `screen` a width bucket. */
+  cpListViewed: "design_cp_list_viewed",
+  /** one set's page. `entry` says how they got there: list, another set, or outside. */
+  cpSetViewed: "design_cp_set_viewed",
+  /** the Free, Premium and promo rows scrolled into view, once each per visit */
+  cpSectionSeen: "design_cp_section_seen",
+  /** a page preview opened full size — the open; its reading time is showcasePageViewed */
+  cpPageOpened: "design_cp_page_opened",
+  /** a Buy button, and `place` says which of the three it was */
+  cpBuyClicked: "design_cp_buy_clicked",
+  /** the checkout form shown; `set` is "custom" for a template request */
+  cpCheckoutViewed: "design_cp_checkout_viewed",
+  /** the form refused or could not send, with the reason it showed */
+  cpCheckoutFailed: "design_cp_checkout_failed",
+  /** one of the two cards after the premium sets */
+  cpPromoClicked: "design_cp_promo_clicked",
 } as const;
 
 /** Where a shared element was mounted. One list, so a typo at a call site is a

@@ -1375,6 +1375,26 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       return Object.fromEntries(rows.map((r) => [String(r.set_id), Number(r.n)]));
     },
 
+    async collectionPageEvents(from, to, limit) {
+      await ready();
+      const { rows } = await db.query(
+        `select name, props, visitor_id, country, created_at
+           from events
+          where created_at >= $1 and created_at < $2
+            and (left(name, 10) = 'design_cp_' or props->>'from' = 'collection_pages')
+          order by created_at
+          limit $3`,
+        [from, to, limit],
+      );
+      return rows.map((r) => ({
+        name: String(r.name),
+        props: (r.props as Record<string, unknown>) ?? {},
+        visitorId: String(r.visitor_id),
+        country: (r.country as string) ?? null,
+        createdAt: iso(r.created_at) ?? "",
+      }));
+    },
+
     async createJob(job) {
       await ready();
       await db.query(

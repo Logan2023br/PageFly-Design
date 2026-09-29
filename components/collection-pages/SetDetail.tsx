@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { EV, track } from "@/lib/analytics";
+import { entryFor, refHost, screenBucket, useTrackOnce } from "./cpTrack";
 import { countLabel, pagesLabel, type PublicCollectionSet } from "@/lib/collectionPages";
 import type { ShowcasePage } from "@/lib/showcasePages";
 import { Icon } from "../ui";
@@ -25,6 +27,18 @@ export function SetDetail({
   preview?: boolean;
 }) {
   const [open, setOpen] = useState<ShowcasePage | null>(null);
+
+  /* Not while an admin previews a hidden set — that is checking, not traffic. */
+  useTrackOnce(preview ? "" : set.id, () => {
+    if (preview) return;
+    track(EV.cpSetViewed, {
+      set: set.id,
+      access: set.access,
+      entry: entryFor("set"),
+      ref: refHost(),
+      screen: screenBucket(),
+    });
+  });
 
   return (
     <>
@@ -57,7 +71,7 @@ export function SetDetail({
               : "Free to download and use"}
           </p>
         </div>
-        <SetAction set={set} size="lg" />
+        <SetAction set={set} size="lg" place="detail" />
       </div>
 
       {others.length > 1 && (
@@ -89,7 +103,16 @@ export function SetDetail({
               </span>
               <button
                 type="button"
-                onClick={() => setOpen(page)}
+                onClick={() => {
+                  if (!preview) {
+                    track(EV.cpPageOpened, {
+                      set: set.id,
+                      page_type: page.slug,
+                      access: set.access,
+                    });
+                  }
+                  setOpen(page);
+                }}
                 aria-label={`Open the ${set.name} ${page.label} page`}
                 className="absolute inset-x-0 top-0 z-10 block aspect-[3/4] w-full cursor-pointer"
               />
@@ -116,7 +139,7 @@ export function SetDetail({
           page={open}
           from="collection_pages"
           onClose={() => setOpen(null)}
-          action={set.access === "paid" ? <SetAction set={set} /> : undefined}
+          action={set.access === "paid" ? <SetAction set={set} place="viewer" /> : undefined}
         />
       )}
     </>

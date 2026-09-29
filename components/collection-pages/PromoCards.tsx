@@ -1,7 +1,11 @@
+"use client";
+
 import Link from "next/link";
+import { EV, track } from "@/lib/analytics";
 import type { ReactNode } from "react";
 import { customRequestUrl } from "@/lib/collectionPages";
 import { Icon } from "../ui";
+import { useSeenOnce } from "./cpTrack";
 
 /* ==========================================================================
    TWO WAYS TO GET A STORE THAT IS NOT ON THIS PAGE, AT THE END OF IT.
@@ -20,9 +24,10 @@ import { Icon } from "../ui";
    ========================================================================== */
 
 export function PromoCards() {
+  const seen = useSeenOnce<HTMLLIElement>(() => track(EV.cpSectionSeen, { section: "promo" }));
   return (
     <>
-      <li className="h-full">
+      <li ref={seen} className="h-full">
         <PromoCard
           href={customRequestUrl}
           tone="warm"
@@ -31,6 +36,7 @@ export function PromoCards() {
           body="Tell us what you sell and the look you want. We design a full page set that is yours alone — guaranteed not to match any other template."
           badge="100% unique design"
           cta="Request a template"
+          card="custom"
           art={<ArtRequest />}
         />
       </li>
@@ -42,6 +48,7 @@ export function PromoCards() {
           title="Build 3 pages free"
           body="Describe your store in a few lines and get three matching pages designed for it — no card, no password."
           cta="Start for free"
+          card="build"
           art={<ArtBuild />}
         />
       </li>
@@ -75,7 +82,9 @@ function PromoCard({
   cta,
   art,
   badge,
+  card,
 }: {
+  card: "custom" | "build";
   href: string;
   /** a promise worth pinning to the picture */
   badge?: string;
@@ -90,6 +99,7 @@ function PromoCard({
   return (
     <Link
       href={href}
+      onClick={() => track(EV.cpPromoClicked, { card })}
       className={`group relative flex h-full flex-col overflow-hidden rounded-pf-card border bg-pf-card shadow-pf-card transition-all duration-300 hover:-translate-y-1 motion-reduce:transition-none motion-reduce:hover:translate-y-0 ${t.border} ${t.glow}`}
     >
       {/* The wash: faint at rest, full on hover. */}

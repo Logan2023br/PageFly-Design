@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { EV, track } from "@/lib/analytics";
+import { entryFor, refHost, useTrackOnce } from "./cpTrack";
 import { CUSTOM_REQUEST, pagesLabel, type PublicCollectionSet } from "@/lib/collectionPages";
 import { Icon } from "../ui";
 import { PageThumb } from "../landing/PagePreview";
@@ -34,6 +36,16 @@ export function CheckoutForm({ set }: { set: PublicCollectionSet | null }) {
   const [email, setEmail] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
   const [error, setError] = useState<string | null>(null);
+  const setKey = set?.id ?? CUSTOM_REQUEST.slug;
+
+  useTrackOnce(setKey, () =>
+    track(EV.cpCheckoutViewed, { set: setKey, entry: entryFor("checkout"), ref: refHost() }),
+  );
+
+  const failed = (reason: string) => {
+    setError(reason);
+    track(EV.cpCheckoutFailed, { set: setKey, reason: reason.slice(0, 120) });
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,9 +70,9 @@ export function CheckoutForm({ set }: { set: PublicCollectionSet | null }) {
         window.scrollTo({ top: 0 });
         return;
       }
-      setError(body?.error ?? "Something went wrong — please try again.");
+      failed(body?.error ?? "Something went wrong — please try again.");
     } catch {
-      setError("No connection — please try again.");
+      failed("No connection — please try again.");
     }
     setState("idle");
   };
