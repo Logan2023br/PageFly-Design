@@ -18,6 +18,7 @@ export function CollectionsTabs({
   orders: initialOrders,
   ordersError,
   leads,
+  referralsToCheck,
   tab: initialTab,
 }: {
   sets: CollectionSetRecord[];
@@ -25,6 +26,8 @@ export function CollectionsTabs({
   orders: CollectionOrderRecord[];
   ordersError: string | null;
   leads: CollectionLeadRecord[];
+  /** referrals waiting for the team — shown on the Referral button */
+  referralsToCheck: number;
   tab: Tab;
 }) {
   const [tab, setTab] = useState(initialTab);
@@ -73,6 +76,17 @@ export function CollectionsTabs({
         {/* A screen of its own rather than a third tab: it has its own window,
             its own day and its own refresh, none of which mean anything to a
             list of sets. */}
+        <div className="flex items-center gap-2">
+        <Link
+          href="/design/admin/collections/referrals"
+          className="inline-flex h-10 items-center gap-2 rounded-pf-md border border-pf-warn/40 bg-pf-warn/10 px-4 text-[13.5px] font-semibold text-pf-text transition-colors hover:border-pf-warn hover:bg-pf-warn/20"
+        >
+          <Icon name="Gift" size={16} className="text-pf-warn" />
+          Referral
+          {referralsToCheck > 0 && (
+            <span className="rounded-pf-pill bg-pf-warn/25 px-1.5 text-[11px] text-pf-warn">{referralsToCheck}</span>
+          )}
+        </Link>
         <Link
           href="/design/admin/collections/analytics"
           className="inline-flex h-10 items-center gap-2 rounded-pf-md border border-pf-primary-hi/40 bg-pf-primary/10 px-4 text-[13.5px] font-semibold text-pf-text transition-colors hover:border-pf-primary-hi hover:bg-pf-primary/20"
@@ -80,6 +94,7 @@ export function CollectionsTabs({
           <Icon name="TrendingUp" size={16} className="text-pf-primary-hi" />
           Analytics
         </Link>
+        </div>
       </div>
       {tab === "sets" ? (
         <CollectionSetsAdmin initial={sets} missing={missing} />

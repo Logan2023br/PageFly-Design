@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Fragment, useEffect, useState } from "react";
 import type { CpSetRow, CpSlice, CpView, FunnelStep } from "@/lib/collectionAnalytics";
 import { formatPrice } from "@/lib/collectionPages";
+import { REFERRAL_GOAL } from "@/lib/referral";
 import { countryLabel } from "@/lib/countries";
 import { Icon, Panel } from "../../ui";
 import { DayStrip } from "../DayStrip";
@@ -451,6 +452,90 @@ export function CollectionAnalytics() {
             )}
           </section>
 
+          {/* ================= REFERRAL PROGRAM ================= */}
+          <TileGroup
+            title="Referral program"
+            note={`The offer beside the premium sets and the members it brought in, ${window}. "To check" and the rewards are the whole program, not the window.`}
+          >
+            <StatTile
+              icon="Gift"
+              label="Join now pressed"
+              value={view.referral.boxClicks.n}
+              footnote={`${people(view.referral.boxClicks.people)} · on the box beside the premium sets`}
+              ratio={ratio(view.referral.boxClicks.people, view.sections.premium)}
+              panel={feed("referral_box")}
+            />
+            <StatTile
+              icon="Eye"
+              label="Program page views"
+              value={view.referral.views.n}
+              footnote={`${people(view.referral.views.people)} · signed in or out`}
+              ratio={ratio(view.referral.views.people, o.visitors)}
+              panel={feed("referral_views")}
+            />
+            <StatTile
+              icon="UserPlus"
+              label="Members joined"
+              value={view.referral.joined}
+              footnote={`${view.referral.members} members in total · ${view.referral.logins.n} returning logins`}
+              ratio={ratio(view.referral.joined, view.referral.views.people)}
+              panel={feed("referral_members", "Members who joined")}
+            />
+            <StatTile
+              icon="ListChecks"
+              label="Stores referred"
+              value={view.referral.submitted}
+              footnote={`${view.referral.verified} verified so far`}
+              ratio={ratio(view.referral.verified, view.referral.submitted)}
+              panel={feed("referral_stores", "Stores members referred")}
+            />
+            <StatTile
+              icon="Clock"
+              label="To check"
+              value={view.referral.toCheck}
+              footnote="referred stores waiting on the team"
+              tone={view.referral.toCheck > 0 ? "danger" : "default"}
+              ratio={view.referral.toCheck > 0 ? 1 : 0}
+            />
+            <StatTile
+              icon="PartyPopper"
+              label="Rewards owed"
+              value={view.referral.rewardsOwed}
+              footnote={`${view.referral.rewardsSent} sent · members at ${REFERRAL_GOAL} verified not yet rewarded`}
+              tone={view.referral.rewardsOwed > 0 ? "danger" : "default"}
+              ratio={view.referral.rewardsOwed > 0 ? 1 : 0}
+              panel={feed("referral_earned", "Members who reached the goal")}
+            />
+            <StatTile
+              icon="CircleAlert"
+              label="Login refused"
+              value={view.referral.loginFailed.n}
+              footnote={`${people(view.referral.loginFailed.people)} — usually a different email`}
+              tone={view.referral.loginFailed.n > 0 ? "danger" : "default"}
+              panel={feed("referral_failed")}
+            />
+            <StatTile
+              icon="TrendingUp"
+              label="Member activity"
+              value={view.referral.storesAdded.n}
+              footnote="stores added from the program page"
+              panel={feed("referral_activity", "Everything members did")}
+            />
+          </TileGroup>
+          <Funnel
+            title="Referral funnel"
+            note="From seeing the offer to reaching the goal. Joined and after are members, from the program's own table."
+            steps={view.funnels.referral}
+            feed={feed}
+          />
+          <p className="-mt-3 text-[11.5px] text-pf-muted">
+            Verifying stores and sending rewards happens in{" "}
+            <Link href="/design/admin/collections/referrals" className="font-semibold text-pf-primary-hi hover:underline">
+              Referral
+            </Link>
+            .
+          </p>
+
           {/* ================= 6 · AUDIENCE ================= */}
           <section className="grid gap-3">
             <div>
@@ -520,6 +605,7 @@ function Funnel({
 }) {
   const icons = ["LayoutGrid", "Eye", "Maximize", "Download", "ShoppingBag", "CircleCheck"] as const;
   const gateIcons = ["Download", "Mail", "Package", "Rocket"] as const;
+  const referralIcons = ["Eye", "Gift", "LayoutGrid", "UserPlus", "ListChecks", "PartyPopper"] as const;
   return (
     <TileGroup title={title} note={note}>
       {steps.map((s, i) => {
@@ -532,6 +618,8 @@ function Funnel({
             icon={
               title === "Download form"
                 ? gateIcons[Math.min(i, gateIcons.length - 1)]
+                : title === "Referral funnel"
+                  ? referralIcons[Math.min(i, referralIcons.length - 1)]
                 : title.startsWith("Premium") && i === 2
                 ? "ShoppingCart"
                 : title.startsWith("Premium") && i === 3

@@ -305,6 +305,34 @@ export async function clearStoreSession(): Promise<void> {
   jar.delete(STORE_COOKIE);
 }
 
+/* ---- referral program session -------------------------------------------- */
+
+/* A member of the referral program on /collection-pages/referral. Its own
+   cookie, not the store session: joining the program is not signing in to
+   PageFly Design, and signing out of one must not sign anybody out of the
+   other. Holds the member's id only — everything else is read fresh, so an
+   admin pausing a member takes effect on their next request. */
+const REFERRAL_COOKIE = "pfd_referral";
+const REFERRAL_MAX_AGE = 60 * 60 * 24 * 60;
+
+export async function setReferralSession(memberId: string): Promise<void> {
+  const jar = await cookies();
+  jar.set(REFERRAL_COOKIE, seal({ mid: memberId, iat: Date.now() }), {
+    ...COOKIE_OPTIONS,
+    maxAge: REFERRAL_MAX_AGE,
+  });
+}
+
+export async function readReferralSession(): Promise<string | null> {
+  const jar = await cookies();
+  return unseal<{ mid: string }>(jar.get(REFERRAL_COOKIE)?.value, REFERRAL_MAX_AGE)?.mid ?? null;
+}
+
+export async function clearReferralSession(): Promise<void> {
+  const jar = await cookies();
+  jar.delete(REFERRAL_COOKIE);
+}
+
 /* ---- admin session ------------------------------------------------------- */
 
 export async function setAdminSession(): Promise<void> {

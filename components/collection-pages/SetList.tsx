@@ -7,6 +7,7 @@ import { countLabel, pagesLabel, type PublicCollectionSet } from "@/lib/collecti
 import { Icon } from "../ui";
 import { PageThumb } from "../landing/PagePreview";
 import { PromoCards } from "./PromoCards";
+import { ReferralBox } from "./ReferralBox";
 import { SetAction } from "./SetAction";
 
 /* ==========================================================================
@@ -69,6 +70,7 @@ export function SetList({ sets }: { sets: PublicCollectionSet[] }) {
         premium
         section="premium"
         extra={<PromoCards />}
+        aside={<ReferralBox />}
       />
     </>
   );
@@ -82,6 +84,7 @@ function Group({
   premium = false,
   extra,
   section,
+  aside,
 }: {
   eyebrow: string;
   title: string;
@@ -92,11 +95,15 @@ function Group({
   extra?: React.ReactNode;
   /** reported once when the row scrolls into view */
   section: "free" | "premium";
+  /** beside the heading, in place of the count */
+  aside?: React.ReactNode;
 }) {
   const seen = useSeenOnce<HTMLElement>(() => track(EV.cpSectionSeen, { section }));
   return (
     <section ref={seen} className="mt-14 border-t border-pf-border pt-10 first-of-type:mt-12">
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+      <div
+        className={`flex flex-wrap justify-between gap-x-8 gap-y-5 ${aside ? "items-center" : "items-end"}`}
+      >
         <div className="max-w-[680px]">
           <p
             className={`flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] ${
@@ -111,11 +118,12 @@ function Group({
           </h2>
           <p className="mt-2 text-[14.5px] leading-relaxed text-pf-muted">{sub}</p>
         </div>
-        {sets.length > 0 && (
-          <span className="text-[13px] font-medium text-pf-faint">
-            {sets.length} {sets.length === 1 ? "set" : "sets"}
-          </span>
-        )}
+        {aside ??
+          (sets.length > 0 && (
+            <span className="text-[13px] font-medium text-pf-faint">
+              {sets.length} {sets.length === 1 ? "set" : "sets"}
+            </span>
+          ))}
       </div>
 
       <ul className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">

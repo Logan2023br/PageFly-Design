@@ -6,7 +6,10 @@ import type {
   CollectionOrderRecord,
   CollectionSetRecord,
   DayCount,
+  ReferralMemberRecord,
+  ReferralRecord,
 } from "./db/types";
+import { REFERRAL_GOAL, progressOf } from "./referral";
 
 /* ==========================================================================
    ADMIN → COLLECTION PAGES → ANALYTICS, AS NUMBERS.
@@ -70,7 +73,7 @@ export type CpSlice = { key: string; n: number; people: number };
 export type FunnelStep = {
   label: string;
   value: number;
-  unit: "people" | "orders" | "leads";
+  unit: "people" | "orders" | "leads" | "members";
   metric: string;
 };
 
@@ -104,6 +107,22 @@ export type CpView = {
     free: FunnelStep[];
     paid: FunnelStep[];
     gate: FunnelStep[];
+    referral: FunnelStep[];
+  };
+  referral: {
+    boxClicks: Count;
+    views: Count;
+    joined: number;
+    logins: Count;
+    loginFailed: Count;
+    storesAdded: Count;
+    submitted: number;
+    verified: number;
+    /** program-wide, not windowed: what the team owes right now */
+    toCheck: number;
+    rewardsOwed: number;
+    rewardsSent: number;
+    members: number;
   };
   sets: CpSetRow[];
   frames: CpSlice[];
@@ -185,6 +204,8 @@ export function buildCollectionView(input: {
   orders: CollectionOrderRecord[];
   /** recent leads; filtered to the window here */
   leads: CollectionLeadRecord[];
+  members?: ReferralMemberRecord[];
+  referrals?: ReferralRecord[];
   sets: CollectionSetRecord[];
   days: number;
   day: string | null;
@@ -388,7 +409,52 @@ export function buildCollectionView(input: {
       },
       { label: "Pressed Install PageFly", value: overview.installs.people, unit: "people", metric: "installs" },
     ],
+    referral: [],
   };
+
+  /* ---- referral program ---- */
+  const members = input.members ?? [];
+  const refs = input.referrals ?? [];
+  const joinedIn = members.filter((m) => inWindow(m.createdAt));
+  const refsIn = refs.filter((r) => inWindow(r.createdAt));
+  const progressFor = (id: string) => progressOf(refs.filter((r) => r.memberId === id));
+  const referral: CpView["referral"] = {
+    boxClicks: count(ev, is(EV.cpReferralBoxClicked)),
+    views: count(ev, is(EV.cpReferralViewed)),
+    joined: joinedIn.length,
+    logins: count(ev, is(EV.cpReferralLoggedIn)),
+    loginFailed: count(ev, is(EV.cpReferralLoginFailed)),
+    storesAdded: count(ev, is(EV.cpReferralStoreAdded)),
+    submitted: refsIn.length,
+    verified: refsIn.filter((r) => r.status === "verified").length,
+    toCheck: refs.filter((r) => r.status === "pending").length,
+    rewardsOwed: members.filter((m) => progressFor(m.id).earned && m.rewardStatus !== "granted").length,
+    rewardsSent: members.filter((m) => m.rewardStatus === "granted").length,
+    members: members.length,
+  };
+  funnels.referral = [
+    {
+      label: "Saw the offer",
+      value: peopleWhere(ev, (r) => is(EV.cpSectionSeen)(r) && r.props.section === "premium").size,
+      unit: "people",
+      metric: "sections_premium",
+    },
+    { label: "Pressed Join now", value: referral.boxClicks.people, unit: "people", metric: "referral_box" },
+    { label: "Opened the program", value: referral.views.people, unit: "people", metric: "referral_views" },
+    { label: "Joined", value: referral.joined, unit: "members", metric: "referral_members" },
+    {
+      label: "Added a store",
+      value: new Set(refsIn.map((r) => r.memberId)).size,
+      unit: "members",
+      metric: "referral_stores",
+    },
+    {
+      label: `Reached ${REFERRAL_GOAL} verified`,
+      value: joinedIn.filter((m) => progressFor(m.id).earned).length,
+      unit: "members",
+      metric: "referral_earned",
+    },
+  ];
 
   /* ---- orders ---- */
   const confirmHours = orders
@@ -407,6 +473,7 @@ export function buildCollectionView(input: {
       .sort((a, b) => a.date.localeCompare(b.date)),
     overview,
     funnels,
+    referral,
     sets: setRows,
     frames: slices(ev, is(EV.showcaseFrameChanged), (r) => str(r.props.frame)),
     sections: {
@@ -502,6 +569,16 @@ const WHAT: Record<string, string> = {
   [EV.cpLeadSubmitted]: "Filled in the download form",
   [EV.cpLeadFailed]: "Download form refused",
   [EV.pageflyInstallClicked]: "Pressed Install PageFly",
+  [EV.cpReferralBoxClicked]: "Pressed Join now (referral)",
+  [EV.cpReferralViewed]: "Opened the referral program",
+  [EV.cpReferralJoined]: "Joined the referral program",
+  [EV.cpReferralLoggedIn]: "Logged in to the referral program",
+  [EV.cpReferralLoginFailed]: "Referral login refused",
+  [EV.cpReferralLoggedOut]: "Logged out of the referral program",
+  [EV.cpReferralStoreAdded]: "Added a referred store",
+  [EV.cpReferralStoreEdited]: "Changed a referred store",
+  [EV.cpReferralStoreRemoved]: "Removed a referred store",
+  [EV.cpReferralStoreFailed]: "Referred store refused",
 };
 
 function detailOf(r: CollectionEventRow): string | null {
@@ -513,6 +590,8 @@ function detailOf(r: CollectionEventRow): string | null {
   if (r.name === EV.cpCheckoutFailed || r.name === EV.cpLeadFailed) return str(p.reason) || null;
   if (r.name === EV.cpPromoClicked) return str(p.card) || null;
   if (r.name === EV.cpSectionSeen) return str(p.section) || null;
+  if (r.name === EV.cpReferralLoginFailed || r.name === EV.cpReferralStoreFailed) return str(p.reason) || null;
+  if (r.name === EV.cpReferralViewed) return p.signed_in ? "signed in" : "signed out";
   if (r.name === EV.cpListViewed || r.name === EV.cpSetViewed || r.name === EV.cpCheckoutViewed) {
     const bits = [str(p.entry), str(p.ref), str(p.screen)].filter(Boolean);
     return bits.join(" · ") || null;
@@ -530,6 +609,8 @@ export function collectionHits(input: {
   events: CollectionEventRow[];
   orders: CollectionOrderRecord[];
   leads: CollectionLeadRecord[];
+  members?: ReferralMemberRecord[];
+  referrals?: ReferralRecord[];
   sets: CollectionSetRecord[];
   day: string | null;
   from: string;
@@ -610,6 +691,54 @@ export function collectionHits(input: {
     );
   }
 
+  /* ---- rows from the referral tables ---- */
+  const members = input.members ?? [];
+  const refs = input.referrals ?? [];
+  const memberOf = new Map(members.map((m) => [m.id, m]));
+  if (metric === "referral_members" || metric === "referral_earned") {
+    return done(
+      members
+        .filter((m) => inWindow(m.createdAt))
+        .filter((m) => metric !== "referral_earned" || progressOf(refs.filter((r) => r.memberId === m.id)).earned)
+        .map((m) => {
+          const p = progressOf(refs.filter((r) => r.memberId === m.id));
+          return {
+            at: m.createdAt,
+            country: null,
+            store: m.domain,
+            lead: { domain: m.domain, email: m.email },
+            visitor: null,
+            what: "Joined the referral program",
+            set: null,
+            page: null,
+            detail: `${p.verified}/${REFERRAL_GOAL} verified · ${p.total} submitted${m.rewardStatus === "granted" ? " · reward sent" : ""}`,
+          };
+        }),
+    );
+  }
+  if (metric === "referral_stores" || metric === "referral_verified") {
+    return done(
+      refs
+        .filter((r) => inWindow(r.createdAt) && (metric !== "referral_verified" || r.status === "verified"))
+        .map((r) => {
+          const m = memberOf.get(r.memberId);
+          return {
+            at: r.createdAt,
+            country: null,
+            store: m?.domain ?? null,
+            lead: m ? { domain: m.domain, email: m.email } : null,
+            visitor: null,
+            what: `Referred ${r.domain}`,
+            set: null,
+            page: null,
+            detail: [r.status === "pending" ? "to check" : r.status === "rejected" ? "not eligible" : "verified", r.plan ?? ""]
+              .filter(Boolean)
+              .join(" · "),
+          };
+        }),
+    );
+  }
+
   /* ---- rows from events ---- */
   const is = (name: string) => (r: CollectionEventRow) => r.name === name;
   const download = (r: CollectionEventRow) =>
@@ -645,6 +774,14 @@ export function collectionHits(input: {
     screens: keyed(view, (r) => str(r.props.screen) || "unknown"),
     checkout_failures: keyed(EV.cpCheckoutFailed, (r) => str(r.props.reason)),
     page_opens: keyed(EV.cpPageOpened, (r) => str(r.props.page_type)),
+    sections_premium: (r) => is(EV.cpSectionSeen)(r) && r.props.section === "premium",
+    referral_box: is(EV.cpReferralBoxClicked),
+    referral_views: is(EV.cpReferralViewed),
+    referral_logins: is(EV.cpReferralLoggedIn),
+    referral_joined_events: is(EV.cpReferralJoined),
+    referral_failed: keyed(EV.cpReferralLoginFailed, (r) => str(r.props.reason)),
+    referral_added: is(EV.cpReferralStoreAdded),
+    referral_activity: (r) => r.name.startsWith("design_cp_referral_"),
   };
   const match = EVENTS[metric];
   if (!match) return null;
@@ -659,7 +796,8 @@ export function collectionHits(input: {
         return {
           at: r.createdAt,
           country: r.country,
-          store: r.domain,
+          /* the PageFly Design session, or the referral program's member */
+          store: r.domain ?? (str(r.props.member) || null),
           lead: lead ? { domain: lead.domain, email: lead.email } : null,
           visitor: r.visitorId,
           what: WHAT[r.name] ?? r.name,

@@ -1,6 +1,6 @@
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { buildStats } from "./postgresRepo";
-import { CollectionSlugTakenError, REGISTER_USER_TYPE, reviewOnlyStore } from "./types";
+import { CollectionSlugTakenError, REGISTER_USER_TYPE, ReferralTakenError, reviewOnlyStore } from "./types";
 import type {
   ModelCallRecord,
   ModelSpendRow,
@@ -17,6 +17,8 @@ import type {
   StoreSummary,
   CollectionLeadRecord,
   CollectionOrderRecord,
+  ReferralMemberRecord,
+  ReferralRecord,
   CollectionPageMeta,
   CollectionSetInput,
   CollectionSetRecord,
@@ -68,6 +70,8 @@ type Shape = {
   })[];
   collectionOrders: CollectionOrderRecord[];
   collectionLeads: CollectionLeadRecord[];
+  referralMembers: ReferralMemberRecord[];
+  referrals: ReferralRecord[];
 };
 
 /* The same rule as `geoClause` in the postgres repo, in the other language —
@@ -84,7 +88,7 @@ function geoAllows(country: string | null, geo: GeoFilter): boolean {
   return true;
 }
 
-const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], pageFiles: [], photos: [], jobs: [], training: [], trainingSections: [], events: [], modelCalls: [], collectionSets: [], collectionPages: [], collectionOrders: [], collectionLeads: [] };
+const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], pageFiles: [], photos: [], jobs: [], training: [], trainingSections: [], events: [], modelCalls: [], collectionSets: [], collectionPages: [], collectionOrders: [], collectionLeads: [], referralMembers: [], referrals: [] };
 
 /** The map key for "no store". A domain can never contain a space, so this
     cannot collide with one — and unlike a NUL it survives grep and an editor. */
@@ -114,6 +118,8 @@ export function createMemoryRepo(file: string): Repo {
         collectionPages: parsed.collectionPages ?? [],
         collectionOrders: parsed.collectionOrders ?? [],
         collectionLeads: parsed.collectionLeads ?? [],
+        referralMembers: parsed.referralMembers ?? [],
+        referrals: parsed.referrals ?? [],
         training: parsed.training ?? [],
         /* Absent in a file written before section references existed. Rows
            written before `vertical` existed read as the shared filing, which is
@@ -719,6 +725,72 @@ export function createMemoryRepo(file: string): Repo {
       return [...data.collectionLeads]
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .slice(0, limit);
+    },
+
+    /* ---- referral program ---- */
+    async listReferralMembers() {
+      sync();
+      return [...data.referralMembers].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    },
+
+    async getReferralMember(id) {
+      sync();
+      return data.referralMembers.find((m) => m.id === id) ?? null;
+    },
+
+    async getReferralMemberByDomain(domain) {
+      sync();
+      return data.referralMembers.find((m) => m.domain === domain) ?? null;
+    },
+
+    async saveReferralMember(member) {
+      sync();
+      const at = data.referralMembers.findIndex((m) => m.id === member.id);
+      if (at >= 0) data.referralMembers[at] = member;
+      else data.referralMembers.push(member);
+      flush();
+    },
+
+    async deleteReferralMember(id) {
+      sync();
+      const before = data.referralMembers.length;
+      data.referralMembers = data.referralMembers.filter((m) => m.id !== id);
+      data.referrals = data.referrals.filter((r) => r.memberId !== id);
+      if (data.referralMembers.length === before) return false;
+      flush();
+      return true;
+    },
+
+    async listReferrals(memberId) {
+      sync();
+      return data.referrals
+        .filter((r) => !memberId || r.memberId === memberId)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    },
+
+    async getReferralByDomain(domain) {
+      sync();
+      return data.referrals.find((r) => r.domain === domain) ?? null;
+    },
+
+    async saveReferral(referral) {
+      sync();
+      if (data.referrals.some((r) => r.domain === referral.domain && r.id !== referral.id)) {
+        throw new ReferralTakenError(referral.domain);
+      }
+      const at = data.referrals.findIndex((r) => r.id === referral.id);
+      if (at >= 0) data.referrals[at] = referral;
+      else data.referrals.push(referral);
+      flush();
+    },
+
+    async deleteReferral(id) {
+      sync();
+      const before = data.referrals.length;
+      data.referrals = data.referrals.filter((r) => r.id !== id);
+      if (data.referrals.length === before) return false;
+      flush();
+      return true;
     },
 
     async createJob(job) {

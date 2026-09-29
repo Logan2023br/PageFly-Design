@@ -17,7 +17,7 @@ export default async function AdminCollectionsPage(props: PageProps<"/design/adm
   const repo = getRepo();
   /* A failed read of the orders is SAID, not drawn as "No orders yet" — an
      empty list and an unreadable one must never look the same. */
-  const [sets, read, leads] = await Promise.all([
+  const [sets, read, leads, referrals] = await Promise.all([
     repo.listCollectionSets().catch(() => []),
     repo.listCollectionOrders().then(
       (orders) => ({ orders, error: null }),
@@ -27,6 +27,7 @@ export default async function AdminCollectionsPage(props: PageProps<"/design/adm
       },
     ),
     repo.listCollectionLeads(5000).catch(() => []),
+    repo.listReferrals().catch(() => []),
   ]);
 
   return (
@@ -41,6 +42,7 @@ export default async function AdminCollectionsPage(props: PageProps<"/design/adm
         orders={read.orders}
         ordersError={read.error}
         leads={leads}
+        referralsToCheck={referrals.filter((r) => r.status === "pending").length}
         tab={tab === "orders" || tab === "leads" ? tab : "sets"}
       />
     </AdminShell>

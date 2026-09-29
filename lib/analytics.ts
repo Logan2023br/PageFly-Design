@@ -391,6 +391,26 @@ export const EV = {
   cpLeadSubmitted: "design_cp_lead_submitted",
   /** the form refused or could not send, with the reason it showed */
   cpLeadFailed: "design_cp_lead_failed",
+  /* The referral program — /collection-pages/referral. `member` is the
+     member's store when they are signed in to the program, which is how a
+     row on the analytics screen is named without a PageFly Design session. */
+  /** "Join now" on the box beside the premium sets */
+  cpReferralBoxClicked: "design_cp_referral_box_clicked",
+  /** the program's page; `signed_in` says which half was shown */
+  cpReferralViewed: "design_cp_referral_viewed",
+  /** a new member — the form created an account */
+  cpReferralJoined: "design_cp_referral_joined",
+  /** a returning member signed in */
+  cpReferralLoggedIn: "design_cp_referral_logged_in",
+  /** the join / sign-in form refused, with the reason it showed */
+  cpReferralLoginFailed: "design_cp_referral_login_failed",
+  cpReferralLoggedOut: "design_cp_referral_logged_out",
+  /** a referred store added, changed or removed by the member */
+  cpReferralStoreAdded: "design_cp_referral_store_added",
+  cpReferralStoreEdited: "design_cp_referral_store_edited",
+  cpReferralStoreRemoved: "design_cp_referral_store_removed",
+  /** adding or changing a store was refused — already referred, their own store… */
+  cpReferralStoreFailed: "design_cp_referral_store_failed",
 } as const;
 
 /** Where a shared element was mounted. One list, so a typo at a call site is a

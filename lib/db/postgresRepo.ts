@@ -13,12 +13,14 @@ import type {
   CollectionOrderRecord,
   CollectionPageMeta,
   CollectionSetRecord,
+  ReferralMemberRecord,
+  ReferralRecord,
   TrainingImage,
   TrainingSection,
   TrainingSectionSummary,
   TrainingSummary,
 } from "./types";
-import { CollectionSlugTakenError, REGISTER_USER_TYPE } from "./types";
+import { CollectionSlugTakenError, REGISTER_USER_TYPE, ReferralTakenError } from "./types";
 import type { ModelSpendRow, StoreFilter } from "./types";
 
 /* ==========================================================================
@@ -487,6 +489,34 @@ create table if not exists collection_leads (
   created_at timestamptz not null default now()
 );
 create index if not exists collection_leads_created on collection_leads (created_at desc);
+
+/* The referral program. A member's referrals go with them. */
+create table if not exists referral_members (
+  id            text primary key,
+  domain        text not null unique,
+  email         text not null,
+  name          text,
+  status        text not null default 'active',
+  reward_status text not null default 'none',
+  reward_note   text,
+  admin_note    text,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now(),
+  last_login_at timestamptz
+);
+
+create table if not exists referrals (
+  id         text primary key,
+  member_id  text not null references referral_members (id) on delete cascade,
+  domain     text not null unique,
+  plan       text,
+  note       text,
+  status     text not null default 'pending',
+  admin_note text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists referrals_member on referrals (member_id, created_at);
 `;
 
 /* The page columns WITHOUT the files — a size is all a listing needs. */
@@ -526,6 +556,38 @@ function toCollectionSet(
           updatedAt: iso(p.updated_at),
         }),
       ),
+  };
+}
+
+function toMember(r: Record<string, unknown>): ReferralMemberRecord {
+  const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : v ? String(v) : "");
+  return {
+    id: String(r.id),
+    domain: String(r.domain),
+    email: String(r.email),
+    name: (r.name as string) ?? null,
+    status: r.status === "paused" ? "paused" : "active",
+    rewardStatus: r.reward_status === "granted" ? "granted" : "none",
+    rewardNote: (r.reward_note as string) ?? null,
+    adminNote: (r.admin_note as string) ?? null,
+    createdAt: iso(r.created_at),
+    updatedAt: iso(r.updated_at),
+    lastLoginAt: r.last_login_at ? iso(r.last_login_at) : null,
+  };
+}
+
+function toReferral(r: Record<string, unknown>): ReferralRecord {
+  const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : v ? String(v) : "");
+  return {
+    id: String(r.id),
+    memberId: String(r.member_id),
+    domain: String(r.domain),
+    plan: (r.plan as string) ?? null,
+    note: (r.note as string) ?? null,
+    status: r.status === "verified" || r.status === "rejected" ? r.status : "pending",
+    adminNote: (r.admin_note as string) ?? null,
+    createdAt: iso(r.created_at),
+    updatedAt: iso(r.updated_at),
   };
 }
 
@@ -1439,6 +1501,85 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
         country: (r.country as string) ?? null,
         createdAt: iso(r.created_at) ?? "",
       }));
+    },
+
+    /* ---- referral program ---- */
+    async listReferralMembers() {
+      await ready();
+      const { rows } = await db.query(`select * from referral_members order by created_at desc`);
+      return rows.map(toMember);
+    },
+
+    async getReferralMember(id) {
+      await ready();
+      const { rows } = await db.query(`select * from referral_members where id = $1`, [id]);
+      return rows[0] ? toMember(rows[0]) : null;
+    },
+
+    async getReferralMemberByDomain(domain) {
+      await ready();
+      const { rows } = await db.query(`select * from referral_members where domain = $1`, [domain]);
+      return rows[0] ? toMember(rows[0]) : null;
+    },
+
+    async saveReferralMember(m) {
+      await ready();
+      await db.query(
+        `insert into referral_members
+           (id, domain, email, name, status, reward_status, reward_note, admin_note, created_at, updated_at, last_login_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         on conflict (id) do update set
+           domain = excluded.domain, email = excluded.email, name = excluded.name,
+           status = excluded.status, reward_status = excluded.reward_status,
+           reward_note = excluded.reward_note, admin_note = excluded.admin_note,
+           updated_at = excluded.updated_at, last_login_at = excluded.last_login_at`,
+        [m.id, m.domain, m.email, m.name, m.status, m.rewardStatus, m.rewardNote, m.adminNote, m.createdAt, m.updatedAt, m.lastLoginAt],
+      );
+    },
+
+    async deleteReferralMember(id) {
+      await ready();
+      const { rowCount } = await db.query(`delete from referral_members where id = $1`, [id]);
+      return (rowCount ?? 0) > 0;
+    },
+
+    async listReferrals(memberId) {
+      await ready();
+      const { rows } = memberId
+        ? await db.query(`select * from referrals where member_id = $1 order by created_at`, [memberId])
+        : await db.query(`select * from referrals order by created_at`);
+      return rows.map(toReferral);
+    },
+
+    async getReferralByDomain(domain) {
+      await ready();
+      const { rows } = await db.query(`select * from referrals where domain = $1`, [domain]);
+      return rows[0] ? toReferral(rows[0]) : null;
+    },
+
+    async saveReferral(r) {
+      await ready();
+      try {
+        await db.query(
+          `insert into referrals
+             (id, member_id, domain, plan, note, status, admin_note, created_at, updated_at)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           on conflict (id) do update set
+             domain = excluded.domain, plan = excluded.plan, note = excluded.note,
+             status = excluded.status, admin_note = excluded.admin_note,
+             updated_at = excluded.updated_at`,
+          [r.id, r.memberId, r.domain, r.plan, r.note, r.status, r.adminNote, r.createdAt, r.updatedAt],
+        );
+      } catch (err) {
+        if ((err as { code?: string }).code === "23505") throw new ReferralTakenError(r.domain);
+        throw err;
+      }
+    },
+
+    async deleteReferral(id) {
+      await ready();
+      const { rowCount } = await db.query(`delete from referrals where id = $1`, [id]);
+      return (rowCount ?? 0) > 0;
     },
 
     async createJob(job) {

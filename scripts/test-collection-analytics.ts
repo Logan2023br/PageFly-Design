@@ -166,6 +166,23 @@ const onSet = collectionHits({ ...W, metric: "visitors", set: "free" })!;
 check(onSet.hits.every((h) => h.set === "Free Set"), "a set's activity is that set's only");
 check(collectionHits({ ...W, metric: "nonsense" }) === null, "an unknown figure opens nothing");
 
+console.log("\nthe referral program");
+const members = [
+  { id: "m1", domain: "alpha.myshopify.com", email: "a@x.co", name: null, status: "active" as const, rewardStatus: "none" as const, rewardNote: null, adminNote: null, createdAt: T, updatedAt: T, lastLoginAt: T },
+  { id: "m2", domain: "beta.myshopify.com", email: "b@x.co", name: null, status: "active" as const, rewardStatus: "granted" as const, rewardNote: null, adminNote: null, createdAt: "2025-01-01T00:00:00.000Z", updatedAt: T, lastLoginAt: null },
+];
+const referrals = [
+  ...[1, 2, 3, 4, 5].map((n) => ({ id: `r${n}`, memberId: "m1", domain: `s${n}.myshopify.com`, plan: null, note: null, status: "verified" as const, adminNote: null, createdAt: T, updatedAt: T })),
+  { id: "r6", memberId: "m1", domain: "s6.myshopify.com", plan: null, note: null, status: "pending" as const, adminNote: null, createdAt: T, updatedAt: T },
+];
+const ref = buildCollectionView({ events: [...events, e(EV.cpReferralBoxClicked, "a"), e(EV.cpReferralViewed, "a", { signed_in: false })], orders, leads, members, referrals, sets, days: 30, day: null, from: "2026-09-01T00:00:00.000Z", to: "2026-10-01T00:00:00.000Z", tz: 0, truncated: false });
+check(ref.referral.joined === 1 && ref.referral.members === 2, "joined in the window, members in total", [ref.referral.joined, ref.referral.members]);
+check(ref.referral.submitted === 6 && ref.referral.verified === 5 && ref.referral.toCheck === 1, "referred, verified, to check", ref.referral);
+check(ref.referral.rewardsOwed === 1 && ref.referral.rewardsSent === 1, "a member at 5 verified is owed; a granted one is sent");
+check(ref.funnels.referral.at(-1)!.value === 1, "reached the goal");
+const memberRows = collectionHits({ ...W, metric: "referral_members", members, referrals })!;
+check(memberRows.total === 1 && memberRows.hits[0].detail!.startsWith("5/5"), "members joined, with their progress", memberRows.hits[0]?.detail);
+
 console.log("\na picked day");
 const one = buildCollectionView({ events, orders, leads, sets, days: 30, day: "2026-09-21", from: "2026-09-01T00:00:00.000Z", to: "2026-10-01T00:00:00.000Z", tz: 0, truncated: false });
 check(one.overview.visitors === 1, "only that day's visitors", one.overview.visitors);

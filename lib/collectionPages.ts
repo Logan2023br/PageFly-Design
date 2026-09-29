@@ -26,7 +26,7 @@ export const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /* `checkout` is a page of its own: /collection-pages/checkout. A set with that
    URL would be unreachable behind it. */
-export const RESERVED_SET_SLUGS = new Set(["checkout", "custom"]);
+export const RESERVED_SET_SLUGS = new Set(["checkout", "custom", "referral"]);
 
 /* `all` is the whole-set download: `/api/collection-pages/<set>/all.pagefly`. */
 export const RESERVED_PAGE_SLUGS = new Set(["all"]);

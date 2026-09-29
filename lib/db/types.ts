@@ -728,6 +728,63 @@ export type CollectionLeadRecord = {
   createdAt: string;
 };
 
+/* ==========================================================================
+   THE REFERRAL PROGRAM — refer five stores that install PageFly and move to a
+   paid plan, get one premium template set free.
+
+   A MEMBER is the store that refers; a REFERRAL is a store they name. A
+   referral counts only once an admin has VERIFIED it — the member says the
+   store installed and upgraded, and somebody with access to PageFly's records
+   checks. That is the whole trust model: the member's word opens the row, an
+   operator's check closes it.
+
+   ONE STORE, ONE REFERRER. A domain can be named by one member only, and never
+   by itself — otherwise the same five stores could earn five rewards.
+   ========================================================================== */
+export type ReferralMemberRecord = {
+  id: string;
+  /** the member's own store, and their login */
+  domain: string;
+  email: string;
+  name: string | null;
+  /** paused members can still sign in and read, but not add stores */
+  status: "active" | "paused";
+  /** the reward, once handed over by an admin */
+  rewardStatus: "none" | "granted";
+  /** which set was given, or anything else about the reward */
+  rewardNote: string | null;
+  /** for the team only; never shown to the member */
+  adminNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lastLoginAt: string | null;
+};
+
+export type ReferralStatus = "pending" | "verified" | "rejected";
+
+export type ReferralRecord = {
+  id: string;
+  memberId: string;
+  domain: string;
+  /** the plan the member says the store moved to */
+  plan: string | null;
+  /** the member's own note */
+  note: string | null;
+  status: ReferralStatus;
+  /** why it was rejected, or anything the team wants to keep — never shown */
+  adminNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Thrown when a referred domain is already somebody's referral. */
+export class ReferralTakenError extends Error {
+  constructor(public domain: string) {
+    super(`${domain} has already been referred.`);
+    this.name = "ReferralTakenError";
+  }
+}
+
 export type CollectionPageInput = Omit<CollectionPageMeta, "htmlSize" | "pageflySize" | "updatedAt">;
 
 export type TrainingSummary = {
@@ -888,6 +945,21 @@ export type Repo = {
   createCollectionLead(lead: CollectionLeadRecord): Promise<void>;
   /** newest first */
   listCollectionLeads(limit: number): Promise<CollectionLeadRecord[]>;
+
+  /* ---- referral program ---- */
+  listReferralMembers(): Promise<ReferralMemberRecord[]>;
+  getReferralMember(id: string): Promise<ReferralMemberRecord | null>;
+  getReferralMemberByDomain(domain: string): Promise<ReferralMemberRecord | null>;
+  /** insert or update by id; the domain is unique */
+  saveReferralMember(member: ReferralMemberRecord): Promise<void>;
+  /** and every referral they made */
+  deleteReferralMember(id: string): Promise<boolean>;
+  /** every referral, or one member's, oldest first */
+  listReferrals(memberId?: string): Promise<ReferralRecord[]>;
+  getReferralByDomain(domain: string): Promise<ReferralRecord | null>;
+  /** insert or update by id; throws ReferralTakenError on a domain already referred */
+  saveReferral(referral: ReferralRecord): Promise<void>;
+  deleteReferral(id: string): Promise<boolean>;
 
   /* ---- stock photos ---- */
   getPhotos(queries: string[]): Promise<PhotoRecord[]>;

@@ -19,6 +19,10 @@ import { guard } from "../shared";
      EV.cpListViewed  EV.cpSetViewed  EV.cpSectionSeen  EV.cpPageOpened
      EV.cpBuyClicked  EV.cpCheckoutViewed  EV.cpCheckoutFailed
      EV.cpPromoClicked  EV.cpGateOpened  EV.cpLeadSubmitted  EV.cpLeadFailed
+     EV.cpReferralBoxClicked  EV.cpReferralViewed  EV.cpReferralJoined
+     EV.cpReferralLoggedIn  EV.cpReferralLoginFailed  EV.cpReferralLoggedOut
+     EV.cpReferralStoreAdded  EV.cpReferralStoreEdited  EV.cpReferralStoreRemoved
+     EV.cpReferralStoreFailed
      EV.showcasePageViewed  EV.showcaseFrameChanged
      EV.showcaseFileDownloaded  EV.showcaseSetDownloaded
        (the last four only where they say from: "collection_pages")
@@ -70,11 +74,13 @@ export async function GET(request: Request) {
 
   try {
     const repo = getRepo();
-    const [events, orders, sets, leads] = await Promise.all([
+    const [events, orders, sets, leads, members, referrals] = await Promise.all([
       repo.collectionPageEvents(from.toISOString(), to.toISOString(), MAX_EVENTS),
       repo.listCollectionOrders(),
       repo.listCollectionSets(),
       repo.listCollectionLeads(20_000),
+      repo.listReferralMembers(),
+      repo.listReferrals(),
     ]);
 
     const metric = url.searchParams.get("hits");
@@ -86,6 +92,8 @@ export async function GET(request: Request) {
         events,
         orders,
         leads,
+        members,
+        referrals,
         sets,
         day,
         from: from.toISOString(),
@@ -106,6 +114,8 @@ export async function GET(request: Request) {
       events,
       orders,
       leads,
+      members,
+      referrals,
       sets,
       days,
       day,
@@ -137,4 +147,14 @@ void [
   EV.cpGateOpened,
   EV.cpLeadSubmitted,
   EV.cpLeadFailed,
+  EV.cpReferralBoxClicked,
+  EV.cpReferralViewed,
+  EV.cpReferralJoined,
+  EV.cpReferralLoggedIn,
+  EV.cpReferralLoginFailed,
+  EV.cpReferralLoggedOut,
+  EV.cpReferralStoreAdded,
+  EV.cpReferralStoreEdited,
+  EV.cpReferralStoreRemoved,
+  EV.cpReferralStoreFailed,
 ];
