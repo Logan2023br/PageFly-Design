@@ -33,12 +33,23 @@ import { REFERRAL_GOAL, progressOf } from "./referral";
 
 type Count = { n: number; people: number };
 
+/** How long previews stayed open: every figure in seconds. */
+export type ReadStats = {
+  n: number;
+  people: number;
+  median: number | null;
+  average: number | null;
+  longest: number | null;
+  total: number;
+};
+
 export type CpPageRow = {
   slug: string;
   label: string;
   opens: Count;
   /** median seconds a preview of it stayed open, or null with no reads */
   medianRead: number | null;
+  reads: ReadStats;
   downloads: Count;
 };
 
@@ -53,6 +64,7 @@ export type CpSetRow = {
   views: Count;
   opens: Count;
   medianRead: number | null;
+  reads: ReadStats;
   /** free: whole-set downloads + single pages, and the people behind either */
   downloads: { sets: number; pages: number; people: number };
   /** download forms filled in for this set */
@@ -125,6 +137,13 @@ export type CpView = {
     members: number;
   };
   sets: CpSetRow[];
+  reading: {
+    all: ReadStats;
+    /** how the readings spread, shortest first */
+    buckets: { key: string; label: string; n: number; people: number }[];
+    /** every page with a reading, longest total first */
+    pages: { set: string; setName: string; page: string; label: string; reads: ReadStats }[];
+  };
   frames: CpSlice[];
   sections: { list: number; free: number; premium: number; promo: number };
   promo: { custom: Count; build: Count; requestsSent: number };
@@ -149,6 +168,33 @@ const median = (xs: number[]): number | null => {
   const m = Math.floor(s.length / 2);
   return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2);
 };
+
+const READ_BUCKETS = [
+  { key: "lt10", label: "Under 10 seconds", max: 9 },
+  { key: "10to30", label: "10–30 seconds", max: 30 },
+  { key: "30to60", label: "30 seconds – 1 minute", max: 60 },
+  { key: "1to3m", label: "1–3 minutes", max: 180 },
+  { key: "gt3m", label: "Over 3 minutes", max: Infinity },
+] as const;
+
+function bucketOf(seconds: number): string {
+  return READ_BUCKETS.find((b) => seconds <= b.max)!.key;
+}
+
+function readStats(rows: CollectionEventRow[]): ReadStats {
+  const secs = rows
+    .map((r) => (typeof r.props.seconds === "number" && Number.isFinite(r.props.seconds) ? r.props.seconds : null))
+    .filter((x): x is number => x !== null);
+  const total = secs.reduce((a, b) => a + b, 0);
+  return {
+    n: secs.length,
+    people: new Set(rows.map((r) => r.visitorId)).size,
+    median: median(secs),
+    average: secs.length ? Math.round(total / secs.length) : null,
+    longest: secs.length ? Math.max(...secs) : null,
+    total,
+  };
+}
 
 /** Presses and distinct people for the rows that pass `keep`. */
 function count(rows: CollectionEventRow[], keep: (r: CollectionEventRow) => boolean): Count {
@@ -287,6 +333,7 @@ export function buildCollectionView(input: {
         label: rec?.pages.find((x) => x.slug === p)?.label ?? p,
         opens: count(ev, (r) => is(EV.cpPageOpened)(r) && onPage(r)),
         medianRead: median(reads(onPage)),
+        reads: readStats(ev.filter((r) => is(EV.showcasePageViewed)(r) && onPage(r))),
         downloads: count(ev, (r) => is(EV.showcaseFileDownloaded)(r) && onPage(r)),
       };
     });
@@ -301,6 +348,7 @@ export function buildCollectionView(input: {
       views,
       opens,
       medianRead: median(reads(mine)),
+      reads: readStats(ev.filter((r) => is(EV.showcasePageViewed)(r) && mine(r))),
       downloads: { sets: wholeSets, pages: singlePages, people: downloaders.size },
       leads: leads.filter((l) => l.setSlug === slug).length,
       buys: count(ev, (r) => is(EV.cpBuyClicked)(r) && mine(r)),
@@ -475,6 +523,23 @@ export function buildCollectionView(input: {
     funnels,
     referral,
     sets: setRows,
+    reading: (() => {
+      const all = ev.filter(is(EV.showcasePageViewed));
+      return {
+        all: readStats(all),
+        buckets: READ_BUCKETS.map((b) => {
+          const rows = all.filter((r) => typeof r.props.seconds === "number" && bucketOf(r.props.seconds) === b.key);
+          return { key: b.key, label: b.label, n: rows.length, people: new Set(rows.map((r) => r.visitorId)).size };
+        }),
+        pages: setRows
+          .flatMap((s) =>
+            s.pages
+              .filter((p) => p.reads.n > 0)
+              .map((p) => ({ set: s.slug, setName: s.name, page: p.slug, label: p.label, reads: p.reads })),
+          )
+          .sort((a, b) => b.reads.total - a.reads.total),
+      };
+    })(),
     frames: slices(ev, is(EV.showcaseFrameChanged), (r) => str(r.props.frame)),
     sections: {
       list: listPeople.size,
@@ -583,7 +648,11 @@ const WHAT: Record<string, string> = {
 
 function detailOf(r: CollectionEventRow): string | null {
   const p = r.props;
-  if (r.name === EV.showcasePageViewed) return typeof p.seconds === "number" ? `${p.seconds}s` : null;
+  if (r.name === EV.showcasePageViewed) {
+    if (typeof p.seconds !== "number") return null;
+    const s = p.seconds;
+    return s < 60 ? `read for ${s}s` : `read for ${Math.floor(s / 60)}m ${s % 60}s`;
+  }
   if (r.name === EV.showcaseFrameChanged) return str(p.frame) || null;
   if (r.name === EV.cpBuyClicked) return [str(p.place), str(p.price)].filter(Boolean).join(" · ") || null;
   if (r.name === EV.cpGateOpened) return str(p.place) || null;
@@ -753,7 +822,10 @@ export function collectionHits(input: {
     list: is(EV.cpListViewed),
     set_views: is(EV.cpSetViewed),
     opens: is(EV.cpPageOpened),
-    reads: is(EV.showcasePageViewed),
+    reads: keyed(EV.showcasePageViewed, (r) => str(r.props.page_type)),
+    read_buckets: keyed(EV.showcasePageViewed, (r) =>
+      typeof r.props.seconds === "number" ? bucketOf(r.props.seconds) : "",
+    ),
     downloads: download,
     buys: is(EV.cpBuyClicked),
     checkout: (r) => is(EV.cpCheckoutViewed)(r) && setOf(r) !== CUSTOM_REQUEST.slug,

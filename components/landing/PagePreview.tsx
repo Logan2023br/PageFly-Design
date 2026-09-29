@@ -252,7 +252,10 @@ export function PageViewer({
      ========================================================================== */
   useEffect(() => {
     const opened = Date.now();
-    return () => {
+    let sent = false;
+    const send = () => {
+      if (sent) return;
+      sent = true;
       const seconds = Math.min(3600, Math.round((Date.now() - opened) / 1000));
       /* Nothing to say about a panel that was shut before a second passed, and
          a pile of zeroes would pull every average down. */
@@ -263,6 +266,17 @@ export function PageViewer({
         seconds,
         from,
       });
+    };
+    /* CLOSING THE TAB IS A FIFTH WAY OUT, AND THE CLEANUP NEVER SEES IT. React
+       does not unmount a page being thrown away, so a visitor who read a
+       preview and then closed the tab left no reading at all — the longest
+       reads were the likeliest to be lost. `pagehide` fires on the way out;
+       `sent` makes sure a panel closed normally afterwards is not counted
+       twice. */
+    window.addEventListener("pagehide", send);
+    return () => {
+      window.removeEventListener("pagehide", send);
+      send();
     };
   }, [set.id, page.slug, from]);
 

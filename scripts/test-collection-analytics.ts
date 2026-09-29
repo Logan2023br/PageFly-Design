@@ -166,6 +166,17 @@ const onSet = collectionHits({ ...W, metric: "visitors", set: "free" })!;
 check(onSet.hits.every((h) => h.set === "Free Set"), "a set's activity is that set's only");
 check(collectionHits({ ...W, metric: "nonsense" }) === null, "an unknown figure opens nothing");
 
+console.log("\nreading time");
+const home = free.pages.find((p) => p.slug === "home")!;
+check(home.reads.n === 2 && home.reads.people === 1, "readings of one page, and the people behind them", home.reads);
+check(home.reads.median === 20 && home.reads.average === 20 && home.reads.longest === 30 && home.reads.total === 40, "median, average, longest, total", home.reads);
+check(v.reading.all.n === 2 && v.reading.pages[0].page === "home", "every page with a reading, longest total first");
+check(v.reading.buckets.find((b) => b.key === "lt10")!.n === 0 && v.reading.buckets.find((b) => b.key === "10to30")!.n === 2, "10s and 30s land in 10–30s", v.reading.buckets);
+const readRows = collectionHits({ ...W, metric: "reads", key: "home", set: "free" })!;
+check(readRows.total === 2 && readRows.hits.every((h) => h.detail?.startsWith("read for")), "a page's readings, each with its length", readRows.hits.map((h) => h.detail));
+check(readRows.hits[0].country === "VN" && readRows.hits[0].lead?.email === "a@alpha.co", "each reading says where and who");
+check(collectionHits({ ...W, metric: "read_buckets", key: "10to30" })!.total === 2, "a length bucket opens into its readings");
+
 console.log("\nthe referral program");
 const members = [
   { id: "m1", domain: "alpha.myshopify.com", email: "a@x.co", name: null, status: "active" as const, rewardStatus: "none" as const, rewardNote: null, adminNote: null, createdAt: T, updatedAt: T, lastLoginAt: T },

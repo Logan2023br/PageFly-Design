@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Fragment, useEffect, useState } from "react";
-import type { CpSetRow, CpSlice, CpView, FunnelStep } from "@/lib/collectionAnalytics";
+import type { CpSetRow, CpSlice, CpView, FunnelStep, ReadStats } from "@/lib/collectionAnalytics";
 import { formatPrice } from "@/lib/collectionPages";
 import { REFERRAL_GOAL } from "@/lib/referral";
 import { countryLabel } from "@/lib/countries";
@@ -319,6 +319,57 @@ export function CollectionAnalytics() {
             </div>
             <SetTable sets={view.sets} days={days} day={day} />
           </section>
+
+          {/* ================= READING TIME ================= */}
+          <TileGroup
+            title="Reading time"
+            note="How long each page preview stayed open, from opening it to closing it — or to closing the tab. Readings under a second are not kept."
+          >
+            <StatTile
+              icon="Clock"
+              label="Readings"
+              value={view.reading.all.n}
+              footnote={`${people(view.reading.all.people)} read at least one page`}
+              ratio={ratio(view.reading.all.n, o.opens.n)}
+              panel={feed("reads", "Every reading")}
+            />
+            <StatTile
+              icon="Clock"
+              label="Median read"
+              value={view.reading.all.median ?? 0}
+              footnote={`seconds · half read longer, half shorter`}
+              hint="The middle reading. Unlike the average, one preview left open over lunch cannot move it."
+            />
+            <StatTile
+              icon="Clock"
+              label="Average read"
+              value={view.reading.all.average ?? 0}
+              footnote={`seconds · longest ${secs(view.reading.all.longest)}`}
+            />
+            <StatTile
+              icon="Clock"
+              label="Total time reading"
+              value={
+                view.reading.all.total < 120
+                  ? view.reading.all.total
+                  : Math.round(view.reading.all.total / 60)
+              }
+              footnote={`${view.reading.all.total < 120 ? "seconds" : "minutes"} across every page · ${secs(view.reading.all.total)}`}
+            />
+          </TileGroup>
+          <div className="grid gap-3">
+            <Breakdown
+              title="How long people read"
+              note="Readings by length — press one to see who"
+              metric="read_buckets"
+              keys={view.reading.buckets.map((b) => b.key)}
+              days={days}
+              day={day}
+              rows={view.reading.buckets.map((b) => ({ key: b.label, n: b.n, people: b.people }))}
+              empty="No page was read in this window."
+            />
+            <ReadingPages rows={view.reading.pages} days={days} day={day} />
+          </div>
 
           {/* ================= 4 · BEHAVIOUR ================= */}
           <section className="grid gap-3">
@@ -875,7 +926,7 @@ function SetTable({ sets, days, day }: { sets: CpSetRow[]; days: number; day: st
                 {isOpen && (
                   <tr className="border-b border-pf-border bg-pf-bg-deep/40">
                     <td colSpan={10} className="px-3 py-3">
-                      <PageTable set={s} />
+                      <PageTable set={s} days={days} day={day} />
                       <div className="mt-4 pl-6">
                         <HitFeed
                           query={{ metric: "visitors", set: s.slug }}
@@ -930,7 +981,98 @@ function Num({ main, sub }: { main: number; sub: string }) {
   );
 }
 
-function PageTable({ set }: { set: CpSetRow }) {
+function ReadCells({ r }: { r: ReadStats }) {
+  return (
+    <>
+      <td className="py-2 text-right tabular-nums text-pf-body">{r.n}</td>
+      <td className="py-2 text-right tabular-nums text-pf-body">{r.people}</td>
+      <td className="py-2 text-right tabular-nums font-semibold text-pf-text">{secs(r.median)}</td>
+      <td className="py-2 text-right tabular-nums text-pf-body">{secs(r.average)}</td>
+      <td className="py-2 text-right tabular-nums text-pf-body">{secs(r.longest)}</td>
+      <td className="py-2 text-right tabular-nums text-pf-body">{secs(r.total)}</td>
+    </>
+  );
+}
+
+const READ_HEAD = ["Reads", "People", "Median", "Average", "Longest", "Total"];
+
+/* Every page that was read, across every set, longest total first. A row
+   opens into each reading of it: who, when, where, how long. */
+function ReadingPages({
+  rows,
+  days,
+  day,
+}: {
+  rows: CpView["reading"]["pages"];
+  days: number;
+  day: string | null;
+}) {
+  const [open, setOpen] = useState<string | null>(null);
+  const top = Math.max(1, ...rows.map((r) => r.reads.total));
+  return (
+    <Panel className="p-4">
+      <p className="text-[12.5px] font-semibold text-pf-text">Pages by reading time</p>
+      <p className="mt-0.5 text-[11px] text-pf-faint">
+        Every set, every page — press one to see each reading: who, when, from where, and for how long
+      </p>
+      {rows.length === 0 ? (
+        <p className="mt-3 text-[12px] text-pf-muted">No page was read in this window.</p>
+      ) : (
+        <div className="mt-3 max-h-[640px] overflow-auto">
+          <table className="w-full min-w-[720px] text-left text-[12px]">
+            <thead>
+              <tr className="text-[10.5px] uppercase tracking-[0.06em] text-pf-faint">
+                <th className="py-1.5 font-semibold">Set · page</th>
+                {READ_HEAD.map((h) => (
+                  <th key={h} className="py-1.5 text-right font-semibold">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const id = `${r.set}/${r.page}`;
+                return (
+                  <Fragment key={id}>
+                    <tr
+                      onClick={() => setOpen(open === id ? null : id)}
+                      className={`cursor-pointer border-t border-pf-border/60 transition-colors hover:bg-pf-card-hi/50 ${open === id ? "bg-pf-card-hi/50" : ""}`}
+                    >
+                      <td className="py-2 pr-3">
+                        <span className="text-pf-text">{r.setName}</span>
+                        <span className="text-pf-faint"> · {r.label}</span>
+                        <div className="mt-1 h-[3px] rounded-full bg-pf-bg-deep">
+                          <div className="h-full rounded-full bg-pf-primary" style={{ width: `${ratio(r.reads.total, top) * 100}%` }} />
+                        </div>
+                      </td>
+                      <ReadCells r={r.reads} />
+                    </tr>
+                    {open === id && (
+                      <tr>
+                        <td colSpan={7} className="pb-3 pt-1">
+                          <HitFeed
+                            query={{ metric: "reads", key: r.page, set: r.set }}
+                            days={days}
+                            day={day}
+                            title={`Every reading of ${r.setName} · ${r.label}`}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+function PageTable({ set, days, day }: { set: CpSetRow; days: number; day: string | null }) {
+  const [open, setOpen] = useState<string | null>(null);
   if (set.pages.length === 0) {
     return <p className="pl-6 text-[12px] text-pf-muted">No pages.</p>;
   }
@@ -938,39 +1080,59 @@ function PageTable({ set }: { set: CpSetRow }) {
   return (
     <div className="pl-6">
       <p className="mb-2 text-[11px] text-pf-faint">
-        Page by page — which pages people open, how long they read, and which they take on their own.
+        Page by page — opens, how long each page was read, and which were taken on their own. Press a
+        page to see every reading of it.
       </p>
       <table className="w-full text-left text-[12px]">
         <thead>
           <tr className="text-[10.5px] uppercase tracking-[0.06em] text-pf-faint">
             <th className="py-1.5 font-semibold">Page</th>
-            <th className="w-[34%] py-1.5 font-semibold">Opens</th>
-            <th className="py-1.5 text-right font-semibold">People</th>
-            <th className="py-1.5 text-right font-semibold">Median read</th>
+            <th className="w-[22%] py-1.5 font-semibold">Opens</th>
+            {READ_HEAD.map((h) => (
+              <th key={h} className="py-1.5 text-right font-semibold">
+                {h === "Reads" ? "Reads" : h === "People" ? "Readers" : h}
+              </th>
+            ))}
             {set.access === "free" && <th className="py-1.5 text-right font-semibold">Taken alone</th>}
           </tr>
         </thead>
         <tbody>
           {set.pages.map((p) => (
-            <tr key={p.slug} className="border-t border-pf-border/60">
-              <td className="py-2 pr-3 text-pf-body">{p.label}</td>
-              <td className="py-2 pr-3">
-                <div className="flex items-center gap-2">
-                  <div className="h-[5px] flex-1 rounded-full bg-pf-bg-deep">
-                    <div
-                      className="h-full rounded-full bg-pf-primary"
-                      style={{ width: `${ratio(p.opens.n, topOpens) * 100}%` }}
-                    />
+            <Fragment key={p.slug}>
+              <tr
+                onClick={() => setOpen(open === p.slug ? null : p.slug)}
+                className={`cursor-pointer border-t border-pf-border/60 transition-colors hover:bg-pf-card-hi/50 ${open === p.slug ? "bg-pf-card-hi/50" : ""}`}
+              >
+                <td className="py-2 pr-3 text-pf-body">{p.label}</td>
+                <td className="py-2 pr-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-[5px] flex-1 rounded-full bg-pf-bg-deep">
+                      <div
+                        className="h-full rounded-full bg-pf-primary"
+                        style={{ width: `${ratio(p.opens.n, topOpens) * 100}%` }}
+                      />
+                    </div>
+                    <span className="w-8 text-right font-semibold tabular-nums text-pf-text">{p.opens.n}</span>
                   </div>
-                  <span className="w-8 text-right font-semibold tabular-nums text-pf-text">{p.opens.n}</span>
-                </div>
-              </td>
-              <td className="py-2 text-right tabular-nums text-pf-body">{p.opens.people}</td>
-              <td className="py-2 text-right tabular-nums text-pf-body">{secs(p.medianRead)}</td>
-              {set.access === "free" && (
-                <td className="py-2 text-right tabular-nums text-pf-body">{p.downloads.people}</td>
+                </td>
+                <ReadCells r={p.reads} />
+                {set.access === "free" && (
+                  <td className="py-2 text-right tabular-nums text-pf-body">{p.downloads.people}</td>
+                )}
+              </tr>
+              {open === p.slug && (
+                <tr>
+                  <td colSpan={set.access === "free" ? 9 : 8} className="pb-3 pt-1">
+                    <HitFeed
+                      query={{ metric: "reads", key: p.slug, set: set.slug }}
+                      days={days}
+                      day={day}
+                      title={`Every reading of ${set.name} · ${p.label}`}
+                    />
+                  </td>
+                </tr>
               )}
-            </tr>
+            </Fragment>
           ))}
         </tbody>
       </table>
