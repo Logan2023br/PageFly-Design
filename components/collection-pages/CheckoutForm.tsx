@@ -134,7 +134,10 @@ export function CheckoutForm({ set }: { set: PublicCollectionSet | null }) {
                 </p>
                 <h2 className="mt-1 font-display text-[20px] font-semibold text-pf-text">{set.name}</h2>
               </div>
-              <span className="font-display text-[24px] font-bold text-pf-text">{set.price}</span>
+              <span className="grid justify-items-end">
+                <span className="font-display text-[24px] font-bold text-pf-text">{set.price}</span>
+                <span className="text-[12px] font-medium text-pf-warn">(Free edits included)</span>
+              </span>
             </div>
             {set.blurb && <p className="text-[13.5px] leading-relaxed text-pf-muted">{set.blurb}</p>}
             <div className="flex flex-wrap gap-1.5">

@@ -36,6 +36,8 @@ export function SetAction({
       >
         <Icon name="ShoppingCart" size={size === "lg" ? 15 : 13} />
         {set.price ? `Buy for ${set.price}` : "Buy this set"}
+        {/* Said on the button, where the price is weighed. */}
+        <span className="font-medium opacity-75">(Free edits included)</span>
       </Link>
     );
   }
