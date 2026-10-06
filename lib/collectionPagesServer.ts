@@ -152,8 +152,15 @@ export async function importBuiltInSets(origin: string): Promise<string[]> {
    To ship a re-export: write the files into `public/showcase/`, add a line
    with the current time.
    ========================================================================== */
-const REEXPORTED: { set: string; page: string; since: string }[] = [
+const REEXPORTED: {
+  set: string;
+  page: string;
+  since: string;
+  /** the files that changed; both when left out */
+  kinds?: CollectionFileKind[];
+}[] = [
   { set: "hexwood", page: "product-page", since: "2026-10-06T02:27:00Z" },
+  { set: "hexwood", page: "contact", since: "2026-10-06T02:53:00Z", kinds: ["html"] },
 ];
 
 let refreshing: Promise<void> | null = null;
@@ -166,7 +173,7 @@ export function refreshBuiltInPages(origin?: string): Promise<void> {
       const set = await repo.getCollectionSetBySlug(r.set);
       const page = set?.pages.find((p) => p.slug === r.page);
       if (!set || !page || Date.parse(page.updatedAt) >= Date.parse(r.since)) continue;
-      for (const kind of ["html", "pagefly"] as const) {
+      for (const kind of r.kinds ?? (["html", "pagefly"] as const)) {
         const bytes = await readBuiltIn(`showcase/${r.set}/${r.page}.${kind}`, origin);
         if (!bytes || rejectFile(kind, bytes)) throw new Error(`${r.set}/${r.page}.${kind} unreadable`);
         await repo.putCollectionFile(set.id, page.id, kind, bytes);
