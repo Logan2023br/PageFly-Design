@@ -366,7 +366,7 @@ function PagePreview({
         ) : (
           <iframe
             title={page.label}
-            srcDoc={html}
+            srcDoc={stayPutStatic(html)}
             /* Nothing in these files needs script, and the documents are built
                from a merchant's own export — so the sandbox is empty, which
                denies script, forms, popups and navigation in one attribute. */

@@ -131,6 +131,22 @@ function Block({ block }: { block: MockupBlock }) {
   }
 }
 
+/* ==========================================================================
+   A TREE MOCKUP IS DRAWN IN THIS DOCUMENT, NOT A FRAME — so a link inside it
+   (a custom block's own HTML can carry one) would navigate the APP. Held on
+   the way down, like the frame guard in `lib/stayPut.ts` does for documents.
+   ========================================================================== */
+const hold = {
+  onClickCapture(e: React.MouseEvent) {
+    const a = (e.target as Element | null)?.closest?.("a[href],area[href]");
+    const href = a?.getAttribute("href") ?? "";
+    if (a && !(href.startsWith("#") && href.length > 1)) e.preventDefault();
+  },
+  onSubmitCapture(e: React.FormEvent) {
+    e.preventDefault();
+  },
+};
+
 /**
  * A whole mockup, laid out for one device width.
  *
@@ -174,7 +190,7 @@ export const MockupPage = memo(function MockupPage({
   const tree = designTreeOf(page);
   if (tree)
     return (
-      <div style={surface}>
+      <div style={surface} {...hold}>
         <DesignRender
           tree={tree}
           device={deviceForWidth(width)}
@@ -194,7 +210,7 @@ export const MockupPage = memo(function MockupPage({
 
   return (
     <MockProvider tokens={page.tokens} vertical={page.vertical} width={width}>
-      <div style={surface}>
+      <div style={surface} {...hold}>
         {page.blocks.map((block) => (
           <Block key={block.id} block={block} />
         ))}

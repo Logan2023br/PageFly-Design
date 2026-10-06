@@ -25,6 +25,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { HERO_SET, SHOWCASE_SETS, htmlFor, pageflyFor } from "../lib/showcasePages";
 import { combinePagefly, readPageflyPage, readPageflySet } from "../lib/collections/pagefly";
+import { stayPut } from "../lib/stayPut";
 
 let bad = 0;
 function check(ok: boolean, label: string, detail = ""): void {
@@ -88,6 +89,12 @@ for (const set of SHOWCASE_SETS) {
     const imgs = (text.match(/<img\b/gi) ?? []).length;
     const lazy = (text.match(/loading="lazy"/gi) ?? []).length;
     check(imgs === 0 || lazy >= imgs, `      every image is lazy`, `${lazy}/${imgs}`);
+
+    /* A button in the preview must not walk the frame to a 404, and these are
+       static files: nothing adds the guard at serve time. Compared against the
+       CURRENT guard, so a change to `lib/stayPut.ts` fails here until every
+       file is rewritten — not only a file that has no guard at all. */
+    check(stayPut(text) === text, `      links held in place (lib/stayPut.ts)`);
 
     /* The offer beside the picture has to be a file PageFly will take. */
     try {

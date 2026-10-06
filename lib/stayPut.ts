@@ -7,24 +7,50 @@
    FRAME, resolved against this origin, and the merchant is left looking at our
    404 where the page used to be.
 
-   So every link and form inside a preview is held where it is. In-page anchors
-   (`#reviews`) still scroll: that is the page moving, not leaving.
+   So nothing inside a preview navigates. In-page anchors (`#reviews`) still
+   scroll: that is the page moving, not leaving.
+
+   NOT ONLY LINKS. A category card is clickable all over — the builder's
+   `card-link` behaviour (`skills/pagefly-builder/scripts/behaviors.js`) sends
+   `window.location.href` to the card's link when the picture or the title is
+   pressed, and no `<a>` is ever clicked. So the frame-that-runs-script guard
+   works at four levels:
+
+   1. Clicks on links are cancelled, and forms do not submit.
+   2. The card's click handler is never attached: `addEventListener` refuses a
+      `click` listener on a `.pu-card`. It is the only thing the builder's
+      runtime sends anywhere by script — checked against every showcase file —
+      and the card keeps its hover and everything else.
+   3. The Navigation API's `navigate` event, cancelled for anything that is not
+      a hash change — the catch-all for any other script. ONLY WHERE THE FRAME
+      HAS AN ORIGIN: Chrome does not fire it in a `sandbox="allow-scripts"`
+      frame, which is every preview on the public pages. It covers the app's
+      own mockups, which are unsandboxed `srcDoc`.
+   4. `window.open` does nothing, so a script cannot get round it with a tab.
 
    TWO SHAPES, because two kinds of frame:
 
-   - A frame that runs script gets `stayPut`: a listener, registered first in
-     `<head>` so it is in place before the page's own scripts, that cancels
-     the navigation on the way down (capture phase) — before any handler on the
-     button itself could act on it.
+   - A frame that runs script gets `stayPut`: the guard above, registered first
+     in `<head>` so it is in place before the page's own scripts.
    - A frame with `sandbox=""` runs no script at all, so it gets `stayPutStatic`
      instead: `<base target="_blank">` turns every link into a popup, and the
-     empty sandbox — no `allow-popups` — refuses every popup. Nothing opens.
+     empty sandbox — no `allow-popups` — refuses every popup. Nothing opens,
+     and with no script there is no `location.href` to worry about.
    ========================================================================== */
 
 const MARK = "data-stay-put";
 
 const SCRIPT = `<script ${MARK}>(function(){
-function stop(e){
+var nav=window.navigation;
+if(nav&&nav.addEventListener)nav.addEventListener("navigate",function(e){
+  if(!e.hashChange&&e.cancelable)e.preventDefault();
+});
+var add=EventTarget.prototype.addEventListener;
+EventTarget.prototype.addEventListener=function(type,fn,opt){
+  if(type==="click"&&this&&this.classList&&this.classList.contains("pu-card"))return;
+  return add.call(this,type,fn,opt);
+};
+function link(e){
   var t=e.target;
   var a=t&&t.closest?t.closest("a[href],area[href]"):null;
   if(!a)return;
@@ -32,14 +58,18 @@ function stop(e){
   if(h.charAt(0)==="#"&&h.length>1&&!a.target)return;
   e.preventDefault();
 }
-document.addEventListener("click",stop,true);
-document.addEventListener("auxclick",stop,true);
-document.addEventListener("submit",function(e){e.preventDefault();},true);
+add.call(document,"click",link,true);
+add.call(document,"auxclick",link,true);
+add.call(document,"submit",function(e){e.preventDefault();},true);
+window.open=function(){return null;};
 })();</script>`;
+
+/** An earlier guard, so a file written by an older version is upgraded. */
+const OLD = new RegExp(`<script ${MARK}>[\\s\\S]*?</script>|<base ${MARK}[^>]*>`, "g");
 
 /** Put `snippet` first in `<head>`, or first in the document if it has none. */
 function inject(html: string, snippet: string): string {
-  if (html.includes(MARK)) return html;
+  html = html.replace(OLD, "");
   const head = /<head\b[^>]*>/i.exec(html);
   if (head) {
     const at = head.index + head[0].length;

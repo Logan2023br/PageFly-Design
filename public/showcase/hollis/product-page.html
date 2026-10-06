@@ -1,5 +1,14 @@
 <!DOCTYPE html><html><head><script data-stay-put>(function(){
-function stop(e){
+var nav=window.navigation;
+if(nav&&nav.addEventListener)nav.addEventListener("navigate",function(e){
+  if(!e.hashChange&&e.cancelable)e.preventDefault();
+});
+var add=EventTarget.prototype.addEventListener;
+EventTarget.prototype.addEventListener=function(type,fn,opt){
+  if(type==="click"&&this&&this.classList&&this.classList.contains("pu-card"))return;
+  return add.call(this,type,fn,opt);
+};
+function link(e){
   var t=e.target;
   var a=t&&t.closest?t.closest("a[href],area[href]"):null;
   if(!a)return;
@@ -7,9 +16,10 @@ function stop(e){
   if(h.charAt(0)==="#"&&h.length>1&&!a.target)return;
   e.preventDefault();
 }
-document.addEventListener("click",stop,true);
-document.addEventListener("auxclick",stop,true);
-document.addEventListener("submit",function(e){e.preventDefault();},true);
+add.call(document,"click",link,true);
+add.call(document,"auxclick",link,true);
+add.call(document,"submit",function(e){e.preventDefault();},true);
+window.open=function(){return null;};
 })();</script><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>pagefly preview</title>
