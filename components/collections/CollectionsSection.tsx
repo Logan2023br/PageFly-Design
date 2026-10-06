@@ -18,6 +18,7 @@ import {
   type PageflyPage,
 } from "@/lib/collections/pagefly";
 import { DEVICES, type PageMockup } from "@/lib/generate/types";
+import { stayPutStatic } from "@/lib/stayPut";
 import { PreviewOverlay } from "../preview/PreviewOverlay";
 import { InstallPageFlyLink } from "../pagefly/InstallPageFly";
 import { Button, Icon, Panel } from "../ui";
@@ -638,7 +639,7 @@ function CollectionDetail({
               ) : (
                 <iframe
                   title={labels[viewing]}
-                  srcDoc={pageToHtml(pages[viewing])}
+                  srcDoc={stayPutStatic(pageToHtml(pages[viewing]))}
                   sandbox=""
                   /* The fallback, for a set with no screenshots. The page's own
                      media queries do the work — `pageToHtml` writes the file's

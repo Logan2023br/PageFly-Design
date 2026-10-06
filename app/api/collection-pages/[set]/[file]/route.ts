@@ -1,6 +1,7 @@
 import { getRepo } from "@/lib/db";
 import { combinePagefly } from "@/lib/collections/pagefly";
 import { readAdminSession } from "@/lib/session";
+import { stayPut } from "@/lib/stayPut";
 
 /* ==========================================================================
    /api/collection-pages/<set>/<page>.html      the preview
@@ -74,7 +75,10 @@ export async function GET(
   if (!bytes) return notFound();
 
   if (kind === "html") {
-    return new Response(Buffer.from(bytes), {
+    /* Its links held in place, so a button in the preview does not walk the
+       frame off to a 404 on this origin. See `lib/stayPut.ts`. */
+    const html = stayPut(new TextDecoder().decode(bytes));
+    return new Response(html, {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
         "Content-Security-Policy": "sandbox allow-scripts",

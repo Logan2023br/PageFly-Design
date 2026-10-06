@@ -1,4 +1,16 @@
-<!DOCTYPE html><html><head><meta charset="utf-8">
+<!DOCTYPE html><html><head><script data-stay-put>(function(){
+function stop(e){
+  var t=e.target;
+  var a=t&&t.closest?t.closest("a[href],area[href]"):null;
+  if(!a)return;
+  var h=a.getAttribute("href")||"";
+  if(h.charAt(0)==="#"&&h.length>1&&!a.target)return;
+  e.preventDefault();
+}
+document.addEventListener("click",stop,true);
+document.addEventListener("auxclick",stop,true);
+document.addEventListener("submit",function(e){e.preventDefault();},true);
+})();</script><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>pagefly preview</title>
 <style>body{margin:0}

@@ -6,6 +6,7 @@ import { deviceForWidth } from "@/lib/design/derive";
 import { DesignRender } from "@/lib/design/render";
 import { designTreeSchema, type DesignTree } from "@/lib/design/schema";
 import { MockProvider } from "./primitives";
+import { stayPut } from "@/lib/stayPut";
 import { pinViewportUnits } from "./viewportUnits";
 import { Footer, NavBar } from "./blocks/chrome";
 import { Hero, PasswordGate } from "./blocks/hero";
@@ -235,7 +236,9 @@ function HtmlMockup({ html, width, bg }: { html: string; width: number; bg: stri
      document is handed over. `vw` is left alone — the frame IS the device
      width, so it already resolves. See `viewportUnits.ts`.
      ==================================================================== */
-  const doc = useMemo(() => pinViewportUnits(html, width), [html, width]);
+  /* Links held in place too: a button in a mockup must not walk the frame off
+     to a 404. See `lib/stayPut.ts`. */
+  const doc = useMemo(() => stayPut(pinViewportUnits(html, width)), [html, width]);
 
   const measure = useCallback(() => {
     const doc = ref.current?.contentDocument;

@@ -29,6 +29,7 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { unzipSync, zipSync, strFromU8 } from "fflate";
+import { stayPut } from "../lib/stayPut";
 
 const ROOT = join(import.meta.dirname, "..");
 
@@ -151,7 +152,7 @@ function main(): void {
       throw new Error(`${pair.html} has no <img> to make lazy — has the export changed shape?`);
 
     const file = onePagefly(pair.page, pageflyZip[pair.page], bundled);
-    writeFileSync(join(out, `${slug}.html`), html);
+    writeFileSync(join(out, `${slug}.html`), stayPut(html));
     writeFileSync(join(out, `${slug}.pagefly`), file);
     written.push(slug);
 
