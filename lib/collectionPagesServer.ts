@@ -161,6 +161,7 @@ const REEXPORTED: {
 }[] = [
   { set: "hexwood", page: "product-page", since: "2026-10-06T02:27:00Z" },
   { set: "hexwood", page: "contact", since: "2026-10-06T02:53:00Z", kinds: ["html"] },
+  { set: "hexwood", page: "blog-article", since: "2026-10-06T03:13:00Z", kinds: ["html"] },
 ];
 
 let refreshing: Promise<void> | null = null;
