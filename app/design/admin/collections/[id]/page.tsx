@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { AdminLogin } from "@/components/admin/AdminLogin";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { CollectionSetEditor } from "@/components/admin/collections/CollectionSetEditor";
+import { refreshBuiltInPages } from "@/lib/collectionPagesServer";
 import { getRepo } from "@/lib/db";
 import { readAdminSession } from "@/lib/session";
 
@@ -18,6 +19,7 @@ export async function generateMetadata(props: PageProps<"/design/admin/collectio
 export default async function AdminCollectionSetPage(props: PageProps<"/design/admin/collections/[id]">) {
   if (!(await readAdminSession())) return <AdminLogin />;
   const { id } = await props.params;
+  await refreshBuiltInPages();
   const set = await getRepo().getCollectionSet(id).catch(() => null);
   if (!set) notFound();
 

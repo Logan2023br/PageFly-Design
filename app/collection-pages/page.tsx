@@ -1,7 +1,7 @@
 import { CollectionShell } from "@/components/collection-pages/Shell";
 import { SetList } from "@/components/collection-pages/SetList";
 import { toPublicSet } from "@/lib/collectionPages";
-import { collectionStats } from "@/lib/collectionPagesServer";
+import { collectionStats, refreshBuiltInPages } from "@/lib/collectionPagesServer";
 import { getRepo } from "@/lib/db";
 
 /* /collection-pages — every visible set, in the order admin gave them.
@@ -11,6 +11,7 @@ export const metadata = { title: "Collection pages — PageFly Design" };
 export const dynamic = "force-dynamic";
 
 export default async function CollectionPagesPage() {
+  await refreshBuiltInPages();
   const [sets, stats] = await Promise.all([
     getRepo().listCollectionSets().catch(() => []),
     collectionStats(),

@@ -80,24 +80,28 @@ export async function storeFile(
    ONLY WHAT IS MISSING. A set whose slug already exists is left alone, so a
    second press cannot overwrite an edit and a deleted one can be brought back.
    ========================================================================== */
+/** A file under `public/`, from disk or else from the site itself. */
+async function readBuiltIn(path: string, origin?: string): Promise<Uint8Array | null> {
+  try {
+    return new Uint8Array(await readFile(join(process.cwd(), "public", path)));
+  } catch {
+    if (!origin) return null;
+    try {
+      const res = await fetch(new URL(path, origin));
+      return res.ok ? new Uint8Array(await res.arrayBuffer()) : null;
+    } catch {
+      return null;
+    }
+  }
+}
+
 export async function importBuiltInSets(origin: string): Promise<string[]> {
   const repo = getRepo();
   const existing = new Set((await repo.listCollectionSets()).map((s) => s.slug));
   const last = Math.max(0, ...(await repo.listCollectionSets()).map((s) => s.position));
   const added: string[] = [];
 
-  const read = async (path: string): Promise<Uint8Array | null> => {
-    try {
-      return new Uint8Array(await readFile(join(process.cwd(), "public", path)));
-    } catch {
-      try {
-        const res = await fetch(new URL(path, origin));
-        return res.ok ? new Uint8Array(await res.arrayBuffer()) : null;
-      } catch {
-        return null;
-      }
-    }
-  };
+  const read = (path: string) => readBuiltIn(path, origin);
 
   for (const [i, built] of SHOWCASE_SETS.entries()) {
     if (existing.has(built.id)) continue;
@@ -130,6 +134,51 @@ export async function importBuiltInSets(origin: string): Promise<string[]> {
     added.push(built.name);
   }
   return added;
+}
+
+/* ==========================================================================
+   A BUILT-IN PAGE RE-EXPORTED AFTER ITS SET WAS IMPORTED.
+
+   The import copies files once, so the table keeps the version it copied
+   while the repository moves on — the landing gallery shows the new page and
+   /collection-pages the old one. Each entry here says "this page was replaced
+   in `public/showcase/` at this moment", and a copy in the table older than
+   that is overwritten from the repository.
+
+   ONCE PER PROCESS, and only while the table is behind: after the copy, the
+   page's `updated_at` is newer than `since` and the entry does nothing. A page
+   an admin has replaced by hand since then is newer too, so their upload wins.
+
+   To ship a re-export: write the files into `public/showcase/`, add a line
+   with the current time.
+   ========================================================================== */
+const REEXPORTED: { set: string; page: string; since: string }[] = [
+  { set: "hexwood", page: "product-page", since: "2026-10-06T02:27:00Z" },
+];
+
+let refreshing: Promise<void> | null = null;
+
+/** Bring re-exported built-in pages into the table. Safe to call on every request. */
+export function refreshBuiltInPages(origin?: string): Promise<void> {
+  refreshing ??= (async () => {
+    const repo = getRepo();
+    for (const r of REEXPORTED) {
+      const set = await repo.getCollectionSetBySlug(r.set);
+      const page = set?.pages.find((p) => p.slug === r.page);
+      if (!set || !page || Date.parse(page.updatedAt) >= Date.parse(r.since)) continue;
+      for (const kind of ["html", "pagefly"] as const) {
+        const bytes = await readBuiltIn(`showcase/${r.set}/${r.page}.${kind}`, origin);
+        if (!bytes || rejectFile(kind, bytes)) throw new Error(`${r.set}/${r.page}.${kind} unreadable`);
+        await repo.putCollectionFile(set.id, page.id, kind, bytes);
+      }
+      console.log(`[collection-pages] ${r.set}/${r.page} refreshed from the repository`);
+    }
+  })().catch((err) => {
+    /* Tried again on the next request rather than never. */
+    refreshing = null;
+    console.warn("[collection-pages] refresh of built-in pages failed:", err);
+  });
+  return refreshing;
 }
 
 /** Built-in sets not yet in the table — what the import button offers. */

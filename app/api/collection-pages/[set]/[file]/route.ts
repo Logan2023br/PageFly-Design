@@ -1,5 +1,6 @@
 import { getRepo } from "@/lib/db";
 import { combinePagefly } from "@/lib/collections/pagefly";
+import { refreshBuiltInPages } from "@/lib/collectionPagesServer";
 import { readAdminSession } from "@/lib/session";
 import { stayPut } from "@/lib/stayPut";
 
@@ -27,13 +28,16 @@ export const dynamic = "force-dynamic";
 const notFound = () => new Response("Not found", { status: 404 });
 
 export async function GET(
-  _request: Request,
+  request: Request,
   ctx: RouteContext<"/api/collection-pages/[set]/[file]">,
 ) {
   const { set: setSlug, file } = await ctx.params;
   const m = /^([a-z0-9-]+)\.(html|pagefly)$/.exec(file);
   if (!m) return notFound();
   const [, pageSlug, kind] = m as unknown as [string, string, "html" | "pagefly"];
+
+  /* A re-exported built-in page reaches the table before it is read. */
+  await refreshBuiltInPages(new URL(request.url).origin);
 
   const repo = getRepo();
   const set = await repo.getCollectionSetBySlug(setSlug).catch(() => null);

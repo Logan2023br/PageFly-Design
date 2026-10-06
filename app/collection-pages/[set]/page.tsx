@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { CollectionShell } from "@/components/collection-pages/Shell";
 import { SetDetail } from "@/components/collection-pages/SetDetail";
 import { toPublicSet } from "@/lib/collectionPages";
-import { collectionStats } from "@/lib/collectionPagesServer";
+import { collectionStats, refreshBuiltInPages } from "@/lib/collectionPagesServer";
 import { getRepo } from "@/lib/db";
 import { readAdminSession } from "@/lib/session";
 
@@ -19,6 +19,7 @@ export async function generateMetadata(props: PageProps<"/collection-pages/[set]
 
 export default async function CollectionSetPage(props: PageProps<"/collection-pages/[set]">) {
   const { set: slug } = await props.params;
+  await refreshBuiltInPages();
   const repo = getRepo();
   const [record, all] = await Promise.all([
     repo.getCollectionSetBySlug(slug).catch(() => null),
