@@ -124,6 +124,21 @@ function subscription(): ShowcasePage[] {
   ];
 }
 
+/* A luxury house: home first, as the set's cover, then the collection and one
+   piece, the house's story, its boutiques, the journal and an invitation-only
+   sale. */
+function maison(): ShowcasePage[] {
+  return [
+    HOME,
+    { slug: "collection-page", label: "Collection", blurb: "The collection, shown the way a boutique would." },
+    { slug: "product-page", label: "Product", blurb: "One piece: its making, its materials, its price." },
+    { slug: "maison", label: "Maison", blurb: "The house's history, from its founding to now." },
+    { slug: "boutiques", label: "Boutiques", blurb: "Where to see it in person, and how to book a visit." },
+    JOURNAL,
+    { slug: "private-sale", label: "Private sale", blurb: "By invitation: numbered editions and access on request." },
+  ];
+}
+
 export const PREVIEW_SETS: ShowcaseSet[] = [
   {
     id: "aurum",
@@ -835,5 +850,73 @@ export const PREVIEW_SETS: ShowcaseSet[] = [
     name: "Tartan and Thistle",
     blurb: "Scottish lambswool and tweed for Burns Night — oatmeal, pine and claret, EB Garamond, heritage.",
     pages: pages({ slug: "winter-sale", label: "Winter sale" }),
+  },
+  {
+    id: "casa-lumen",
+    name: "Casa Lumen",
+    blurb: "Milanese furniture since 1958 — travertine beige and ink, Instrument Serif, architectural.",
+    pages: maison(),
+  },
+  {
+    id: "kiln-atelier",
+    name: "Kiln Atelier",
+    blurb: "Wood-fired ceramics from Mashiko — clay and charcoal, Hina Mincho, quiet.",
+    pages: maison(),
+  },
+  {
+    id: "herbarium",
+    name: "Herbarium",
+    blurb: "Botanical skin care from an Edinburgh lab — sage paper and olive, Libre Caslon with Plex Mono, apothecary.",
+    pages: maison(),
+  },
+  {
+    id: "domaine-solene",
+    name: "Domaine Solene",
+    blurb: "A Grand Cru Burgundy domaine since 1862 — parchment and claret, Cormorant Garamond, old-world.",
+    pages: maison(),
+  },
+  {
+    id: "isla-private-island",
+    name: "Isla Private Island",
+    blurb: "A twelve-villa private island resort — sand and deep lagoon teal, Marcellus, unhurried.",
+    pages: [
+      HOME,
+      { slug: "the-island", label: "The island", blurb: "Why the island was left alone, and who looks after it." },
+      { slug: "villas", label: "Villas", blurb: "All twelve villas, filterable by setting." },
+      { slug: "villa", label: "Villa", blurb: "One villa: the rooms, the view and the nightly rate." },
+      { slug: "private-island", label: "Private island", blurb: "The whole island, for one party." },
+      { slug: "reserve", label: "Reserve", blurb: "Plan a stay: transfers, dates and the details." },
+      JOURNAL,
+    ],
+  },
+  {
+    id: "maison-cire",
+    name: "Maison Cire",
+    blurb: "Parisian candle makers since 1643 — near-black and wax ivory, Italiana, candlelit.",
+    pages: maison(),
+  },
+  {
+    id: "lune-linen",
+    name: "Lune Linen",
+    blurb: "Stonewashed French-flax bedding — oyster and stone, Ibarra Real Nova, soft.",
+    pages: maison(),
+  },
+  {
+    id: "sonor",
+    name: "Sonor",
+    blurb: "Copenhagen acoustic engineering — concrete grey and graphite, Manrope with JetBrains Mono, precise.",
+    pages: maison(),
+  },
+  {
+    id: "verre-couture",
+    name: "Verre Couture",
+    blurb: "A Paris couture house — pure black on white, DM Serif Display, runway minimal.",
+    pages: maison(),
+  },
+  {
+    id: "ryokucha-kyoto",
+    name: "Ryokucha Kyoto",
+    blurb: "Uji matcha and gyokuro since 1790 — washi and tea green, Zen Old Mincho, ceremonial.",
+    pages: maison(),
   },
 ];
