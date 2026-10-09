@@ -10,6 +10,8 @@ import { PromoCards } from "./PromoCards";
 import { ReferralBox } from "./ReferralBox";
 import { SetAction } from "./SetAction";
 
+const SHOW_PREMIUM = false;
+
 /* ==========================================================================
    EVERY SET, ONE CARD EACH — FREE FIRST, THEN PREMIUM.
 
@@ -60,9 +62,10 @@ export function SetList({ sets }: { sets: PublicCollectionSet[] }) {
         />
       )}
 
-      {/* Always drawn: with no premium set yet, the section still carries the
-          two ways to get a store that is not here. */}
-      <Group
+      {/* Hidden for now: the paid offer is off the list. Flip SHOW_PREMIUM to
+          bring the section back — with no premium set yet, it still carries
+          the two ways to get a store that is not here. */}
+      {SHOW_PREMIUM && <Group
         eyebrow="Premium templates"
         title="Premium page sets"
         sub="Fuller stores with more pages and more polish. Preview every page for free — when you buy, we check your order and send the files to your email."
@@ -71,7 +74,7 @@ export function SetList({ sets }: { sets: PublicCollectionSet[] }) {
         section="premium"
         extra={<PromoCards />}
         aside={<ReferralBox />}
-      />
+      />}
     </>
   );
 }
