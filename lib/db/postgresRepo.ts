@@ -459,6 +459,10 @@ create table if not exists collection_pages (
   primary key (set_id, id),
   unique (set_id, slug)
 );
+/* "Visible preview" arrived after the table did: listed on
+   /collection-pages-preview, not on /collection-pages. A preview set keeps
+   visible = false, so a build from before this column reads it as hidden. */
+alter table collection_sets add column if not exists preview boolean not null default false;
 
 /* No foreign key to the set: an order outlives the set it was for. */
 create table if not exists collection_orders (
@@ -537,7 +541,7 @@ function toCollectionSet(
     slug: String(r.slug),
     name: String(r.name),
     blurb: String(r.blurb ?? ""),
-    visible: Boolean(r.visible),
+    visibility: r.preview ? "preview" : r.visible ? "visible" : "hidden",
     access: r.access === "paid" ? "paid" : "free",
     priceCents: r.price_cents === null || r.price_cents === undefined ? null : Number(r.price_cents),
     buyUrl: (r.buy_url as string) ?? null,
@@ -1299,15 +1303,16 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
       try {
         await db.query(
           `insert into collection_sets
-             (id, slug, name, blurb, visible, access, price_cents, buy_url, position)
-           values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+             (id, slug, name, blurb, visible, preview, access, price_cents, buy_url, position)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
            on conflict (id) do update set
              slug = excluded.slug, name = excluded.name, blurb = excluded.blurb,
-             visible = excluded.visible, access = excluded.access,
+             visible = excluded.visible, preview = excluded.preview, access = excluded.access,
              price_cents = excluded.price_cents, buy_url = excluded.buy_url,
              position = excluded.position, updated_at = now()`,
           [
-            set.id, set.slug, set.name, set.blurb, set.visible, set.access,
+            set.id, set.slug, set.name, set.blurb,
+            set.visibility === "visible", set.visibility === "preview", set.access,
             set.priceCents, set.buyUrl, set.position,
           ],
         );

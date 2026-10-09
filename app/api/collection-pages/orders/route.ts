@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CUSTOM_REQUEST } from "@/lib/collectionPages";
+import { CUSTOM_REQUEST, isPublic } from "@/lib/collectionPages";
 import { newId } from "@/lib/collectionPagesServer";
 import { getRepo } from "@/lib/db";
 import { normalizeDomain } from "@/lib/storeForm";
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
   }
 
   const set = await repo.getCollectionSetBySlug(parsed.data.set);
-  if (!set || !set.visible || set.access !== "paid") {
+  if (!set || !isPublic(set) || set.access !== "paid") {
     return Response.json({ ok: false, error: "This set is not for sale." }, { status: 404 });
   }
 

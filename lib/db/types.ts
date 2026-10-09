@@ -632,6 +632,8 @@ export type TrainingSectionSummary = {
 
 export type CollectionFileKind = "html" | "pagefly";
 
+export type CollectionVisibility = "visible" | "preview" | "hidden";
+
 export type CollectionPageMeta = {
   /** internal and stable; the slug can be renamed without breaking a reference */
   id: string;
@@ -652,8 +654,15 @@ export type CollectionSetRecord = {
   slug: string;
   name: string;
   blurb: string;
-  /** false keeps it off the public page; an admin can still preview it */
-  visible: boolean;
+  /**
+   * Where the set is shown.
+   *
+   *   visible  listed on /collection-pages for everyone
+   *   preview  listed on /collection-pages-preview only — its own page and its
+   *            files open for anyone with the link, as on a visible set
+   *   hidden   on neither; an admin can still preview it
+   */
+  visibility: CollectionVisibility;
   /**
    * FREE is downloadable by anyone. PAID shows every preview and hands over no
    * file: the button goes to `buyUrl`, and the file routes refuse. There is no

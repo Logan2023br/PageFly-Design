@@ -53,7 +53,7 @@ export function SetDetail({
       )}
 
       <Link
-        href="/collection-pages"
+        href={set.visibility === "preview" ? "/collection-pages-preview" : "/collection-pages"}
         className="inline-flex items-center gap-1.5 text-[13.5px] font-medium text-pf-muted transition-colors hover:text-pf-text"
       >
         <Icon name="ArrowLeft" size={14} />

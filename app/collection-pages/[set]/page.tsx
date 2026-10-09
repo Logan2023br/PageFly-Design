@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { CollectionShell } from "@/components/collection-pages/Shell";
 import { SetDetail } from "@/components/collection-pages/SetDetail";
-import { toPublicSet } from "@/lib/collectionPages";
+import { isPublic, toPublicSet } from "@/lib/collectionPages";
 import { collectionStats, refreshBuiltInPages } from "@/lib/collectionPagesServer";
 import { getRepo } from "@/lib/db";
 import { readAdminSession } from "@/lib/session";
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata(props: PageProps<"/collection-pages/[set]">) {
   const { set: slug } = await props.params;
   const set = await getRepo().getCollectionSetBySlug(slug).catch(() => null);
-  return { title: `${set?.visible ? set.name : "Collection pages"} — PageFly Design` };
+  return { title: `${set && isPublic(set) ? set.name : "Collection pages"} — PageFly Design` };
 }
 
 export default async function CollectionSetPage(props: PageProps<"/collection-pages/[set]">) {
@@ -26,11 +26,14 @@ export default async function CollectionSetPage(props: PageProps<"/collection-pa
     repo.listCollectionSets().catch(() => []),
   ]);
   if (!record) notFound();
-  const preview = !record.visible;
+  /* A "preview" set is open to anyone with the link — only "hidden" is admin's. */
+  const preview = !isPublic(record);
   if (preview && !(await readAdminSession())) notFound();
 
   const others = all
-    .filter((s) => s.visible && s.pages.some((p) => p.htmlSize !== null))
+    /* The pills stay with the listing the visitor came from. */
+    .filter((s) => s.visibility === (record.visibility === "preview" ? "preview" : "visible"))
+    .filter((s) => s.pages.some((p) => p.htmlSize !== null))
     .map((s) => ({ id: s.slug, name: s.name }));
 
   return (

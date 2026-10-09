@@ -6,8 +6,9 @@ import { unzipSync } from "fflate";
 import { EV } from "./analytics";
 import { labelFromSlug } from "./collectionPages";
 import { getRepo } from "./db";
-import type { CollectionFileKind, CollectionSetRecord } from "./db/types";
-import { SHOWCASE_SETS } from "./showcasePages";
+import { PREVIEW_SETS } from "./collectionSets";
+import type { CollectionFileKind, CollectionSetRecord, CollectionVisibility } from "./db/types";
+import { SHOWCASE_SETS, type ShowcaseSet } from "./showcasePages";
 
 /* ==========================================================================
    Collection pages, the server half: what a file must be to be stored, and
@@ -77,6 +78,10 @@ export async function storeFile(
    right there. On a serverless host it may not be in the function's bundle,
    and the same files are served at the site's own origin.
 
+   THE PREVIEW SETS COME IN THE SAME WAY. The ten in `public/collection-sets/`
+   (see `lib/collectionSets.ts`) are imported by the same press, as "Visible
+   preview": on /collection-pages-preview, not yet on /collection-pages.
+
    ONLY WHAT IS MISSING. A set whose slug already exists is left alone, so a
    second press cannot overwrite an edit and a deleted one can be brought back.
    ========================================================================== */
@@ -95,15 +100,22 @@ async function readBuiltIn(path: string, origin?: string): Promise<Uint8Array | 
   }
 }
 
+/** Every set the repository ships: where its files are, and how it arrives. */
+const BUILT_IN: { set: ShowcaseSet; dir: string; visibility: CollectionVisibility }[] = [
+  ...SHOWCASE_SETS.map((set) => ({ set, dir: "showcase", visibility: "visible" as const })),
+  ...PREVIEW_SETS.map((set) => ({ set, dir: "collection-sets", visibility: "preview" as const })),
+];
+
 export async function importBuiltInSets(origin: string): Promise<string[]> {
   const repo = getRepo();
-  const existing = new Set((await repo.listCollectionSets()).map((s) => s.slug));
-  const last = Math.max(0, ...(await repo.listCollectionSets()).map((s) => s.position));
+  const sets = await repo.listCollectionSets();
+  const existing = new Set(sets.map((s) => s.slug));
+  let last = Math.max(0, ...sets.map((s) => s.position));
   const added: string[] = [];
 
   const read = (path: string) => readBuiltIn(path, origin);
 
-  for (const [i, built] of SHOWCASE_SETS.entries()) {
+  for (const { set: built, dir, visibility } of BUILT_IN) {
     if (existing.has(built.id)) continue;
     const id = newId();
     await repo.saveCollectionSet({
@@ -111,11 +123,11 @@ export async function importBuiltInSets(origin: string): Promise<string[]> {
       slug: built.id,
       name: built.name,
       blurb: built.blurb,
-      visible: true,
+      visibility,
       access: "free",
       priceCents: null,
       buyUrl: null,
-      position: last + i + 1,
+      position: ++last,
     });
     for (const [at, page] of built.pages.entries()) {
       const pageId = newId();
@@ -127,7 +139,7 @@ export async function importBuiltInSets(origin: string): Promise<string[]> {
         position: at + 1,
       });
       for (const kind of ["html", "pagefly"] as const) {
-        const bytes = await read(`showcase/${built.id}/${page.slug}.${kind}`);
+        const bytes = await read(`${dir}/${built.id}/${page.slug}.${kind}`);
         if (bytes) await repo.putCollectionFile(id, pageId, kind, bytes);
       }
     }
@@ -193,7 +205,7 @@ export function refreshBuiltInPages(origin?: string): Promise<void> {
 /** Built-in sets not yet in the table — what the import button offers. */
 export function missingBuiltIns(sets: CollectionSetRecord[]): string[] {
   const have = new Set(sets.map((s) => s.slug));
-  return SHOWCASE_SETS.filter((s) => !have.has(s.id)).map((s) => s.name);
+  return BUILT_IN.filter((b) => !have.has(b.set.id)).map((b) => b.set.name);
 }
 
 /* ==========================================================================

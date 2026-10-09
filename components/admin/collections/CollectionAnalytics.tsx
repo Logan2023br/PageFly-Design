@@ -885,7 +885,9 @@ function SetTable({ sets, days, day }: { sets: CpSetRow[]; days: number; day: st
                         {free ? "Free" : (formatPrice(s.priceCents) ?? "Paid")}
                       </span>
                       {s.gone && <span className="text-[10.5px] text-pf-faint">deleted</span>}
-                      {!s.gone && !s.visible && <span className="text-[10.5px] text-pf-faint">hidden</span>}
+                      {!s.gone && s.visibility !== "visible" && (
+                        <span className="text-[10.5px] text-pf-faint">{s.visibility}</span>
+                      )}
                     </div>
                   </td>
                   <Num main={s.views.people} sub={plural(s.views.n, "view")} />

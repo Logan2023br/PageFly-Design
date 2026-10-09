@@ -89,7 +89,12 @@ export function CollectionSetsAdmin({
     run(`vis-${set.id}`, () =>
       api(`/api/admin/collection-pages/${set.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ ...settingsOf(set), visible: !set.visible }),
+        /* Hide takes a set off either listing; Show puts a hidden one on the
+           public page. Preview is chosen in the set's own settings. */
+        body: JSON.stringify({
+          ...settingsOf(set),
+          visibility: set.visibility === "hidden" ? "visible" : "hidden",
+        }),
       }),
     );
 
@@ -105,7 +110,8 @@ export function CollectionSetsAdmin({
     );
   };
 
-  const visible = sets.filter((s) => s.visible).length;
+  const visible = sets.filter((s) => s.visibility === "visible").length;
+  const preview = sets.filter((s) => s.visibility === "preview").length;
   const paid = sets.filter((s) => s.access === "paid").length;
   const pages = sets.reduce((n, s) => n + s.pages.length, 0);
 
@@ -114,6 +120,7 @@ export function CollectionSetsAdmin({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-[13px] text-pf-muted">
           {sets.length} {sets.length === 1 ? "set" : "sets"} · {pages} pages · {visible} visible
+          {preview > 0 && ` · ${preview} in preview`}
           {paid > 0 && ` · ${paid} paid`}
         </p>
         <div className="flex items-center gap-2">
@@ -163,7 +170,8 @@ export function CollectionSetsAdmin({
               {missing.length} built-in {missing.length === 1 ? "set is" : "sets are"} not here yet
             </p>
             <p className="text-[12.5px] text-pf-muted">
-              {missing.join(", ")} — copied in with every page and file, free and visible.
+              {missing.join(", ")} — copied in with every page and file, as free downloads. The
+              three landing sets arrive visible, the others as Visible preview.
             </p>
           </div>
           <Button
@@ -257,7 +265,7 @@ export function CollectionSetsAdmin({
                       >
                         {set.name}
                       </Link>
-                      <VisibilityBadge visible={set.visible} />
+                      <VisibilityBadge visibility={set.visibility} />
                       <AccessBadge access={set.access} price={formatPrice(set.priceCents)} />
                     </div>
                     <p className="mt-0.5 truncate text-[12.5px] text-pf-faint">
@@ -277,17 +285,21 @@ export function CollectionSetsAdmin({
                     <Button
                       variant="ghost"
                       size="sm"
-                      icon={set.visible ? "EyeOff" : "Eye"}
+                      icon={set.visibility === "hidden" ? "Eye" : "EyeOff"}
                       onClick={() => void toggle(set)}
                       disabled={busy !== null}
                     >
-                      {set.visible ? "Hide" : "Show"}
+                      {set.visibility === "hidden" ? "Show" : "Hide"}
                     </Button>
                     <Link
                       href={`/collection-pages/${set.slug}`}
                       target="_blank"
                       aria-label={`Open ${set.name} on the public page`}
-                      title={set.visible ? "Open the public page" : "Preview (only admins can see it)"}
+                      title={
+                        set.visibility === "hidden"
+                          ? "Preview (only admins can see it)"
+                          : "Open the public page"
+                      }
                       className="grid size-8 place-items-center rounded-pf-md border border-pf-border text-pf-body transition-colors hover:border-pf-border-hi hover:text-pf-text"
                     >
                       <Icon name="ArrowUpRight" size={14} />
@@ -325,7 +337,7 @@ export function settingsOf(set: CollectionSetRecord) {
     name: set.name,
     slug: set.slug,
     blurb: set.blurb,
-    visible: set.visible,
+    visibility: set.visibility,
     access: set.access,
     priceCents: set.priceCents,
     buyUrl: set.buyUrl,

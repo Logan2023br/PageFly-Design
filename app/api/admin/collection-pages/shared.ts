@@ -43,7 +43,7 @@ export const settings = z
     name: z.string().trim().min(1, "The name is empty.").max(80),
     slug: setSlug,
     blurb: z.string().trim().max(300).default(""),
-    visible: z.boolean(),
+    visibility: z.enum(["visible", "preview", "hidden"]),
     access: z.enum(["free", "paid"]),
     priceCents: z.number().int().min(0).max(100_000_000).nullable(),
     buyUrl: z

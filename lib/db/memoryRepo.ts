@@ -170,6 +170,9 @@ export function createMemoryRepo(file: string): Repo {
   /** A set as the Repo contract has it: pages ordered, files reduced to sizes. */
   const collectionWithPages = (set: Shape["collectionSets"][number]): CollectionSetRecord => ({
     ...set,
+    /* A file written before `visibility` has `visible: boolean` instead. */
+    visibility:
+      set.visibility ?? ((set as { visible?: boolean }).visible === false ? "hidden" : "visible"),
     pages: data.collectionPages
       .filter((p) => p.setId === set.id)
       .sort((a, b) => a.position - b.position || a.updatedAt.localeCompare(b.updatedAt))

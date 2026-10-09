@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isPublic } from "@/lib/collectionPages";
 import { newId } from "@/lib/collectionPagesServer";
 import { getRepo } from "@/lib/db";
 import { countryOf } from "@/lib/geo";
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
 
   const repo = getRepo();
   const set = await repo.getCollectionSetBySlug(parsed.data.set);
-  if (!set || !set.visible || set.access !== "free") {
+  if (!set || !isPublic(set) || set.access !== "free") {
     return Response.json({ ok: false, error: "This set is not a free download." }, { status: 404 });
   }
   const page = parsed.data.page ? set.pages.find((p) => p.slug === parsed.data.page) : null;

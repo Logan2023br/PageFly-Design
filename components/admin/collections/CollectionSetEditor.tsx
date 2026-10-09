@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import {
   MAX_FILE_BYTES,
+  VISIBILITY_LABEL,
   collectionFileUrl,
   formatBytes,
   formatPrice,
@@ -67,7 +68,7 @@ export function CollectionSetEditor({ initial }: { initial: CollectionSetRecord 
     draft.name !== saved_.name ||
     draft.slug !== saved_.slug ||
     draft.blurb !== saved_.blurb ||
-    draft.visible !== saved_.visible ||
+    draft.visibility !== saved_.visibility ||
     draft.access !== saved_.access ||
     (draft.access === "paid" && priceCents !== saved_.priceCents);
 
@@ -87,7 +88,7 @@ export function CollectionSetEditor({ initial }: { initial: CollectionSetRecord 
         name: draft.name,
         slug: draft.slug,
         blurb: draft.blurb,
-        visible: draft.visible,
+        visibility: draft.visibility,
         access: draft.access,
         /* A free set keeps no price: switching back to paid later starts from
            an empty field rather than from a number nobody re-checked. */
@@ -227,7 +228,7 @@ export function CollectionSetEditor({ initial }: { initial: CollectionSetRecord 
           All sets
         </Link>
         <div className="flex items-center gap-2">
-          <VisibilityBadge visible={set.visible} />
+          <VisibilityBadge visibility={set.visibility} />
           <AccessBadge access={set.access} price={formatPrice(set.priceCents)} />
           <Link
             href={`/collection-pages/${set.slug}`}
@@ -235,7 +236,7 @@ export function CollectionSetEditor({ initial }: { initial: CollectionSetRecord 
             className="inline-flex h-8 items-center gap-1.5 rounded-pf-md border border-pf-border px-3 text-[12.5px] font-semibold text-pf-body transition-colors hover:border-pf-border-hi hover:text-pf-text"
           >
             <Icon name="ArrowUpRight" size={13} />
-            {set.visible ? "Open public page" : "Preview"}
+            {set.visibility === "hidden" ? "Preview" : "Open public page"}
           </Link>
         </div>
       </div>
@@ -442,19 +443,22 @@ export function CollectionSetEditor({ initial }: { initial: CollectionSetRecord 
               <span className={FIELD_LABEL}>Visibility</span>
               <Segmented
                 label="Visibility"
-                value={draft.visible ? "visible" : "hidden"}
-                onChange={(v) => setDraft({ ...draft, visible: v === "visible" })}
+                value={draft.visibility}
+                onChange={(v) => setDraft({ ...draft, visibility: v })}
                 options={[
-                  { id: "visible", label: "Visible" },
-                  { id: "hidden", label: "Hidden" },
+                  { id: "visible", label: VISIBILITY_LABEL.visible },
+                  { id: "preview", label: VISIBILITY_LABEL.preview },
+                  { id: "hidden", label: VISIBILITY_LABEL.hidden },
                 ]}
               />
               <p className="text-[12px] text-pf-faint">
-                {draft.visible
-                  ? previewable === 0
-                    ? "Visible, but it has no page with a preview yet, so it will not show."
-                    : "Listed on /collection-pages for everyone."
-                  : "Only admins can open it — use Preview to check it first."}
+                {draft.visibility === "hidden"
+                  ? "Only admins can open it — use Preview to check it first."
+                  : previewable === 0
+                    ? "Shown, but it has no page with a preview yet, so it will not appear."
+                    : draft.visibility === "preview"
+                      ? "Listed on /collection-pages-preview only — not on /collection-pages."
+                      : "Listed on /collection-pages for everyone."}
               </p>
             </div>
 

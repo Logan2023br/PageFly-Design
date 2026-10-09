@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       blurb: "",
       /* HIDDEN FROM BIRTH. A new set has no pages yet, and a visible empty set
          is a card on the public page that opens onto nothing. */
-      visible: false,
+      visibility: "hidden",
       access: "free",
       priceCents: null,
       buyUrl: null,

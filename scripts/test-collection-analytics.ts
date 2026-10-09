@@ -34,8 +34,8 @@ const e = (name: string, visitorId: string, props: Record<string, unknown> = {},
 
 const page = (slug: string) => ({ id: slug, slug, label: slug.toUpperCase(), blurb: "", position: 0, htmlSize: 1, pageflySize: 1, updatedAt: T });
 const sets: CollectionSetRecord[] = [
-  { id: "f1", slug: "free", name: "Free Set", blurb: "", visible: true, access: "free", priceCents: null, buyUrl: null, position: 1, createdAt: T, updatedAt: T, pages: [page("home"), page("about")] },
-  { id: "p1", slug: "paid", name: "Paid Set", blurb: "", visible: true, access: "paid", priceCents: 6900, buyUrl: null, position: 2, createdAt: T, updatedAt: T, pages: [page("home")] },
+  { id: "f1", slug: "free", name: "Free Set", blurb: "", visibility: "visible", access: "free", priceCents: null, buyUrl: null, position: 1, createdAt: T, updatedAt: T, pages: [page("home"), page("about")] },
+  { id: "p1", slug: "paid", name: "Paid Set", blurb: "", visibility: "visible", access: "paid", priceCents: 6900, buyUrl: null, position: 2, createdAt: T, updatedAt: T, pages: [page("home")] },
 ];
 
 const CP = { from: "collection_pages" };

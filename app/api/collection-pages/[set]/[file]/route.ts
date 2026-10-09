@@ -1,3 +1,4 @@
+import { isPublic } from "@/lib/collectionPages";
 import { getRepo } from "@/lib/db";
 import { combinePagefly } from "@/lib/collections/pagefly";
 import { refreshBuiltInPages } from "@/lib/collectionPagesServer";
@@ -43,15 +44,16 @@ export async function GET(
   const set = await repo.getCollectionSetBySlug(setSlug).catch(() => null);
   if (!set) return notFound();
 
-  const admin = !set.visible || set.access === "paid" ? await readAdminSession() : false;
-  if (!set.visible && !admin) return notFound();
+  const open = isPublic(set);
+  const admin = !open || set.access === "paid" ? await readAdminSession() : false;
+  if (!open && !admin) return notFound();
   if (kind === "pagefly" && set.access === "paid" && !admin) {
     return new Response("This set is not a free download.", { status: 403 });
   }
 
   /* Anything only an admin may see must never land in a shared cache. */
   const cache =
-    set.visible && (kind === "html" || set.access === "free")
+    open && (kind === "html" || set.access === "free")
       ? "public, max-age=300, s-maxage=86400"
       : "private, no-store";
 

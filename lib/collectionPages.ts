@@ -1,4 +1,4 @@
-import type { CollectionSetRecord } from "./db/types";
+import type { CollectionSetRecord, CollectionVisibility } from "./db/types";
 import type { ShowcasePage, ShowcaseSet } from "./showcasePages";
 
 /* ==========================================================================
@@ -9,6 +9,17 @@ import type { ShowcasePage, ShowcaseSet } from "./showcasePages";
    the route derives the same ones when it stores it; one copy of that rule is
    the only way the two agree.
    ========================================================================== */
+
+/** Whether anyone may open the set and its files: "visible" and "preview" are
+    both public, they differ only in which listing shows them. */
+export const isPublic = (set: { visibility: CollectionVisibility }) => set.visibility !== "hidden";
+
+/** The admin's words for each visibility, and what each one means. */
+export const VISIBILITY_LABEL: Record<CollectionVisibility, string> = {
+  visible: "Visible",
+  preview: "Visible preview",
+  hidden: "Hidden",
+};
 
 /** A url-safe slug: lower case, dashes, nothing else. */
 export function slugify(text: string): string {
@@ -106,7 +117,7 @@ export type PublicCollectionSet = ShowcaseSet & {
   price: string | null;
   /** the whole set as one import, or null when it is not handed over */
   download: string | null;
-  visible: boolean;
+  visibility: CollectionVisibility;
   /** people who downloaded it (free) or confirmed orders (paid) */
   count: number;
 };
@@ -149,7 +160,7 @@ export function toPublicSet(
     download: downloadable
       ? `/api/collection-pages/${set.slug}/all.pagefly?v=${Date.parse(set.updatedAt) || 0}`
       : null,
-    visible: set.visible,
+    visibility: set.visibility,
     count:
       (free ? stats?.downloads[set.slug] : stats?.purchases[set.id]) ?? 0,
   };

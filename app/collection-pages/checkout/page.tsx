@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { CheckoutForm } from "@/components/collection-pages/CheckoutForm";
 import { CollectionShell } from "@/components/collection-pages/Shell";
-import { toPublicSet } from "@/lib/collectionPages";
+import { isPublic, toPublicSet } from "@/lib/collectionPages";
 import { getRepo } from "@/lib/db";
 
 /* ==========================================================================
@@ -27,7 +27,7 @@ export default async function CheckoutPage(props: PageProps<"/collection-pages/c
   const slug = Array.isArray(raw) ? raw[0] : raw;
   const record = slug ? await getRepo().getCollectionSetBySlug(slug).catch(() => null) : null;
 
-  if (!record || !record.visible || record.access !== "paid") {
+  if (!record || !isPublic(record) || record.access !== "paid") {
     return (
       <CollectionShell>
         <div className="mx-auto grid max-w-[520px] justify-items-center gap-3 py-16 text-center">

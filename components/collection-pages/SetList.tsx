@@ -23,25 +23,36 @@ const SHOW_PREMIUM = false;
 
    The card's picture is the set's first page — its Home, the cover a merchant
    would meet the store by — and the chips under it name the rest.
+
+   `preview` is /collection-pages-preview: the sets set to "Visible preview",
+   drawn the same way. Its list and section views are not reported — that page
+   is for checking sets, and its visits would blur the public page's funnel.
    ========================================================================== */
-export function SetList({ sets }: { sets: PublicCollectionSet[] }) {
+export function SetList({
+  sets,
+  preview = false,
+}: {
+  sets: PublicCollectionSet[];
+  preview?: boolean;
+}) {
   const free = sets.filter((s) => s.access === "free");
   const paid = sets.filter((s) => s.access === "paid");
 
-  useTrackOnce("list", () =>
+  useTrackOnce("list", () => {
+    if (preview) return;
     track(EV.cpListViewed, {
       entry: entryFor("list"),
       ref: refHost(),
       screen: screenBucket(),
       sets: sets.length,
-    }),
-  );
+    });
+  });
 
   return (
     <>
       <div className="max-w-[720px]">
         <p className="text-[13px] font-semibold uppercase tracking-[0.08em] text-pf-primary-hi">
-          Collection pages
+          {preview ? "Collection pages · Preview" : "Collection pages"}
         </p>
         <h1 className="mt-3 font-display text-[34px] font-bold leading-[1.1] tracking-[-0.02em] text-pf-text sm:text-[44px]">
           Complete page sets, one store each.
@@ -50,6 +61,9 @@ export function SetList({ sets }: { sets: PublicCollectionSet[] }) {
           Pick a set to see every page in it, then open any page to read the full mockup at
           desktop, tablet and mobile widths.
         </p>
+        {preview && sets.length === 0 && (
+          <p className="mt-6 text-[14px] text-pf-faint">No set is in preview right now.</p>
+        )}
       </div>
 
       {free.length > 0 && (
@@ -59,6 +73,7 @@ export function SetList({ sets }: { sets: PublicCollectionSet[] }) {
           sub="Every page is yours to keep. Download a whole set in one file and import it straight into your PageFly editor — no cost, no sign-up."
           sets={free}
           section="free"
+          quiet={preview}
         />
       )}
 
@@ -88,6 +103,7 @@ function Group({
   extra,
   section,
   aside,
+  quiet = false,
 }: {
   eyebrow: string;
   title: string;
@@ -100,8 +116,12 @@ function Group({
   section: "free" | "premium";
   /** beside the heading, in place of the count */
   aside?: React.ReactNode;
+  /** not reported when seen */
+  quiet?: boolean;
 }) {
-  const seen = useSeenOnce<HTMLElement>(() => track(EV.cpSectionSeen, { section }));
+  const seen = useSeenOnce<HTMLElement>(() => {
+    if (!quiet) track(EV.cpSectionSeen, { section });
+  });
   return (
     <section ref={seen} className="mt-14 border-t border-pf-border pt-10 first-of-type:mt-12">
       <div

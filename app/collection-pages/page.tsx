@@ -17,7 +17,7 @@ export default async function CollectionPagesPage() {
     collectionStats(),
   ]);
   const shown = sets
-    .filter((s) => s.visible)
+    .filter((s) => s.visibility === "visible")
     .map((s) => toPublicSet(s, stats))
     /* A visible set with nothing to preview would be a card that opens onto
        an empty page. */

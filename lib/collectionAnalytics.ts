@@ -5,6 +5,7 @@ import type {
   CollectionLeadRecord,
   CollectionOrderRecord,
   CollectionSetRecord,
+  CollectionVisibility,
   DayCount,
   ReferralMemberRecord,
   ReferralRecord,
@@ -58,7 +59,7 @@ export type CpSetRow = {
   name: string;
   access: "free" | "paid";
   priceCents: number | null;
-  visible: boolean;
+  visibility: CollectionVisibility | null;
   /** the set is no longer in the table — its history is still counted */
   gone: boolean;
   views: Count;
@@ -343,7 +344,7 @@ export function buildCollectionView(input: {
       name: rec?.name ?? slug,
       access,
       priceCents: rec?.priceCents ?? null,
-      visible: rec?.visible ?? false,
+      visibility: rec?.visibility ?? null,
       gone: !rec,
       views,
       opens,
