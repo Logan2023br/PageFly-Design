@@ -37,9 +37,12 @@ import { tintFor } from "@/lib/tint";
 /** Long enough to read a sentence of about twenty words, and no longer. */
 const SHOW_MS = 5_000;
 /** Read a little first. */
-const FIRST_DELAY_MS = 12_000;
-/** And then rarely, so the corner is empty most of the time. */
-const GAP_MS = 22_000;
+const FIRST_DELAY_MS = [15_000, 25_000] as const;
+/** And then rarely, so the corner is empty most of the time. RANDOM within the
+    range, because a card that arrives on a fixed beat reads as a script. */
+const GAP_MS = [30_000, 60_000] as const;
+
+const between = ([lo, hi]: readonly [number, number]) => lo + Math.random() * (hi - lo);
 
 /** The slide, matched to the CSS transition below. */
 const SLIDE_MS = 420;
@@ -136,7 +139,7 @@ function ProofToastView({ items }: { items: ProofItem[] }) {
          freezes nothing by itself, so without this a visitor returns to a
          corner that has already run through half the list at nobody. */
       if (document.hidden) {
-        after(GAP_MS, show);
+        after(between(GAP_MS), show);
         return;
       }
       const next = items[order.current[at % items.length]];
@@ -148,11 +151,11 @@ function ProofToastView({ items }: { items: ProofItem[] }) {
       requestAnimationFrame(() => requestAnimationFrame(() => !cancelled && setInView(true)));
       after(SHOW_MS, () => {
         setInView(false);
-        after(SLIDE_MS + GAP_MS, show);
+        after(SLIDE_MS + between(GAP_MS), show);
       });
     };
 
-    after(at === 0 ? FIRST_DELAY_MS : GAP_MS, show);
+    after(between(at === 0 ? FIRST_DELAY_MS : GAP_MS), show);
     return () => {
       cancelled = true;
       for (const t of timers) clearTimeout(t);
