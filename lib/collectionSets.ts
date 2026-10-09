@@ -15,8 +15,9 @@ import type { ShowcasePage, ShowcaseSet } from "./showcasePages";
    blog-article, and a sale named after its own offer.
 
    NOT EVERY SET IS A SHOP. Northwind, Atlas Studio, Kinetik, Roam Diaries,
-   Salt & Smoke and Kumo Ryokan are a SaaS, a studio, an agency, two creators
-   and an inn, and their seven pages are their own: each is listed whole, with the shared pages
+   Salt & Smoke, Kumo Ryokan, Brightline Pros and Off The Record are a SaaS, a
+   studio, an agency, two creators, an inn, a home-services firm and a podcast,
+   and their seven pages are their own: each is listed whole, with the shared pages
    (home, about-us, contact, blog-article) keeping the shared slugs.
    ========================================================================== */
 
@@ -292,6 +293,86 @@ export const PREVIEW_SETS: ShowcaseSet[] = [
       { slug: "journal-article", label: "Journal", blurb: "A letter from the inn's journal." },
       ABOUT,
       CONTACT,
+    ],
+  },
+  {
+    id: "fairway-club",
+    name: "Fairway Club",
+    blurb: "Country-club golf apparel — navy and ivory with gold, Libre Baskerville, preppy polish.",
+    pages: pages({ slug: "clubhouse-clearance" }),
+  },
+  {
+    id: "dink-society",
+    name: "Dink Society",
+    blurb: "Pickleball gear — navy, ball yellow and court orange, Rubik Mono, sporty and loud.",
+    pages: pages({ slug: "summer-smash-sale" }),
+  },
+  {
+    id: "lone-star-boot-co",
+    name: "Lone Star Boot Co",
+    blurb: "Handmade western boots — saddle leather brown on parchment, Rye display, Texan heritage.",
+    pages: pages({ slug: "rodeo-days-sale" }),
+  },
+  {
+    id: "smokestack-bbq",
+    name: "Smokestack BBQ",
+    blurb: "Kansas City BBQ sauces and rubs — charcoal, fire red and mustard, Lobster script, smoky.",
+    pages: pages({ slug: "fourth-of-july-sale" }),
+  },
+  {
+    id: "groove-swim",
+    name: "Groove Swim",
+    blurb: "Retro swimwear — sunset peach, tangerine and pink, Shrikhand script, '70s summer.",
+    pages: pages({ slug: "end-of-summer-sale" }),
+  },
+  {
+    id: "little-acorn",
+    name: "Little Acorn",
+    blurb: "Organic baby essentials — oat cream, clay pink and sage, Sniglet rounded type, gentle.",
+    pages: pages({ slug: "spring-snuggle-sale" }),
+  },
+  {
+    id: "rest-co",
+    name: "Rest Co",
+    blurb: "A mattress-in-a-box brand — midnight navy and lavender, Newsreader serif, dreamy calm.",
+    pages: pages({ slug: "memorial-day-sale" }),
+  },
+  {
+    id: "mane-theory",
+    name: "Mane Theory",
+    blurb: "Curly-hair care — cocoa, terracotta and honey gold, Abril Fatface, warm and proud.",
+    pages: pages({ slug: "curl-fest-sale" }),
+  },
+  {
+    id: "brightline-pros",
+    name: "Brightline Pros",
+    blurb: "A home-services company — navy and safety yellow, Oswald caps, built to get the call.",
+    pages: [
+      HOME,
+      { slug: "services", label: "Services", blurb: "Every trade offered, with what each visit covers." },
+      { slug: "service-areas", label: "Service areas", blurb: "Where the crews work, town by town." },
+      { slug: "projects", label: "Projects", blurb: "Recent jobs, filterable by trade." },
+      { slug: "get-a-quote", label: "Get a quote", blurb: "The estimate form, short enough to finish." },
+      ABOUT,
+      CONTACT,
+    ],
+  },
+  {
+    id: "off-the-record",
+    name: "Off The Record",
+    blurb: "A weekly podcast — cobalt, ink and hot pink, Alfa Slab One, newsroom energy.",
+    pages: [
+      HOME,
+      { slug: "episodes", label: "Episodes", blurb: "The archive, searchable by topic and guest." },
+      { slug: "episode", label: "Episode", blurb: "One episode, with the player, notes and guests." },
+      { slug: "merch", label: "Merch", blurb: "The show's own store." },
+      { slug: "sponsor", label: "Sponsor", blurb: "For advertisers: the audience and the ad formats." },
+      ABOUT,
+      {
+        slug: "blog-article",
+        label: "Blog article",
+        blurb: "A long read that picks up where an episode left off.",
+      },
     ],
   },
 ];
