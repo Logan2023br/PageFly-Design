@@ -18,8 +18,10 @@ import type { ShowcasePage, ShowcaseSet } from "./showcasePages";
    Salt & Smoke, Kumo Ryokan, Brightline Pros and Off The Record are a SaaS, a
    studio, an agency, two creators, an inn, a home-services firm and a podcast,
    and their seven pages are their own — the ten BFCM sets are seven pages of one
-   Black Friday / Cyber Monday campaign: each is listed whole, with the shared pages
-   (home, about-us, contact, blog-article) keeping the shared slugs.
+   Black Friday / Cyber Monday campaign, and the ten festival sets (Halloween to
+   Tết) are a seasonal store's home, sale, countdown, gift boxes, guide, journal
+   and last-minute page: each is listed whole, with the shared pages (home,
+   about-us, contact, blog-article) keeping the shared slugs.
    ========================================================================== */
 
 /** The seven pages, in the order a merchant meets them; only the sale differs. */
@@ -79,6 +81,28 @@ function bfcm(): ShowcasePage[] {
     { slug: "gift-guide", label: "Gift guide", blurb: "Gifts by recipient and by budget." },
     { slug: "last-chance", label: "Last chance", blurb: "The extension: final hours, and the order-by date." },
   ];
+}
+
+/* A seasonal store: home first, as the set's cover, then the sale, the
+   countdown and the boxed gifts, and the pages every festival shares. */
+const GIFT_GUIDE: ShowcasePage = { slug: "gift-guide", label: "Gift guide", blurb: "Gifts by recipient and by budget." };
+const LAST_MINUTE: ShowcasePage = {
+  slug: "last-minute",
+  label: "Last minute",
+  blurb: "The order-by dates, express delivery and e-gift cards.",
+};
+const JOURNAL: ShowcasePage = {
+  slug: "journal-article",
+  label: "Journal",
+  blurb: "A how-to for the season, with the products it uses beside it.",
+};
+function festival(
+  sale: ShowcasePage,
+  countdown: ShowcasePage,
+  boxes: ShowcasePage,
+  read: ShowcasePage = JOURNAL,
+): ShowcasePage[] {
+  return [HOME, sale, countdown, boxes, GIFT_GUIDE, read, LAST_MINUTE];
 }
 
 export const PREVIEW_SETS: ShowcaseSet[] = [
@@ -453,5 +477,164 @@ export const PREVIEW_SETS: ShowcaseSet[] = [
     name: "Plum BFCM",
     blurb: "A jewellery and fragrance brand's campaign — plum and peach, Petrona serif, luxe.",
     pages: bfcm(),
+  },
+  {
+    id: "hollow-manor",
+    name: "Hollow Manor",
+    blurb: "A gothic Halloween house — candlelit black and blood red, Pirata One blackletter, darkly beautiful.",
+    pages: festival(
+      {
+        slug: "halloween-sale",
+        label: "Halloween sale",
+        blurb: "The season's offer, with a countdown to Hallows' Eve.",
+      },
+      {
+        slug: "13-nights",
+        label: "13 Nights",
+        blurb: "A new curiosity revealed each night, at its lowest price.",
+      },
+      { slug: "gift-sets", label: "Gift sets", blurb: "Wax-sealed boxes, priced by size." },
+    ),
+  },
+  {
+    id: "boo-crew",
+    name: "Boo Crew",
+    blurb: "Kids' Halloween costumes and pajamas — pumpkin orange and grape purple, Creepster, cute not scary.",
+    pages: festival(
+      {
+        slug: "halloween-sale",
+        label: "Halloween sale",
+        blurb: "The season's offer, with a countdown to trick-or-treat.",
+      },
+      { slug: "costume-shop", label: "Costume shop", blurb: "Costumes by age and by monster." },
+      { slug: "boo-bundles", label: "Boo bundles", blurb: "Costume, bucket and pajamas, cheaper together." },
+      {
+        slug: "party-ideas",
+        label: "Party ideas",
+        blurb: "A not-too-scary party for little kids, with what to buy for it.",
+      },
+    ),
+  },
+  {
+    id: "deepa-diwali",
+    name: "Deepa Diwali",
+    blurb: "A Diwali store for India — indigo night and marigold orange, Eczar serif, festive.",
+    pages: festival(
+      {
+        slug: "diwali-sale",
+        label: "Diwali sale",
+        blurb: "The festival offer, with a countdown to Lakshmi Puja.",
+      },
+      {
+        slug: "5-days-of-diwali",
+        label: "5 Days of Diwali",
+        blurb: "Dhanteras to Bhai Dooj — a new offer unlocks each day.",
+      },
+      { slug: "festive-hampers", label: "Festive hampers", blurb: "Gift hampers, priced by size." },
+    ),
+  },
+  {
+    id: "double-eleven",
+    name: "Double Eleven",
+    blurb: "A Singles' Day mega sale, in Chinese — hot pink-red on blush, ZCOOL KuaiLe, loud and fast.",
+    pages: festival(
+      {
+        slug: "mega-sale",
+        label: "Mega sale",
+        blurb: "The 11.11 main venue: half price, coupons and a countdown to midnight.",
+      },
+      { slug: "hourly-flash", label: "Hourly flash", blurb: "A limited drop on every hour of the day." },
+      { slug: "bundles", label: "Bundles", blurb: "Sets that cost less together than apart." },
+      {
+        slug: "shopping-guide",
+        label: "Shopping guide",
+        blurb: "How coupons, thresholds and price protection stack.",
+      },
+    ),
+  },
+  {
+    id: "frost-christmas",
+    name: "Frost Christmas",
+    blurb: "A Nordic Christmas home store — frost white and ice blue, Bellefair serif, quiet and calm.",
+    pages: festival(
+      { slug: "holiday-sale", label: "Holiday sale", blurb: "The Christmas offer, with a countdown." },
+      { slug: "advent-calendar", label: "Advent calendar", blurb: "Twenty-four doors, one offer a day." },
+      { slug: "gift-sets", label: "Gift sets", blurb: "Boxed sets, priced by size." },
+    ),
+  },
+  {
+    id: "jolly-and-co",
+    name: "Jolly and Co",
+    blurb: "A retro Christmas shop since 1952 — cream, candy red and pine green, Berkshire Swash, nostalgic.",
+    pages: festival(
+      { slug: "holiday-sale", label: "Holiday sale", blurb: "The Christmas offer, with a countdown." },
+      {
+        slug: "12-days-of-christmas",
+        label: "12 Days of Christmas",
+        blurb: "A new deal each day, like the song.",
+      },
+      { slug: "gift-boxes", label: "Gift boxes", blurb: "Boxed gifts, priced by size." },
+    ),
+  },
+  {
+    id: "ugly-sweater-club",
+    name: "Ugly Sweater Club",
+    blurb: "Ugly Christmas sweaters — candy pink, red and green, Bowlby One, loud and silly.",
+    pages: festival(
+      { slug: "holiday-sale", label: "Holiday sale", blurb: "The Christmas offer, with a countdown." },
+      {
+        slug: "sweater-contest",
+        label: "Sweater contest",
+        blurb: "A prize for the ugliest sweater, and a deal a day until it's judged.",
+      },
+      { slug: "matching-sets", label: "Matching sets", blurb: "Family and couple sets, cheaper together." },
+      { slug: "party-guide", label: "Party guide", blurb: "How to throw the ultimate ugly sweater party." },
+    ),
+  },
+  {
+    id: "eight-lights",
+    name: "Eight Lights",
+    blurb: "A Hanukkah store — pale blue and royal blue, Suez One, bright and gentle.",
+    pages: festival(
+      {
+        slug: "hanukkah-sale",
+        label: "Hanukkah sale",
+        blurb: "The holiday offer, with a countdown to the first night.",
+      },
+      { slug: "8-nights", label: "8 Nights", blurb: "A new gift unlocks each night of Hanukkah." },
+      { slug: "gift-boxes", label: "Gift boxes", blurb: "Boxed gifts, priced by size." },
+    ),
+  },
+  {
+    id: "midnight-gala",
+    name: "Midnight Gala",
+    blurb: "New Year's Eve partywear — black and champagne gold, Limelight deco, glamorous.",
+    pages: festival(
+      {
+        slug: "new-year-sale",
+        label: "New Year sale",
+        blurb: "The year-end offer, with a countdown to midnight.",
+      },
+      {
+        slug: "countdown-to-midnight",
+        label: "Countdown to midnight",
+        blurb: "Deals that unlock as the year runs out.",
+      },
+      { slug: "party-kits", label: "Party kits", blurb: "The party, boxed — priced by size." },
+    ),
+  },
+  {
+    id: "tet-an-khang",
+    name: "Tet An Khang",
+    blurb: "Vietnamese Tết gifts, in Vietnamese — lucky red and gold on cream, Lora serif, traditional.",
+    pages: festival(
+      { slug: "tet-sale", label: "Tet sale", blurb: "The Tết offer, with a countdown to the new year." },
+      {
+        slug: "lucky-countdown",
+        label: "Lucky countdown",
+        blurb: "From Ông Táo to Giao thừa, a lucky offer each day.",
+      },
+      { slug: "gift-baskets", label: "Gift baskets", blurb: "Tết baskets, priced by size." },
+    ),
   },
 ];
