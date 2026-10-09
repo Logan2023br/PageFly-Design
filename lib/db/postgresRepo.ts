@@ -92,6 +92,7 @@ const STORE_SUMMARY_SELECT = `select d.domain,
                 coalesce(s.page_limit, 0)   as page_limit,
                 s.first_seen_at, s.last_seen_at,
                 coalesce(s.blocked, false)  as blocked,
+                coalesce(s.proof_hidden, false) as proof_hidden,
                 coalesce(r.run_count,0)  as run_count,
                 coalesce(p.pages_used,0) as pages_used,
                 coalesce(r.tokens,0)     as tokens,
@@ -230,6 +231,7 @@ create table if not exists stores (
 
 /* Added after the first release, so an existing table needs it too. */
 alter table stores add column if not exists blocked boolean not null default false;
+alter table stores add column if not exists proof_hidden boolean not null default false;
 
 create table if not exists runs (
   id          text primary key,
@@ -652,6 +654,7 @@ export function createPostgresRepo(url: string, override?: Pool): Repo {
       pagesUsed: Number(r.pages_used ?? 0),
       tokens: Number(r.tokens ?? 0),
       lastRunAt: iso(r.last_run_at),
+      proofHidden: Boolean(r.proof_hidden),
       review:
         stars === null
           ? null
@@ -1072,6 +1075,11 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
            comment = excluded.comment`,
         [domain, review.stars, comment],
       );
+    },
+
+    async setProofHidden(domain, hidden) {
+      await ready();
+      await db.query("update stores set proof_hidden = $2 where domain = $1", [domain, hidden]);
     },
 
     async listTrainingItems() {

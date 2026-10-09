@@ -184,6 +184,14 @@ export type StoreSummary = StoreRecord & {
   tokens: number;
   lastRunAt: string | null;
   review: { stars: number; comment: string | null; createdAt: string } | null;
+  /**
+   * Kept out of the corner card on the landing page (`lib/proof.ts`).
+   *
+   * On the summary, not on StoreRecord, because the sheet sync writes
+   * StoreRecords and has no opinion on this — an operator's "don't show this
+   * store" must survive every re-sync, the same way `blocked` does.
+   */
+  proofHidden: boolean;
 };
 
 
@@ -859,6 +867,9 @@ export type Repo = {
     domain: string,
     review: { stars: number; comment: string | null } | null,
   ): Promise<void>;
+  /** Shows or hides one store in the landing page's proof toast. A no-op for a
+      domain with no store row. */
+  setProofHidden(domain: string, hidden: boolean): Promise<void>;
 
   /* ---- build jobs ---- */
   createJob(job: JobRecord): Promise<void>;

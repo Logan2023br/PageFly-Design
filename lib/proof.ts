@@ -93,6 +93,8 @@ export async function proofFeed(): Promise<ProofItem[]> {
   for (const s of stores) {
     /* A store refused at sign-in is not a customer to point at. */
     if (s.blocked) continue;
+    /* And one an operator switched off in the Users table's edit dialog. */
+    if (s.proofHidden) continue;
 
     const who = mask(s.storeName?.trim() || s.domain);
 

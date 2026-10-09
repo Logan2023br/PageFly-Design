@@ -44,6 +44,8 @@ const addSchema = z.object({
      take back. */
   stars: z.number().int().min(1).max(5).nullish(),
   comment: z.string().max(2000).nullish(),
+  /* Absent means "this form did not ask" — a sheet paste must not switch it. */
+  proofHidden: z.boolean().optional(),
 });
 
 export type StoresResponse =
@@ -120,6 +122,9 @@ export async function POST(request: Request) {
         ? null
         : { stars: body.stars, comment: body.comment ?? null },
     );
+
+  if (body.proofHidden !== undefined)
+    await repo.setProofHidden(domain, body.proofHidden);
 
   return Response.json({ ok: true, domain } satisfies StoresResponse);
 }

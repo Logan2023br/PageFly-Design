@@ -72,6 +72,9 @@ type Shape = {
   collectionLeads: CollectionLeadRecord[];
   referralMembers: ReferralMemberRecord[];
   referrals: ReferralRecord[];
+  /* Domains kept out of the proof toast. Beside `stores` rather than in it,
+     because `upsertStores` replaces a row wholesale on every sheet sync. */
+  proofHidden: string[];
 };
 
 /* The same rule as `geoClause` in the postgres repo, in the other language —
@@ -88,7 +91,7 @@ function geoAllows(country: string | null, geo: GeoFilter): boolean {
   return true;
 }
 
-const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], pageFiles: [], photos: [], jobs: [], training: [], trainingSections: [], events: [], modelCalls: [], collectionSets: [], collectionPages: [], collectionOrders: [], collectionLeads: [], referralMembers: [], referrals: [] };
+const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], pageFiles: [], photos: [], jobs: [], training: [], trainingSections: [], events: [], modelCalls: [], collectionSets: [], collectionPages: [], collectionOrders: [], collectionLeads: [], referralMembers: [], referrals: [], proofHidden: [] };
 
 /** The map key for "no store". A domain can never contain a space, so this
     cannot collide with one — and unlike a NUL it survives grep and an editor. */
@@ -120,6 +123,7 @@ export function createMemoryRepo(file: string): Repo {
         collectionLeads: parsed.collectionLeads ?? [],
         referralMembers: parsed.referralMembers ?? [],
         referrals: parsed.referrals ?? [],
+        proofHidden: parsed.proofHidden ?? [],
         training: parsed.training ?? [],
         /* Absent in a file written before section references existed. Rows
            written before `vertical` existed read as the shared filing, which is
@@ -390,6 +394,14 @@ export function createMemoryRepo(file: string): Repo {
       // One review per store, for ever — only the forwarded flag may change.
       if (existing) existing.forwarded = review.forwarded;
       else data.reviews.push({ ...review });
+      flush();
+    },
+
+    async setProofHidden(domain, hidden) {
+      sync();
+      if (!data.stores.some((s) => s.domain === domain)) return;
+      data.proofHidden = data.proofHidden.filter((d) => d !== domain);
+      if (hidden) data.proofHidden.push(domain);
       flush();
     },
 
@@ -951,6 +963,7 @@ export function createMemoryRepo(file: string): Repo {
             tokens: runs.reduce((sum, r) => sum + r.tokens, 0),
             lastRunAt:
               runs.map((r) => r.createdAt).sort().at(-1) ?? null,
+            proofHidden: data.proofHidden.includes(domain),
             review: review
               ? {
                   stars: review.stars,

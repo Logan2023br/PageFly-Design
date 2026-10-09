@@ -56,6 +56,8 @@ export function EditStore({
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState<Draft>(() => draftOf(store));
+  /* Separate from the draft because it is a switch, not a text field. */
+  const [showInProof, setShowInProof] = useState(!store.proofHidden);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,6 +95,7 @@ export function EditStore({
              form always asked — see the three states on the route's schema. */
           stars: draft.stars === "" ? null : Number(draft.stars),
           comment: draft.comment.trim(),
+          proofHidden: !showInProof,
         }),
       });
       const body = (await res.json()) as StoresResponse;
@@ -214,6 +217,39 @@ export function EditStore({
                 Saving with no rating deletes this review.
               </p>
             )}
+          </div>
+
+          {/* The corner card on the landing page — "Brig*** built 3 pages".
+              Off keeps this store out of it; nothing else changes. */}
+          <div className="mt-4 flex items-center justify-between gap-3 border-t border-pf-border pt-4">
+            <div className="min-w-0">
+              <h3 className="text-[12.5px] font-semibold text-pf-text">
+                Show in landing popup
+              </h3>
+              <p className="mt-0.5 text-[11.5px] text-pf-faint">
+                {showInProof
+                  ? "This store's name and page count can appear in the corner popup."
+                  : "This store never appears in the corner popup."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowInProof((v) => !v)}
+              role="switch"
+              aria-checked={showInProof}
+              aria-label="Show in landing popup"
+              className={[
+                "relative h-5 w-9 shrink-0 rounded-full border transition-colors duration-150",
+                showInProof ? "border-pf-accent bg-pf-accent" : "border-pf-border bg-pf-surface",
+              ].join(" ")}
+            >
+              <span
+                className={[
+                  "absolute top-1/2 size-3.5 -translate-y-1/2 rounded-full bg-white transition-all duration-150",
+                  showInProof ? "left-[18px]" : "left-[2px] opacity-60",
+                ].join(" ")}
+              />
+            </button>
           </div>
 
           {error && (
