@@ -180,6 +180,14 @@ const REEXPORTED: {
   /* Set a little after the deploy lands, so a copy imported from the first
      export just before it is still replaced. */
   { set: "maison-lune", page: "blog-article", since: "2026-10-09T13:40:00Z", dir: "collection-sets" },
+  /* VOLT, re-exported whole. */
+  { set: "volt", page: "home", since: "2026-10-09T16:10:00Z", dir: "collection-sets" },
+  { set: "volt", page: "product-page", since: "2026-10-09T16:10:00Z", dir: "collection-sets" },
+  { set: "volt", page: "collection-page", since: "2026-10-09T16:10:00Z", dir: "collection-sets" },
+  { set: "volt", page: "about-us", since: "2026-10-09T16:10:00Z", dir: "collection-sets" },
+  { set: "volt", page: "contact", since: "2026-10-09T16:10:00Z", dir: "collection-sets" },
+  { set: "volt", page: "blog-article", since: "2026-10-09T16:10:00Z", dir: "collection-sets" },
+  { set: "volt", page: "archive-sale", since: "2026-10-09T16:10:00Z", dir: "collection-sets" },
 ];
 
 let refreshing: Promise<void> | null = null;

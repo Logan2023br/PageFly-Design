@@ -17,7 +17,8 @@ import type { ShowcasePage, ShowcaseSet } from "./showcasePages";
    NOT EVERY SET IS A SHOP. Northwind, Atlas Studio, Kinetik, Roam Diaries,
    Salt & Smoke, Kumo Ryokan, Brightline Pros and Off The Record are a SaaS, a
    studio, an agency, two creators, an inn, a home-services firm and a podcast,
-   and their seven pages are their own: each is listed whole, with the shared pages
+   and their seven pages are their own — the ten BFCM sets are seven pages of one
+   Black Friday / Cyber Monday campaign: each is listed whole, with the shared pages
    (home, about-us, contact, blog-article) keeping the shared slugs.
    ========================================================================== */
 
@@ -61,6 +62,24 @@ const CONTACT: ShowcasePage = {
   label: "Contact",
   blurb: "How to reach a person, and what to expect back.",
 };
+
+/* A Black Friday / Cyber Monday campaign: the main sale first, as the set's
+   cover, then the campaign in the order it runs. */
+function bfcm(): ShowcasePage[] {
+  return [
+    {
+      slug: "black-friday-sale",
+      label: "Black Friday",
+      blurb: "The main event: the headline discount, the countdown and the best sellers.",
+    },
+    { slug: "early-access", label: "Early access", blurb: "The sign-up that lets the list shop first." },
+    { slug: "doorbusters", label: "Doorbusters", blurb: "Limited-stock drops, released through the weekend." },
+    { slug: "bundles", label: "Bundles", blurb: "Sets that cost less together than apart." },
+    { slug: "cyber-monday", label: "Cyber Monday", blurb: "One more day, online only, with a code on top." },
+    { slug: "gift-guide", label: "Gift guide", blurb: "Gifts by recipient and by budget." },
+    { slug: "last-chance", label: "Last chance", blurb: "The extension: final hours, and the order-by date." },
+  ];
+}
 
 export const PREVIEW_SETS: ShowcaseSet[] = [
   {
@@ -374,5 +393,65 @@ export const PREVIEW_SETS: ShowcaseSet[] = [
         blurb: "A long read that picks up where an episode left off.",
       },
     ],
+  },
+  {
+    id: "obsidian-bfcm",
+    name: "Obsidian BFCM",
+    blurb: "A consumer-tech store's campaign — black and silver, Anybody display, stark and premium.",
+    pages: bfcm(),
+  },
+  {
+    id: "velvet-bfcm",
+    name: "Velvet BFCM",
+    blurb: "A beauty brand's campaign — blush pink and wine red, Prata serif, glossy.",
+    pages: bfcm(),
+  },
+  {
+    id: "holo-bfcm",
+    name: "Holo BFCM",
+    blurb: "A streetwear drop's campaign — violet, hot pink and ice blue, Michroma, holographic Y2K.",
+    pages: bfcm(),
+  },
+  {
+    id: "evergreen-bfcm",
+    name: "Evergreen BFCM",
+    blurb: "A home-goods store's holiday event — forest green, ivory and gold, Gilda Display, classic.",
+    pages: bfcm(),
+  },
+  {
+    id: "signal-bfcm",
+    name: "Signal BFCM",
+    blurb: "A boots-and-basics store's campaign — black and signal yellow, Schibsted Grotesk, brutalist.",
+    pages: bfcm(),
+  },
+  {
+    id: "aurora-bfcm",
+    name: "Aurora BFCM",
+    blurb: "A sleep and wellness brand's campaign — night navy, aurora mint and lilac, Gabarito, dreamy.",
+    pages: bfcm(),
+  },
+  {
+    id: "wrapped-bfcm",
+    name: "Wrapped BFCM",
+    blurb: "A toy and gift shop's campaign — candy red on cream, Caprasimo, Christmas cheer.",
+    pages: bfcm(),
+  },
+  {
+    id: "receipt-bfcm",
+    name: "Receipt BFCM",
+    blurb: "A coffee roaster's campaign — paper white, ink and orange, Martian Mono, till-receipt style.",
+    pages: bfcm(),
+  },
+  {
+    id: "atelier-bfcm",
+    name: "Atelier BFCM",
+    blurb: "A fashion house's private sale — stone, ink and cobalt, Cinzel caps, couture restraint.",
+    pages: bfcm(),
+  },
+  {
+    id: "plum-bfcm",
+    name: "Plum BFCM",
+    blurb: "A jewellery and fragrance brand's campaign — plum and peach, Petrona serif, luxe.",
+    pages: bfcm(),
   },
 ];
