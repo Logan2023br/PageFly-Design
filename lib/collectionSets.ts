@@ -20,7 +20,8 @@ import type { ShowcasePage, ShowcaseSet } from "./showcasePages";
    and their seven pages are their own — the ten BFCM sets are seven pages of one
    Black Friday / Cyber Monday campaign, and the ten festival sets (Halloween to
    Tết) are a seasonal store's home, sale, countdown, gift boxes, guide, journal
-   and last-minute page: each is listed whole, with the shared pages (home,
+   and last-minute page, and the ten subscription boxes are a box's home, plans,
+   builder, product, how-it-works, gift and journal pages: each is listed whole, with the shared pages (home,
    about-us, contact, blog-article) keeping the shared slugs.
    ========================================================================== */
 
@@ -103,6 +104,24 @@ function festival(
   read: ShowcasePage = JOURNAL,
 ): ShowcasePage[] {
   return [HOME, sale, countdown, boxes, GIFT_GUIDE, read, LAST_MINUTE];
+}
+
+/* A subscription box: home first, as the set's cover, then the plans, the
+   box builder and one product, then how it works, gifting and the journal. */
+function subscription(): ShowcasePage[] {
+  return [
+    HOME,
+    {
+      slug: "subscription-plans",
+      label: "Plans",
+      blurb: "The plans side by side: what each box holds, and what it saves.",
+    },
+    { slug: "build-your-box", label: "Build your box", blurb: "Pick the items, watch the price drop." },
+    { slug: "product-page", label: "Product", blurb: "One item, with subscribe-and-save beside buy-once." },
+    { slug: "how-it-works", label: "How it works", blurb: "Choose, receive, skip or cancel — in steps." },
+    { slug: "gift-a-subscription", label: "Gift a subscription", blurb: "A box for someone else, prepaid." },
+    JOURNAL,
+  ];
 }
 
 export const PREVIEW_SETS: ShowcaseSet[] = [
@@ -636,5 +655,65 @@ export const PREVIEW_SETS: ShowcaseSet[] = [
       },
       { slug: "gift-baskets", label: "Gift baskets", blurb: "Tết baskets, priced by size." },
     ),
+  },
+  {
+    id: "marigold-coffee-club",
+    name: "Marigold Coffee Club",
+    blurb: "Mexican single-origin coffee by subscription — marigold cream and magenta, Bungee, festive.",
+    pages: subscription(),
+  },
+  {
+    id: "holi-hues-nail-club",
+    name: "Holi Hues Nail Club",
+    blurb: "A monthly vegan gel-polish box — white with hot pink and violet, Righteous, Holi colour.",
+    pages: subscription(),
+  },
+  {
+    id: "lantern-tea-club",
+    name: "Lantern Tea Club",
+    blurb: "Single-estate teas each month — rice paper, night navy and lantern orange, Alice serif, calm.",
+    pages: subscription(),
+  },
+  {
+    id: "crescent-scent-club",
+    name: "Crescent Scent Club",
+    blurb: "A monthly attar and oud box — sand, deep teal and gold, El Messiri, Arabian luxe.",
+    pages: subscription(),
+  },
+  {
+    id: "self-love-club",
+    name: "Self Love Club",
+    blurb: "A monthly self-care box — blush pink and cherry red, Bagel Fat One, sweet.",
+    pages: subscription(),
+  },
+  {
+    id: "clover-plant-club",
+    name: "Clover Plant Club",
+    blurb: "Plant of the month — mint and clover green, Uncial Antiqua, Irish luck.",
+    pages: subscription(),
+  },
+  {
+    id: "game-day-crate",
+    name: "Game Day Crate",
+    blurb: "Sauces and snacks before every big game — field green and burnt orange, Graduate varsity, sporty.",
+    pages: subscription(),
+  },
+  {
+    id: "star-spangled-tee-club",
+    name: "Star Spangled Tee Club",
+    blurb: "American-made basics by subscription — parchment, navy and flag red, Bevan slab, heritage.",
+    pages: subscription(),
+  },
+  {
+    id: "pencil-case-learning-box",
+    name: "Pencil Case Learning Box",
+    blurb: "A monthly STEM project for ages 4–10 — paper white and crayon blue, Gaegu handwriting, playful.",
+    pages: subscription(),
+  },
+  {
+    id: "petal-skincare-refill",
+    name: "Petal Skincare Refill",
+    blurb: "Botanical skincare in refill pouches — petal white and lavender, Italiana serif, gentle.",
+    pages: subscription(),
   },
 ];
