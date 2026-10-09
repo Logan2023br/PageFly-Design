@@ -14,9 +14,9 @@ import type { ShowcasePage, ShowcaseSet } from "./showcasePages";
    analytics: home, product-page, collection-page, about-us, contact,
    blog-article, and a sale named after its own offer.
 
-   NOT EVERY SET IS A SHOP. Northwind, Atlas Studio, Kinetik, Roam Diaries and
-   Salt & Smoke are a SaaS, a studio, an agency and two creators, and their
-   seven pages are their own: each is listed whole, with the shared pages
+   NOT EVERY SET IS A SHOP. Northwind, Atlas Studio, Kinetik, Roam Diaries,
+   Salt & Smoke and Kumo Ryokan are a SaaS, a studio, an agency, two creators
+   and an inn, and their seven pages are their own: each is listed whole, with the shared pages
    (home, about-us, contact, blog-article) keeping the shared slugs.
    ========================================================================== */
 
@@ -225,5 +225,73 @@ export const PREVIEW_SETS: ShowcaseSet[] = [
     name: "Wick House",
     blurb: "Hand-poured candles — smoky brown and amber glow, Young Serif, slow evenings.",
     pages: pages({ slug: "winter-glow-sale" }),
+  },
+  {
+    id: "cha-yun",
+    name: "Cha Yun",
+    blurb: "A Chinese tea house, in Chinese — rice paper and cinnabar red, brush calligraphy, calm.",
+    pages: pages({ slug: "mid-autumn-sale" }),
+  },
+  {
+    id: "hua-yan",
+    name: "Hua Yan",
+    blurb: "Guochao cosmetics, in Chinese — oxblood and palace gold, ZCOOL display, ornate.",
+    pages: pages({ slug: "double-11-sale" }),
+  },
+  {
+    id: "zhixin",
+    name: "Zhixin",
+    blurb: "A smart-home brand, in Chinese — deep navy, azure and aqua, launch-event tech.",
+    pages: pages({ slug: "618-sale" }),
+  },
+  {
+    id: "rangoli-house",
+    name: "Rangoli House",
+    blurb: "Handwoven Indian ethnic wear — plum, magenta and marigold, Rozha One, festive.",
+    pages: pages({ slug: "diwali-sale" }),
+  },
+  {
+    id: "spice-route",
+    name: "Spice Route",
+    blurb: "Farm-direct Indian spices — roasted brown and turmeric gold, Yatra One, earthy.",
+    pages: pages({ slug: "harvest-festival-sale" }),
+  },
+  {
+    id: "dar-al-oud",
+    name: "Dar Al Oud",
+    blurb: "An oud and perfume house, in Arabic, right to left — black and gold, Ruqaa script, opulent.",
+    pages: pages({ slug: "ramadan-eid-sale" }),
+  },
+  {
+    id: "halawiyat-baghdad",
+    name: "Halawiyat Baghdad",
+    blurb: "A Baghdad sweets bakery, in Arabic, right to left — cream and pistachio green, Kufi, homely.",
+    pages: pages({ slug: "eid-sale" }),
+  },
+  {
+    id: "wabi-kobo",
+    name: "Wabi Kobo",
+    blurb: "Handmade Japanese ceramics, in Japanese — washi white and indigo, Mincho serif, wabi-sabi.",
+    pages: pages({ slug: "kura-dashi-sale" }),
+  },
+  {
+    id: "neo-tokyo",
+    name: "Neo Tokyo",
+    blurb: "Shibuya streetwear drops, in Japanese — black and neon pink, Dela Gothic, night city.",
+    pages: pages({ slug: "archive-sale" }),
+  },
+  {
+    id: "kumo-ryokan",
+    name: "Kumo Ryokan",
+    blurb: "A hot-spring inn below Mt. Fuji, in Japanese — washi and pine green with gold, Old Mincho, serene.",
+    pages: [
+      HOME,
+      { slug: "rooms", label: "Rooms", blurb: "Every room type, with what each one looks out on." },
+      { slug: "dining", label: "Dining", blurb: "The seasonal kaiseki, course by course." },
+      { slug: "experiences", label: "Experiences", blurb: "What to do during a stay, by kind." },
+      { slug: "journal-article", label: "Journal", blurb: "A letter from the inn's journal." },
+      ABOUT,
+      CONTACT,
+    ],
   },
 ];
