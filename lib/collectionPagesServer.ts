@@ -170,11 +170,16 @@ const REEXPORTED: {
   since: string;
   /** the files that changed; both when left out */
   kinds?: CollectionFileKind[];
+  /** the directory under `public/`; `showcase` when left out */
+  dir?: string;
 }[] = [
   { set: "hexwood", page: "product-page", since: "2026-10-06T02:27:00Z" },
   { set: "hexwood", page: "contact", since: "2026-10-06T02:53:00Z", kinds: ["html"] },
   { set: "hexwood", page: "blog-article", since: "2026-10-06T03:13:00Z", kinds: ["html"] },
   { set: "hollis", page: "product-page", since: "2026-10-06T03:27:00Z" },
+  /* Set a little after the deploy lands, so a copy imported from the first
+     export just before it is still replaced. */
+  { set: "maison-lune", page: "blog-article", since: "2026-10-09T13:40:00Z", dir: "collection-sets" },
 ];
 
 let refreshing: Promise<void> | null = null;
@@ -188,7 +193,7 @@ export function refreshBuiltInPages(origin?: string): Promise<void> {
       const page = set?.pages.find((p) => p.slug === r.page);
       if (!set || !page || Date.parse(page.updatedAt) >= Date.parse(r.since)) continue;
       for (const kind of r.kinds ?? (["html", "pagefly"] as const)) {
-        const bytes = await readBuiltIn(`showcase/${r.set}/${r.page}.${kind}`, origin);
+        const bytes = await readBuiltIn(`${r.dir ?? "showcase"}/${r.set}/${r.page}.${kind}`, origin);
         if (!bytes || rejectFile(kind, bytes)) throw new Error(`${r.set}/${r.page}.${kind} unreadable`);
         await repo.putCollectionFile(set.id, page.id, kind, bytes);
       }
