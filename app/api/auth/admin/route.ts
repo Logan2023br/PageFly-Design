@@ -45,7 +45,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    await setAdminSession();
+    await setAdminSession(body.username);
   } catch (err) {
     if (err instanceof MissingSecretError)
       return Response.json(

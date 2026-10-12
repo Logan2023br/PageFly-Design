@@ -53,3 +53,6 @@ lerna-debug.log*
 *.sw?
 .pfd-dev-db.json
 .pfd-session-secret
+
+# Upsell Build Pages design files in development (UPSELL_STORAGE_DIR unset)
+.pfd-upsell

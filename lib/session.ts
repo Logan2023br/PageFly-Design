@@ -335,9 +335,11 @@ export async function clearReferralSession(): Promise<void> {
 
 /* ---- admin session ------------------------------------------------------- */
 
-export async function setAdminSession(): Promise<void> {
+/** `username` is who signed in, kept so a review can say who made it. A
+    cookie from before it was recorded still verifies — it just has no name. */
+export async function setAdminSession(username?: string): Promise<void> {
   const jar = await cookies();
-  jar.set(ADMIN_COOKIE, seal({ admin: true, iat: Date.now() }), {
+  jar.set(ADMIN_COOKIE, seal({ admin: true, u: username?.slice(0, 120), iat: Date.now() }), {
     ...COOKIE_OPTIONS,
     maxAge: ADMIN_MAX_AGE,
   });
@@ -347,6 +349,12 @@ export async function readAdminSession(): Promise<boolean> {
   const jar = await cookies();
   return unseal<{ admin: boolean }>(jar.get(ADMIN_COOKIE)?.value, ADMIN_MAX_AGE)
     ?.admin === true;
+}
+
+export async function readAdminName(): Promise<string | null> {
+  const jar = await cookies();
+  const data = unseal<{ admin: boolean; u?: string }>(jar.get(ADMIN_COOKIE)?.value, ADMIN_MAX_AGE);
+  return data?.admin === true ? (data.u ?? null) : null;
 }
 
 export async function clearAdminSession(): Promise<void> {

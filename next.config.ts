@@ -17,6 +17,15 @@ const nextConfig: NextConfig = {
      does let any page on the listed domains read your dev assets while the
      tunnel is open, which is the reason the block exists — keep the list to
      what you actually use. */
+  /* Upsell Build Pages lives with the rest of admin under /design/admin; the
+     links the Builder and Slack hand out use the shorter /admin/upsell. */
+  async redirects() {
+    return [
+      { source: "/admin/upsell", destination: "/design/admin/upsell", permanent: false },
+      { source: "/admin/upsell/:path*", destination: "/design/admin/upsell/:path*", permanent: false },
+    ];
+  },
+
   allowedDevOrigins: [
     "*.ngrok-free.app",
     "*.ngrok-free.dev",

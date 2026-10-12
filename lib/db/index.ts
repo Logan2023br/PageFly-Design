@@ -71,7 +71,7 @@ function databaseUrlVar(): string | null {
   return null;
 }
 
-function databaseUrl(): string | null {
+export function databaseUrl(): string | null {
   const name = databaseUrlVar();
   return name ? (process.env[name] ?? null) : null;
 }
