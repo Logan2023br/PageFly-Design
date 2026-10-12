@@ -226,9 +226,9 @@ async function main() {
     });
     check(r.changed, "first report changes things");
     const a = await leads.getLead("L261012AAAA");
-    check(a?.status === "sent" && a?.sent_at === "2026-10-12T03:00:00.000Z" && a?.crisp_session === "session_abc" && a?.pages_at_send === 1, "lead is sent with send fields", a);
+    check(a?.status === "sent" && a?.sent_at === "2026-10-12T03:00:00Z" && a?.crisp_session === "session_abc" && a?.pages_at_send === 1, "lead is sent with send fields", a);
     const d = (await designs.getDesign(designId))!.design;
-    check(d.expires_at === "2026-11-11T03:00:00.000Z", "link expires 30 days after the send", d.expires_at);
+    check(d.expires_at === "2026-11-11T03:00:00Z", "link expires 30 days after the send", d.expires_at);
     const r2 = await messages.reportResult(initialId, { status: "failed", error: "late duplicate" });
     check(!r2.changed && r2.message.status === "sent", "second report changes nothing");
     const sentEvents = await p.query("select 1 from upsell_events where type = 'message_sent'");
@@ -286,7 +286,7 @@ async function main() {
     const out = await messages.approvedForSending();
     check(out.length === 1 && out[0].kind === "followup1" && out[0].content === "Hi again, edited", "approved follow-up is served", out);
     await messages.reportResult(fu, { status: "sent", sent_at: "2026-10-14T03:00:00Z" });
-    check((await leads.getLead("L261012AAAA"))?.followup1_at === "2026-10-14T03:00:00.000Z", "followup1_at recorded");
+    check((await leads.getLead("L261012AAAA"))?.followup1_at === "2026-10-14T03:00:00Z", "followup1_at recorded");
 
     /* A follow-up for a lead with no Crisp conversation is held back. */
     await leads.upsertLeads([{ lead_id: "L261012EEEE", store_domain: "echo.myshopify.com", group: "test" }]);

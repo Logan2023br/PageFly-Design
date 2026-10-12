@@ -232,6 +232,14 @@ but the store.
 One wrinkle: that driver reads its file once at startup, so editing the JSON by
 hand needs a restart.
 
+### Upsell Build Pages
+
+`/design/admin/upsell` (also `/admin/upsell`): pages NIU Builder designs for new installs, reviewed
+by an admin before any message reaches the merchant; `/new-page?id=…` is what the merchant opens.
+Postgres only. API, curl examples and VPS notes: `docs/upsell-api.md`. The NIU Ops script:
+`scripts/niu/`. Tests: `UPSELL_TEST_DATABASE_URL=… npx tsx scripts/test-upsell.ts` and
+`pytest scripts/niu/tests`.
+
 ### The allowlist
 
 The domain in `lib/allowlist.ts` is compiled in, so a deployment with nothing

@@ -3,7 +3,7 @@
 import { MotionConfig, motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { IconName } from "@/lib/icons";
 import { Icon } from "../ui";
 
@@ -14,7 +14,7 @@ import { Icon } from "../ui";
    between the two should not feel like they changed products.
    ========================================================================== */
 
-export type AdminSection = "stats" | "users" | "analytics" | "training" | "collections";
+export type AdminSection = "stats" | "users" | "analytics" | "training" | "collections" | "upsell";
 
 const NAV: { id: AdminSection; label: string; href: string; icon: IconName }[] = [
   { id: "stats", label: "Thống kê", href: "/design/admin", icon: "ChartColumn" },
@@ -40,7 +40,38 @@ const NAV: { id: AdminSection; label: string; href: string; icon: IconName }[] =
     href: "/design/admin/collections",
     icon: "LayoutGrid",
   },
+  {
+    id: "upsell",
+    label: "Upsell Build Pages",
+    href: "/design/admin/upsell",
+    icon: "Rocket",
+  },
 ];
+
+/* What is waiting for review in Upsell Build Pages, on the menu item itself.
+   Read in the browser rather than by every admin page's server component, so
+   adding the badge did not add a query to five screens that have nothing to
+   do with it. A failure just shows no badge. */
+function useUpsellPending(): number {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    let live = true;
+    const load = () =>
+      fetch("/api/admin/upsell/counts")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((b: { pages?: number; messages?: number } | null) => {
+          if (live && b) setN((b.pages ?? 0) + (b.messages ?? 0));
+        })
+        .catch(() => undefined);
+    void load();
+    const t = setInterval(load, 60_000);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, []);
+  return n;
+}
 
 export function AdminShell({
   current,
@@ -55,6 +86,7 @@ export function AdminShell({
   actions?: ReactNode;
   children: ReactNode;
 }) {
+  const upsellPending = useUpsellPending();
   return (
     <MotionConfig reducedMotion="user">
       <div
@@ -112,6 +144,11 @@ export function AdminShell({
                     <span className="relative z-10 flex items-center gap-2">
                       <Icon name={item.icon} size={15} />
                       {item.label}
+                      {item.id === "upsell" && upsellPending > 0 && (
+                        <span className="rounded-pf-pill bg-pf-warn/25 px-1.5 text-[11px] text-pf-warn">
+                          {upsellPending}
+                        </span>
+                      )}
                     </span>
                   </Link>
                 );

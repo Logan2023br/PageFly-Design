@@ -113,5 +113,7 @@ export const DEFAULT_INITIAL_TEMPLATE =
 export function isoOrNull(v: unknown): string | null {
   if (v === null || v === undefined || v === "") return null;
   const d = new Date(String(v));
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  /* Seconds, like every timestamp the API returns (see db.ts) — so a value
+     the script echoes back compares equal to the one stored. */
+  return Number.isNaN(d.getTime()) ? null : d.toISOString().replace(/\.\d{3}Z$/, "Z");
 }

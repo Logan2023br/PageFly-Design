@@ -18,10 +18,16 @@ import { UpsellError } from "./types";
    ========================================================================== */
 
 /* Timestamps as ISO 8601 UTC strings, numerics and counts as numbers — the
-   API speaks JSON, and a Date or a "12.50" string would leak straight into it. */
+   API speaks JSON, and a Date or a "12.50" string would leak straight into it.
+
+   SECONDS, NO MILLISECONDS: `2026-10-12T03:00:00Z`, exactly what niu_ops.py's
+   `iso()` writes. The script compares `last_reply_at` as a string to decide
+   whether a reply is new; `…:00.000Z` against `…:00Z` would send the same
+   reply to classification on every run. */
+const isoSeconds = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, "Z");
 const parsers: Record<number, (v: string) => unknown> = {
-  1184: (v) => new Date(v).toISOString(), // timestamptz
-  1114: (v) => new Date(`${v}Z`).toISOString(), // timestamp
+  1184: (v) => isoSeconds(new Date(v)), // timestamptz
+  1114: (v) => isoSeconds(new Date(`${v}Z`)), // timestamp
   1700: (v) => Number(v), // numeric
   20: (v) => Number(v), // int8 (count(*))
 };

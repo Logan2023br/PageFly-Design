@@ -1,0 +1,6 @@
+# Only `sheet` needs these two; every other command runs on the standard library.
+google-auth>=2.20
+requests>=2.31
+
+# Tests
+pytest>=7

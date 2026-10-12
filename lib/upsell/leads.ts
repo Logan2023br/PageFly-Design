@@ -441,7 +441,7 @@ export async function setBuildStatus(
       throw new UpsellError(`Lead ${leadId} is ${cur.status}; it cannot move to ${status}.`, 409);
     const set: Record<string, unknown> = { status };
     if (status === "building") {
-      set.build_started_at = new Date().toISOString();
+      set.build_started_at = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
       set.error = null;
     } else {
       set.error = error ? error.slice(0, 2000) : null;
