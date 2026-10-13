@@ -21,6 +21,13 @@ const nextConfig: NextConfig = {
      links the Builder and Slack hand out use the shorter /admin/upsell. */
   async redirects() {
     return [
+      /* The front door and the merchant app both go to /collection-pages, for
+         everyone. Exact paths only: /design/login, /design/library and
+         /design/admin stay reachable. This also ends /?login= invite links
+         and the way back into /design. Temporary (307), not permanent, so a
+         browser does not keep it once it is taken out. */
+      { source: "/", destination: "/collection-pages", permanent: false },
+      { source: "/design", destination: "/collection-pages", permanent: false },
       { source: "/admin/upsell", destination: "/design/admin/upsell", permanent: false },
       { source: "/admin/upsell/:path*", destination: "/design/admin/upsell/:path*", permanent: false },
     ];
