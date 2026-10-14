@@ -1,9 +1,12 @@
 import { z } from "zod";
+import { getRepo } from "@/lib/db";
 import {
+  DECOY_ADMIN_HASH,
   MissingSecretError,
   checkAdminCredentials,
   clearAdminSession,
   setAdminSession,
+  verifyAdminPassword,
 } from "@/lib/session";
 
 /* ==========================================================================
@@ -14,7 +17,8 @@ import {
    password is ever part of the browser bundle. They default to the pair
    specified for launch and are overridable with ADMIN_USERNAME /
    ADMIN_PASSWORD — which is what should happen before this is reachable by
-   anyone outside the team.
+   anyone outside the team. That pair is the owner; any other sign-in is an
+   account made on admin's Accounts screen, with the sections it was given.
    ========================================================================== */
 
 const bodySchema = z.object({
@@ -35,17 +39,25 @@ export async function POST(request: Request) {
     );
   }
 
+  let accountId: string | undefined;
   if (!checkAdminCredentials(body.username, body.password)) {
-    /* One message for a wrong username and a wrong password alike — saying which
-       was wrong confirms that a username exists. */
-    return Response.json(
-      { ok: false, error: "Incorrect username or password." } satisfies AdminAuthResponse,
-      { status: 401 },
-    );
+    const account = await getRepo()
+      .getAdminAccountByUsername(body.username)
+      .catch(() => null);
+    const ok = verifyAdminPassword(body.password, account?.passwordHash ?? DECOY_ADMIN_HASH);
+    if (!account || !ok) {
+      /* One message for a wrong username and a wrong password alike — saying
+         which was wrong confirms that a username exists. */
+      return Response.json(
+        { ok: false, error: "Incorrect username or password." } satisfies AdminAuthResponse,
+        { status: 401 },
+      );
+    }
+    accountId = account.id;
   }
 
   try {
-    await setAdminSession(body.username);
+    await setAdminSession(body.username, accountId);
   } catch (err) {
     if (err instanceof MissingSecretError)
       return Response.json(

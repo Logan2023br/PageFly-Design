@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { RESERVED_PAGE_SLUGS, RESERVED_SET_SLUGS, SLUG_RE } from "@/lib/collectionPages";
 import { CollectionSlugTakenError } from "@/lib/db/types";
-import { readAdminSession } from "@/lib/session";
+import { readAdminSection } from "@/lib/session";
 
 /* What every /api/admin/collection-pages route shares: the guard, the answer
    shapes, and the field rules. */
@@ -9,7 +9,7 @@ import { readAdminSession } from "@/lib/session";
 export type Fail = { ok: false; error: string };
 
 export async function guard(): Promise<Response | null> {
-  if (await readAdminSession()) return null;
+  if (await readAdminSection("collections")) return null;
   return Response.json({ ok: false, error: "Not signed in." } satisfies Fail, { status: 401 });
 }
 

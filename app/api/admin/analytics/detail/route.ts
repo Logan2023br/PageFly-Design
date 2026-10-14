@@ -1,4 +1,4 @@
-import { readAdminSession } from "@/lib/session";
+import { readAdminSection } from "@/lib/session";
 import { getRepo } from "@/lib/db";
 import { DETAIL_OF, type DetailRow, type DetailResponse } from "@/lib/analytics/detail";
 import type { EventHit, GeoFilter } from "@/lib/db/types";
@@ -33,7 +33,7 @@ const FEED = 300;
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  if (!(await readAdminSession()))
+  if (!(await readAdminSection("analytics")))
     return Response.json({ ok: false, error: "Not signed in." } satisfies DetailResponse, {
       status: 401,
     });

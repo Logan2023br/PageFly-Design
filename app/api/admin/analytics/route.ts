@@ -1,6 +1,6 @@
 import { getRepo } from "@/lib/db";
 import { EV } from "@/lib/analytics";
-import { readAdminSession } from "@/lib/session";
+import { readAdminSection } from "@/lib/session";
 import type {
   CountryCount,
   DayCount,
@@ -502,7 +502,7 @@ const DURATION_BUCKETS = [
 ];
 
 export async function GET(request: Request) {
-  if (!(await readAdminSession()))
+  if (!(await readAdminSection("analytics")))
     return Response.json({ ok: false, error: "Not signed in." } satisfies AnalyticsResponse, {
       status: 401,
     });

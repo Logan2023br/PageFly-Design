@@ -1,5 +1,5 @@
-import { AdminLogin } from "@/components/admin/AdminLogin";
 import { AdminShell } from "@/components/admin/AdminShell";
+import { adminGate } from "@/components/admin/adminGate";
 import { FilterBar, Pager, TABS, TabNav, type TabId } from "@/components/admin/upsell/Chrome";
 import { InstallsTable } from "@/components/admin/upsell/InstallsTable";
 import { LeadTable } from "@/components/admin/upsell/LeadTable";
@@ -18,7 +18,6 @@ import {
 } from "@/lib/upsell/adminQueries";
 import { hasUpsellDatabase } from "@/lib/upsell/db";
 import { NUMERIC_KEYS, SETTING_HELP, getSettings } from "@/lib/upsell/settings";
-import { readAdminSession } from "@/lib/session";
 
 /* /design/admin/upsell — Upsell Build Pages. Read on the server per request,
    like the other admin screens; the tab and filters are in the URL. */
@@ -27,7 +26,8 @@ export const metadata = { title: "Upsell Build Pages — PageFly Design Admin" }
 export const dynamic = "force-dynamic";
 
 export default async function UpsellAdminPage(props: PageProps<"/design/admin/upsell">) {
-  if (!(await readAdminSession())) return <AdminLogin />;
+  const gate = await adminGate("upsell");
+  if (gate) return gate;
 
   const sp = await props.searchParams;
   const one = (k: string) => {

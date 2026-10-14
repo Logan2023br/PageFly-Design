@@ -1,7 +1,6 @@
-import { AdminLogin } from "@/components/admin/AdminLogin";
 import { AdminShell } from "@/components/admin/AdminShell";
+import { adminGate } from "@/components/admin/adminGate";
 import { AnalyticsView } from "@/components/admin/AnalyticsView";
-import { readAdminSession } from "@/lib/session";
 
 /* ==========================================================================
    /design/admin/analytics
@@ -17,7 +16,8 @@ export const metadata = { title: "Analytics — PageFly Design" };
 export const dynamic = "force-dynamic";
 
 export default async function AnalyticsPage() {
-  if (!(await readAdminSession())) return <AdminLogin />;
+  const gate = await adminGate("analytics");
+  if (gate) return gate;
 
   return (
     <AdminShell current="analytics" title="Analytics">

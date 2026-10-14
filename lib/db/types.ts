@@ -13,6 +13,8 @@
    column exists now so that change needs no migration.
    ========================================================================== */
 
+import type { AdminSection } from "../adminSections";
+
 /**
  * `userType` for a store that came through the public registration form.
  *
@@ -777,6 +779,29 @@ export type CollectionLeadRecord = {
    ONE STORE, ONE REFERRER. A domain can be named by one member only, and never
    by itself — otherwise the same five stores could earn five rewards.
    ========================================================================== */
+/**
+ * A sign-in to admin, made on its Accounts screen. It opens only the sections
+ * listed — see lib/adminSections.ts. The owner sign-in from ADMIN_USERNAME is
+ * not one of these: it is configured, not stored, and always opens everything.
+ */
+export type AdminAccountRecord = {
+  id: string;
+  /** stored lower-case, unique; what is typed at sign-in */
+  username: string;
+  /** `scrypt$<salt>$<hash>`, never the password */
+  passwordHash: string;
+  sections: AdminSection[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export class AdminUsernameTakenError extends Error {
+  constructor(username: string) {
+    super(`The username "${username}" is already used.`);
+    this.name = "AdminUsernameTakenError";
+  }
+}
+
 export type ReferralMemberRecord = {
   id: string;
   /** the member's own store, and their login */
@@ -988,6 +1013,12 @@ export type Repo = {
   listCollectionLeads(limit: number): Promise<CollectionLeadRecord[]>;
 
   /* ---- referral program ---- */
+  listAdminAccounts(): Promise<AdminAccountRecord[]>;
+  getAdminAccount(id: string): Promise<AdminAccountRecord | null>;
+  getAdminAccountByUsername(username: string): Promise<AdminAccountRecord | null>;
+  /** insert or update by id; throws AdminUsernameTakenError on a clash */
+  saveAdminAccount(account: Omit<AdminAccountRecord, "createdAt" | "updatedAt">): Promise<void>;
+  deleteAdminAccount(id: string): Promise<boolean>;
   listReferralMembers(): Promise<ReferralMemberRecord[]>;
   getReferralMember(id: string): Promise<ReferralMemberRecord | null>;
   getReferralMemberByDomain(domain: string): Promise<ReferralMemberRecord | null>;

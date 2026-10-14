@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AdminLogin } from "@/components/admin/AdminLogin";
 import { AdminShell } from "@/components/admin/AdminShell";
+import { adminGate } from "@/components/admin/adminGate";
 import { Pill, StatusBadge } from "@/components/admin/upsell/bits";
 import { LeadMessages, PagePreviews, ReviewActions, Timeline } from "@/components/admin/upsell/LeadDetailParts";
 import { filterOptions, leadDetail } from "@/lib/upsell/adminQueries";
@@ -9,7 +9,6 @@ import { customerClock, daysLeft, fmtVN, handleOf, money } from "@/lib/upsell/fo
 import { hasUpsellDatabase } from "@/lib/upsell/db";
 import { initialDraft } from "@/lib/upsell/review";
 import { getSettings } from "@/lib/upsell/settings";
-import { readAdminSession } from "@/lib/session";
 
 /* /design/admin/upsell/leads/:lead_id — one lead, everything about it. */
 
@@ -28,7 +27,8 @@ function Row({ k, children }: { k: string; children: React.ReactNode }) {
 const ext = "text-pf-primary-hi hover:text-pf-text underline-offset-2 hover:underline";
 
 export default async function LeadPage(props: PageProps<"/design/admin/upsell/leads/[lead_id]">) {
-  if (!(await readAdminSession())) return <AdminLogin />;
+  const gate = await adminGate("upsell");
+  if (gate) return gate;
   if (!hasUpsellDatabase()) notFound();
   const { lead_id } = await props.params;
   const [d, cfg, options] = await Promise.all([leadDetail(lead_id), getSettings(), filterOptions()]);

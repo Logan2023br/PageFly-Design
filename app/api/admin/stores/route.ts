@@ -3,7 +3,7 @@ import { DEFAULT_PAGE_LIMIT } from "@/lib/pageCatalog";
 import { findBuiltinStore } from "@/lib/allowlist";
 import { getRepo } from "@/lib/db";
 import type { StoreFilter, StoreSort } from "@/lib/db/types";
-import { readAdminSession } from "@/lib/session";
+import { readAdminSection } from "@/lib/session";
 import { normalizeDomain } from "@/lib/sheet";
 
 /* ==========================================================================
@@ -53,7 +53,7 @@ export type StoresResponse =
   | { ok: false; error: string };
 
 async function guard(): Promise<Response | null> {
-  if (await readAdminSession()) return null;
+  if (await readAdminSection("users")) return null;
   return Response.json(
     { ok: false, error: "Not authorised." } satisfies StoresResponse,
     { status: 401 },
@@ -177,7 +177,7 @@ const SORTS = new Set(["recent", "pages", "tokens", "rating", "domain", "registe
 const FILTERS = new Set(["built", "signedin", "idle"]);
 
 export async function GET(req: Request): Promise<Response> {
-  if (!(await readAdminSession())) {
+  if (!(await readAdminSection("users"))) {
     return Response.json({ error: "not signed in" }, { status: 401 });
   }
 

@@ -1,9 +1,8 @@
-import { AdminLogin } from "@/components/admin/AdminLogin";
 import { AdminShell } from "@/components/admin/AdminShell";
+import { adminGate } from "@/components/admin/adminGate";
 import { TrainingTabs } from "@/components/admin/TrainingTabs";
 import { sliceIds } from "@/lib/ai/skills";
 import { getRepo } from "@/lib/db";
-import { readAdminSession } from "@/lib/session";
 
 /* ==========================================================================
    /design/admin/training
@@ -17,7 +16,8 @@ export const metadata = { title: "Training Design — PageFly Design Admin" };
 export const dynamic = "force-dynamic";
 
 export default async function AdminTrainingPage() {
-  if (!(await readAdminSession())) return <AdminLogin />;
+  const gate = await adminGate("training");
+  if (gate) return gate;
 
   /* An unreachable database should not be a crashed screen: the operator can
      still see where they are and what this is for. */

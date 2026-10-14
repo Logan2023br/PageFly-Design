@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash, timingSafeEqual } from "node:crypto";
-import { readAdminName, readAdminSession } from "@/lib/session";
+import { readAdminName, readAdminSection } from "@/lib/session";
 import { rateLimited } from "./track";
 import { UpsellError } from "./types";
 
@@ -33,7 +33,7 @@ export function requireKey(req: Request): Response | null {
 }
 
 export async function requireAdmin(): Promise<Response | null> {
-  if (await readAdminSession()) return null;
+  if (await readAdminSection("upsell")) return null;
   return json({ ok: false, error: "Not signed in." }, 401);
 }
 
@@ -43,7 +43,7 @@ export async function keyOrAdmin(req: Request): Promise<{ who: "key" | "admin" }
     const denied = requireKey(req);
     return denied ?? { who: "key" };
   }
-  if (await readAdminSession()) return { who: "admin" };
+  if (await readAdminSection("upsell")) return { who: "admin" };
   return json({ error: "Invalid or missing X-API-Key." }, 401);
 }
 

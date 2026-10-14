@@ -4,7 +4,7 @@ import { getRepo } from "@/lib/db";
 import type { TrainingSection, TrainingSectionSummary } from "@/lib/db/types";
 import { sliceIds } from "@/lib/ai/skills";
 import { PAGEFLY_ELEMENTS } from "@/lib/pagefly/elements";
-import { readAdminSession } from "@/lib/session";
+import { readAdminSection } from "@/lib/session";
 
 /* ==========================================================================
    /api/admin/training/sections
@@ -64,7 +64,7 @@ export type SectionResponse =
   | { ok: false; error: string };
 
 async function guard(): Promise<Response | null> {
-  if (await readAdminSession()) return null;
+  if (await readAdminSection("training")) return null;
   return Response.json(
     { ok: false, error: "Not signed in." } satisfies SectionsResponse,
     { status: 401 },

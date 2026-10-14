@@ -15,13 +15,20 @@ import type {
   CollectionReviewer,
   CollectionSetRecord,
   ReferralMemberRecord,
+  AdminAccountRecord,
   ReferralRecord,
   TrainingImage,
   TrainingSection,
   TrainingSectionSummary,
   TrainingSummary,
 } from "./types";
-import { CollectionSlugTakenError, REGISTER_USER_TYPE, ReferralTakenError } from "./types";
+import {
+  AdminUsernameTakenError,
+  CollectionSlugTakenError,
+  REGISTER_USER_TYPE,
+  ReferralTakenError,
+} from "./types";
+import { isAdminSection } from "../adminSections";
 import type { ModelSpendRow, StoreFilter } from "./types";
 
 /* ==========================================================================
@@ -502,6 +509,16 @@ create table if not exists collection_leads (
 create index if not exists collection_leads_created on collection_leads (created_at desc);
 
 /* The referral program. A member's referrals go with them. */
+/* Sign-ins to admin made on its Accounts screen — see AdminAccountRecord. */
+create table if not exists admin_accounts (
+  id            text primary key,
+  username      text not null unique,
+  password_hash text not null,
+  sections      jsonb not null default '[]',
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+
 create table if not exists referral_members (
   id            text primary key,
   domain        text not null unique,
@@ -574,6 +591,20 @@ function toCollectionSet(
           updatedAt: iso(p.updated_at),
         }),
       ),
+  };
+}
+
+function toAdminAccount(r: Record<string, unknown>): AdminAccountRecord {
+  const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : String(v ?? ""));
+  const sections = Array.isArray(r.sections) ? r.sections : [];
+  return {
+    id: String(r.id),
+    username: String(r.username),
+    passwordHash: String(r.password_hash),
+    /* A section a later build dropped is ignored rather than trusted. */
+    sections: sections.filter(isAdminSection),
+    createdAt: iso(r.created_at),
+    updatedAt: iso(r.updated_at),
   };
 }
 
@@ -1539,6 +1570,50 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
     },
 
     /* ---- referral program ---- */
+    async listAdminAccounts() {
+      await ready();
+      const { rows } = await db.query(`select * from admin_accounts order by created_at`);
+      return rows.map(toAdminAccount);
+    },
+
+    async getAdminAccount(id) {
+      await ready();
+      const { rows } = await db.query(`select * from admin_accounts where id = $1`, [id]);
+      return rows[0] ? toAdminAccount(rows[0]) : null;
+    },
+
+    async getAdminAccountByUsername(username) {
+      await ready();
+      const { rows } = await db.query(`select * from admin_accounts where username = $1`, [
+        username.trim().toLowerCase(),
+      ]);
+      return rows[0] ? toAdminAccount(rows[0]) : null;
+    },
+
+    async saveAdminAccount(a) {
+      await ready();
+      const username = a.username.trim().toLowerCase();
+      try {
+        await db.query(
+          `insert into admin_accounts (id, username, password_hash, sections)
+           values ($1, $2, $3, $4::jsonb)
+           on conflict (id) do update set
+             username = excluded.username, password_hash = excluded.password_hash,
+             sections = excluded.sections, updated_at = now()`,
+          [a.id, username, a.passwordHash, JSON.stringify(a.sections)],
+        );
+      } catch (err) {
+        if ((err as { code?: string }).code === "23505") throw new AdminUsernameTakenError(username);
+        throw err;
+      }
+    },
+
+    async deleteAdminAccount(id) {
+      await ready();
+      const { rowCount } = await db.query(`delete from admin_accounts where id = $1`, [id]);
+      return (rowCount ?? 0) > 0;
+    },
+
     async listReferralMembers() {
       await ready();
       const { rows } = await db.query(`select * from referral_members order by created_at desc`);

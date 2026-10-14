@@ -1,6 +1,9 @@
 import "server-only";
 
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { cache } from "react";
+import { ALL_ADMIN_SECTIONS, type AdminSection } from "./adminSections";
+import { getRepo } from "./db";
 import { normalizeDomain } from "./sheet";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -335,26 +338,65 @@ export async function clearReferralSession(): Promise<void> {
 
 /* ---- admin session ------------------------------------------------------- */
 
-/** `username` is who signed in, kept so a review can say who made it. A
-    cookie from before it was recorded still verifies — it just has no name. */
-export async function setAdminSession(username?: string): Promise<void> {
+/**
+ * `username` is who signed in, kept so a review can say who made it. A cookie
+ * from before it was recorded still verifies — it just has no name.
+ *
+ * `account` is set for a sign-in made on the Accounts screen, and is what its
+ * permissions are looked up by on every request; without it the sign-in is
+ * the owner's (ADMIN_USERNAME), which opens every section.
+ */
+export async function setAdminSession(username?: string, account?: string): Promise<void> {
   const jar = await cookies();
-  jar.set(ADMIN_COOKIE, seal({ admin: true, u: username?.slice(0, 120), iat: Date.now() }), {
-    ...COOKIE_OPTIONS,
-    maxAge: ADMIN_MAX_AGE,
-  });
+  jar.set(
+    ADMIN_COOKIE,
+    seal({ admin: true, u: username?.slice(0, 120), acct: account, iat: Date.now() }),
+    { ...COOKIE_OPTIONS, maxAge: ADMIN_MAX_AGE },
+  );
 }
 
-export async function readAdminSession(): Promise<boolean> {
+export type AdminIdentity = {
+  username: string | null;
+  /** null for the owner, who is configured rather than stored */
+  accountId: string | null;
+  sections: AdminSection[];
+};
+
+/**
+ * Who is signed in to admin, and what they may open — or null.
+ *
+ * AN ACCOUNT IS READ FRESH, not from the cookie: deleting an account or taking
+ * a section away holds from its next request, not when its cookie runs out.
+ * Cached for the request, so a page and its guards cost one lookup.
+ */
+export const readAdmin = cache(async (): Promise<AdminIdentity | null> => {
   const jar = await cookies();
-  return unseal<{ admin: boolean }>(jar.get(ADMIN_COOKIE)?.value, ADMIN_MAX_AGE)
-    ?.admin === true;
+  const data = unseal<{ admin: boolean; u?: string; acct?: string }>(
+    jar.get(ADMIN_COOKIE)?.value,
+    ADMIN_MAX_AGE,
+  );
+  if (data?.admin !== true) return null;
+  if (!data.acct) return { username: data.u ?? null, accountId: null, sections: ALL_ADMIN_SECTIONS };
+  const account = await getRepo()
+    .getAdminAccount(data.acct)
+    .catch(() => null);
+  if (!account) return null;
+  return { username: account.username, accountId: account.id, sections: account.sections };
+});
+
+/** Signed in to admin at all — for what any admin may do, like seeing a hidden
+    set's preview. A section's own screens and API ask `readAdminSection`. */
+export async function readAdminSession(): Promise<boolean> {
+  return (await readAdmin()) !== null;
+}
+
+/** Signed in AND given this section. */
+export async function readAdminSection(section: AdminSection): Promise<boolean> {
+  return (await readAdmin())?.sections.includes(section) ?? false;
 }
 
 export async function readAdminName(): Promise<string | null> {
-  const jar = await cookies();
-  const data = unseal<{ admin: boolean; u?: string }>(jar.get(ADMIN_COOKIE)?.value, ADMIN_MAX_AGE);
-  return data?.admin === true ? (data.u ?? null) : null;
+  return (await readAdmin())?.username ?? null;
 }
 
 export async function clearAdminSession(): Promise<void> {
@@ -387,5 +429,26 @@ export function checkAdminCredentials(
     timingSafeEqual(digest(password), digest(expectedPass))
   );
 }
+
+/* ---- admin account passwords -------------------------------------------- */
+
+/** `scrypt$<salt>$<hash>`, both base64url. */
+export function hashAdminPassword(password: string): string {
+  const salt = randomBytes(16);
+  const hash = scryptSync(password, salt, 64);
+  return `scrypt$${salt.toString("base64url")}$${hash.toString("base64url")}`;
+}
+
+export function verifyAdminPassword(password: string, stored: string): boolean {
+  const [kind, salt, hash] = stored.split("$");
+  if (kind !== "scrypt" || !salt || !hash) return false;
+  const expected = Buffer.from(hash, "base64url");
+  const given = scryptSync(password, Buffer.from(salt, "base64url"), expected.length);
+  return timingSafeEqual(given, expected);
+}
+
+/** A hash nobody's password matches, verified against when the username is
+    unknown, so a wrong username takes as long as a wrong password. */
+export const DECOY_ADMIN_HASH = hashAdminPassword(randomBytes(16).toString("hex"));
 
 export const COOKIE_NAMES = { store: STORE_COOKIE, admin: ADMIN_COOKIE };

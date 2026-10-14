@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getRepo } from "@/lib/db";
 import type { TrainingItem, TrainingSummary } from "@/lib/db/types";
-import { readAdminSession } from "@/lib/session";
+import { readAdminSection } from "@/lib/session";
 import { VERTICAL_IDS } from "@/lib/verticals";
 
 /* ==========================================================================
@@ -60,7 +60,7 @@ export type TrainingItemResponse =
   | { ok: false; error: string };
 
 async function guard(): Promise<Response | null> {
-  if (await readAdminSession()) return null;
+  if (await readAdminSection("training")) return null;
   return Response.json(
     { ok: false, error: "Not signed in." } satisfies TrainingResponse,
     { status: 401 },

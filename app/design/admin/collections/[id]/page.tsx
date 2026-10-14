@@ -1,10 +1,9 @@
 import { notFound } from "next/navigation";
-import { AdminLogin } from "@/components/admin/AdminLogin";
 import { AdminShell } from "@/components/admin/AdminShell";
+import { adminGate } from "@/components/admin/adminGate";
 import { CollectionSetEditor } from "@/components/admin/collections/CollectionSetEditor";
 import { refreshBuiltInPages } from "@/lib/collectionPagesServer";
 import { getRepo } from "@/lib/db";
-import { readAdminSession } from "@/lib/session";
 
 /* /design/admin/collections/<id> — one set's pages, files and settings. */
 
@@ -17,7 +16,8 @@ export async function generateMetadata(props: PageProps<"/design/admin/collectio
 }
 
 export default async function AdminCollectionSetPage(props: PageProps<"/design/admin/collections/[id]">) {
-  if (!(await readAdminSession())) return <AdminLogin />;
+  const gate = await adminGate("collections");
+  if (gate) return gate;
   const { id } = await props.params;
   await refreshBuiltInPages();
   const set = await getRepo().getCollectionSet(id).catch(() => null);

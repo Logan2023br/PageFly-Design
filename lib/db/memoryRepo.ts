@@ -1,7 +1,8 @@
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { buildStats } from "./postgresRepo";
-import { CollectionSlugTakenError, REGISTER_USER_TYPE, ReferralTakenError, reviewOnlyStore } from "./types";
+import { AdminUsernameTakenError, CollectionSlugTakenError, REGISTER_USER_TYPE, ReferralTakenError, reviewOnlyStore } from "./types";
 import type {
+  AdminAccountRecord,
   ModelCallRecord,
   ModelSpendRow,
   CountryCount,
@@ -76,6 +77,7 @@ type Shape = {
   collectionOrders: CollectionOrderRecord[];
   collectionLeads: CollectionLeadRecord[];
   referralMembers: ReferralMemberRecord[];
+  adminAccounts: AdminAccountRecord[];
   referrals: ReferralRecord[];
   /* Domains kept out of the proof toast. Beside `stores` rather than in it,
      because `upsertStores` replaces a row wholesale on every sheet sync. */
@@ -96,7 +98,7 @@ function geoAllows(country: string | null, geo: GeoFilter): boolean {
   return true;
 }
 
-const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], pageFiles: [], photos: [], jobs: [], training: [], trainingSections: [], events: [], modelCalls: [], collectionSets: [], collectionPages: [], collectionOrders: [], collectionLeads: [], referralMembers: [], referrals: [], proofHidden: [] };
+const EMPTY: Shape = { stores: [], runs: [], runPages: [], reviews: [], pageFiles: [], photos: [], jobs: [], training: [], trainingSections: [], events: [], modelCalls: [], collectionSets: [], collectionPages: [], collectionOrders: [], collectionLeads: [], referralMembers: [], adminAccounts: [], referrals: [], proofHidden: [] };
 
 /** The map key for "no store". A domain can never contain a space, so this
     cannot collide with one — and unlike a NUL it survives grep and an editor. */
@@ -127,6 +129,7 @@ export function createMemoryRepo(file: string): Repo {
         collectionOrders: parsed.collectionOrders ?? [],
         collectionLeads: parsed.collectionLeads ?? [],
         referralMembers: parsed.referralMembers ?? [],
+        adminAccounts: parsed.adminAccounts ?? [],
         referrals: parsed.referrals ?? [],
         proofHidden: parsed.proofHidden ?? [],
         training: parsed.training ?? [],
@@ -757,6 +760,45 @@ export function createMemoryRepo(file: string): Repo {
     },
 
     /* ---- referral program ---- */
+    /* ---- admin accounts ---- */
+    async listAdminAccounts() {
+      sync();
+      return [...data.adminAccounts].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    },
+
+    async getAdminAccount(id) {
+      sync();
+      return data.adminAccounts.find((a) => a.id === id) ?? null;
+    },
+
+    async getAdminAccountByUsername(username) {
+      sync();
+      const u = username.trim().toLowerCase();
+      return data.adminAccounts.find((a) => a.username === u) ?? null;
+    },
+
+    async saveAdminAccount(account) {
+      sync();
+      const username = account.username.trim().toLowerCase();
+      if (data.adminAccounts.some((a) => a.username === username && a.id !== account.id)) {
+        throw new AdminUsernameTakenError(username);
+      }
+      const now = new Date().toISOString();
+      const at = data.adminAccounts.findIndex((a) => a.id === account.id);
+      if (at >= 0) data.adminAccounts[at] = { ...data.adminAccounts[at], ...account, username, updatedAt: now };
+      else data.adminAccounts.push({ ...account, username, createdAt: now, updatedAt: now });
+      flush();
+    },
+
+    async deleteAdminAccount(id) {
+      sync();
+      const before = data.adminAccounts.length;
+      data.adminAccounts = data.adminAccounts.filter((a) => a.id !== id);
+      if (data.adminAccounts.length === before) return false;
+      flush();
+      return true;
+    },
+
     async listReferralMembers() {
       sync();
       return [...data.referralMembers].sort((a, b) => b.createdAt.localeCompare(a.createdAt));

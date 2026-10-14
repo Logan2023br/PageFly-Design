@@ -1,4 +1,4 @@
-import { readAdminSession } from "@/lib/session";
+import { readAdminSection } from "@/lib/session";
 import { countryOf } from "@/lib/geo";
 
 /* ==========================================================================
@@ -41,7 +41,7 @@ const RELEVANT = [
 ] as const;
 
 export async function GET(request: Request) {
-  if (!(await readAdminSession()))
+  if (!(await readAdminSection("analytics")))
     return Response.json({ ok: false, error: "Not signed in." }, { status: 401 });
 
   const seen: Record<string, string | null> = {};

@@ -1,7 +1,6 @@
-import { AdminLogin } from "@/components/admin/AdminLogin";
 import { AdminShell } from "@/components/admin/AdminShell";
+import { adminGate } from "@/components/admin/adminGate";
 import { CollectionAnalytics } from "@/components/admin/collections/CollectionAnalytics";
-import { readAdminSession } from "@/lib/session";
 
 /* /design/admin/collections/analytics — how /collection-pages is used. A
    static segment, so it wins over `[id]`. The figures are fetched by the
@@ -11,7 +10,8 @@ export const metadata = { title: "Collection pages analytics — PageFly Design 
 export const dynamic = "force-dynamic";
 
 export default async function CollectionAnalyticsPage() {
-  if (!(await readAdminSession())) return <AdminLogin />;
+  const gate = await adminGate("collections");
+  if (gate) return gate;
   return (
     <AdminShell
       current="collections"

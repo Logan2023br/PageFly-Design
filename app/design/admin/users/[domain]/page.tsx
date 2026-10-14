@@ -1,10 +1,9 @@
 import { notFound } from "next/navigation";
-import { AdminLogin } from "@/components/admin/AdminLogin";
 import { AdminShell } from "@/components/admin/AdminShell";
+import { adminGate } from "@/components/admin/adminGate";
 import { LibraryContent } from "@/components/library/LibraryScreen";
 import { AdminView } from "@/components/results/adminView";
 import { getRepo } from "@/lib/db";
-import { readAdminSession } from "@/lib/session";
 import { normalizeDomain } from "@/lib/sheet";
 import type { RunSummary } from "@/app/api/runs/route";
 
@@ -27,7 +26,8 @@ export default async function AdminStorePagesPage({
 }: {
   params: Promise<{ domain: string }>;
 }) {
-  if (!(await readAdminSession())) return <AdminLogin />;
+  const gate = await adminGate("users");
+  if (gate) return gate;
 
   const { domain: raw } = await params;
   const domain = normalizeDomain(decodeURIComponent(raw));

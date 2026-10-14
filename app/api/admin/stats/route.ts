@@ -1,5 +1,5 @@
 import { getRepo } from "@/lib/db";
-import { readAdminSession } from "@/lib/session";
+import { readAdminSection } from "@/lib/session";
 
 /* ==========================================================================
    GET /api/admin/stats?days=30
@@ -23,7 +23,7 @@ export const dynamic = "force-dynamic";
 const ALLOWED = new Set([1, 7, 30, 90, 0]);
 
 export async function GET(req: Request): Promise<Response> {
-  if (!(await readAdminSession())) {
+  if (!(await readAdminSection("stats"))) {
     return Response.json({ error: "not signed in" }, { status: 401 });
   }
 

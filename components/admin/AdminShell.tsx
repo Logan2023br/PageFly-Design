@@ -4,8 +4,10 @@ import { MotionConfig, motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
+import type { AdminSection } from "@/lib/adminSections";
 import type { IconName } from "@/lib/icons";
 import { Icon } from "../ui";
+import { useAdminAccess } from "./AdminAccess";
 
 /* ==========================================================================
    Admin chrome: left sidebar, content on the right.
@@ -14,7 +16,7 @@ import { Icon } from "../ui";
    between the two should not feel like they changed products.
    ========================================================================== */
 
-export type AdminSection = "stats" | "users" | "analytics" | "training" | "collections" | "upsell";
+export type { AdminSection };
 
 const NAV: { id: AdminSection; label: string; href: string; icon: IconName }[] = [
   { id: "stats", label: "Thống kê", href: "/design/admin", icon: "ChartColumn" },
@@ -46,15 +48,23 @@ const NAV: { id: AdminSection; label: string; href: string; icon: IconName }[] =
     href: "/design/admin/upsell",
     icon: "Rocket",
   },
+  {
+    id: "accounts",
+    label: "Tài khoản",
+    href: "/design/admin/accounts",
+    icon: "ShieldCheck",
+  },
 ];
 
 /* What is waiting for review in Upsell Build Pages, on the menu item itself.
    Read in the browser rather than by every admin page's server component, so
    adding the badge did not add a query to five screens that have nothing to
    do with it. A failure just shows no badge. */
-function useUpsellPending(): number {
+function useUpsellPending(allowed: boolean): number {
   const [n, setN] = useState(0);
   useEffect(() => {
+    /* Without the section the counts answer 401; there is no badge to show. */
+    if (!allowed) return;
     let live = true;
     const load = () =>
       fetch("/api/admin/upsell/counts")
@@ -69,7 +79,7 @@ function useUpsellPending(): number {
       live = false;
       clearInterval(t);
     };
-  }, []);
+  }, [allowed]);
   return n;
 }
 
@@ -86,7 +96,10 @@ export function AdminShell({
   actions?: ReactNode;
   children: ReactNode;
 }) {
-  const upsellPending = useUpsellPending();
+  /* Only the sections this sign-in has; the server refuses the rest anyway. */
+  const access = useAdminAccess();
+  const nav = NAV.filter((item) => access.sections.includes(item.id));
+  const upsellPending = useUpsellPending(access.sections.includes("upsell"));
   return (
     <MotionConfig reducedMotion="user">
       <div
@@ -123,7 +136,7 @@ export function AdminShell({
               aria-label="Admin sections"
               className="flex gap-1 overflow-x-auto border-b border-pf-border pb-3 lg:flex-col lg:border-b-0 lg:pb-0"
             >
-              {NAV.map((item) => {
+              {nav.map((item) => {
                 const active = item.id === current;
                 return (
                   <Link
@@ -170,6 +183,9 @@ export function AdminShell({
                 >
                   <Icon name="LogOut" size={15} />
                   Sign out
+                  {access.username && (
+                    <span className="font-normal text-pf-faint">· {access.username}</span>
+                  )}
                 </button>
               </form>
             </nav>
