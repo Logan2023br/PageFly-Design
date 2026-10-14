@@ -675,11 +675,30 @@ export type CollectionSetRecord = {
   position: number;
   createdAt: string;
   updatedAt: string;
+  /** who on the TS team is checking the set's .pagefly files, or null */
+  review: CollectionReview | null;
   pages: CollectionPageMeta[];
 };
 
+/**
+ * The TS team's check of a set: one reviewer takes it, downloads the files,
+ * and marks it done. Kept apart from the settings, so saving a set never
+ * clears a review and a review never moves the set's "updated" date.
+ */
+export const COLLECTION_REVIEWERS = ["Max", "Aasim", "Alfie"] as const;
+export type CollectionReviewer = (typeof COLLECTION_REVIEWERS)[number];
+export type CollectionReview = {
+  reviewer: CollectionReviewer;
+  startedAt: string;
+  /** null while the review is under way */
+  doneAt: string | null;
+};
+
 /** What an admin edits on a set; the pages are edited on their own. */
-export type CollectionSetInput = Omit<CollectionSetRecord, "createdAt" | "updatedAt" | "pages">;
+export type CollectionSetInput = Omit<
+  CollectionSetRecord,
+  "createdAt" | "updatedAt" | "review" | "pages"
+>;
 
 /** Thrown by either driver when a slug is already used, so a route can say
     which field is wrong instead of answering 500. */
@@ -928,6 +947,8 @@ export type Repo = {
   deleteCollectionSet(id: string): Promise<boolean>;
   /** rewrites `position` to the order given; ids not listed keep theirs */
   orderCollectionSets(ids: string[]): Promise<void>;
+  /** sets or clears the TS review, leaving `updatedAt` alone */
+  setCollectionReview(id: string, review: CollectionReview | null): Promise<void>;
   /** insert or update a page's metadata, leaving its files alone */
   saveCollectionPage(setId: string, page: CollectionPageInput): Promise<void>;
   deleteCollectionPage(setId: string, pageId: string): Promise<boolean>;

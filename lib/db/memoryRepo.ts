@@ -21,6 +21,7 @@ import type {
   ReferralRecord,
   CollectionPageMeta,
   CollectionSetInput,
+  CollectionReview,
   CollectionSetRecord,
   TrainingItem,
   TrainingSection,
@@ -62,7 +63,11 @@ type Shape = {
   events: EventRecord[];
   modelCalls: ModelCallRecord[];
   /* Files as base64 for the same reason `pageFiles` are. */
-  collectionSets: (CollectionSetInput & { createdAt: string; updatedAt: string })[];
+  collectionSets: (CollectionSetInput & {
+    createdAt: string;
+    updatedAt: string;
+    review?: CollectionReview | null;
+  })[];
   collectionPages: (Omit<CollectionPageMeta, "htmlSize" | "pageflySize"> & {
     setId: string;
     html: string | null;
@@ -173,6 +178,7 @@ export function createMemoryRepo(file: string): Repo {
     /* A file written before `visibility` has `visible: boolean` instead. */
     visibility:
       set.visibility ?? ((set as { visible?: boolean }).visible === false ? "hidden" : "visible"),
+    review: set.review ?? null,
     pages: data.collectionPages
       .filter((p) => p.setId === set.id)
       .sort((a, b) => a.position - b.position || a.updatedAt.localeCompare(b.updatedAt))
@@ -605,6 +611,14 @@ export function createMemoryRepo(file: string): Repo {
         const set = data.collectionSets.find((s) => s.id === id);
         if (set) set.position = i + 1;
       });
+      flush();
+    },
+
+    async setCollectionReview(id, review) {
+      sync();
+      const set = data.collectionSets.find((s) => s.id === id);
+      if (!set) return;
+      set.review = review;
       flush();
     },
 

@@ -8,6 +8,7 @@ import type { CollectionSetRecord } from "@/lib/db/types";
 import { Button, Icon, Panel } from "../../ui";
 import { PageThumb } from "../../landing/PagePreview";
 import { AccessBadge, VisibilityBadge, api } from "./shared";
+import { TsReview } from "./TsReview";
 
 /* ==========================================================================
    /design/admin/collections — every set, in the order the public page shows
@@ -20,7 +21,8 @@ import { AccessBadge, VisibilityBadge, api } from "./shared";
 
    THE COMMON ACTS ARE ON THE ROW. Hiding a set, moving it and opening it live
    are one press each without opening the editor; only changing what is IN the
-   set needs the editor.
+   set needs the editor. The TS team's review sits above them — see TsReview.
+   None of these presses is an analytics event: the counts are the public's.
    ========================================================================== */
 
 export function CollectionSetsAdmin({
@@ -281,45 +283,53 @@ export function CollectionSetsAdmin({
                     </p>
                   </div>
 
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={set.visibility === "hidden" ? "Eye" : "EyeOff"}
-                      onClick={() => void toggle(set)}
-                      disabled={busy !== null}
-                    >
-                      {set.visibility === "hidden" ? "Show" : "Hide"}
-                    </Button>
-                    <Link
-                      href={`/collection-pages/${set.slug}`}
-                      target="_blank"
-                      aria-label={`Open ${set.name} on the public page`}
-                      title={
-                        set.visibility === "hidden"
-                          ? "Preview (only admins can see it)"
-                          : "Open the public page"
+                  <div className="flex shrink-0 flex-col items-end gap-2">
+                    <TsReview
+                      set={set}
+                      onSaved={(saved) =>
+                        setSets((all) => all.map((s) => (s.id === saved.id ? saved : s)))
                       }
-                      className="grid size-8 place-items-center rounded-pf-md border border-pf-border text-pf-body transition-colors hover:border-pf-border-hi hover:text-pf-text"
-                    >
-                      <Icon name="ArrowUpRight" size={14} />
-                    </Link>
-                    <Link
-                      href={`/design/admin/collections/${set.id}`}
-                      className="inline-flex h-8 items-center gap-1.5 rounded-pf-md bg-pf-primary px-3 text-[12.5px] font-semibold text-white shadow-pf-button transition-colors hover:bg-pf-primary-hi"
-                    >
-                      <Icon name="Pencil" size={13} />
-                      Edit
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={() => remove(set)}
-                      disabled={busy !== null}
-                      aria-label={`Delete ${set.name}`}
-                      className="grid size-8 place-items-center rounded-pf-md text-pf-faint transition-colors hover:bg-pf-danger/10 hover:text-pf-danger"
-                    >
-                      <Icon name="Trash2" size={14} />
-                    </button>
+                    />
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={set.visibility === "hidden" ? "Eye" : "EyeOff"}
+                        onClick={() => void toggle(set)}
+                        disabled={busy !== null}
+                      >
+                        {set.visibility === "hidden" ? "Show" : "Hide"}
+                      </Button>
+                      <Link
+                        href={`/collection-pages/${set.slug}`}
+                        target="_blank"
+                        aria-label={`Open ${set.name} on the public page`}
+                        title={
+                          set.visibility === "hidden"
+                            ? "Preview (only admins can see it)"
+                            : "Open the public page"
+                        }
+                        className="grid size-8 place-items-center rounded-pf-md border border-pf-border text-pf-body transition-colors hover:border-pf-border-hi hover:text-pf-text"
+                      >
+                        <Icon name="ArrowUpRight" size={14} />
+                      </Link>
+                      <Link
+                        href={`/design/admin/collections/${set.id}`}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-pf-md bg-pf-primary px-3 text-[12.5px] font-semibold text-white shadow-pf-button transition-colors hover:bg-pf-primary-hi"
+                      >
+                        <Icon name="Pencil" size={13} />
+                        Edit
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => remove(set)}
+                        disabled={busy !== null}
+                        aria-label={`Delete ${set.name}`}
+                        className="grid size-8 place-items-center rounded-pf-md text-pf-faint transition-colors hover:bg-pf-danger/10 hover:text-pf-danger"
+                      >
+                        <Icon name="Trash2" size={14} />
+                      </button>
+                    </div>
                   </div>
                 </Panel>
               </li>

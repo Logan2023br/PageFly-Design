@@ -12,6 +12,7 @@ import type {
   StoreSummary,
   CollectionOrderRecord,
   CollectionPageMeta,
+  CollectionReviewer,
   CollectionSetRecord,
   ReferralMemberRecord,
   ReferralRecord,
@@ -463,6 +464,10 @@ create table if not exists collection_pages (
    /collection-pages-preview, not on /collection-pages. A preview set keeps
    visible = false, so a build from before this column reads it as hidden. */
 alter table collection_sets add column if not exists preview boolean not null default false;
+/* The TS team's review — see CollectionReview. */
+alter table collection_sets add column if not exists review_by text;
+alter table collection_sets add column if not exists review_started_at timestamptz;
+alter table collection_sets add column if not exists review_done_at timestamptz;
 
 /* No foreign key to the set: an order outlives the set it was for. */
 create table if not exists collection_orders (
@@ -548,6 +553,13 @@ function toCollectionSet(
     position: Number(r.position ?? 0),
     createdAt: iso(r.created_at),
     updatedAt: iso(r.updated_at),
+    review: r.review_by
+      ? {
+          reviewer: r.review_by as CollectionReviewer,
+          startedAt: iso(r.review_started_at),
+          doneAt: r.review_done_at ? iso(r.review_done_at) : null,
+        }
+      : null,
     pages: pages
       .filter((p) => String(p.set_id) === String(r.id))
       .map(
@@ -1337,6 +1349,16 @@ const toJob = (r: Record<string, unknown>): JobRecord => ({
            from unnest($1::text[]) with ordinality as o(id, i)
           where s.id = o.id`,
         [ids],
+      );
+    },
+
+    async setCollectionReview(id, review) {
+      await ready();
+      await db.query(
+        `update collection_sets
+            set review_by = $2, review_started_at = $3, review_done_at = $4
+          where id = $1`,
+        [id, review?.reviewer ?? null, review?.startedAt ?? null, review?.doneAt ?? null],
       );
     },
 
