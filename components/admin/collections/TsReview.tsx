@@ -14,7 +14,7 @@ import { api } from "./shared";
 /* ==========================================================================
    The TS team's check of one set, on its row in the admin list.
 
-     nobody yet   [TS Review] → a dialog: pick Max, Aasim or Alfie, Confirm
+     nobody yet   [TS Review] → a dialog: pick a TS member, Confirm
      reviewing    [Download .pagefly]  Alfie Reviewing · 14/10/2026 10:22:05  [Done]
      done         [Download .pagefly]  Alfie Done · 14/10/2026 11:03:41
 

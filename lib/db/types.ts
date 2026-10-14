@@ -685,7 +685,7 @@ export type CollectionSetRecord = {
  * and marks it done. Kept apart from the settings, so saving a set never
  * clears a review and a review never moves the set's "updated" date.
  */
-export const COLLECTION_REVIEWERS = ["Max", "Aasim", "Alfie"] as const;
+export const COLLECTION_REVIEWERS = ["Max", "Aasim", "Alfie", "Hew", "Logan", "Bevis"] as const;
 export type CollectionReviewer = (typeof COLLECTION_REVIEWERS)[number];
 export type CollectionReview = {
   reviewer: CollectionReviewer;
