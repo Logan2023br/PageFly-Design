@@ -18,6 +18,8 @@ import { api } from "./shared";
      reviewing    [Download .pagefly]  Alfie Reviewing · 14/10/2026 10:22:05  [Done]
      done         [Download .pagefly]  Alfie Done · 14/10/2026 11:03:41
 
+   Either of the last two can be reset, after a confirm, back to nobody.
+
    The download is the whole set as one .pagefly — the same file the public
    page hands out, which an admin may fetch even for a hidden or paid set.
    ========================================================================== */
@@ -45,7 +47,9 @@ export function TsReview({
   const review = set.review;
   const hasFiles = set.pages.some((p) => p.pageflySize !== null);
 
-  const send = async (body: { reviewer: CollectionReviewer } | { done: true }) => {
+  const send = async (
+    body: { reviewer: CollectionReviewer } | { done: true } | { reset: true },
+  ) => {
     setBusy(true);
     setError(null);
     const res = await api<{ set: CollectionSetRecord }>(
@@ -106,6 +110,23 @@ export function TsReview({
               {busy ? "Saving…" : "Done"}
             </Button>
           )}
+          <Button
+            variant="quiet"
+            size="sm"
+            icon="RotateCcw"
+            title="Clear this review, so the set can be taken again"
+            onClick={() => {
+              if (
+                window.confirm(
+                  `Reset the review of “${set.name}”? ${review.reviewer}'s status is cleared.`,
+                )
+              )
+                void send({ reset: true });
+            }}
+            disabled={busy}
+          >
+            Reset
+          </Button>
         </>
       ) : (
         <Button variant="ghost" size="sm" icon="Users" onClick={() => setOpen(true)}>

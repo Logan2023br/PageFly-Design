@@ -9,6 +9,7 @@ import { fail, firstIssue, guard } from "../../shared";
 
    PUT   { reviewer }   a TS member takes the set: Reviewing, from now
    PUT   { done: true } the review is finished: Done, at now
+   PUT   { reset: true } back to nobody, so the set can be taken again
 
    The times are the server's, so two reviewers on two clocks still read one
    order. The answer is the whole set again, as on the other set routes.
@@ -19,6 +20,7 @@ export const dynamic = "force-dynamic";
 const body = z.union([
   z.object({ reviewer: z.enum(COLLECTION_REVIEWERS) }),
   z.object({ done: z.literal(true) }),
+  z.object({ reset: z.literal(true) }),
 ]);
 
 export async function PUT(
@@ -42,6 +44,8 @@ export async function PUT(
       startedAt: now,
       doneAt: null,
     });
+  } else if ("reset" in parsed.data) {
+    await repo.setCollectionReview(id, null);
   } else {
     if (!set.review) return fail("Nobody is reviewing this set yet.");
     if (!set.review.doneAt) await repo.setCollectionReview(id, { ...set.review, doneAt: now });
