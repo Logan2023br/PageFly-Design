@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { STATUS_LABEL, statusTone } from "@/lib/upsell/format";
+import { Icon } from "../../ui";
 import { api } from "../collections/shared";
 
 /* The small pieces every Upsell screen uses. */
@@ -86,6 +87,26 @@ export function PageThumb({ designId, slot, version, label, height = 220 }: { de
         style={{ width: `${100 / scale}%`, height: height / scale, transform: `scale(${scale})` }}
       />
     </div>
+  );
+}
+
+/**
+ * The lead's Crisp conversation, in a new tab — or "—" without one. Only an
+ * https link is drawn: the script writes ticket_link, and a stored
+ * `javascript:` URL must never become something an admin clicks.
+ */
+export function CrispLink({ href, label = "Mở Crisp" }: { href: string | null | undefined; label?: string }) {
+  if (!href || !/^https:\/\//i.test(href)) return <span className="text-pf-faint">—</span>;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-pf-md border border-pf-border px-2.5 text-[12px] font-semibold text-pf-body transition-colors hover:border-pf-border-hi hover:bg-pf-card-hi hover:text-pf-text"
+    >
+      <Icon name="MessageSquare" size={13} />
+      {label}
+    </a>
   );
 }
 

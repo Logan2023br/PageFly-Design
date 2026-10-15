@@ -5,7 +5,7 @@ import { KIND_LABEL, MESSAGE_STATUS_LABEL, fmtVN } from "@/lib/upsell/format";
 import { PAGE_LABELS, PAGE_TYPES, REPEATED_FAILURE, type EventRow, type MessageRow, type PageType } from "@/lib/upsell/types";
 import { Button, Icon } from "../../ui";
 import { FIELD, FIELD_LABEL, Segmented } from "../collections/shared";
-import { ErrorLine, Pill, useAct } from "./bits";
+import { CrispLink, ErrorLine, Pill, useAct } from "./bits";
 
 /* ==========================================================================
    The lead page's interactive parts: the two previews, the review actions,
@@ -241,7 +241,7 @@ export function ReviewActions({ leadId, draft, pageTypes }: { leadId: string; dr
 
 /* ---- messages --------------------------------------------------------------- */
 
-export function LeadMessages({ leadId, messages }: { leadId: string; messages: MessageRow[] }) {
+export function LeadMessages({ leadId, messages, ticketLink }: { leadId: string; messages: MessageRow[]; ticketLink: string | null }) {
   const [compose, setCompose] = useState(false);
   const [text, setText] = useState("");
   const [run, busy, error] = useAct();
@@ -276,14 +276,14 @@ export function LeadMessages({ leadId, messages }: { leadId: string; messages: M
       )}
       {messages.length === 0 && <p className="text-[12.5px] text-pf-faint">Chưa có tin nào.</p>}
       {messages.map((m) => (
-        <MessageItem key={m.id} m={m} />
+        <MessageItem key={m.id} m={m} ticketLink={ticketLink} />
       ))}
       <ErrorLine error={error} />
     </section>
   );
 }
 
-function MessageItem({ m }: { m: MessageRow }) {
+function MessageItem({ m, ticketLink }: { m: MessageRow; ticketLink: string | null }) {
   const [run, busy, error] = useAct();
   const url = `/api/admin/upsell/messages/${m.id}`;
   const tone = m.status === "sent" ? "ok" : m.status === "failed" ? "bad" : m.status === "rejected" ? "muted" : "warn";
@@ -298,6 +298,7 @@ function MessageItem({ m }: { m: MessageRow }) {
           {m.approved_by && ` · duyệt bởi ${m.approved_by.replace(/^admin:/, "")} ${fmtVN(m.approved_at)}`}
           {m.sent_at && ` · gửi ${fmtVN(m.sent_at)}`}
         </span>
+        {m.status === "sent" && ticketLink && <CrispLink href={ticketLink} label="Mở ticket Crisp" />}
       </div>
       <pre className="max-h-[200px] overflow-auto whitespace-pre-wrap font-mono text-[12px] text-pf-body">{m.content}</pre>
       {m.error && (

@@ -209,7 +209,7 @@ def test_send_respects_hours_and_reports(bpu, monkeypatch, capsys):
     out = json.loads(capsys.readouterr().out)
     assert out["waiting_for_business_hours"] == 1
     assert sorted(out["sent"]) == ["L_m_fu:followup1", "L_m_now:initial"]
-    assert out["failed"] == ["m_noemail"]
+    assert out["failed"] == [{"id": "m_noemail", "lead_id": "L_m_noemail", "error": "No email"}]
 
     assert "m_night" not in pfd.results
     assert pfd.results["m_noemail"] == {"status": "failed", "error": "No email"}
@@ -223,9 +223,13 @@ def test_send_respects_hours_and_reports(bpu, monkeypatch, capsys):
     assert ("POST", "/conversation", {}) in posts
     notes = [b for m, p, b in posts if p.endswith("/message") and b["type"] == "note"]
     assert len(notes) == 1 and "L_m_now" in notes[0]["content"], "only the first message carries the internal note"
+    texts = [b for m, p, b in posts if p.endswith("/message") and b["type"] == "text"]
+    assert texts and all(b["user"] == bpu.CRISP_SENDER for b in texts), "customer messages carry the PageFly Team avatar"
+    assert bpu.CRISP_SENDER["user_id"] and bpu.CRISP_SENDER["avatar"].startswith("https://image.crisp.chat/")
+    assert notes[0]["user"] == {"type": "website", "nickname": "PageFly Team"}, "the internal note is unchanged"
 
 
-def test_send_reports_crisp_failure(bpu, monkeypatch):
+def test_send_reports_crisp_failure(bpu, monkeypatch, capsys):
     monkeypatch.setattr(bpu, "local_hour", lambda tz: 12)
     pfd, w = bpu.FAKE_PFD, bpu.FAKE_WORLD
     pfd.approved = [outgoing("m1")]
@@ -239,6 +243,14 @@ def test_send_reports_crisp_failure(bpu, monkeypatch):
     monkeypatch.setattr(type(w), "__call__", broken)
     bpu.cmd_send([])
     assert pfd.results["m1"]["status"] == "failed" and pfd.results["m1"]["error"] == "Crisp create 500"
+    out = json.loads(capsys.readouterr().out)
+    assert out["failed"] == [{"id": "m1", "lead_id": "L_m1", "error": "Crisp create 500"}], "the reason is in the output"
+
+
+def test_templates_put_bold_outside_the_link(bpu):
+    """Crisp does not render ** inside a link's text."""
+    for tpl in (bpu.FU1, bpu.FU2, bpu.REVIEW):
+        assert "[**" not in tpl and "**[" in tpl
 
 
 # ---------------------------------------------------------------- auth

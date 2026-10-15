@@ -7,7 +7,7 @@ import type { MessageListRow } from "@/lib/upsell/adminQueries";
 import { REPEATED_FAILURE } from "@/lib/upsell/types";
 import { Button } from "../../ui";
 import { FIELD } from "../collections/shared";
-import { ErrorLine, Pill, useAct } from "./bits";
+import { CrispLink, ErrorLine, Pill, useAct } from "./bits";
 import { Empty } from "./PendingPages";
 
 /* ==========================================================================
@@ -129,7 +129,12 @@ function MessageCard({
           {mode === "failed" && m.attempts >= REPEATED_FAILURE && <Pill tone="bad">Lỗi nhiều lần</Pill>}
         </div>
         {mode === "failed" ? (
-          <p className="text-[12.5px] font-medium text-pf-danger">{m.error || "Không rõ lý do"}</p>
+          <>
+            <p className="text-[12.5px] font-medium text-pf-danger">{m.error || "Không rõ lý do"}</p>
+            <p className="flex items-center gap-2 text-[11.5px] text-pf-faint">
+              Ticket: <CrispLink href={m.ticket_link} />
+            </p>
+          </>
         ) : (
           <p className="text-[12.5px] text-pf-body">{draftReason(m)}</p>
         )}

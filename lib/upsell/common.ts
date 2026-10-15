@@ -106,7 +106,8 @@ export const DEFAULT_INITIAL_TEMPLATE =
   "Welcome to PageFly! To help you get started, our team designed 2 pages for your store, " +
   "built with your own products: a **{page1_label}** and a **{page2_label}**. They're free, " +
   "and you can import them into PageFly in about a minute.\n\n" +
-  "👉 [**See your 2 pages**]({link})\n\n" +
+  /* Bold around the link, not inside it: Crisp does not render ** in a link's text. */
+  "👉 **[See your 2 pages]({link})**\n\n" +
   "Want a different style or another page type? Just reply here and I will rebuild it for you.\n\n" +
   "Best regards,\n**{pic} – PageFly Support**";
 

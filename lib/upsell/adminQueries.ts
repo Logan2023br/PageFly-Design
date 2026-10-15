@@ -99,6 +99,7 @@ export type MessageListRow = MessageRow & {
   sentiment: string | null;
   feedback_summary: string | null;
   crisp_session: string | null;
+  ticket_link: string | null;
 };
 
 export async function listMessages(status: "pending_review" | "approved" | "failed", f: Filters): Promise<Paged<MessageListRow>> {
@@ -115,7 +116,7 @@ export async function listMessages(status: "pending_review" | "approved" | "fail
   const pg = paging(total, f.page);
   const { rows } = await p.query<MessageListRow>(
     `select m.*, l.store_domain, l.store_name, l.timezone, l.country, l.pic, l.status as lead_status, l.sent_at as sent_at_lead,
-            l.sentiment, l.feedback_summary, l.crisp_session,
+            l.sentiment, l.feedback_summary, l.crisp_session, l.ticket_link,
             coalesce((select count(distinct visitor_id) from upsell_events e where e.design_id = d.id and e.actor='customer' and e.type='view'),0) as unique_views,
             coalesce((select count(*) from upsell_events e where e.design_id = d.id and e.actor='customer' and e.type='download'),0) as downloads,
             (select rating from upsell_events e where e.design_id = d.id and e.actor='customer' and e.type='feedback' and e.rating is not null order by created_at desc limit 1) as rating

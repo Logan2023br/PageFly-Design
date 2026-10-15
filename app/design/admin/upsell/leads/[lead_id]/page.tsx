@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { adminGate } from "@/components/admin/adminGate";
-import { Pill, StatusBadge } from "@/components/admin/upsell/bits";
+import { CrispLink, Pill, StatusBadge } from "@/components/admin/upsell/bits";
 import { LeadMessages, PagePreviews, ReviewActions, Timeline } from "@/components/admin/upsell/LeadDetailParts";
 import { filterOptions, leadDetail } from "@/lib/upsell/adminQueries";
 import { customerClock, daysLeft, fmtVN, handleOf, money } from "@/lib/upsell/format";
@@ -84,11 +84,7 @@ export default async function LeadPage(props: PageProps<"/design/admin/upsell/le
                   <a className={ext} href={`https://ac2.pagefly.io/app-data/stores/${l.store_domain}`} target="_blank" rel="noreferrer">
                     AC2
                   </a>
-                  {l.ticket_link && (
-                    <a className={ext} href={l.ticket_link} target="_blank" rel="noreferrer">
-                      Ticket Crisp
-                    </a>
-                  )}
+                  {l.ticket_link && <CrispLink href={l.ticket_link} label="Mở ticket Crisp" />}
                   {design && (
                     <a className={ext} href={`/new-page?id=${design.design.id}`} target="_blank" rel="noreferrer">
                       Trang khách
@@ -158,7 +154,7 @@ export default async function LeadPage(props: PageProps<"/design/admin/upsell/le
           {l.status === "pending_review" && design && (
             <ReviewActions leadId={l.lead_id} draft={initialDraft(l, design.design.id, cfg)} pageTypes={[l.page1_type, l.page2_type]} />
           )}
-          <LeadMessages leadId={l.lead_id} messages={d.messages} />
+          <LeadMessages leadId={l.lead_id} messages={d.messages} ticketLink={l.ticket_link} />
           <Timeline leadId={l.lead_id} events={d.events} pic={l.pic} pics={options.pics} notes={l.internal_notes} />
         </div>
       </div>

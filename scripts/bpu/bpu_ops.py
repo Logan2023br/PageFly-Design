@@ -24,6 +24,8 @@ PFD = os.environ.get("PFD_BASE", "https://pagefly-design.pagefly.io").rstrip("/"
 AC2 = "https://ac2.pagefly.io/api/app-data/stores"
 CRISP_WID = os.environ.get("CRISP_WEBSITE_ID", "7cd1799e-e8eb-476e-8cb7-33778fc41c2a")
 CRISP = f"https://api.crisp.chat/v1/website/{CRISP_WID}"
+CRISP_SENDER = {"type": "website", "user_id": "11c92319-89c1-42be-b4da-2bf5e40568c3", "nickname": "PageFly Team",
+                "avatar": "https://image.crisp.chat/avatar/operator/11c92319-89c1-42be-b4da-2bf5e40568c3/120/?avatar=https%3A%2F%2Fstorage.crisp.chat%2Fusers%2Favatar%2Foperator%2F61a991f5c29c8c00%2F83c74eca5527aaa97d9821735a6a1e_90vs0g.png"}
 SHEET_ID = os.environ.get("SHEET_ID", "1qH3yMamu2V1FUGcMeWeRV7SLf-eR97-wet5B84djUCA")
 UA = "Mozilla/5.0 (compatible; PageFly-BPU/1.0)"
 LOG = []
@@ -285,14 +287,14 @@ def cmd_sync(args):
 
 FU1 = ("{hi}\n\nJust a quick reminder: the 2 pages I designed for your store are still waiting for you. "
        "They're built with your own products, so you can publish them as they are or tweak them in PageFly.\n\n"
-       "👉 [**See your 2 pages**]({link})\n\nWant a different style or another page type? Reply here and I will rebuild it.\n\n"
+       "👉 **[See your 2 pages]({link})**\n\nWant a different style or another page type? Reply here and I will rebuild it.\n\n"
        "Best regards,\n**{pic} – PageFly Support**")
 FU2 = ("{hi}\n\n{seen}If anything stops you from using them (import steps, design, or something missing), tell me and I will sort it out for you. "
        "Importing takes about a minute: download the .pagefly file, then import it in PageFly.\n\n"
-       "👉 [**Open your pages**]({link})\n\nBest regards,\n**{pic} – PageFly Support**")
+       "👉 **[Open your pages]({link})**\n\nBest regards,\n**{pic} – PageFly Support**")
 REVIEW = ("{hi}\n\nThank you for the kind words, it means a lot to our team! 🙌\n\n"
           "If PageFly has been helpful so far, would you mind leaving us a quick review on the Shopify App Store? "
-          "It takes about 30 seconds and helps other merchants find us.\n\n👉 [**Leave a review**]({review})\n\n"
+          "It takes about 30 seconds and helps other merchants find us.\n\n👉 **[Leave a review]({review})**\n\n"
           "And if you need anything else for your pages, just reply here.\n\nBest regards,\n**{pic} – PageFly Support**")
 
 
@@ -404,6 +406,11 @@ def cmd_send(args):
     if s != 200:
         sys.exit("Cannot read approved messages")
     sent, failed, waiting = [], [], 0
+
+    def fail(m, error):  # report it, and keep the reason for this run's output
+        pfd("POST", f"/api/upsell/messages/{m['id']}/result", {"status": "failed", "error": error})
+        failed.append({"id": m["id"], "lead_id": m.get("lead_id"), "error": error})
+
     for m in j.get("messages", [])[:30]:
         L = m.get("lead") or {}
         h = local_hour(L.get("timezone"))
@@ -411,14 +418,14 @@ def cmd_send(args):
             waiting += 1
             continue
         if not L.get("email"):
-            pfd("POST", f"/api/upsell/messages/{m['id']}/result", {"status": "failed", "error": "No email"}); failed.append(m["id"]); continue
+            fail(m, "No email"); continue
         sid = L.get("crisp_session")
         result = {"status": "sent", "sent_at": iso()}
         if not sid:  # first message: new conversation
             cs, cj = crisp("POST", "/conversation", {})
             sid = (cj.get("data") or {}).get("session_id") if isinstance(cj, dict) else None
             if not sid:
-                pfd("POST", f"/api/upsell/messages/{m['id']}/result", {"status": "failed", "error": f"Crisp create {cs}"}); failed.append(m["id"]); continue
+                fail(m, f"Crisp create {cs}"); continue
             name = L.get("store_name") or "Merchant"
             crisp("PATCH", f"/conversation/{sid}/meta", {"email": L["email"], "nickname": name,
                                                          "subject": f"We designed 2 pages for {name}"})
@@ -427,9 +434,9 @@ def cmd_send(args):
                            "plan_at_send": st.get("pageflyPlan") or "Free", "price_at_send": float(st.get("pageflyPrice") or 0),
                            "pages_at_send": int(st.get("totalPages") or 0)})
         ms, mj = crisp("POST", f"/conversation/{sid}/message", {"type": "text", "from": "operator", "origin": "chat",
-                                                               "content": m["content"], "user": {"type": "website", "nickname": "PageFly Team"}})
+                                                               "content": m["content"], "user": CRISP_SENDER})
         if ms >= 300 or (isinstance(mj, dict) and mj.get("error")):
-            pfd("POST", f"/api/upsell/messages/{m['id']}/result", {"status": "failed", "error": f"Crisp message {ms}"}); failed.append(m["id"]); continue
+            fail(m, f"Crisp message {ms}"); continue
         if m.get("kind") == "initial":
             crisp("POST", f"/conversation/{sid}/message", {"type": "note", "from": "operator", "origin": "chat",
                   "content": f"BPU auto-build program (2 free pages). Lead {m['lead_id']}. Preview: {L.get('design_url')}. "

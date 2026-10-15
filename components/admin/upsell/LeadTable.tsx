@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { daysLeft, fmtVN, hoursSince, money } from "@/lib/upsell/format";
 import type { LeadListRow } from "@/lib/upsell/leads";
 import { Button } from "../../ui";
-import { ErrorLine, Pill, StatusBadge, useAct } from "./bits";
+import { CrispLink, ErrorLine, Pill, StatusBadge, useAct } from "./bits";
 import { Empty } from "./PendingPages";
 
 /* ==========================================================================
@@ -18,7 +19,12 @@ export type TableVariant = "tracking" | "upgraded" | "queue" | "control" | "clos
 const yes = (b: boolean | null | undefined) => (b ? "✓" : "—");
 
 export function LeadTable({ rows, variant }: { rows: LeadListRow[]; variant: TableVariant }) {
+  const router = useRouter();
   if (rows.length === 0) return <Empty text="Không có lead nào." />;
+  /* On Đang theo dõi the whole row opens the lead — except a press on a link
+     or button inside it, which does its own thing. */
+  const rowOpens = variant === "tracking";
+  const ticket = { head: "Ticket", cell: (l: LeadListRow) => <CrispLink href={l.ticket_link} /> };
   const cols: { head: string; cell: (l: LeadListRow) => React.ReactNode; className?: string }[] = [
     {
       head: "Store",
@@ -66,6 +72,7 @@ export function LeadTable({ rows, variant }: { rows: LeadListRow[]; variant: Tab
           return d === null ? "—" : d <= 0 ? <span className="text-pf-danger">Hết hạn</span> : `${d} ngày`;
         },
       },
+      ticket,
     );
   } else if (variant === "upgraded") {
     cols.push(
@@ -78,6 +85,7 @@ export function LeadTable({ rows, variant }: { rows: LeadListRow[]; variant: Tab
         cell: (l) => (l.sent_at && l.upgraded_at ? `${Math.max(0, Math.round((new Date(l.upgraded_at).getTime() - new Date(l.sent_at).getTime()) / 86_400_000))} ngày` : "—"),
       },
       { head: "PIC", cell: (l) => l.pic ?? "—" },
+      ticket,
     );
   } else if (variant === "queue") {
     cols.push(
@@ -135,7 +143,18 @@ export function LeadTable({ rows, variant }: { rows: LeadListRow[]; variant: Tab
         </thead>
         <tbody>
           {rows.map((l) => (
-            <tr key={l.lead_id} className="border-t border-pf-border align-top">
+            <tr
+              key={l.lead_id}
+              onClick={
+                rowOpens
+                  ? (e) => {
+                      if ((e.target as Element).closest("a, button, input, textarea, select")) return;
+                      router.push(`/design/admin/upsell/leads/${l.lead_id}`);
+                    }
+                  : undefined
+              }
+              className={`border-t border-pf-border align-top ${rowOpens ? "cursor-pointer transition-colors hover:bg-pf-card-hi/60" : ""}`}
+            >
               {cols.map((c) => (
                 <td key={c.head} className="px-3 py-2.5 text-pf-body">
                   {c.cell(l)}

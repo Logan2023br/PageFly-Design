@@ -339,6 +339,12 @@ async function main() {
     const list = await adminQueries.listMessages("failed", {});
     const row = list.rows.find((m) => m.id === id);
     check(list.total === 1 && row?.error === "Crisp create 401" && row.attempts === 1 && row.store_domain === "alpha.myshopify.com", "Lỗi gửi lists it with store, reason and attempts", list);
+    const leadA = await leads.getLead("L261012AAAA");
+    check(Boolean(leadA?.ticket_link) && row?.ticket_link === leadA?.ticket_link, "Lỗi gửi carries the lead's Crisp ticket", row?.ticket_link);
+    const tracking = await adminQueries.listLeadTab("tracking", {});
+    check(tracking.rows.some((l) => l.lead_id === "L261012AAAA" && l.ticket_link === leadA?.ticket_link), "Đang theo dõi rows carry the ticket", tracking.rows.map((l) => l.ticket_link));
+    const { DEFAULT_INITIAL_TEMPLATE } = await import("../lib/upsell/common");
+    check(DEFAULT_INITIAL_TEMPLATE.includes("👉 **[See your 2 pages]({link})**") && !DEFAULT_INITIAL_TEMPLATE.includes("[**"), "first message: bold outside the link, as Crisp renders it");
     check((await adminQueries.tabCounts()).failed === 1, "the tab counts it");
     check((await review.pendingCounts()).failed === 1, "the sidebar counts it");
 
