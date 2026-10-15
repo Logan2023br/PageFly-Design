@@ -363,7 +363,7 @@ async function main() {
       "-c",
       "import hashlib;d='zircon.myshopify.com';h=int(hashlib.sha1(d.encode()).hexdigest(),16);n=h%36**4;s=''\nfor _ in range(4):\n s='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'[n%36]+s;n//=36\nprint(s)",
     ]).toString().trim();
-    check(leads.leadIdFor("zircon.myshopify.com").leadId.slice(7) === py, "lead id suffix matches niu_ops.py", py);
+    check(leads.leadIdFor("zircon.myshopify.com").leadId.slice(7) === py, "lead id suffix matches bpu_ops.py", py);
   }
 
   await closeUpsellPool();

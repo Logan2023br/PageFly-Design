@@ -454,7 +454,7 @@ export async function setBuildStatus(
 
 /* ---- ids ----------------------------------------------------------------- */
 
-/** The same id `niu_ops.py`'s `lead_id_for` makes: L + the date in Vietnam +
+/** The same id `bpu_ops.py`'s `lead_id_for` makes: L + the date in Vietnam +
     four base-36 characters of the domain's SHA-1. Used when an admin turns a
     skipped install into a lead by hand, so the script recognises it. */
 export function leadIdFor(domain: string, now = new Date()): { leadId: string; hash: bigint } {

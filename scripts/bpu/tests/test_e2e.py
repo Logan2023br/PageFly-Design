@@ -1,9 +1,9 @@
-"""niu_ops.py against a REAL PageFly Design server — the contract, proven.
+"""bpu_ops.py against a REAL PageFly Design server — the contract, proven.
 
 Only AC2, Crisp and storefronts are faked; every PageFly Design call goes over
 HTTP to the server at PFD_E2E_BASE, which must run on a throwaway Postgres.
 
-    PFD_E2E_BASE=http://localhost:3100 PFD_E2E_KEY=<UPSELL_API_KEY> pytest scripts/niu/tests/test_e2e.py
+    PFD_E2E_BASE=http://localhost:3100 PFD_E2E_KEY=<UPSELL_API_KEY> pytest scripts/bpu/tests/test_e2e.py
 
 Walks one lead the whole way: sync → Builder marks building and uploads →
 admin approves (signed in, as on the screen) → send → the customer opens the
@@ -122,7 +122,7 @@ def test_wrong_key_is_401_everywhere():
 
 
 def test_one_lead_end_to_end(live):
-    niu, world = live
+    bpu, world = live
     domain = fresh_domain()
     world.stores[domain] = {"shopDomain": domain, "createdAt": ago(0.5), "name": "E2E Chocolates", "email": "owner@e2e-choc.com",
                             "phone": "+84 900", "country": "VN", "timezone": "Asia/Ho_Chi_Minh", "shopifyPlan": "Shopify",
@@ -130,7 +130,7 @@ def test_one_lead_end_to_end(live):
     world.products[domain] = [{"title": f"Bar {i}", "product_type": "Chocolate"} for i in range(12)]
 
     # 1. sync
-    niu.cmd_sync([])
+    bpu.cmd_sync([])
     s, j = jcall("GET", "/api/upsell/installs?since_hours=2")
     assert s == 200 and any(i["store_domain"] == domain and i["lead"] is True for i in j["installs"])
     lead = lead_by_domain(domain)
@@ -191,7 +191,7 @@ def test_one_lead_end_to_end(live):
     # 5. send (fake Crisp). Only our message: other approved ones from earlier runs would be "sent" to the fake too.
     world.next_session = f"session_{lid}"
     world.stores[domain]["totalPages"] = 1
-    niu.cmd_send([])
+    bpu.cmd_send([])
     lead = lead_by_domain(domain)
     assert lead["status"] == "sent" and lead["crisp_session"] == f"session_{lid}" and lead["sent_at"]
     assert lead["ticket_link"].endswith(f"/inbox/session_{lid}/") and lead["plan_at_send"] == "Free"
@@ -219,21 +219,21 @@ def test_one_lead_end_to_end(live):
     assert lead["status"] == "downloaded" and lead["views"] == 1 and lead["downloads"] == 1, "admin download not counted"
 
     # 7. track: a reply in Crisp and an upgrade in AC2.
-    sent_ms = niu.parse_iso(lead["sent_at"]).timestamp() * 1000
+    sent_ms = bpu.parse_iso(lead["sent_at"]).timestamp() * 1000
     world.crisp_msgs[f"session_{lid}"] = [
         {"from": "operator", "type": "text", "read": True, "timestamp": sent_ms},
         {"from": "user", "type": "text", "content": "These look great!", "timestamp": sent_ms + 60_000},
     ]
     world.stores[domain].update(pageflyPlan="Silver", pageflyPrice=24, totalPages=3)
-    world.activities[domain] = [{"type": "SUBSCRIPTION_CHARGE_ACTIVATED", "occurredAt": niu.iso()}]
-    niu.cmd_track([])
+    world.activities[domain] = [{"type": "SUBSCRIPTION_CHARGE_ACTIVATED", "occurredAt": bpu.iso()}]
+    bpu.cmd_track([])
     lead = lead_by_domain(domain)
     assert lead["status"] == "upgraded" and lead["upgraded"] is True and lead["mrr_added"] == 24
     assert lead["replied"] is True and lead["message_read"] is True and lead["used_page"] is True
     assert any(c["lead_id"] == lid for c in json.load(open("replies_to_classify.json")))
 
     # A second run: the same reply is not news, and no event is written twice.
-    niu.cmd_track([])
+    bpu.cmd_track([])
     assert not any(c["lead_id"] == lid for c in json.load(open("replies_to_classify.json")))
     s, j = jcall("GET", "/api/upsell/events/export?limit=5000")
     mine = [e for e in j["events"] if e["lead_id"] == lid]
@@ -251,7 +251,7 @@ def test_one_lead_end_to_end(live):
     # 9. apply-sentiment writes the classification back.
     f = "classified.json"
     json.dump([{"lead_id": lid, "sentiment": "Positive", "summary_vi": "Khách khen", "wants_changes": False}], open(f, "w"))
-    niu.cmd_apply_sentiment([f])
+    bpu.cmd_apply_sentiment([f])
     s, j = jcall("GET", "/api/upsell/leads/export?all=1")
     L = next(l for l in j["leads"] if l["lead_id"] == lid)
     assert L["sentiment"] == "Positive" and L["feedback_summary"] == "Khách khen"

@@ -2,7 +2,7 @@
    Upsell Build Pages — the shapes, written once.
 
    Field names are snake_case on purpose and match the database columns one
-   for one: `scripts/niu/niu_ops.py` and the Builder prompt read and write
+   for one: `scripts/bpu/bpu_ops.py` and the Builder prompt read and write
    these exact names over the API, so a camelCase layer in between would be a
    translation table that one day disagrees with itself.
    ========================================================================== */

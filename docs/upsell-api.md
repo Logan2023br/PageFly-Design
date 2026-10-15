@@ -1,6 +1,6 @@
 # Upsell Build Pages — API
 
-Dùng bởi NIU Ops (`scripts/niu/niu_ops.py`) và NIU Builder. Mọi route dưới `/api/upsell/*`
+Dùng bởi BPU Ops (`scripts/bpu/bpu_ops.py`) và BPU Builder. Mọi route dưới `/api/upsell/*`
 (trừ `events` và `download`) cần header `X-API-Key` khớp `UPSELL_API_KEY` trên server.
 Sai hoặc thiếu key → `401`. Quá 300 request/phút cho một key → `429`. Không có Postgres → `503`.
 Thời gian nhận và trả đều là ISO 8601 UTC, dạng `2026-10-12T03:00:00Z`.
@@ -11,9 +11,9 @@ export PFD_API_KEY=…            # = UPSELL_API_KEY trên server
 H=(-H "X-API-Key: $PFD_API_KEY" -H "Content-Type: application/json")
 ```
 
-Tạo một lead mẫu có 2 page giả ở tab **Chờ duyệt page**: `scripts/niu/upsell-demo.sh`.
+Tạo một lead mẫu có 2 page giả ở tab **Chờ duyệt page**: `scripts/bpu/upsell-demo.sh`.
 
-## Script (NIU Ops)
+## Script (BPU Ops)
 
 ```bash
 # Cài đặt

@@ -2,9 +2,9 @@
 # ==========================================================================
 # A sample lead, built with fake files, landed in "Chờ duyệt page".
 #
-#     PFD_BASE=https://pagefly-design.pagefly.io PFD_API_KEY=… scripts/niu/upsell-demo.sh
+#     PFD_BASE=https://pagefly-design.pagefly.io PFD_API_KEY=… scripts/bpu/upsell-demo.sh
 #
-# Walks the same calls NIU Ops and NIU Builder make: install → lead →
+# Walks the same calls BPU Ops and BPU Builder make: install → lead →
 # building → upload two pages. The lead id is fixed per day, so a second run
 # the same day answers 409 on status/upload while the first sits in review —
 # that is the state machine refusing, not a failure. Needs curl and zip.

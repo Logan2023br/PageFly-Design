@@ -1,4 +1,4 @@
-"""Shared fixtures: load niu_ops.py fresh, and fake every service it talks to.
+"""Shared fixtures: load bpu_ops.py fresh, and fake every service it talks to.
 
 `http` is the script's single door to the network, so replacing it routes
 every call — PageFly Design, AC2, Crisp, a store's products.json — to the
@@ -12,12 +12,12 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-SCRIPT = pathlib.Path(__file__).resolve().parents[1] / "niu_ops.py"
+SCRIPT = pathlib.Path(__file__).resolve().parents[1] / "bpu_ops.py"
 GOOD_KEY = "good-key-0123456789abcdef"
 
 
 def load_script():
-    spec = importlib.util.spec_from_file_location("niu_ops_under_test", SCRIPT)
+    spec = importlib.util.spec_from_file_location("bpu_ops_under_test", SCRIPT)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -132,7 +132,7 @@ class FakeWorld:
 
 
 @pytest.fixture
-def niu(monkeypatch, tmp_path):
+def bpu(monkeypatch, tmp_path):
     monkeypatch.setenv("PFD_API_KEY", GOOD_KEY)
     monkeypatch.setenv("AC2_TOKEN", "ac2-token")
     monkeypatch.setenv("CRISP_IDENTIFIER", "crisp-id")

@@ -1,4 +1,4 @@
-"""niu_ops.py against fakes of every API it calls.
+"""bpu_ops.py against fakes of every API it calls.
 
 What these pin down is the CONTRACT: which paths the script calls, with which
 field names, and what it does with the answers. The server implements the
@@ -45,8 +45,8 @@ LEAD_FIELDS = {"lead_id", "store_domain", "store_name", "email", "phone", "count
 
 
 # ---------------------------------------------------------------- sync
-def test_sync_posts_installs_and_leads(niu, capsys):
-    w = niu.FAKE_WORLD
+def test_sync_posts_installs_and_leads(bpu, capsys):
+    w = bpu.FAKE_WORLD
     test_d = domain_in_group(False, "ziru")
     ctrl_d = domain_in_group(True, "cacao")
     weak_d, pw_d, old_d = "my-store-123.myshopify.com", "locked.myshopify.com", "old.myshopify.com"
@@ -59,8 +59,8 @@ def test_sync_posts_installs_and_leads(niu, capsys):
     }
     w.products = {test_d: products(12), ctrl_d: products(3), weak_d: products(1), pw_d: 401}
 
-    niu.cmd_sync(["--intents", "missing.json"])
-    pfd = niu.FAKE_PFD
+    bpu.cmd_sync(["--intents", "missing.json"])
+    pfd = bpu.FAKE_PFD
 
     assert ("GET", "/api/upsell/installs?since_hours=80") in pfd.calls
     assert set(pfd.installs) == {test_d, ctrl_d, weak_d, pw_d}, "old install is outside the lookback"
@@ -83,8 +83,8 @@ def test_sync_posts_installs_and_leads(niu, capsys):
     assert out["checked"] == 4 and out["new_leads"] == 1 and out["control"] == 1
 
 
-def test_sync_skips_known_and_rechecks_at_24h(niu):
-    w, pfd = niu.FAKE_WORLD, niu.FAKE_PFD
+def test_sync_skips_known_and_rechecks_at_24h(bpu):
+    w, pfd = bpu.FAKE_WORLD, bpu.FAKE_PFD
     pfd.installs = {
         "known.myshopify.com": {"store_domain": "known.myshopify.com", "installed_at": ago(1), "lead": True, "skip_reason": ""},
         "empty.myshopify.com": {"store_domain": "empty.myshopify.com", "installed_at": ago(24.5), "lead": False,
@@ -93,7 +93,7 @@ def test_sync_skips_known_and_rechecks_at_24h(niu):
     w.stores = {"known.myshopify.com": good_store("known.myshopify.com"),
                 "empty.myshopify.com": good_store("empty.myshopify.com", createdAt=ago(24.5))}
     w.products = {"empty.myshopify.com": products(4)}
-    niu.cmd_sync([])
+    bpu.cmd_sync([])
     posted = [c for c in pfd.calls if c == ("POST", "/api/upsell/installs")]
     assert len(posted) == 1
     assert pfd.installs["empty.myshopify.com"]["rechecked"] is True
@@ -111,8 +111,8 @@ def tracked(lead_id, domain, **kw):
     return L
 
 
-def test_track_syncs_outcomes_and_drafts(niu, capsys):
-    w, pfd = niu.FAKE_WORLD, niu.FAKE_PFD
+def test_track_syncs_outcomes_and_drafts(bpu, capsys):
+    w, pfd = bpu.FAKE_WORLD, bpu.FAKE_PFD
     pfd.export = [
         tracked("LA", "a.myshopify.com"),                                          # 50h, never opened -> followup1
         tracked("LB", "b.myshopify.com", unique_views=1, rating=5),               # rated 5 -> review
@@ -125,13 +125,13 @@ def test_track_syncs_outcomes_and_drafts(niu, capsys):
         w.stores[f"{d}.myshopify.com"] = good_store(f"{d}.myshopify.com", totalPages=1, numPublished=0)
     w.stores["c.myshopify.com"].update(pageflyPlan="Silver", pageflyPrice=24, totalPages=3)
     w.activities["c.myshopify.com"] = [{"type": "SUBSCRIPTION_CHARGE_ACTIVATED", "occurredAt": ago(2)}]
-    sent_ms = (niu.parse_iso(pfd.export[3]["sent_at"]).timestamp() + 3600) * 1000
+    sent_ms = (bpu.parse_iso(pfd.export[3]["sent_at"]).timestamp() + 3600) * 1000
     w.crisp_msgs["session_LD"] = [
         {"from": "operator", "type": "text", "read": True, "timestamp": sent_ms - 7200 * 1000},
         {"from": "user", "type": "text", "content": "Love it, thanks!", "timestamp": sent_ms},
     ]
 
-    niu.cmd_track([])
+    bpu.cmd_track([])
     assert ("GET", "/api/upsell/leads/export?active=1&tracking_days=30") in pfd.calls
     synced = {u["lead_id"]: u for u in pfd.synced}
     assert set(synced) == {"LA", "LB", "LC", "LD", "LE", "LF"}
@@ -156,30 +156,30 @@ def test_track_syncs_outcomes_and_drafts(niu, capsys):
     assert out["upgraded_now"] == ["LC"] and out["replies_to_classify"] == 1
 
 
-def test_track_does_not_reclassify_a_known_reply(niu):
+def test_track_does_not_reclassify_a_known_reply(bpu):
     """`last_reply_at` comes back in exactly the format the script writes it,
     so an old reply compares equal and is not classified again."""
-    w, pfd = niu.FAKE_WORLD, niu.FAKE_PFD
+    w, pfd = bpu.FAKE_WORLD, bpu.FAKE_PFD
     L = tracked("LD", "d.myshopify.com", unique_views=1, replied=True)
-    reply_ts = (niu.parse_iso(L["sent_at"]).timestamp() + 3600)
-    L["last_reply_at"] = niu.iso(niu.datetime.fromtimestamp(reply_ts, niu.timezone.utc))
+    reply_ts = (bpu.parse_iso(L["sent_at"]).timestamp() + 3600)
+    L["last_reply_at"] = bpu.iso(bpu.datetime.fromtimestamp(reply_ts, bpu.timezone.utc))
     pfd.export = [L]
     w.stores["d.myshopify.com"] = good_store("d.myshopify.com")
     w.crisp_msgs["session_LD"] = [{"from": "user", "type": "text", "content": "hi", "timestamp": reply_ts * 1000}]
-    niu.cmd_track([])
+    bpu.cmd_track([])
     assert json.load(open("replies_to_classify.json")) == []
 
 
 # ---------------------------------------------------------------- apply-sentiment
-def test_apply_sentiment(niu, tmp_path):
-    pfd = niu.FAKE_PFD
+def test_apply_sentiment(bpu, tmp_path):
+    pfd = bpu.FAKE_PFD
     pfd.export = [tracked("LP", "p.myshopify.com"), tracked("LQ", "q.myshopify.com", message_kinds=["initial", "review"])]
     f = tmp_path / "classified.json"
     f.write_text(json.dumps([
         {"lead_id": "LP", "sentiment": "Positive", "summary_vi": "Khách khen", "wants_changes": False},
         {"lead_id": "LQ", "sentiment": "Positive", "summary_vi": "Lại khen", "wants_changes": True},
     ]))
-    niu.cmd_apply_sentiment([str(f)])
+    bpu.cmd_apply_sentiment([str(f)])
     assert ("GET", "/api/upsell/leads/export?active=1&tracking_days=60") in pfd.calls
     synced = {u["lead_id"]: u for u in pfd.synced}
     assert synced["LP"] == {"lead_id": "LP", "sentiment": "Positive", "feedback_summary": "Khách khen", "wants_changes": False}
@@ -195,9 +195,9 @@ def outgoing(mid, kind="initial", mode="window", tz="Asia/Ho_Chi_Minh", email="o
                                             "design_url": "https://pfd.test/new-page?id=Q4JFADCA"}}
 
 
-def test_send_respects_hours_and_reports(niu, monkeypatch, capsys):
-    w, pfd = niu.FAKE_WORLD, niu.FAKE_PFD
-    monkeypatch.setattr(niu, "local_hour", lambda tz: 3 if tz == "Night/Zone" else 12)
+def test_send_respects_hours_and_reports(bpu, monkeypatch, capsys):
+    w, pfd = bpu.FAKE_WORLD, bpu.FAKE_PFD
+    monkeypatch.setattr(bpu, "local_hour", lambda tz: 3 if tz == "Night/Zone" else 12)
     w.stores["ziru-cl.myshopify.com"] = good_store("ziru-cl.myshopify.com", pageflyPlan="Free", pageflyPrice=0, totalPages=2)
     pfd.approved = [
         outgoing("m_night", tz="Night/Zone"),                         # waits
@@ -205,7 +205,7 @@ def test_send_respects_hours_and_reports(niu, monkeypatch, capsys):
         outgoing("m_noemail", email=""),                              # fails
         outgoing("m_fu", kind="followup1", sid="session_existing"),   # existing conversation
     ]
-    niu.cmd_send([])
+    bpu.cmd_send([])
     out = json.loads(capsys.readouterr().out)
     assert out["waiting_for_business_hours"] == 1
     assert sorted(out["sent"]) == ["L_m_fu:followup1", "L_m_now:initial"]
@@ -225,9 +225,9 @@ def test_send_respects_hours_and_reports(niu, monkeypatch, capsys):
     assert len(notes) == 1 and "L_m_now" in notes[0]["content"], "only the first message carries the internal note"
 
 
-def test_send_reports_crisp_failure(niu, monkeypatch):
-    monkeypatch.setattr(niu, "local_hour", lambda tz: 12)
-    pfd, w = niu.FAKE_PFD, niu.FAKE_WORLD
+def test_send_reports_crisp_failure(bpu, monkeypatch):
+    monkeypatch.setattr(bpu, "local_hour", lambda tz: 12)
+    pfd, w = bpu.FAKE_PFD, bpu.FAKE_WORLD
     pfd.approved = [outgoing("m1")]
     real = type(w).__call__
 
@@ -237,21 +237,21 @@ def test_send_reports_crisp_failure(niu, monkeypatch):
         return real(self, method, url, body)
 
     monkeypatch.setattr(type(w), "__call__", broken)
-    niu.cmd_send([])
+    bpu.cmd_send([])
     assert pfd.results["m1"]["status"] == "failed" and pfd.results["m1"]["error"] == "Crisp create 500"
 
 
 # ---------------------------------------------------------------- auth
-def test_wrong_key_is_logged_and_stops(niu, monkeypatch):
-    niu.FAKE_PFD.key = "a-different-key-entirely"
+def test_wrong_key_is_logged_and_stops(bpu, monkeypatch):
+    bpu.FAKE_PFD.key = "a-different-key-entirely"
     with pytest.raises(SystemExit) as e:
-        niu.cmd_sync([])
+        bpu.cmd_sync([])
     assert "Cannot read installs" in str(e.value)
-    assert any("-> 401" in line for line in niu.LOG)
-    assert ("POST", "/api/upsell/installs") not in niu.FAKE_PFD.calls
+    assert any("-> 401" in line for line in bpu.LOG)
+    assert ("POST", "/api/upsell/installs") not in bpu.FAKE_PFD.calls
 
 
-def test_settings_from_server_override_defaults(niu):
-    niu.FAKE_PFD.settings.update({"followup1_hours": 24, "pic": "Mai"})
-    cfg = niu.settings()
+def test_settings_from_server_override_defaults(bpu):
+    bpu.FAKE_PFD.settings.update({"followup1_hours": 24, "pic": "Mai"})
+    cfg = bpu.settings()
     assert cfg["followup1_hours"] == 24.0 and cfg["pic"] == "Mai" and cfg["send_hour_start"] == 9.0
