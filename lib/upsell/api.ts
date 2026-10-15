@@ -12,15 +12,34 @@ import { UpsellError } from "./types";
 
 export const json = (body: unknown, status = 200) => Response.json(body, { status });
 
-/** X-API-Key against UPSELL_API_KEY, constant time. No key configured means
-    every call is refused — never "open because nobody set it". */
+/* TODO: xoá fallback này sau khi đã đặt UPSELL_API_KEY trong .env trên VPS.
+   Until then a server without UPSELL_API_KEY accepts the one key whose SHA-256
+   (hex) this is — only the hash is here, never the key. */
+export const UPSELL_API_KEY_SHA256_FALLBACK =
+  "f920ba5dca3443a93270f87b86cbd430f5b91854b4a8e36e67917b4f6f49747b";
+
+/** X-API-Key against UPSELL_API_KEY, constant time. With no key configured,
+    against the SHA-256 fallback above instead (see its TODO). */
 export function apiKeyOk(req: Request): boolean {
-  const expected = process.env.UPSELL_API_KEY ?? "";
-  const given = req.headers.get("x-api-key") ?? "";
-  if (expected.length < 16 || !given) return false;
+  return keyMatches(
+    req.headers.get("x-api-key") ?? "",
+    process.env.UPSELL_API_KEY ?? "",
+    UPSELL_API_KEY_SHA256_FALLBACK,
+  );
+}
+
+/** The comparison itself, apart from the environment so a test can give it a
+    fallback hash it knows the key of. */
+export function keyMatches(given: string, expected: string, fallbackSha256: string): boolean {
+  if (!given) return false;
   const a = createHash("sha256").update(given).digest();
-  const b = createHash("sha256").update(expected).digest();
-  return timingSafeEqual(a, b);
+  if (expected) {
+    if (expected.length < 16) return false;
+    const b = createHash("sha256").update(expected).digest();
+    return timingSafeEqual(a, b);
+  }
+  const b = Buffer.from(fallbackSha256, "hex");
+  return b.length === a.length && timingSafeEqual(a, b);
 }
 
 /** null when the caller may proceed, else the response to send. 300 a minute
