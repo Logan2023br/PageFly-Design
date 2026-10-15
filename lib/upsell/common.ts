@@ -108,7 +108,7 @@ export const DEFAULT_INITIAL_TEMPLATE =
   "and you can import them into PageFly in about a minute.\n\n" +
   /* Bold around the link, not inside it: Crisp does not render ** in a link's text. */
   "👉 **[See your 2 pages]({link})**\n\n" +
-  "Want a different style or another page type? Just reply here and I will rebuild it for you.\n\n" +
+  "Feel free to customize these pages in the PageFly editor to make them your own. If you have any questions, just reply here.\n\n" +
   "Best regards,\n**{pic} – PageFly Support**";
 
 export function isoOrNull(v: unknown): string | null {
