@@ -268,6 +268,24 @@ const REEXPORTED: {
       kinds: ["pagefly"] as CollectionFileKind[],
     })),
   ),
+  /* Verdant, Spice Route, Ember Roast, Pip & Pop and Pawsome, the same. */
+  ...(
+    [
+      ["verdant", "spring-plant-sale"],
+      ["spice-route", "harvest-festival-sale"],
+      ["ember-roast", "clearance-sale"],
+      ["pip-and-pop", "summer-toy-sale"],
+      ["pawsome", "pet-week-sale"],
+    ] as const
+  ).flatMap(([set, sale]) =>
+    ["home", "product-page", "collection-page", "about-us", "contact", "blog-article", sale].map((page) => ({
+      set,
+      page,
+      since: "2026-10-15T11:10:00Z",
+      dir: "collection-sets",
+      kinds: ["pagefly"] as CollectionFileKind[],
+    })),
+  ),
   /* Aurum's sale, re-exported again. */
   {
     set: "aurum",
