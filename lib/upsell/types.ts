@@ -214,8 +214,14 @@ export type MessageRow = {
   approved_at: string | null;
   sent_at: string | null;
   error: string | null;
+  /** times the script reported it failed; kept across retries */
+  attempts: number;
+  failed_at: string | null;
   created_at: string;
 };
+
+/** From this many failures a message is marked "Lỗi nhiều lần". */
+export const REPEATED_FAILURE = 3;
 
 export type EventRow = {
   id: number;

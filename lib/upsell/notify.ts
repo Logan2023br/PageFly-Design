@@ -5,7 +5,8 @@ import { db } from "./db";
 import { getInternal, getSettings, setInternal } from "./settings";
 
 /* ==========================================================================
-   Slack: "there is something to review".
+   Slack: "there is something to review" — or a message the script could not
+   send, which waits on the Lỗi gửi tab for someone to retry or drop it.
 
    AT MOST ONE MESSAGE PER 15 MINUTES. A Builder run lands two leads a minute
    apart, and the script drafts follow-ups in batches; a ping per item would
@@ -17,7 +18,7 @@ import { getInternal, getSettings, setInternal } from "./settings";
 
 const WINDOW_MS = 15 * 60 * 1000;
 
-type Kind = "lead" | "message";
+type Kind = "lead" | "message" | "failed";
 
 export async function notifySlack(kind: Kind): Promise<void> {
   const cfg = await getSettings();
@@ -38,27 +39,30 @@ export async function flushSlack(): Promise<boolean> {
   if (Date.now() - last < WINDOW_MS) return false;
 
   const p = await db();
-  const { rows } = await p.query<{ pages: number; messages: number }>(
+  const { rows } = await p.query<{ pages: number; messages: number; failed: number }>(
     `select (select count(*) from upsell_leads where status = 'pending_review') as pages,
-            (select count(*) from upsell_messages where status = 'pending_review') as messages`,
+            (select count(*) from upsell_messages where status = 'pending_review') as messages,
+            (select count(*) from upsell_messages where status = 'failed') as failed`,
   );
-  const { pages, messages } = rows[0];
+  const { pages, messages, failed } = rows[0];
   /* Claim the window before sending, so two instances flushing at once send
      once. A failed send then waits for the next window, which is fine. */
   await setInternal("slack_last_at", Date.now());
   await setInternal("slack_pending", []);
-  if (pages === 0 && messages === 0) return false;
+  if (pages === 0 && messages === 0 && failed === 0) return false;
 
   const base = `${upsellOrigin()}/design/admin/upsell`;
   const lines = [
     pages > 0 ? `• <${base}?tab=pages|${pages} lead chờ duyệt page>` : null,
     messages > 0 ? `• <${base}?tab=messages|${messages} tin chờ duyệt>` : null,
+    failed > 0 ? `• <${base}?tab=failed|${failed} tin gửi lỗi>` : null,
   ].filter(Boolean);
+  const head = pages === 0 && messages === 0 ? "có tin gửi lỗi" : failed > 0 ? "có việc cần xử lý" : "có việc cần duyệt";
   try {
     const res = await fetch(cfg.slack_webhook_url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: `*Upsell Build Pages* — có việc cần duyệt\n${lines.join("\n")}` }),
+      body: JSON.stringify({ text: `*Upsell Build Pages* — ${head}\n${lines.join("\n")}` }),
       signal: AbortSignal.timeout(10_000),
     });
     return res.ok;

@@ -60,8 +60,8 @@ const NAV: { id: AdminSection; label: string; href: string; icon: IconName }[] =
    Read in the browser rather than by every admin page's server component, so
    adding the badge did not add a query to five screens that have nothing to
    do with it. A failure just shows no badge. */
-function useUpsellPending(allowed: boolean): number {
-  const [n, setN] = useState(0);
+function useUpsellPending(allowed: boolean): { n: number; failed: number } {
+  const [n, setN] = useState({ n: 0, failed: 0 });
   useEffect(() => {
     /* Without the section the counts answer 401; there is no badge to show. */
     if (!allowed) return;
@@ -69,8 +69,9 @@ function useUpsellPending(allowed: boolean): number {
     const load = () =>
       fetch("/api/admin/upsell/counts")
         .then((r) => (r.ok ? r.json() : null))
-        .then((b: { pages?: number; messages?: number } | null) => {
-          if (live && b) setN((b.pages ?? 0) + (b.messages ?? 0));
+        .then((b: { pages?: number; messages?: number; failed?: number } | null) => {
+          /* Waiting for review plus failed sends; red while anything failed. */
+          if (live && b) setN({ n: (b.pages ?? 0) + (b.messages ?? 0) + (b.failed ?? 0), failed: b.failed ?? 0 });
         })
         .catch(() => undefined);
     void load();
@@ -157,9 +158,14 @@ export function AdminShell({
                     <span className="relative z-10 flex items-center gap-2">
                       <Icon name={item.icon} size={15} />
                       {item.label}
-                      {item.id === "upsell" && upsellPending > 0 && (
-                        <span className="rounded-pf-pill bg-pf-warn/25 px-1.5 text-[11px] text-pf-warn">
-                          {upsellPending}
+                      {item.id === "upsell" && upsellPending.n > 0 && (
+                        <span
+                          title={upsellPending.failed > 0 ? `${upsellPending.failed} tin gửi lỗi` : undefined}
+                          className={`rounded-pf-pill px-1.5 text-[11px] ${
+                            upsellPending.failed > 0 ? "bg-pf-danger text-white" : "bg-pf-warn/25 text-pf-warn"
+                          }`}
+                        >
+                          {upsellPending.n}
                         </span>
                       )}
                     </span>

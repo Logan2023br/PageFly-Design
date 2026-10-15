@@ -16,6 +16,7 @@ export const TABS = [
   { id: "pages", label: "Chờ duyệt page" },
   { id: "messages", label: "Tin chờ duyệt" },
   { id: "waiting", label: "Chờ gửi" },
+  { id: "failed", label: "Lỗi gửi" },
   { id: "tracking", label: "Đang theo dõi" },
   { id: "upgraded", label: "Đã nâng cấp" },
   { id: "queue", label: "Hàng đợi build" },
@@ -27,8 +28,9 @@ export const TABS = [
 ] as const;
 export type TabId = (typeof TABS)[number]["id"];
 
-/** Tabs whose count is work waiting — drawn amber. */
+/** Tabs whose count is work waiting — drawn amber; something broken — red. */
 const URGENT = new Set(["pages", "messages"]);
+const BROKEN = new Set(["failed"]);
 
 export function TabNav({ tab, counts }: { tab: TabId; counts: Record<string, number> }) {
   return (
@@ -49,7 +51,13 @@ export function TabNav({ tab, counts }: { tab: TabId; counts: Record<string, num
             {n !== undefined && (n > 0 || URGENT.has(t.id)) && (
               <span
                 className={`rounded-pf-pill px-1.5 text-[11px] ${
-                  active ? "bg-white/20" : URGENT.has(t.id) && n > 0 ? "bg-pf-warn/20 text-pf-warn" : "bg-pf-card-hi text-pf-faint"
+                  BROKEN.has(t.id) && n > 0
+                    ? "bg-pf-danger text-white"
+                    : active
+                      ? "bg-white/20"
+                      : URGENT.has(t.id) && n > 0
+                        ? "bg-pf-warn/20 text-pf-warn"
+                        : "bg-pf-card-hi text-pf-faint"
                 }`}
               >
                 {n}

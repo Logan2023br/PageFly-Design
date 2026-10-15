@@ -70,6 +70,10 @@ async function main() {
   const access = await import("../lib/upsell/access");
   const maintenance = await import("../lib/upsell/maintenance");
   const api = await import("../lib/upsell/api");
+  const settings = await import("../lib/upsell/settings");
+  const notify = await import("../lib/upsell/notify");
+  const adminQueries = await import("../lib/upsell/adminQueries");
+  const { REPEATED_FAILURE } = await import("../lib/upsell/types");
 
   {
     const { Pool } = await import("pg");
@@ -293,6 +297,90 @@ async function main() {
     const d = await messages.createDrafts([{ lead_id: "L261012EEEE", kind: "review", content: "please review" }]);
     await messages.approveMessage(d.created[0], {}, "admin:t");
     check(!(await messages.approvedForSending()).some((m) => m.lead_id === "L261012EEEE"), "review ask without a conversation is not served");
+  }
+
+  console.log("send failures");
+  {
+    /* Slack goes to a local server, so what would be posted can be read. */
+    const { createServer } = await import("node:http");
+    const posts: string[] = [];
+    const hook = createServer((rq, rs) => {
+      let b = "";
+      rq.on("data", (d) => (b += d));
+      rq.on("end", () => {
+        posts.push(b);
+        rs.end("ok");
+      });
+    });
+    await new Promise<void>((r) => hook.listen(0, "127.0.0.1", () => r()));
+    const port = (hook.address() as { port: number }).port;
+    await settings.saveSettings({ slack_webhook_url: `http://127.0.0.1:${port}/hook` });
+    await settings.setInternal("slack_last_at", 0);
+    await settings.setInternal("slack_pending", []);
+    const waitPosts = async (n: number) => {
+      for (let i = 0; i < 50 && posts.length < n; i++) await new Promise((r) => setTimeout(r, 50));
+    };
+
+    const d = await messages.createDrafts([{ lead_id: "L261012AAAA", kind: "custom", content: "try me" }]);
+    const id = d.created[0];
+    await waitPosts(1); // the draft's own "có việc cần duyệt"
+    posts.length = 0;
+    await settings.setInternal("slack_last_at", 0);
+    await messages.approveMessage(id, { send_mode: "window" }, "admin:t");
+
+    const r1 = await messages.reportResult(id, { status: "failed", error: "Crisp create 401" });
+    check(r1.changed && r1.message.status === "failed" && r1.message.attempts === 1 && Boolean(r1.message.failed_at), "failure recorded: attempts 1, failed_at set", r1.message);
+    const dup = await messages.reportResult(id, { status: "failed", error: "Crisp create 401" });
+    check(!dup.changed && dup.message.attempts === 1, "the same failure reported twice counts once", dup.message);
+
+    await waitPosts(1);
+    check(posts.length === 1 && posts[0].includes("tab=failed") && posts[0].includes("1 tin gửi lỗi"), "a new failure goes to Slack, linking Lỗi gửi", posts);
+
+    const list = await adminQueries.listMessages("failed", {});
+    const row = list.rows.find((m) => m.id === id);
+    check(list.total === 1 && row?.error === "Crisp create 401" && row.attempts === 1 && row.store_domain === "alpha.myshopify.com", "Lỗi gửi lists it with store, reason and attempts", list);
+    check((await adminQueries.tabCounts()).failed === 1, "the tab counts it");
+    check((await review.pendingCounts()).failed === 1, "the sidebar counts it");
+
+    /* Retry: approve again. The count stays; the error clears until the next report. */
+    await messages.approveMessage(id, { send_mode: "now" }, "admin:t");
+    const back = (await messages.messagesForLead("L261012AAAA")).find((m) => m.id === id)!;
+    check(back.status === "approved" && back.error === null && back.attempts === 1 && back.send_mode === "now", "retry puts it back to send, count kept", back);
+    check((await review.pendingCounts()).failed === 0, "a retried message leaves Lỗi gửi");
+
+    const r2 = await messages.reportResult(id, { status: "failed", error: "Crisp message 500" });
+    await messages.approveMessage(id, { send_mode: "window" }, "admin:t");
+    const r3 = await messages.reportResult(id, { status: "failed", error: "Crisp create 401" });
+    check(r2.message.attempts === 2 && r3.message.attempts === 3 && r3.message.attempts >= REPEATED_FAILURE, "each new failure counts: third is 'Lỗi nhiều lần'", [r2.message.attempts, r3.message.attempts]);
+
+    await new Promise((r) => setTimeout(r, 300));
+    check(posts.length === 1, "within 15 minutes Slack is not pinged again", posts.length);
+    check(((await settings.getInternal("slack_pending")) as string[]).includes("failed"), "the failure waits for the next window");
+    await settings.setInternal("slack_last_at", 0);
+    check(await notify.flushSlack(), "the next window sends it");
+    check(posts.length === 2 && posts[1].includes("tab=failed"), "…with the Lỗi gửi link", posts[1]);
+
+    const stats = await adminQueries.upsellStats({});
+    const by = (reason: string) => stats.failuresByReason.find((x) => x.reason === reason);
+    check(by("Crisp create 401")?.failures === 2 && by("Crisp create 401")?.messages === 1 && by("Crisp create 401")?.open === 1, "stats: failures by reason, still open", stats.failuresByReason);
+    check(by("Crisp message 500")?.failures === 1 && by("Crisp message 500")?.open === 1, "stats: each reason its own row", stats.failuresByReason);
+
+    /* Bulk retry is approveMessage per id, as the bulk route runs it. */
+    const d2 = await messages.createDrafts([{ lead_id: "L261012AAAA", kind: "custom", content: "second" }]);
+    await messages.approveMessage(d2.created[0], {}, "admin:t");
+    await messages.reportResult(d2.created[0], { status: "failed", error: "No email" });
+    check((await adminQueries.listMessages("failed", {})).total === 2, "two on Lỗi gửi");
+    for (const m of [id, d2.created[0]]) await messages.approveMessage(m, { send_mode: "window" }, "admin:t");
+    check((await adminQueries.tabCounts()).failed === 0, "retrying the selected ones empties Lỗi gửi");
+
+    await messages.reportResult(d2.created[0], { status: "failed", error: "No email" });
+    await messages.rejectMessage(d2.created[0], "admin:t");
+    const dropped = (await messages.messagesForLead("L261012AAAA")).find((m) => m.id === d2.created[0])!;
+    check(dropped.status === "rejected" && (await adminQueries.tabCounts()).failed === 0, "Bỏ drops a failed message", dropped.status);
+    await messages.reportResult(id, { status: "sent", sent_at: "2026-10-14T05:00:00Z" });
+
+    await settings.saveSettings({ slack_webhook_url: "" });
+    await new Promise<void>((r) => hook.close(() => r()));
   }
 
   console.log("sync");

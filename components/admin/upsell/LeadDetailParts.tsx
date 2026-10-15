@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { KIND_LABEL, MESSAGE_STATUS_LABEL, fmtVN } from "@/lib/upsell/format";
-import { PAGE_LABELS, PAGE_TYPES, type EventRow, type MessageRow, type PageType } from "@/lib/upsell/types";
+import { PAGE_LABELS, PAGE_TYPES, REPEATED_FAILURE, type EventRow, type MessageRow, type PageType } from "@/lib/upsell/types";
 import { Button, Icon } from "../../ui";
 import { FIELD, FIELD_LABEL, Segmented } from "../collections/shared";
 import { ErrorLine, Pill, useAct } from "./bits";
@@ -300,7 +300,17 @@ function MessageItem({ m }: { m: MessageRow }) {
         </span>
       </div>
       <pre className="max-h-[200px] overflow-auto whitespace-pre-wrap font-mono text-[12px] text-pf-body">{m.content}</pre>
-      {m.error && <p className="text-[12px] text-pf-danger">{m.error}</p>}
+      {m.error && (
+        <p className="flex flex-wrap items-center gap-2 text-[12px] text-pf-danger">
+          {m.error}
+          {m.attempts > 0 && (
+            <span className="text-pf-faint">
+              · lỗi {fmtVN(m.failed_at)} · đã thử {m.attempts} lần
+            </span>
+          )}
+          {m.attempts >= REPEATED_FAILURE && <Pill tone="bad">Lỗi nhiều lần</Pill>}
+        </p>
+      )}
       <div className="flex flex-wrap gap-2">
         {(m.status === "pending_review" || m.status === "failed") && (
           <>

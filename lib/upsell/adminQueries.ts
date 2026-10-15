@@ -79,6 +79,12 @@ export async function listLeadTab(tab: LeadTab, f: Filters): Promise<Paged<LeadL
   return { rows: rows.map(shapeLead), total, page: pg.page, pages: pg.pages };
 }
 
+const MESSAGE_ORDER = {
+  pending_review: "m.created_at asc",
+  approved: "(m.send_mode='now') desc, m.approved_at asc",
+  failed: "m.failed_at desc nulls last, m.created_at desc",
+} as const;
+
 export type MessageListRow = MessageRow & {
   store_domain: string;
   store_name: string | null;
@@ -95,7 +101,7 @@ export type MessageListRow = MessageRow & {
   crisp_session: string | null;
 };
 
-export async function listMessages(status: "pending_review" | "approved", f: Filters): Promise<Paged<MessageListRow>> {
+export async function listMessages(status: "pending_review" | "approved" | "failed", f: Filters): Promise<Paged<MessageListRow>> {
   const w = leadWhere(f, "created_at");
   /* The date filter is on the message here, not the lead. */
   w.sql = w.sql.map((s) => s.replace("(l.created_at at time zone", "(m.created_at at time zone"));
@@ -114,7 +120,7 @@ export async function listMessages(status: "pending_review" | "approved", f: Fil
             coalesce((select count(*) from upsell_events e where e.design_id = d.id and e.actor='customer' and e.type='download'),0) as downloads,
             (select rating from upsell_events e where e.design_id = d.id and e.actor='customer' and e.type='feedback' and e.rating is not null order by created_at desc limit 1) as rating
        ${base} ${where}
-      order by ${status === "approved" ? "(m.send_mode='now') desc, m.approved_at asc" : "m.created_at asc"}
+      order by ${MESSAGE_ORDER[status]}
       limit ${PAGE_SIZE} offset ${pg.offset}`,
     w.params,
   );
@@ -157,6 +163,7 @@ export async function tabCounts(): Promise<Record<string, number>> {
        (select count(*) from upsell_leads where status = 'pending_review') as pages,
        (select count(*) from upsell_messages where status = 'pending_review') as messages,
        (select count(*) from upsell_messages m join upsell_leads l on l.lead_id = m.lead_id where m.status = 'approved') as waiting,
+       (select count(*) from upsell_messages where status = 'failed') as failed,
        (select count(*) from upsell_leads where status in ('sent','viewed','downloaded','used')) as tracking,
        (select count(*) from upsell_leads where upgraded is true) as upgraded,
        (select count(*) from upsell_leads where status in ('new','building','rebuild_requested')) as queue,
@@ -209,7 +216,13 @@ export type UpsellStats = {
   byPageType: Breakdown[];
   byPic: Breakdown[];
   weekly: { week: string; leads: number; sent: number; upgraded: number }[];
+  failuresByReason: FailureReason[];
 };
+
+/** Send failures grouped by the script's error text: every report counts,
+    `messages` is how many different messages, `open` how many still sit on
+    Lỗi gửi. Dated by the failure, within the filter's from/to. */
+export type FailureReason = { reason: string; failures: number; messages: number; open: number };
 
 const REACHED: Record<string, readonly string[]> = {
   sent: ["sent", "viewed", "downloaded", "used", "upgraded"],
@@ -292,6 +305,18 @@ export async function upsellStats(f: Filters): Promise<UpsellStats> {
   }
 
   const approvedTest = test.filter(approved);
+  const fw = leadWhere({ from: f.from, to: f.to }, "created_at", "e");
+  const failures = await p.query<FailureReason>(
+    `select coalesce(nullif(e.detail->>'error', ''), '(không rõ)') as reason,
+            count(*) as failures,
+            count(distinct e.detail->>'message_id') as messages,
+            count(distinct case when m.status = 'failed' then m.id end) as open
+       from upsell_events e
+       left join upsell_messages m on m.id = e.detail->>'message_id'
+      where e.type = 'message_failed' ${fw.sql.length ? `and ${fw.sql.join(" and ")}` : ""}
+      group by 1 order by 2 desc, 1 limit 20`,
+    fw.params,
+  );
   return {
     funnel: [
       { label: "Store mới cài", value: installs },
@@ -315,5 +340,6 @@ export async function upsellStats(f: Filters): Promise<UpsellStats> {
     byPageType: breakdown((l) => [l.page1_type, l.page2_type].filter((x): x is string => Boolean(x))),
     byPic: breakdown((l) => [l.pic || "(chưa có)"]),
     weekly: [...weeks.values()].sort((a, b) => a.week.localeCompare(b.week)).slice(-16),
+    failuresByReason: failures.rows,
   };
 }

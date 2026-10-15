@@ -198,6 +198,10 @@ create table if not exists upsell_messages (
 create unique index if not exists upsell_messages_one_per_kind
   on upsell_messages (lead_id, kind) where kind <> 'custom';
 create index if not exists upsell_messages_status on upsell_messages (status, created_at);
+/* How many times the script reported this message failed, and when it last
+   did. A retry (approve again) keeps the count, so "Lỗi nhiều lần" survives it. */
+alter table upsell_messages add column if not exists attempts int not null default 0;
+alter table upsell_messages add column if not exists failed_at timestamptz;
 
 create table if not exists upsell_events (
   id         bigserial primary key,

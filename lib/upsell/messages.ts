@@ -143,6 +143,13 @@ export type ResultBody = {
     exactly as it is, whatever a second report says. */
 export async function reportResult(id: string, body: ResultBody, actor: Actor = "claude"): Promise<{ changed: boolean; message: MessageRow }> {
   if (body.status !== "sent" && body.status !== "failed") throw new UpsellError("status must be sent or failed.", 422);
+  const out = await recordResult(id, body, actor);
+  /* A new failure is something to act on: Slack, within its 15-minute window. */
+  if (out.changed && out.message.status === "failed") void notifySlack("failed").catch(() => undefined);
+  return out;
+}
+
+async function recordResult(id: string, body: ResultBody, actor: Actor): Promise<{ changed: boolean; message: MessageRow }> {
   return tx(async (c) => {
     const m = await lockMessage(c, id);
     if (m.status === "sent") return { changed: false, message: m };
@@ -152,9 +159,18 @@ export async function reportResult(id: string, body: ResultBody, actor: Actor = 
 
     if (body.status === "failed") {
       const error = String(body.error ?? "unknown error").slice(0, 1000);
-      await c.query("update upsell_messages set status = 'failed', error = $2 where id = $1", [id, error]);
-      await recordEvent(c, { lead_id: m.lead_id, type: "message_failed", actor, detail: { message_id: id, kind: m.kind, error } });
-      return { changed: true, message: { ...m, status: "failed", error } };
+      const { rows } = await c.query<MessageRow>(
+        `update upsell_messages set status = 'failed', error = $2, attempts = attempts + 1, failed_at = now()
+          where id = $1 returning *`,
+        [id, error],
+      );
+      await recordEvent(c, {
+        lead_id: m.lead_id,
+        type: "message_failed",
+        actor,
+        detail: { message_id: id, kind: m.kind, error, attempt: rows[0].attempts },
+      });
+      return { changed: true, message: rows[0] };
     }
 
     const sentAt = isoOrNull(body.sent_at) ?? new Date().toISOString();

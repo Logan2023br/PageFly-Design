@@ -64,9 +64,11 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
     const r = await listLeadTab("pages", f);
     body = <PendingPages leads={r.rows} />;
     pager = <Pager tab={tab} f={f} {...r} />;
-  } else if (tab === "messages" || tab === "waiting") {
-    const r = await listMessages(tab === "messages" ? "pending_review" : "approved", f);
-    body = <MessageQueue rows={r.rows} mode={tab === "messages" ? "drafts" : "waiting"} window={window} />;
+  } else if (tab === "messages" || tab === "waiting" || tab === "failed") {
+    const status = tab === "messages" ? "pending_review" : tab === "waiting" ? "approved" : "failed";
+    const r = await listMessages(status, f);
+    const mode = tab === "messages" ? "drafts" : tab === "waiting" ? "waiting" : "failed";
+    body = <MessageQueue rows={r.rows} mode={mode} window={window} />;
     pager = <Pager tab={tab} f={f} {...r} />;
   } else if (tab === "installs") {
     const r = await listInstallsPage(f);

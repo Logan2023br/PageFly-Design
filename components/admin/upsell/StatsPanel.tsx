@@ -1,4 +1,4 @@
-import type { Breakdown, UpsellStats } from "@/lib/upsell/adminQueries";
+import type { Breakdown, FailureReason, UpsellStats } from "@/lib/upsell/adminQueries";
 import { money, pct } from "@/lib/upsell/format";
 
 /* ==========================================================================
@@ -108,6 +108,44 @@ function BreakdownTable({ title, rows }: { title: string; rows: Breakdown[] }) {
   );
 }
 
+function FailureTable({ rows }: { rows: FailureReason[] }) {
+  return (
+    <section className="grid gap-2">
+      <h3 className="text-[13px] font-semibold text-pf-text">Tin gửi lỗi theo lý do</h3>
+      <div className="overflow-x-auto rounded-pf-card border border-pf-border">
+        <table className="w-full text-left text-[12.5px]">
+          <thead className="bg-pf-card-hi text-[11px] uppercase tracking-[0.06em] text-pf-faint">
+            <tr>
+              {["Lý do", "Lần lỗi", "Số tin", "Còn lỗi"].map((h) => (
+                <th key={h} className="px-3 py-2 font-semibold">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-3 py-4 text-center text-pf-faint">
+                  Chưa có tin nào gửi lỗi
+                </td>
+              </tr>
+            )}
+            {rows.map((r) => (
+              <tr key={r.reason} className="border-t border-pf-border">
+                <td className="max-w-[420px] break-words px-3 py-2 font-semibold text-pf-text">{r.reason}</td>
+                <td className="px-3 py-2">{r.failures}</td>
+                <td className="px-3 py-2">{r.messages}</td>
+                <td className={`px-3 py-2 ${r.open > 0 ? "font-semibold text-pf-danger" : ""}`}>{r.open}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 export function StatsPanel({ s }: { s: UpsellStats }) {
   const approvals = s.firstPassApproved + s.approvedAfterRebuild;
   return (
@@ -135,6 +173,7 @@ export function StatsPanel({ s }: { s: UpsellStats }) {
         <BreakdownTable title="Theo ngành hàng" rows={s.byCategory} />
         <BreakdownTable title="Theo loại page" rows={s.byPageType} />
         <BreakdownTable title="Theo PIC" rows={s.byPic} />
+        <FailureTable rows={s.failuresByReason} />
       </div>
     </div>
   );

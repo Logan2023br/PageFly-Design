@@ -187,11 +187,12 @@ export async function setLeadMeta(
 }
 
 /** Counts for the sidebar and the tab bar. */
-export async function pendingCounts(): Promise<{ pages: number; messages: number }> {
+export async function pendingCounts(): Promise<{ pages: number; messages: number; failed: number }> {
   const p = await db();
-  const { rows } = await p.query<{ pages: number; messages: number }>(
+  const { rows } = await p.query<{ pages: number; messages: number; failed: number }>(
     `select (select count(*) from upsell_leads where status = 'pending_review') as pages,
-            (select count(*) from upsell_messages where status = 'pending_review') as messages`,
+            (select count(*) from upsell_messages where status = 'pending_review') as messages,
+            (select count(*) from upsell_messages where status = 'failed') as failed`,
   );
-  return rows[0] ?? { pages: 0, messages: 0 };
+  return rows[0] ?? { pages: 0, messages: 0, failed: 0 };
 }
