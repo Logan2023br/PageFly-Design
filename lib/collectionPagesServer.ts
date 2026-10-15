@@ -198,6 +198,14 @@ const REEXPORTED: {
       kinds: ["pagefly"] as CollectionFileKind[],
     }),
   ),
+  /* Aurum's sale, re-exported again. */
+  {
+    set: "aurum",
+    page: "private-sale",
+    since: "2026-10-15T08:30:00Z",
+    dir: "collection-sets",
+    kinds: ["pagefly"],
+  },
 ];
 
 let refreshing: Promise<void> | null = null;
