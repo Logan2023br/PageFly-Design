@@ -13,7 +13,7 @@ Commands (run in this order):
   send            Send messages approved in PageFly Design admin via Crisp (customer business hours)
   sheet           Mirror PageFly Design data into the Google Sheet (needs GOOGLE_SA_JSON)
 
-Env: AC2_TOKEN, CRISP_IDENTIFIER, CRISP_KEY, PFD_API_KEY, optional PFD_BASE, CRISP_WEBSITE_ID,
+Env: AC2_TOKEN (or N8N_AC2_URL + N8N_AC2_KEY to read AC2 through the n8n proxy), CRISP_IDENTIFIER, CRISP_KEY, PFD_API_KEY, optional PFD_BASE, CRISP_WEBSITE_ID,
      GOOGLE_SA_JSON (service-account JSON, raw or base64), SHEET_ID.
 Only the standard library is needed, except `sheet` (pip install google-auth requests).
 """
@@ -82,9 +82,15 @@ def pfd(method, path, body=None):
 
 
 def ac2(path="", query=None):
-    q = dict(query or {}, token=env("AC2_TOKEN"))
-    s, j = http("GET", f"{AC2}{path}?{urllib.parse.urlencode(q)}")
-    return j if s == 200 else {}
+    """AC2 read-only. Uses the n8n proxy when N8N_AC2_URL is set (AC2 token stays in n8n), else AC2_TOKEN directly."""
+    proxy = os.environ.get("N8N_AC2_URL", "")
+    if proxy:
+        q = dict(query or {}, path=path)
+        s, j = http("GET", f"{proxy}?{urllib.parse.urlencode(q)}", headers={"X-NIU-Key": env("N8N_AC2_KEY")})
+    else:
+        q = dict(query or {}, token=env("AC2_TOKEN"))
+        s, j = http("GET", f"{AC2}{path}?{urllib.parse.urlencode(q)}")
+    return j if s == 200 and isinstance(j, dict) else {}
 
 
 def crisp(method, path, body=None):
