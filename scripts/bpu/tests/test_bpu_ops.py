@@ -6,6 +6,7 @@ same names (app/api/upsell/*); a rename on either side fails here.
 """
 import hashlib
 import json
+import re
 
 import pytest
 
@@ -247,10 +248,18 @@ def test_send_reports_crisp_failure(bpu, monkeypatch, capsys):
     assert out["failed"] == [{"id": "m1", "lead_id": "L_m1", "error": "Crisp create 500"}], "the reason is in the output"
 
 
-def test_templates_put_bold_outside_the_link(bpu):
-    """Crisp does not render ** inside a link's text."""
-    for tpl in (bpu.FU1, bpu.FU2, bpu.REVIEW):
-        assert "[**" not in tpl and "**[" in tpl
+LINK = re.compile(r"\[([^\]]*)\]\(([^)]*)\)")
+
+
+def test_template_links_are_plain(bpu):
+    """Crisp renders neither **[text](url)** nor [**text**](url): every link stays plain."""
+    for name in ("FU1", "FU2", "REVIEW"):
+        tpl = getattr(bpu, name)
+        links = list(LINK.finditer(tpl))
+        assert links, f"{name} has a link"
+        for m in links:
+            assert "*" not in m.group(1), f"{name}: bold inside {m.group(0)}"
+            assert not tpl[:m.start()].endswith("*") and not tpl[m.end():].startswith("*"), f"{name}: bold around {m.group(0)}"
 
 
 # ---------------------------------------------------------------- auth

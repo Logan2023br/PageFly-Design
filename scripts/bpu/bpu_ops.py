@@ -287,14 +287,14 @@ def cmd_sync(args):
 
 FU1 = ("{hi}\n\nJust a quick reminder: the 2 pages I designed for your store are still waiting for you. "
        "They're built with your own products, so you can publish them as they are or tweak them in PageFly.\n\n"
-       "👉 **[See your 2 pages]({link})**\n\nFeel free to customize these pages in the PageFly editor to make them your own. If you have any questions, just reply here.\n\n"
+       "👉 [See your 2 pages]({link})\n\nFeel free to customize these pages in the PageFly editor to make them your own. If you have any questions, just reply here.\n\n"
        "Best regards,\n**{pic} – PageFly Support**")
 FU2 = ("{hi}\n\n{seen}If anything stops you from using them (import steps, design, or something missing), tell me and I will sort it out for you. "
        "Importing takes about a minute: download the .pagefly file, then import it in PageFly.\n\n"
-       "👉 **[Open your pages]({link})**\n\nBest regards,\n**{pic} – PageFly Support**")
+       "👉 [Open your pages]({link})\n\nBest regards,\n**{pic} – PageFly Support**")
 REVIEW = ("{hi}\n\nThank you for the kind words, it means a lot to our team! 🙌\n\n"
           "If PageFly has been helpful so far, would you mind leaving us a quick review on the Shopify App Store? "
-          "It takes about 30 seconds and helps other merchants find us.\n\n👉 **[Leave a review]({review})**\n\n"
+          "It takes about 30 seconds and helps other merchants find us.\n\n👉 [Leave a review]({review})\n\n"
           "And if you need anything else for your pages, just reply here.\n\nBest regards,\n**{pic} – PageFly Support**")
 
 

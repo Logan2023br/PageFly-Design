@@ -106,8 +106,9 @@ export const DEFAULT_INITIAL_TEMPLATE =
   "Welcome to PageFly! To help you get started, our team designed 2 pages for your store, " +
   "built with your own products: a **{page1_label}** and a **{page2_label}**. They're free, " +
   "and you can import them into PageFly in about a minute.\n\n" +
-  /* Bold around the link, not inside it: Crisp does not render ** in a link's text. */
-  "👉 **[See your 2 pages]({link})**\n\n" +
+  /* A plain link: Crisp renders neither **[text](url)** nor [**text**](url) —
+     both arrive as raw markdown. */
+  "👉 [See your 2 pages]({link})\n\n" +
   "Feel free to customize these pages in the PageFly editor to make them your own. If you have any questions, just reply here.\n\n" +
   "Best regards,\n**{pic} – PageFly Support**";
 

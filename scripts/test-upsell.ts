@@ -344,7 +344,15 @@ async function main() {
     const tracking = await adminQueries.listLeadTab("tracking", {});
     check(tracking.rows.some((l) => l.lead_id === "L261012AAAA" && l.ticket_link === leadA?.ticket_link), "Đang theo dõi rows carry the ticket", tracking.rows.map((l) => l.ticket_link));
     const { DEFAULT_INITIAL_TEMPLATE } = await import("../lib/upsell/common");
-    check(DEFAULT_INITIAL_TEMPLATE.includes("👉 **[See your 2 pages]({link})**") && !DEFAULT_INITIAL_TEMPLATE.includes("[**"), "first message: bold outside the link, as Crisp renders it");
+    /* Crisp renders neither **[text](url)** nor [**text**](url): links stay plain. */
+    const links = [...DEFAULT_INITIAL_TEMPLATE.matchAll(/\[([^\]]*)\]\(([^)]*)\)/g)];
+    check(
+      links.length === 1 &&
+        DEFAULT_INITIAL_TEMPLATE.includes("👉 [See your 2 pages]({link})") &&
+        links.every((m) => !m[1].includes("*") && !DEFAULT_INITIAL_TEMPLATE.slice(0, m.index).endsWith("*") && !DEFAULT_INITIAL_TEMPLATE.slice(m.index! + m[0].length).startsWith("*")),
+      "first message: the link is plain, no ** in or around it",
+      links.map((m) => m[0]),
+    );
     check((await adminQueries.tabCounts()).failed === 1, "the tab counts it");
     check((await review.pendingCounts()).failed === 1, "the sidebar counts it");
 
@@ -484,7 +492,7 @@ async function main() {
       install_lookback_hours: "5",
       pic: "Mai",
       review_url: "https://apps.shopify.com/pagefly#reviews",
-      initial_message_template: "Hi **{store_name}**, 👉 **[See your 2 pages]({link})**",
+      initial_message_template: "Hi **{store_name}**, 👉 [See your 2 pages]({link})",
       slack_webhook_url: "https://hooks.slack.test/T000/B000/xyz",
     };
     check(Object.keys(next).sort().join() === [...settings.SETTING_KEYS].sort().join(), "the test covers every setting", settings.SETTING_KEYS);
