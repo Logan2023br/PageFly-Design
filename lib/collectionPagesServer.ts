@@ -238,6 +238,18 @@ const REEXPORTED: {
       kinds: ["pagefly"] as CollectionFileKind[],
     }),
   ),
+  /* Nordlys, its seven .pagefly re-exported. An uploaded set, not a built-in
+     one: its pages are slugged `nordlys-*`, and only the .pagefly is in the
+     repository — the previews stay the uploaded ones. */
+  ...["home", "product-page", "collection-page", "about-us", "contact", "blog-article", "solstice-sale"].map(
+    (page) => ({
+      set: "nordlys",
+      page: `nordlys-${page}`,
+      since: "2026-10-15T10:00:00Z",
+      dir: "collection-sets",
+      kinds: ["pagefly"] as CollectionFileKind[],
+    }),
+  ),
   /* Aurum's sale, re-exported again. */
   {
     set: "aurum",
