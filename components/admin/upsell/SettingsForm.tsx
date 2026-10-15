@@ -5,7 +5,11 @@ import { Button } from "../../ui";
 import { FIELD, FIELD_LABEL, api } from "../collections/shared";
 import { ErrorLine } from "./bits";
 
-/* Tab 11 — every upsell_settings key, with what it does beside it. */
+/* Tab 11 — every upsell_settings key, with what it does beside it.
+
+   ONLY WHAT CHANGED IS SENT. Saving the whole form wrote every field back
+   as it was when the page loaded, so a tab left open (or a second admin)
+   pressing Lưu put back values someone else had changed since. */
 
 export function SettingsForm({
   initial,
@@ -17,6 +21,8 @@ export function SettingsForm({
   numeric: string[];
 }) {
   const [values, setValues] = useState(initial);
+  /* What the server last said is stored — the baseline "changed" is against. */
+  const [stored, setStored] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -25,10 +31,12 @@ export function SettingsForm({
     setBusy(true);
     setError(null);
     setSaved(false);
-    const r = await api<{ settings: Record<string, string | number> }>("/api/admin/upsell/settings", { method: "PUT", body: JSON.stringify(values) });
+    const changed = Object.fromEntries(Object.entries(values).filter(([k, v]) => String(v) !== String(stored[k] ?? "")));
+    const r = await api<{ settings: Record<string, string | number> }>("/api/admin/upsell/settings", { method: "PUT", body: JSON.stringify(changed) });
     setBusy(false);
     if (!r.ok) return setError(r.error);
     setValues(r.settings);
+    setStored(r.settings);
     setSaved(true);
   };
 
@@ -45,7 +53,10 @@ export function SettingsForm({
               type={numeric.includes(k) ? "number" : k === "slack_webhook_url" ? "password" : "text"}
               step="any"
               value={String(values[k] ?? "")}
-              onChange={(e) => setValues({ ...values, [k]: numeric.includes(k) ? e.target.value : e.target.value })}
+              onChange={(e) => {
+                setSaved(false);
+                setValues({ ...values, [k]: e.target.value });
+              }}
             />
           )}
           <span className="text-[12px] text-pf-faint">{help[k]}</span>

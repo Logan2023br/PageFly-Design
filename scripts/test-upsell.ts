@@ -460,6 +460,64 @@ async function main() {
     check(leads.leadIdFor("zircon.myshopify.com").leadId.slice(7) === py, "lead id suffix matches bpu_ops.py", py);
   }
 
+  console.log("settings: saved in admin, read back by the API");
+  {
+    const settingsRoute = await import("../app/api/upsell/settings/route");
+    const queueRoute = await import("../app/api/upsell/queue/route");
+    const keyed = (path: string) => new Request(`https://x${path}`, { headers: { "x-api-key": "test-key-0123456789abcdef" } });
+    const readApi = async () => {
+      const res = await settingsRoute.GET(keyed("/api/upsell/settings"));
+      return { res, body: (await res.json()) as { settings: Record<string, unknown> } };
+    };
+
+    /* Each key, one at a time, as the form sends it: the value as typed (a string). */
+    const next: Record<string, string> = {
+      score_threshold: "7",
+      control_percent: "25",
+      min_products: "3",
+      max_builds_per_run: "1",
+      followup1_hours: "36",
+      followup2_hours: "120",
+      send_hour_start: "8",
+      send_hour_end: "20",
+      tracking_days: "45",
+      install_lookback_hours: "5",
+      pic: "Mai",
+      review_url: "https://apps.shopify.com/pagefly#reviews",
+      initial_message_template: "Hi **{store_name}**, 👉 **[See your 2 pages]({link})**",
+      slack_webhook_url: "https://hooks.slack.test/T000/B000/xyz",
+    };
+    check(Object.keys(next).sort().join() === [...settings.SETTING_KEYS].sort().join(), "the test covers every setting", settings.SETTING_KEYS);
+    for (const k of settings.SETTING_KEYS) {
+      const saved = await settings.saveSettings({ [k]: next[k] });
+      const { res, body } = await readApi();
+      const want = settings.NUMERIC_KEYS.includes(k) ? Number(next[k]) : k === "slack_webhook_url" ? "(set)" : next[k];
+      check(String(saved[k]) === next[k] && body.settings[k] === want, `${k}: saved ${next[k]}, API returns ${JSON.stringify(want)}`, { saved: saved[k], api: body.settings[k] });
+      check(res.headers.get("cache-control") === "no-store", `${k}: the answer is not cacheable`);
+    }
+
+    /* A save names only what changed: everything else stays as stored. */
+    await settings.saveSettings({ pic: "Logan" });
+    const after = (await readApi()).body.settings;
+    check(after.max_builds_per_run === 1 && after.install_lookback_hours === 5 && after.pic === "Logan", "saving one key leaves the others alone", after);
+
+    /* Bad input is refused whole, not skipped while answering "saved". */
+    await rejects(settings.saveSettings({ max_builds_per_run: "", pic: "Nope" }), 422, "an empty number is 422");
+    await rejects(settings.saveSettings({ max_builds_per_run: "abc" }), 422, "a non-number is 422");
+    await rejects(settings.saveSettings({ max_build_per_run: 3 }), 422, "a misspelt key is 422");
+    const still = (await readApi()).body.settings;
+    check(still.max_builds_per_run === 1 && still.pic === "Logan", "a refused save writes nothing", still);
+
+    /* The Builder asks the queue without a limit; the setting decides. */
+    for (const [id, dom] of [["L261099QA01", "qa1.myshopify.com"], ["L261099QA02", "qa2.myshopify.com"]])
+      await leads.upsertLeads([{ lead_id: id, store_domain: dom, group: "test", status: "new", lead_score: 9 }]);
+    const q = (await (await queueRoute.GET(keyed("/api/upsell/queue"))).json()) as { leads: unknown[] };
+    check(q.leads.length === 1, "queue without limit gives max_builds_per_run (1) leads", q.leads.length);
+    await settings.saveSettings({ max_builds_per_run: 2, slack_webhook_url: "" });
+    const q2 = (await (await queueRoute.GET(keyed("/api/upsell/queue"))).json()) as { leads: unknown[] };
+    check(q2.leads.length === 2, "…and 2 once it is 2 again", q2.leads.length);
+  }
+
   await closeUpsellPool();
   console.log(failures === 0 ? "\nAll checks passed." : `\n${failures} check(s) failed.`);
   process.exit(failures === 0 ? 0 : 1);

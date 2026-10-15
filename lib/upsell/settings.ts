@@ -1,6 +1,7 @@
 import "server-only";
 
 import { db, type Db } from "./db";
+import { UpsellError } from "./types";
 
 /* ==========================================================================
    upsell_settings — key/value, with the defaults written here.
@@ -68,20 +69,32 @@ export async function getSettings(c?: Db): Promise<Settings> {
   return out as Settings;
 }
 
-/** Saves only the keys it knows, coerced to the default's type. Returns what
-    is now in force. */
+/** Saves the keys given, coerced to the default's type, and only those — a
+    key left out keeps what is stored. Returns what is now in force.
+
+    NOTHING IS SKIPPED QUIETLY: an unknown key, or a number field that is
+    empty or not a number, refuses the whole save (422) before anything is
+    written. Skipping it would answer "saved" while the old value stayed. */
 export async function saveSettings(patch: Record<string, unknown>): Promise<Settings> {
-  const q = await db();
+  const rows: [SettingKey, number | string][] = [];
+  const bad: string[] = [];
   for (const [key, raw] of Object.entries(patch)) {
-    if (!(key in SETTING_DEFAULTS)) continue;
-    const def = SETTING_DEFAULTS[key as SettingKey];
-    let value: number | string;
-    if (typeof def === "number") {
-      value = Number(raw);
-      if (!Number.isFinite(value)) continue;
-    } else {
-      value = String(raw ?? "");
+    if (!(key in SETTING_DEFAULTS)) {
+      bad.push(`${key} (không có setting này)`);
+      continue;
     }
+    const def = SETTING_DEFAULTS[key as SettingKey];
+    if (typeof def === "number") {
+      const n = typeof raw === "string" ? (raw.trim() === "" ? NaN : Number(raw)) : typeof raw === "number" ? raw : NaN;
+      if (!Number.isFinite(n)) bad.push(`${key} (phải là số)`);
+      else rows.push([key as SettingKey, n]);
+    } else {
+      rows.push([key as SettingKey, String(raw ?? "")]);
+    }
+  }
+  if (bad.length) throw new UpsellError(`Chưa lưu — giá trị không hợp lệ: ${bad.join(", ")}.`, 422);
+  const q = await db();
+  for (const [key, value] of rows) {
     await q.query(
       `insert into upsell_settings (key, value, updated_at) values ($1, $2::jsonb, now())
        on conflict (key) do update set value = excluded.value, updated_at = now()`,

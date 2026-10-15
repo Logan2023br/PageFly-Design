@@ -24,8 +24,7 @@ Mọi request tới `$PFD/api/upsell/*` đều gửi header `X-API-Key`.
 ## Bước 1. Lấy việc
 
 ```bash
-curl -sS "${H[@]}" "$PFD/api/upsell/settings"          # đọc max_builds_per_run
-curl -sS "${H[@]}" "$PFD/api/upsell/queue?limit=2"     # limit = max_builds_per_run
+curl -sS "${H[@]}" "$PFD/api/upsell/queue"             # không truyền limit: server lấy đúng max_builds_per_run trong Cài đặt
 ```
 
 `queue` trả `{ "leads": [...] }`, đã sắp xếp sẵn: ưu tiên cao trước, rồi điểm cao, rồi lead cũ nhất. Mỗi lead có:

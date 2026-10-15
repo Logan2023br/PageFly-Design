@@ -10,7 +10,11 @@ import { UpsellError } from "./types";
    way of turning an error into a response.
    ========================================================================== */
 
-export const json = (body: unknown, status = 200) => Response.json(body, { status });
+/* no-store on every answer: these are live state (settings, queue, counts),
+   and a proxy in front of the app holding one would hand the script or the
+   Builder yesterday's value. */
+export const json = (body: unknown, status = 200) =>
+  Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
 /* TODO: xoá fallback này sau khi đã đặt UPSELL_API_KEY trong .env trên VPS.
    Until then a server without UPSELL_API_KEY accepts the one key whose SHA-256
