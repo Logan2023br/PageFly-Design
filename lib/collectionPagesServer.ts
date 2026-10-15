@@ -250,6 +250,24 @@ const REEXPORTED: {
       kinds: ["pagefly"] as CollectionFileKind[],
     }),
   ),
+  /* Rest Co, Fairway Club, Optique and Wick House, their seven .pagefly
+     each re-exported; the previews are unchanged. */
+  ...(
+    [
+      ["rest-co", "memorial-day-sale"],
+      ["fairway-club", "clubhouse-clearance"],
+      ["optique", "summer-sale"],
+      ["wick-house", "winter-glow-sale"],
+    ] as const
+  ).flatMap(([set, sale]) =>
+    ["home", "product-page", "collection-page", "about-us", "contact", "blog-article", sale].map((page) => ({
+      set,
+      page,
+      since: "2026-10-15T10:10:00Z",
+      dir: "collection-sets",
+      kinds: ["pagefly"] as CollectionFileKind[],
+    })),
+  ),
   /* Aurum's sale, re-exported again. */
   {
     set: "aurum",
