@@ -218,6 +218,16 @@ const REEXPORTED: {
       kinds: ["pagefly"] as CollectionFileKind[],
     }),
   ),
+  /* Oaken, its seven .pagefly re-exported; the previews are unchanged. */
+  ...["home", "product-page", "collection-page", "about-us", "contact", "blog-article", "sample-sale"].map(
+    (page) => ({
+      set: "oaken",
+      page,
+      since: "2026-10-15T09:35:00Z",
+      dir: "collection-sets",
+      kinds: ["pagefly"] as CollectionFileKind[],
+    }),
+  ),
   /* Aurum's sale, re-exported again. */
   {
     set: "aurum",
