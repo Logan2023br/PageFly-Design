@@ -40,6 +40,7 @@ export function CollectionSetsAdmin({
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
+  const [query, setQuery] = useState("");
 
   const reload = async () => {
     const res = await api<{ sets: CollectionSetRecord[]; missing: string[] }>(
@@ -117,6 +118,11 @@ export function CollectionSetsAdmin({
   const paid = sets.filter((s) => s.access === "paid").length;
   const pages = sets.reduce((n, s) => n + s.pages.length, 0);
 
+  /* Search by the set's name or slug, ignoring case and accents. While a search
+     is on, the arrows are off: moving among a filtered few would be guesswork. */
+  const q = fold(query.trim());
+  const found = q ? sets.filter((s) => fold(`${s.name} ${s.slug}`).includes(q)) : sets;
+
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -190,6 +196,32 @@ export function CollectionSetsAdmin({
         </Panel>
       )}
 
+      {sets.length > 0 && (
+        <div className="relative">
+          <Icon
+            name="Search"
+            size={16}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-pf-faint"
+          />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setQuery("");
+            }}
+            placeholder="Search sets by name"
+            aria-label="Search sets by name"
+            className="w-full rounded-pf-md border border-pf-border bg-pf-bg-deep py-2.5 pl-9 pr-3 text-[13.5px] text-pf-text outline-none transition-colors focus:border-pf-primary-hi"
+          />
+          {q && (
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-pf-faint">
+              {found.length} of {sets.length}
+            </span>
+          )}
+        </div>
+      )}
+
       {error && (
         <p role="alert" className="text-[13px] text-pf-danger">
           {error}
@@ -204,9 +236,15 @@ export function CollectionSetsAdmin({
             Create a set, then drop its .html previews and .pagefly files into it.
           </p>
         </Panel>
+      ) : found.length === 0 ? (
+        <Panel className="grid place-items-center gap-2 px-6 py-12 text-center">
+          <Icon name="Search" size={24} className="text-pf-faint" />
+          <p className="text-[13.5px] text-pf-muted">No set matches “{query.trim()}”.</p>
+        </Panel>
       ) : (
         <ul className="grid gap-2.5">
-          {sets.map((set, at) => {
+          {found.map((set) => {
+            const at = sets.indexOf(set);
             const cover = set.pages.find((p) => p.htmlSize !== null);
             const shown = set.pages.filter((p) => p.htmlSize !== null).length;
             return (
@@ -220,7 +258,7 @@ export function CollectionSetsAdmin({
                     <button
                       type="button"
                       onClick={() => move(at, -1)}
-                      disabled={at === 0 || busy !== null}
+                      disabled={at === 0 || busy !== null || q !== ""}
                       aria-label={`Move ${set.name} up`}
                       className="grid size-7 place-items-center rounded-pf-sm text-pf-faint transition-colors hover:bg-pf-card-hi hover:text-pf-text disabled:opacity-30"
                     >
@@ -229,7 +267,7 @@ export function CollectionSetsAdmin({
                     <button
                       type="button"
                       onClick={() => move(at, 1)}
-                      disabled={at === sets.length - 1 || busy !== null}
+                      disabled={at === sets.length - 1 || busy !== null || q !== ""}
                       aria-label={`Move ${set.name} down`}
                       className="grid size-7 place-items-center rounded-pf-sm text-pf-faint transition-colors hover:bg-pf-card-hi hover:text-pf-text disabled:opacity-30"
                     >
@@ -352,4 +390,9 @@ export function settingsOf(set: CollectionSetRecord) {
     priceCents: set.priceCents,
     buyUrl: set.buyUrl,
   };
+}
+
+/** lowercase, without accents, so "tet" finds "Tết" */
+function fold(text: string): string {
+  return text.normalize("NFD").replace(/\p{Diacritic}/gu, "").replace(/đ/gi, "d").toLowerCase();
 }
