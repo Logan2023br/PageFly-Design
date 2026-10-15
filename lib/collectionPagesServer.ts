@@ -198,6 +198,16 @@ const REEXPORTED: {
       kinds: ["pagefly"] as CollectionFileKind[],
     }),
   ),
+  /* Maison Lune, its seven .pagefly re-exported; the previews are unchanged. */
+  ...["home", "product-page", "collection-page", "about-us", "contact", "blog-article", "archive-sale"].map(
+    (page) => ({
+      set: "maison-lune",
+      page,
+      since: "2026-10-15T09:10:00Z",
+      dir: "collection-sets",
+      kinds: ["pagefly"] as CollectionFileKind[],
+    }),
+  ),
   /* Aurum's sale, re-exported again. */
   {
     set: "aurum",
