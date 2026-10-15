@@ -86,7 +86,7 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
     <AdminShell
       current="upsell"
       title="Upsell Build Pages"
-      subtitle="NIU: page Claude dựng cho store mới cài — duyệt page, duyệt tin, theo dõi kết quả. Không tin nào tới khách khi chưa được duyệt."
+      subtitle="BPU: page Claude dựng cho store mới cài — duyệt page, duyệt tin, theo dõi kết quả. Không tin nào tới khách khi chưa được duyệt."
     >
       <div className="grid gap-4">
         <TabNav tab={tab} counts={counts} />
