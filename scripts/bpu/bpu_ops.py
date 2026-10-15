@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""NIU (New Install Upsell) ops script.
+"""BPU (Build Page Upsell) ops script.
 
-Run by the "NIU Ops" Claude scheduled task every hour. Deterministic work only;
+Run by the "BPU Ops" Claude scheduled task every hour. Deterministic work only;
 Claude handles the judgment steps (Mixpanel intents, reply classification).
 
 Commands (run in this order):
@@ -25,7 +25,7 @@ AC2 = "https://ac2.pagefly.io/api/app-data/stores"
 CRISP_WID = os.environ.get("CRISP_WEBSITE_ID", "7cd1799e-e8eb-476e-8cb7-33778fc41c2a")
 CRISP = f"https://api.crisp.chat/v1/website/{CRISP_WID}"
 SHEET_ID = os.environ.get("SHEET_ID", "1qH3yMamu2V1FUGcMeWeRV7SLf-eR97-wet5B84djUCA")
-UA = "Mozilla/5.0 (compatible; PageFly-NIU/1.0)"
+UA = "Mozilla/5.0 (compatible; PageFly-BPU/1.0)"
 LOG = []
 
 
@@ -86,7 +86,7 @@ def ac2(path="", query=None):
     proxy = os.environ.get("N8N_AC2_URL", "")
     if proxy:
         q = dict(query or {}, path=path)
-        s, j = http("GET", f"{proxy}?{urllib.parse.urlencode(q)}", headers={"X-NIU-Key": env("N8N_AC2_KEY")})
+        s, j = http("GET", f"{proxy}?{urllib.parse.urlencode(q)}", headers={"X-BPU-Key": env("N8N_AC2_KEY")})
     else:
         q = dict(query or {}, token=env("AC2_TOKEN"))
         s, j = http("GET", f"{AC2}{path}?{urllib.parse.urlencode(q)}")
@@ -432,7 +432,7 @@ def cmd_send(args):
             pfd("POST", f"/api/upsell/messages/{m['id']}/result", {"status": "failed", "error": f"Crisp message {ms}"}); failed.append(m["id"]); continue
         if m.get("kind") == "initial":
             crisp("POST", f"/conversation/{sid}/message", {"type": "note", "from": "operator", "origin": "chat",
-                  "content": f"NIU auto-build program (2 free pages). Lead {m['lead_id']}. Preview: {L.get('design_url')}. "
+                  "content": f"BPU auto-build program (2 free pages). Lead {m['lead_id']}. Preview: {L.get('design_url')}. "
                              f"If the customer replies, please mention {cfg['pic']}.", "user": {"type": "website", "nickname": "PageFly Team"}})
         crisp("PATCH", f"/conversation/{sid}/state", {"state": "resolved"})
         pfd("POST", f"/api/upsell/messages/{m['id']}/result", result)

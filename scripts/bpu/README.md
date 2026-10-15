@@ -1,6 +1,6 @@
-# NIU Ops — `niu_ops.py`
+# BPU Ops — `bpu_ops.py`
 
-Script mà Claude scheduled task **NIU Ops** chạy mỗi giờ. Chỉ làm phần việc
+Script mà Claude scheduled task **BPU Ops** chạy mỗi giờ. Chỉ làm phần việc
 có thể lặp lại chính xác (gọi API, chấm điểm, soạn tin theo mẫu); phần cần phán
 đoán (intent từ Mixpanel, phân loại phản hồi) là việc của Claude.
 
@@ -28,11 +28,11 @@ Mỗi lệnh in một dòng JSON tóm tắt ra stdout; lỗi gọi API in ra std
 
 ```bash
 export PFD_API_KEY=…   # = UPSELL_API_KEY trên server
-python3 scripts/niu/niu_ops.py sync --intents intents.json
-python3 scripts/niu/niu_ops.py track
-python3 scripts/niu/niu_ops.py apply-sentiment classified.json
-python3 scripts/niu/niu_ops.py send
-python3 scripts/niu/niu_ops.py sheet
+python3 scripts/bpu/bpu_ops.py sync --intents intents.json
+python3 scripts/bpu/bpu_ops.py track
+python3 scripts/bpu/bpu_ops.py apply-sentiment classified.json
+python3 scripts/bpu/bpu_ops.py send
+python3 scripts/bpu/bpu_ops.py sheet
 ```
 
 ## Biến môi trường
@@ -45,7 +45,7 @@ python3 scripts/niu/niu_ops.py sheet
 | `CRISP_IDENTIFIER`, `CRISP_KEY` | có (`track`, `send`) | Plugin token Crisp (Basic auth, tier `plugin`). |
 | `CRISP_WEBSITE_ID` | không | Mặc định `7cd1799e-e8eb-476e-8cb7-33778fc41c2a`. |
 | `GOOGLE_SA_JSON` | chỉ `sheet` | JSON service account, nguyên văn hoặc base64. Sheet phải share quyền Editor cho email của service account. |
-| `SHEET_ID` | không | Mặc định là sheet NIU hiện tại. |
+| `SHEET_ID` | không | Mặc định là sheet BPU hiện tại. |
 
 Các ngưỡng (điểm, % đối chứng, giờ follow-up, giờ gửi, PIC, link review…) không
 nằm ở đây — script đọc chúng từ `GET /api/upsell/settings`, sửa trong
@@ -54,11 +54,11 @@ nằm ở đây — script đọc chúng từ `GET /api/upsell/settings`, sửa 
 ## Test
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -r scripts/niu/requirements.txt
-.venv/bin/pytest scripts/niu/tests -q
+python3 -m venv .venv && .venv/bin/pip install -r scripts/bpu/requirements.txt
+.venv/bin/pytest scripts/bpu/tests -q
 ```
 
-- `tests/test_niu_ops.py` — giả lập toàn bộ (PageFly Design, AC2, Crisp,
+- `tests/test_bpu_ops.py` — giả lập toàn bộ (PageFly Design, AC2, Crisp,
   `products.json`) trong bộ nhớ; không gọi mạng. Kiểm tra script gọi đúng
   đường dẫn với đúng tên field.
 - `tests/test_e2e.py` — chạy script với **server PageFly Design thật**
@@ -67,7 +67,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/niu/requirements.txt
 ```bash
 # server: npx next dev -p 3100 với DATABASE_URL (Postgres), UPSELL_API_KEY=…, PFD_PUBLIC_URL=http://localhost:3100
 PFD_E2E_BASE=http://localhost:3100 PFD_E2E_KEY=<UPSELL_API_KEY> \
-  .venv/bin/pytest scripts/niu/tests/test_e2e.py -q
+  .venv/bin/pytest scripts/bpu/tests/test_e2e.py -q
 ```
 
 Test e2e đăng nhập admin bằng `ADMIN_USERNAME`/`ADMIN_PASSWORD` (mặc định
