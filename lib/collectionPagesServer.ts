@@ -188,6 +188,16 @@ const REEXPORTED: {
   { set: "volt", page: "contact", since: "2026-10-09T16:10:00Z", dir: "collection-sets" },
   { set: "volt", page: "blog-article", since: "2026-10-09T16:10:00Z", dir: "collection-sets" },
   { set: "volt", page: "archive-sale", since: "2026-10-09T16:10:00Z", dir: "collection-sets" },
+  /* Aurum, its seven .pagefly re-exported; the previews are unchanged. */
+  ...["home", "product-page", "collection-page", "about-us", "contact", "blog-article", "private-sale"].map(
+    (page) => ({
+      set: "aurum",
+      page,
+      since: "2026-10-15T07:45:00Z",
+      dir: "collection-sets",
+      kinds: ["pagefly"] as CollectionFileKind[],
+    }),
+  ),
 ];
 
 let refreshing: Promise<void> | null = null;
