@@ -228,6 +228,16 @@ const REEXPORTED: {
       kinds: ["pagefly"] as CollectionFileKind[],
     }),
   ),
+  /* Dew, its seven .pagefly re-exported; the previews are unchanged. */
+  ...["home", "product-page", "collection-page", "about-us", "contact", "blog-article", "glow-week-sale"].map(
+    (page) => ({
+      set: "dew",
+      page,
+      since: "2026-10-15T09:40:00Z",
+      dir: "collection-sets",
+      kinds: ["pagefly"] as CollectionFileKind[],
+    }),
+  ),
   /* Aurum's sale, re-exported again. */
   {
     set: "aurum",
