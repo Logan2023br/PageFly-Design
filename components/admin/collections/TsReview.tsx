@@ -15,13 +15,14 @@ import { api } from "./shared";
    The TS team's check of one set, on its row in the admin list.
 
      nobody yet   [TS Review] → a dialog: pick a TS member, Confirm
-     reviewing    [Download .pagefly]  Alfie Reviewing · 14/10/2026 10:22:05  [Done]
-     done         [Download .pagefly]  Alfie Done · 14/10/2026 11:03:41
+     reviewing    [Download .pagefly] [Download .html]  Alfie Reviewing · 14/10/2026 10:22:05  [Done]
+     done         [Download .pagefly] [Download .html]  Alfie Done · 14/10/2026 11:03:41
 
    Either of the last two can be reset, after a confirm, back to nobody.
 
    The download is the whole set as one .pagefly — the same file the public
    page hands out, which an admin may fetch even for a hidden or paid set.
+   The .html one is every page's preview file as stored, in one zip.
    ========================================================================== */
 
 /** dd/mm/yyyy hh:mm:ss, in the viewer's own time zone */
@@ -46,6 +47,7 @@ export function TsReview({
   const [error, setError] = useState<string | null>(null);
   const review = set.review;
   const hasFiles = set.pages.some((p) => p.pageflySize !== null);
+  const hasHtml = set.pages.some((p) => p.htmlSize !== null);
 
   const send = async (
     body: { reviewer: CollectionReviewer } | { done: true } | { reset: true },
@@ -86,6 +88,20 @@ export function TsReview({
           >
             <Icon name="Download" size={14} />
             Download .pagefly
+          </a>
+          <a
+            href={hasHtml ? `/api/admin/collection-pages/${set.id}/html` : undefined}
+            download={`${set.slug}-html.zip`}
+            aria-disabled={!hasHtml}
+            title={hasHtml ? "Every page's .html of this set, in one zip" : "No .html files yet"}
+            className={`inline-flex h-8 items-center gap-1.5 rounded-pf-md border border-pf-border px-3 text-[12.5px] font-semibold transition-colors ${
+              hasHtml
+                ? "text-pf-body hover:border-pf-border-hi hover:bg-pf-card"
+                : "pointer-events-none text-pf-faint"
+            }`}
+          >
+            <Icon name="Download" size={14} />
+            Download .html
           </a>
           <span
             className={`inline-flex h-8 items-center gap-1.5 rounded-pf-md border px-3 text-[12.5px] font-semibold ${
