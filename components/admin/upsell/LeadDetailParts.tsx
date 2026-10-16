@@ -363,6 +363,8 @@ const EVENT_LABEL: Record<string, string> = {
   upgraded: "Nâng cấp",
   uninstalled: "Gỡ app",
   note_added: "Ghi chú",
+  whatsapp_sent: "Đánh dấu đã gửi WhatsApp",
+  whatsapp_unmarked: "Bỏ đánh dấu WhatsApp",
   status_changed: "Đổi trạng thái",
   view: "Khách xem trang",
   preview_open: "Khách mở toàn màn hình",

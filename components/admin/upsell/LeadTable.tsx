@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { daysLeft, fmtVN, hoursSince, money } from "@/lib/upsell/format";
 import type { LeadListRow } from "@/lib/upsell/leads";
 import { Button } from "../../ui";
-import { CrispLink, ErrorLine, Pill, PhoneLine, StatusBadge, useAct } from "./bits";
+import { CrispLink, ErrorLine, Pill, PhoneLine, StatusBadge, WhatsappMark, useAct } from "./bits";
 import { Empty } from "./PendingPages";
 
 /* ==========================================================================
@@ -74,6 +74,10 @@ export function LeadTable({ rows, variant }: { rows: LeadListRow[]; variant: Tab
         },
       },
       ticket,
+      {
+        head: "WhatsApp",
+        cell: (l) => <WhatsappMark leadId={l.lead_id} sentAt={l.whatsapp_sent_at} sentBy={l.whatsapp_sent_by} />,
+      },
     );
   } else if (variant === "upgraded") {
     cols.push(

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { STATUS_LABEL, statusTone, whatsappUrl } from "@/lib/upsell/format";
+import { STATUS_LABEL, fmtVN, statusTone, whatsappUrl } from "@/lib/upsell/format";
 import { Icon } from "../../ui";
 import { api } from "../collections/shared";
 
@@ -154,6 +154,43 @@ export function PhoneLine({ phone }: { phone: string | null | undefined }) {
         </a>
       )}
     </span>
+  );
+}
+
+/** "Đã gửi qua WhatsApp": the mark, who set it and when, and the button that
+    sets or clears it. The message itself goes from someone's phone. */
+export function WhatsappMark({ leadId, sentAt, sentBy }: { leadId: string; sentAt: string | null; sentBy: string | null }) {
+  const [run, busy, error] = useAct();
+  const set = (sent: boolean) => run(`/api/admin/upsell/leads/${leadId}`, { action: "whatsapp", sent });
+  return (
+    <div className="grid justify-items-start gap-1">
+      {sentAt ? (
+        <>
+          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-pf-pill border border-pf-success/30 bg-pf-success/10 px-2 py-0.5 text-[11px] font-semibold text-pf-success">
+            <Icon name="Check" size={11} />
+            Đã gửi WhatsApp
+          </span>
+          <span className="whitespace-nowrap text-[11px] text-pf-faint">
+            {fmtVN(sentAt)}
+            {sentBy ? ` · ${sentBy.replace(/^admin:/, "")}` : ""}
+          </span>
+          <button type="button" disabled={busy} onClick={() => void set(false)} className="text-[11px] text-pf-faint underline-offset-2 hover:text-pf-text hover:underline disabled:opacity-50">
+            Bỏ đánh dấu
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void set(true)}
+          className="inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-pf-md border border-pf-border px-2.5 text-[12px] font-semibold text-pf-body transition-colors hover:border-pf-success/50 hover:text-pf-success disabled:opacity-50"
+        >
+          <Icon name="MessageSquare" size={13} />
+          Đánh dấu đã gửi
+        </button>
+      )}
+      <ErrorLine error={error} />
+    </div>
   );
 }
 

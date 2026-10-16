@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { adminGate } from "@/components/admin/adminGate";
-import { CrispLink, PhoneLine, Pill, StatusBadge } from "@/components/admin/upsell/bits";
+import { CrispLink, PhoneLine, Pill, StatusBadge, WhatsappMark } from "@/components/admin/upsell/bits";
 import { LeadMessages, PagePreviews, ReviewActions, Timeline } from "@/components/admin/upsell/LeadDetailParts";
 import { filterOptions, leadDetail } from "@/lib/upsell/adminQueries";
 import { customerClock, daysLeft, fmtVN, handleOf, money } from "@/lib/upsell/format";
@@ -125,6 +125,9 @@ export default async function LeadPage(props: PageProps<"/design/admin/upsell/le
               {l.error && <Row k="Lỗi">{l.error}</Row>}
               {l.reject_reason && <Row k="Lý do từ chối">{l.reject_reason}</Row>}
               {l.rebuild_note && <Row k="Ghi chú rebuild">{l.rebuild_note}</Row>}
+              <Row k="WhatsApp">
+                <WhatsappMark leadId={l.lead_id} sentAt={l.whatsapp_sent_at} sentBy={l.whatsapp_sent_by} />
+              </Row>
               <Row k="Rebuild">{l.rebuild_count} lần</Row>
               {l.reviewed_by && <Row k="Duyệt bởi">{`${l.reviewed_by.replace(/^admin:/, "")} · ${fmtVN(l.reviewed_at)}`}</Row>}
             </dl>

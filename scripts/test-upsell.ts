@@ -468,6 +468,25 @@ async function main() {
     check(leads.leadIdFor("zircon.myshopify.com").leadId.slice(7) === py, "lead id suffix matches bpu_ops.py", py);
   }
 
+  console.log("marked as sent on WhatsApp");
+  {
+    await review.setWhatsappSent("L261012AAAA", true, "admin:mai");
+    const on = (await leads.getLead("L261012AAAA"))!;
+    check(Boolean(on.whatsapp_sent_at) && on.whatsapp_sent_by === "admin:mai", "marking records when and who", on);
+    await review.setWhatsappSent("L261012AAAA", true, "admin:other");
+    check((await leads.getLead("L261012AAAA"))!.whatsapp_sent_by === "admin:mai", "marking again changes nothing");
+    await leads.syncLeads([{ lead_id: "L261012AAAA", whatsapp_sent_at: null, whatsapp_sent_by: "claude" }]);
+    check(Boolean((await leads.getLead("L261012AAAA"))!.whatsapp_sent_at), "the script's sync cannot clear it");
+    const row = (await adminQueries.listLeadTab("upgraded", {})).rows.find((l) => l.lead_id === "L261012AAAA");
+    check(Boolean(row?.whatsapp_sent_at), "the lead tables carry it");
+    await review.setWhatsappSent("L261012AAAA", false, "admin:mai");
+    const off = (await leads.getLead("L261012AAAA"))!;
+    check(off.whatsapp_sent_at === null && off.whatsapp_sent_by === null, "unmarking clears it");
+    const ev = await adminQueries.leadDetail("L261012AAAA");
+    const types = ev!.events.map((e) => e.type);
+    check(types.filter((t) => t === "whatsapp_sent").length === 1 && types.includes("whatsapp_unmarked"), "both on the timeline, once each", types);
+  }
+
   console.log("phone → WhatsApp");
   {
     const { whatsappUrl } = await import("../lib/upsell/format");

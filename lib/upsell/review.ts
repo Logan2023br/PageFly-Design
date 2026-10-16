@@ -186,6 +186,18 @@ export async function setLeadMeta(
   });
 }
 
+/** "Đã gửi qua WhatsApp": an admin marks (or unmarks) that the customer was
+    also messaged on WhatsApp. Nothing is sent from here — WhatsApp happens on
+    someone's phone — so this only records who said so, and when. */
+export async function setWhatsappSent(leadId: string, sent: boolean, actor: Actor): Promise<void> {
+  await tx(async (c) => {
+    const lead = await lockLead(c, leadId);
+    if (Boolean(lead.whatsapp_sent_at) === sent) return;
+    await updateLead(c, leadId, sent ? { whatsapp_sent_at: new Date().toISOString(), whatsapp_sent_by: actor } : { whatsapp_sent_at: null, whatsapp_sent_by: null });
+    await recordEvent(c, { lead_id: leadId, type: sent ? "whatsapp_sent" : "whatsapp_unmarked", actor });
+  });
+}
+
 /** Counts for the sidebar and the tab bar. */
 export async function pendingCounts(): Promise<{ pages: number; messages: number; failed: number }> {
   const p = await db();

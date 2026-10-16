@@ -1,6 +1,6 @@
 import { adminActor, fail, json, readJson, requireAdmin } from "@/lib/upsell/api";
 import { createCustomMessage } from "@/lib/upsell/messages";
-import { approveLead, rejectLead, requestRebuild, requeueLead, setLeadMeta } from "@/lib/upsell/review";
+import { approveLead, rejectLead, requestRebuild, requeueLead, setLeadMeta, setWhatsappSent } from "@/lib/upsell/review";
 import { UpsellError } from "@/lib/upsell/types";
 
 /* ==========================================================================
@@ -12,6 +12,7 @@ import { UpsellError } from "@/lib/upsell/types";
    requeue  {}
    meta     { pic?, priority?, note?, internal_notes? }
    message  { content }   — a custom message, drafted for approval
+   whatsapp { sent }      — mark / unmark "Đã gửi qua WhatsApp"
    ========================================================================== */
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,9 @@ export async function POST(req: Request, ctx: RouteContext<"/api/admin/upsell/le
           },
           actor,
         );
+        return json({ ok: true });
+      case "whatsapp":
+        await setWhatsappSent(lead_id, b.sent === true, actor);
         return json({ ok: true });
       case "message":
         return json({ ok: true, id: await createCustomMessage(lead_id, s("content") ?? "", actor) });

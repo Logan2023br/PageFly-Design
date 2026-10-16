@@ -157,6 +157,9 @@ export type LeadRow = {
   app_status: string | null;
   uninstalled_at: string | null;
   internal_notes: string | null;
+  /** marked by an admin: the customer was also messaged on WhatsApp */
+  whatsapp_sent_at: string | null;
+  whatsapp_sent_by: string | null;
   last_synced_at: string | null;
   created_at: string;
   updated_at: string;
