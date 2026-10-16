@@ -110,18 +110,43 @@ export function CrispLink({ href, label = "Mở Crisp" }: { href: string | null 
   );
 }
 
-/** The store's phone, tap-to-call, with a WhatsApp link when the number is
-    written internationally (see whatsappUrl). Nothing at all without one. */
+/** The store's phone: a click copies it (to paste into WhatsApp, a dialer or
+    a note), with a WhatsApp link beside it when the number is written
+    internationally (see whatsappUrl). Nothing at all without a phone. */
 export function PhoneLine({ phone }: { phone: string | null | undefined }) {
+  const [copied, setCopied] = useState(false);
   const p = String(phone ?? "").trim();
   if (!p) return null;
   const wa = whatsappUrl(p);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(p);
+    } catch {
+      /* No clipboard API (an http origin, an old browser): the old way. */
+      const t = document.createElement("textarea");
+      t.value = p;
+      t.style.position = "fixed";
+      t.style.opacity = "0";
+      document.body.appendChild(t);
+      t.select();
+      document.execCommand("copy");
+      t.remove();
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
   return (
     <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px]">
-      <a href={`tel:${p.replace(/[^\d+]/g, "")}`} className="inline-flex items-center gap-1 text-pf-muted hover:text-pf-text">
-        <Icon name="Smartphone" size={12} />
+      <button
+        type="button"
+        onClick={() => void copy()}
+        title="Bấm để copy số"
+        className="inline-flex items-center gap-1 text-pf-muted transition-colors hover:text-pf-text"
+      >
+        <Icon name={copied ? "Check" : "Smartphone"} size={12} className={copied ? "text-pf-success" : undefined} />
         {p}
-      </a>
+        {copied && <span className="font-semibold text-pf-success">Đã copy</span>}
+      </button>
       {wa && (
         <a href={wa} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-pf-success hover:underline">
           <Icon name="MessageSquare" size={12} />
