@@ -42,6 +42,7 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
     pic: one("pic"),
     cat: one("cat"),
     min_score: one("min_score"),
+    act: one("act"),
     page: Number(one("page") ?? 1),
   };
 

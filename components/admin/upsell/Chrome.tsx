@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { Filters } from "@/lib/upsell/adminQueries";
+import { LEAD_ACTIVITY, type Filters } from "@/lib/upsell/adminQueries";
 
 /* A copy of FIELD from collections/shared, not an import: that module is
    "use client", and a server component importing a plain string from it
@@ -70,6 +70,9 @@ export function TabNav({ tab, counts }: { tab: TabId; counts: Record<string, num
   );
 }
 
+/** Tabs whose leads have been sent pages, so "đã tải / đã xem" means something. */
+const ACTIVITY_TABS = new Set<string>(["tracking", "upgraded", "closed", "stats"]);
+
 export function FilterBar({ tab, f, pics, categories }: { tab: TabId; f: Filters; pics: string[]; categories: string[] }) {
   return (
     <form method="get" className="flex flex-wrap items-end gap-2">
@@ -97,6 +100,16 @@ export function FilterBar({ tab, f, pics, categories }: { tab: TabId; f: Filters
           <option key={c} value={c} />
         ))}
       </datalist>
+      {ACTIVITY_TABS.has(tab) && (
+        <select name="act" defaultValue={f.act ?? ""} className={`${FIELD} w-[170px]`} aria-label="Khách đã làm gì">
+          <option value="">Mọi hoạt động</option>
+          {Object.entries(LEAD_ACTIVITY).map(([k, v]) => (
+            <option key={k} value={k}>
+              {v.label}
+            </option>
+          ))}
+        </select>
+      )}
       <input name="min_score" type="number" defaultValue={f.min_score} placeholder="Điểm ≥" className={`${FIELD} w-[96px]`} aria-label="Điểm tối thiểu" />
       <button type="submit" className="h-[38px] rounded-pf-md bg-pf-primary px-4 text-[13px] font-semibold text-white hover:bg-pf-primary-hi">
         Lọc

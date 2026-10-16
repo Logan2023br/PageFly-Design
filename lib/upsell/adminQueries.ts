@@ -19,8 +19,26 @@ export type Filters = {
   pic?: string;
   cat?: string;
   min_score?: string;
+  /** what the customer did — a key of LEAD_ACTIVITY */
+  act?: string;
   page?: number;
 };
+
+/* "Khách đã làm gì": the activity filter. Fixed SQL per key, nothing from the
+   request is interpolated — an unknown key filters nothing. */
+const customerDid = (type: string) =>
+  `exists (select 1 from upsell_events e join upsell_designs dd on dd.id = e.design_id
+            where dd.lead_id = l.lead_id and e.actor = 'customer' and e.type = '${type}')`;
+export const LEAD_ACTIVITY = {
+  downloaded: { label: "Đã tải", sql: customerDid("download") },
+  viewed: { label: "Đã xem", sql: customerDid("view") },
+  viewed_not_downloaded: { label: "Đã xem, chưa tải", sql: `${customerDid("view")} and not ${customerDid("download")}` },
+  not_viewed: { label: "Chưa xem", sql: `not ${customerDid("view")}` },
+  read: { label: "Đã đọc tin", sql: "l.message_read is true" },
+  replied: { label: "Đã phản hồi", sql: "l.replied is true" },
+  whatsapp: { label: "Đã gửi WhatsApp", sql: "l.whatsapp_sent_at is not null" },
+  no_whatsapp: { label: "Chưa gửi WhatsApp", sql: "l.whatsapp_sent_at is null" },
+} as const;
 
 export type Paged<T> = { rows: T[]; total: number; page: number; pages: number };
 
@@ -52,6 +70,8 @@ function leadWhere(f: Filters, col: string, alias = "l"): { sql: string[]; param
   if (f.pic?.trim()) add((n) => `${alias}.pic ilike $${n}`, f.pic.trim());
   if (f.cat?.trim()) add((n) => `${alias}.category_hint ilike $${n}`, `%${f.cat.trim()}%`);
   if (f.min_score && Number.isFinite(Number(f.min_score))) add((n) => `${alias}.lead_score >= $${n}`, Number(f.min_score));
+  /* Leads only (alias l): installs have no design to have been viewed. */
+  if (alias === "l" && f.act && f.act in LEAD_ACTIVITY) sql.push(`(${LEAD_ACTIVITY[f.act as keyof typeof LEAD_ACTIVITY].sql})`);
   return { sql, params };
 }
 

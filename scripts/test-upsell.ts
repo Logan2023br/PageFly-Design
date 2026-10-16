@@ -487,6 +487,34 @@ async function main() {
     check(types.filter((t) => t === "whatsapp_sent").length === 1 && types.includes("whatsapp_unmarked"), "both on the timeline, once each", types);
   }
 
+  console.log("activity filter (Khách đã làm gì)");
+  {
+    const want: Record<string, (l: import("../lib/upsell/leads").LeadListRow) => boolean> = {
+      downloaded: (l) => l.downloads > 0,
+      viewed: (l) => l.views > 0,
+      viewed_not_downloaded: (l) => l.views > 0 && l.downloads === 0,
+      not_viewed: (l) => l.views === 0,
+      read: (l) => l.message_read === true,
+      replied: (l) => l.replied === true,
+      whatsapp: (l) => Boolean(l.whatsapp_sent_at),
+      no_whatsapp: (l) => !l.whatsapp_sent_at,
+    };
+    check(Object.keys(want).sort().join() === Object.keys(adminQueries.LEAD_ACTIVITY).sort().join(), "every activity option is tested");
+    await review.setWhatsappSent("L261012AAAA", true, "admin:t");
+    let sawDownload = false;
+    for (const tab of ["tracking", "upgraded", "closed"] as const) {
+      const all = (await adminQueries.listLeadTab(tab, {})).rows;
+      for (const [act, pred] of Object.entries(want)) {
+        const got = (await adminQueries.listLeadTab(tab, { act })).rows.map((l) => l.lead_id).sort();
+        const exp = all.filter(pred).map((l) => l.lead_id).sort();
+        check(got.join() === exp.join(), `${tab} · ${act}: ${exp.length} lead`, { got, exp });
+      }
+      sawDownload ||= all.some((l) => l.downloads > 0);
+    }
+    check(sawDownload, "the fixture has a lead that downloaded, so 'Đã tải' is really exercised");
+    check((await adminQueries.listLeadTab("upgraded", { act: "'; drop table upsell_leads; --" })).total >= 0, "an unknown act filters nothing and runs no SQL from the URL");
+  }
+
   console.log("phone → WhatsApp");
   {
     const { whatsappUrl } = await import("../lib/upsell/format");
