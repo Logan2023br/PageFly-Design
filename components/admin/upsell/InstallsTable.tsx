@@ -4,7 +4,7 @@ import Link from "next/link";
 import { fmtVN } from "@/lib/upsell/format";
 import type { InstallRow } from "@/lib/upsell/types";
 import { Button } from "../../ui";
-import { ErrorLine, Pill, useAct } from "./bits";
+import { ErrorLine, Pill, PhoneLine, useAct } from "./bits";
 import { Empty } from "./PendingPages";
 
 /* Tab 9 — every new install the script looked at, with its score and why it
@@ -32,6 +32,7 @@ export function InstallsTable({ rows }: { rows: (InstallRow & { lead_id: string 
                 <div className="text-[11.5px] text-pf-faint">
                   {i.store_domain} · {i.country ?? "?"} · {i.email_type ?? ""}
                 </div>
+                <PhoneLine phone={i.phone} />
               </td>
               <td className="whitespace-nowrap px-3 py-2.5">{fmtVN(i.installed_at)}</td>
               <td className="px-3 py-2.5">

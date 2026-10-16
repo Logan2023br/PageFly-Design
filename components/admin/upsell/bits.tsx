@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { STATUS_LABEL, statusTone } from "@/lib/upsell/format";
+import { STATUS_LABEL, statusTone, whatsappUrl } from "@/lib/upsell/format";
 import { Icon } from "../../ui";
 import { api } from "../collections/shared";
 
@@ -107,6 +107,28 @@ export function CrispLink({ href, label = "Mở Crisp" }: { href: string | null 
       <Icon name="MessageSquare" size={13} />
       {label}
     </a>
+  );
+}
+
+/** The store's phone, tap-to-call, with a WhatsApp link when the number is
+    written internationally (see whatsappUrl). Nothing at all without one. */
+export function PhoneLine({ phone }: { phone: string | null | undefined }) {
+  const p = String(phone ?? "").trim();
+  if (!p) return null;
+  const wa = whatsappUrl(p);
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px]">
+      <a href={`tel:${p.replace(/[^\d+]/g, "")}`} className="inline-flex items-center gap-1 text-pf-muted hover:text-pf-text">
+        <Icon name="Smartphone" size={12} />
+        {p}
+      </a>
+      {wa && (
+        <a href={wa} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-pf-success hover:underline">
+          <Icon name="MessageSquare" size={12} />
+          WhatsApp
+        </a>
+      )}
+    </span>
   );
 }
 

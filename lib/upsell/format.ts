@@ -115,3 +115,14 @@ export function draftReason(m: {
 export const money = (n: number | null | undefined) => (n === null || n === undefined ? "—" : `$${Number(n).toFixed(Number(n) % 1 ? 2 : 0)}`);
 export const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 export const handleOf = (domain: string) => domain.replace(/\.myshopify\.com$/i, "");
+
+/** The wa.me link for a phone, or null. WhatsApp needs the number in full
+    international form, so only a number written with its country code (+… or
+    00…) gets one — a local "0912…" would open a chat with whoever has that
+    number in some other country. */
+export function whatsappUrl(phone: string | null | undefined): string | null {
+  const p = String(phone ?? "").trim();
+  if (!/^(\+|00)/.test(p)) return null;
+  const digits = p.replace(/^00/, "").replace(/\D/g, "");
+  return digits.length >= 8 && digits.length <= 15 ? `https://wa.me/${digits}` : null;
+}

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { daysLeft, fmtVN, hoursSince, money } from "@/lib/upsell/format";
 import type { LeadListRow } from "@/lib/upsell/leads";
 import { Button } from "../../ui";
-import { CrispLink, ErrorLine, Pill, StatusBadge, useAct } from "./bits";
+import { CrispLink, ErrorLine, Pill, PhoneLine, StatusBadge, useAct } from "./bits";
 import { Empty } from "./PendingPages";
 
 /* ==========================================================================
@@ -36,6 +36,7 @@ export function LeadTable({ rows, variant }: { rows: LeadListRow[]; variant: Tab
           <div className="text-[11.5px] text-pf-faint">
             {l.store_domain} · {l.lead_id}
           </div>
+          <PhoneLine phone={l.phone} />
         </div>
       ),
     },

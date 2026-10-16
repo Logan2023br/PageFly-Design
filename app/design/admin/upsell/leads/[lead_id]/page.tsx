@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { adminGate } from "@/components/admin/adminGate";
-import { CrispLink, Pill, StatusBadge } from "@/components/admin/upsell/bits";
+import { CrispLink, PhoneLine, Pill, StatusBadge } from "@/components/admin/upsell/bits";
 import { LeadMessages, PagePreviews, ReviewActions, Timeline } from "@/components/admin/upsell/LeadDetailParts";
 import { filterOptions, leadDetail } from "@/lib/upsell/adminQueries";
 import { customerClock, daysLeft, fmtVN, handleOf, money } from "@/lib/upsell/format";
@@ -62,7 +62,7 @@ export default async function LeadPage(props: PageProps<"/design/admin/upsell/le
                 </a>
               </Row>
               <Row k="Email">{l.email || "—"}</Row>
-              <Row k="Phone">{l.phone || "—"}</Row>
+              <Row k="Phone">{l.phone ? <PhoneLine phone={l.phone} /> : "—"}</Row>
               <Row k="Quốc gia">{l.country || "—"}</Row>
               <Row k="Giờ khách">
                 <span className={clock.inWindow ? "text-pf-success" : "text-pf-warn"}>{clock.time}</span> <span className="text-pf-faint">({clock.tz})</span>

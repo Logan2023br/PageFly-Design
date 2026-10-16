@@ -468,6 +468,15 @@ async function main() {
     check(leads.leadIdFor("zircon.myshopify.com").leadId.slice(7) === py, "lead id suffix matches bpu_ops.py", py);
   }
 
+  console.log("phone → WhatsApp");
+  {
+    const { whatsappUrl } = await import("../lib/upsell/format");
+    check(whatsappUrl("+1 (555) 010-2030") === "https://wa.me/15550102030", "+ number becomes a wa.me link, digits only");
+    check(whatsappUrl("0084 912 345 678") === "https://wa.me/84912345678", "00 prefix is read as international");
+    check(whatsappUrl("0912345678") === null, "a local number gets no link (country unknown)");
+    check(whatsappUrl("") === null && whatsappUrl(null) === null && whatsappUrl("+12") === null, "empty or too short: none");
+  }
+
   console.log("settings: saved in admin, read back by the API");
   {
     const settingsRoute = await import("../app/api/upsell/settings/route");
