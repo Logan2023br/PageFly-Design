@@ -41,8 +41,14 @@ customCSS — follow the review-collection-pages skill rules and its `pagefly-ru
 `extra_fixes.py`, not in one set.
 
 **b. Real render.** `python3 runner.py step $S "real render check (PageFly MCP)"`.
-`PageFly:list_pages` with `query` = the set name, limit 20. Titles look like
-`3 - Forge - Collection - 2026-10-19 16:25:14`; for each page number keep the NEWEST timestamp.
+Find the imported pages — never by guessing from the number in the title (it is only the order in the
+imported file, e.g. `204 - Deepa Diwali - Home - 2026-10-19 17:33:10`):
+1. `python3 imports.py $S` prints, per page, the title keys to look for.
+2. For each page call `PageFly:list_pages` with `query` = that page's key, limit 20, and save every
+   result of the set into one JSON array file (`[{"id","title"},…]`).
+3. `python3 imports.py $S --pick <that file>` prints `{page slug: [pageId, title]}` — the newest import
+   whose title matches the key exactly. A page with `null` was not imported: log it with
+   `runner.py error` and treat the set as `reimport`.
 For each page `PageFly:screenshot_page(pageId)` (desktop 1440 + mobile 375) and compare with the
 HTML mockup (`$CR_WORK/$S/html/<page>.html` — render it at 1440 and 390 with playwright and Read the PNG),
 section by section: layout, fonts, spacing, image frames, icons, countdown, product media.
