@@ -3,7 +3,7 @@ import { RESERVED_SET_SLUGS, slugify } from "@/lib/collectionPages";
 import { missingBuiltIns, newId } from "@/lib/collectionPagesServer";
 import { getRepo } from "@/lib/db";
 import type { CollectionSetRecord } from "@/lib/db/types";
-import { fail, failFrom, firstIssue, guard, setSlug } from "./shared";
+import { fail, failFrom, firstIssue, guard, guardOrKey, setSlug } from "./shared";
 
 /* ==========================================================================
    /api/admin/collection-pages
@@ -24,8 +24,9 @@ async function listing() {
   return Response.json({ ok: true, sets, missing: missingBuiltIns(sets) } satisfies CollectionSetsResponse);
 }
 
-export async function GET() {
-  return (await guard()) ?? listing();
+export async function GET(request: Request) {
+  const who = await guardOrKey(request);
+  return who instanceof Response ? who : listing();
 }
 
 const createSchema = z.object({

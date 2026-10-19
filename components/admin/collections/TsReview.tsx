@@ -234,7 +234,7 @@ function ReviewerDialog({
           </div>
 
           <div role="radiogroup" aria-label="Reviewer" className="mt-4 grid gap-1.5">
-            {COLLECTION_REVIEWERS.map((name) => (
+            {COLLECTION_REVIEWERS.filter((n) => n !== "Claude").map((name) => (
               <button
                 key={name}
                 type="button"

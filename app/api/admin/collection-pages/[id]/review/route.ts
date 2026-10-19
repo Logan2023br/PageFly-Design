@@ -2,7 +2,7 @@ import { z } from "zod";
 import { getRepo } from "@/lib/db";
 import { COLLECTION_REVIEWERS } from "@/lib/db/types";
 import type { CollectionSetResponse } from "../route";
-import { fail, firstIssue, guard } from "../../shared";
+import { fail, firstIssue, guardOrKey } from "../../shared";
 
 /* ==========================================================================
    /api/admin/collection-pages/<id>/review
@@ -27,8 +27,8 @@ export async function PUT(
   request: Request,
   ctx: RouteContext<"/api/admin/collection-pages/[id]/review">,
 ) {
-  const denied = await guard();
-  if (denied) return denied;
+  const who = await guardOrKey(request);
+  if (who instanceof Response) return who;
   const { id } = await ctx.params;
   const repo = getRepo();
   const set = await repo.getCollectionSet(id);
@@ -36,6 +36,15 @@ export async function PUT(
 
   const parsed = body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return fail(firstIssue(parsed.error));
+  /* The key may only act as Claude: take a set as Claude, or finish Claude's review. */
+  if (who === "script") {
+    if ("reset" in parsed.data) return fail("Reset needs an admin.", 403);
+    if ("reviewer" in parsed.data && parsed.data.reviewer !== "Claude") return fail("The key reviews as Claude only.", 403);
+    /* Never take a set someone else holds — reviewing or done. */
+    if ("reviewer" in parsed.data && set.review && set.review.reviewer !== "Claude")
+      return fail(`${set.review.reviewer} already has this set.`, 409);
+    if ("done" in parsed.data && set.review?.reviewer !== "Claude") return fail("This set is not Claude's review.", 403);
+  }
   const now = new Date().toISOString();
 
   if ("reviewer" in parsed.data) {

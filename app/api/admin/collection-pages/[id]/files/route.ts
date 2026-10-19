@@ -2,7 +2,7 @@ import { MAX_FILE_BYTES, RESERVED_PAGE_SLUGS, SLUG_RE } from "@/lib/collectionPa
 import { rejectFile, storeFile } from "@/lib/collectionPagesServer";
 import { getRepo } from "@/lib/db";
 import type { CollectionSetResponse } from "../route";
-import { fail, failFrom, guard } from "../../shared";
+import { fail, failFrom, guardOrKey } from "../../shared";
 
 /* ==========================================================================
    POST /api/admin/collection-pages/<id>/files?slug=home&kind=html
@@ -21,8 +21,8 @@ export async function POST(
   request: Request,
   ctx: RouteContext<"/api/admin/collection-pages/[id]/files">,
 ) {
-  const denied = await guard();
-  if (denied) return denied;
+  const who = await guardOrKey(request);
+  if (who instanceof Response) return who;
   const { id } = await ctx.params;
   const params = new URL(request.url).searchParams;
   const slug = params.get("slug") ?? "";
@@ -39,6 +39,9 @@ export async function POST(
   const repo = getRepo();
   const set = await repo.getCollectionSet(id);
   if (!set) return fail("That set no longer exists.", 404);
+  /* The key replaces a .pagefly on a page that exists; never the html, never a new page. */
+  if (who === "script" && kind !== "pagefly") return fail("The key replaces .pagefly files only.", 403);
+  if (who === "script" && !set.pages.some((p) => p.slug === slug)) return fail("No such page in this set.", 404);
   try {
     await storeFile(set, slug, kind, bytes);
   } catch (err) {

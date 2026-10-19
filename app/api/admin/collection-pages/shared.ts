@@ -2,6 +2,8 @@ import { z } from "zod";
 import { RESERVED_PAGE_SLUGS, RESERVED_SET_SLUGS, SLUG_RE } from "@/lib/collectionPages";
 import { CollectionSlugTakenError } from "@/lib/db/types";
 import { readAdminSection } from "@/lib/session";
+import { keyMatches } from "@/lib/upsell/api";
+import { rateLimited } from "@/lib/upsell/track";
 
 /* What every /api/admin/collection-pages route shares: the guard, the answer
    shapes, and the field rules. */
@@ -10,6 +12,35 @@ export type Fail = { ok: false; error: string };
 
 export async function guard(): Promise<Response | null> {
   if (await readAdminSection("collections")) return null;
+  return Response.json({ ok: false, error: "Not signed in." } satisfies Fail, { status: 401 });
+}
+
+/* TODO: xoá fallback này sau khi đặt COLLECTIONS_API_KEY trong .env trên VPS.
+   Until then a server without COLLECTIONS_API_KEY accepts the one key whose
+   SHA-256 (hex) this is — only the hash is here, never the key. */
+export const COLLECTIONS_API_KEY_SHA256_FALLBACK =
+  "1c2dd4255bc9488b9046ae31cb6445988d63c5821849158bdb592581131b7942";
+
+/* The review runner's key: X-API-Key against COLLECTIONS_API_KEY, or the
+   fallback hash above while that is unset. It opens three things and nothing
+   else: the set list, a .pagefly on a page that already exists, and "Claude"
+   taking and finishing a review. Creating, deleting, pricing and hiding still
+   need the admin cookie. */
+export function scriptKeyOk(request: Request): boolean {
+  return keyMatches(
+    request.headers.get("x-api-key") ?? "",
+    process.env.COLLECTIONS_API_KEY ?? "",
+    COLLECTIONS_API_KEY_SHA256_FALLBACK,
+  );
+}
+
+/** "admin" for the cookie, "script" for the key, or the response to send. */
+export async function guardOrKey(request: Request): Promise<"admin" | "script" | Response> {
+  if (await readAdminSection("collections")) return "admin";
+  if (scriptKeyOk(request)) {
+    if (rateLimited("collections-key", 300)) return fail("Rate limit: 300 requests a minute.", 429);
+    return "script";
+  }
   return Response.json({ ok: false, error: "Not signed in." } satisfies Fail, { status: 401 });
 }
 
