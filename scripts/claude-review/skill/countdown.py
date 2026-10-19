@@ -17,7 +17,7 @@ JS_MEASURE = """(sel) => Array.from(document.querySelectorAll(sel)).map(cd => {
   const n = u.children[0], l = u.children[1], rn = n.getBoundingClientRect(), rl = l.getBoundingClientRect();
   const f = e => { const c = getComputedStyle(e); return {family:c.fontFamily, size:c.fontSize, weight:c.fontWeight,
      style:c.fontStyle, lh:c.lineHeight, ls:c.letterSpacing, tt:c.textTransform, color:c.color, opacity:c.opacity}; };
-  return {w:r.width, h:r.height, gap:r2.left - r.right, bw:parseFloat(cs.borderTopWidth), bs:cs.borderTopStyle,
+  return {w:r.width, h:r.height, gap:Math.max(r2.left - r.right, r.left - r2.right),bw:parseFloat(cs.borderTopWidth), bs:cs.borderTopStyle,
     bc:cs.borderTopColor, bg:cs.backgroundColor, rad:cs.borderTopLeftRadius,
     nTop:rn.top - r.top, nH:rn.height, gapNL:rl.top - rn.bottom, lH:rl.height, lBottom:r.bottom - rl.bottom,
     num:f(n), lab:f(l)}; })"""
@@ -65,7 +65,7 @@ def find_countdowns(d):
                  re.fullmatch(r'\d{1,2}', str(by[u['children'][0]]['data'].get('value', '')).strip())
                  for u in units)
         # a numbered list (01 Ha Giang, 02 Ha Long...) has the same shape: the labels must be time units
-        UNIT = re.compile(r'^\s*(d|h|m|s|days?|hours?|hrs?|mins?|minutes?|secs?|seconds?|weeks?|wks?|ng[aà]y|gi[oờ]|ph[uú]t|gi[aâ]y|tage?|stunden?|std|minuten?|sekunden?|jours?|heures?|secondes?|d[ií]as?|horas?|minutos?|segundos?|giorni|ore|minuti|secondi|日|时|時|分|秒|天|일|시간|분|초)\s*$', re.I)
+        UNIT = re.compile(r'^\s*(d|h|m|s|days?|hours?|hrs?|mins?|minutes?|secs?|seconds?|weeks?|wks?|ng[aà]y|gi[oờ]|ph[uú]t|gi[aâ]y|tage?|stunden?|std|minuten?|sekunden?|jours?|heures?|secondes?|d[ií]as?|horas?|minutos?|segundos?|giorni|ore|minuti|secondi|يوم|أيام|ايام|ساعة|ساعات|دقيقة|دقائق|ثانية|ثوان[يٍ]?|日|时|時|分|秒|天|일|시간|분|초)\s*$', re.I)
         if ok:
             labels = [str(by[u['children'][1]]['data'].get('value', '')) for u in units]
             labels = [re.sub(r'<[^>]+>', '', l) for l in labels]

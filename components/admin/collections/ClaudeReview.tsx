@@ -17,7 +17,7 @@ import { api } from "./shared";
 
 const POLL_MS = 15_000;
 /** a "running" run with no heartbeat for this long has died */
-const STALE_MS = 25 * 60_000;
+const STALE_MS = 12 * 60_000;
 
 function ago(iso: string | null, now: number) {
   if (!iso || !now) return "";
@@ -91,11 +91,14 @@ export function ClaudeReview() {
   const stale =
     state.status === "running" && state.heartbeatAt && now - Date.parse(state.heartbeatAt) > STALE_MS;
   const finished = state.done.length;
-  const total = finished + state.queue.length + (state.current ? 1 : 0);
+  const inQueue = !!state.current && state.queue.some((q) => q.slug === state.current?.slug);
+  const total = finished + state.queue.length + (state.current && !inQueue ? 1 : 0);
   const pct = total ? Math.round((finished / total) * 100) : 0;
-  const left = state.queue.length + (state.current ? 1 : 0);
+  const left = state.queue.length + (state.current && !inQueue ? 1 : 0);
   const eta = state.avgSecs && left ? duration(state.avgSecs * left) : null;
   const counts = state.done.reduce<Record<string, number>>((m, d) => ((m[d.result] = (m[d.result] ?? 0) + 1), m), {});
+  /* the set on the bench is still at the head of the queue — "next" is the one after it */
+  const nextUp = state.queue.find((q) => q.slug !== state.current?.slug);
   const active = state.status === "running" || state.status === "requested" || state.status === "stopping";
 
   const headline =
@@ -103,7 +106,7 @@ export function ClaudeReview() {
       ? `Requested ${ago(state.requestedAt, now)} — Claude picks it up within the hour`
       : state.status === "running"
         ? stale
-          ? `No word from Claude for ${ago(state.heartbeatAt, now).replace(" ago", "")} — the run may have stopped; the next hourly check resumes it`
+          ? `No word from Claude for ${ago(state.heartbeatAt, now).replace(" ago", "")} — the run stopped; press Run now on the routine, or the next hourly check resumes it`
           : `Running · last update ${ago(state.heartbeatAt, now)}`
         : state.status === "stopping"
           ? "Stopping after the current set"
@@ -160,9 +163,9 @@ export function ClaudeReview() {
                 <span className="text-pf-faint">(since {ago(state.current.startedAt, now)})</span>
               </p>
             )}
-            {state.queue[0] && (
+            {nextUp && (
               <p className="text-pf-body">
-                <span className="text-pf-faint">Next:</span> {state.queue[0].name}
+                <span className="text-pf-faint">Next:</span> {nextUp.name}
               </p>
             )}
             {state.message && <p className="text-pf-muted">{state.message}</p>}

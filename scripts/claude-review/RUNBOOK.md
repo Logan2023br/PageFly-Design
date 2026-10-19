@@ -9,44 +9,39 @@ The sets were imported by Tu into the PageFly store **loganpagefly** before the 
 
 ## 0. Setup (every run)
 
-```bash
-git clone --depth 1 https://github.com/Logan2023br/PageFly-Design.git /tmp/pfd
-cd /tmp/pfd/scripts/claude-review
-pip install --break-system-packages -q pillow numpy playwright >/dev/null 2>&1 || true
-```
-
-The key lives on Tu's Mac, never in the repo: read it with `device_bash`
-(`cat "$HOME/mnt/PageFly-Design/.env.claude-review.local"`) and `export COLLECTIONS_API_KEY=...`
-in every cloud `bash` call (each call is a fresh shell — prefix the export).
+The scheduled routine follows `ROUTINE.md` (one subagent per set); this file is the per-set procedure.
+Work in `scripts/claude-review`. The key is in the environment variable `COLLECTIONS_API_KEY`.
+Run every script through `./cr` — it finds a Python with the packages and the Playwright that matches the
+preinstalled Chromium (never run `playwright install`). Below, `python3 x.py` means `./cr x.py`.
 
 ```bash
-python3 runner.py begin      # GO <n> sets  |  NOOP <why>  -> on NOOP stop here, nothing to do
+./cr runner.py begin      # GO <n> sets  |  NOOP <why>  -> on NOOP stop here, nothing to do
 ```
 
 ## 1. Per set — loop until `runner.py next` prints NONE
 
-Before each set: `python3 runner.py stop?` — on STOP, end the run.
+Before each set: `./cr runner.py stop?` — on STOP, end the run.
 
 ```bash
-S=$(python3 runner.py next)
-python3 runner.py run $S "pipeline + offline verify" -- python3 review.py prep $S --redo
-python3 looks.py $S                      # sections that need a look, each with a side-by-side PNG
+S=$(./cr runner.py next)
+./cr runner.py run $S "pipeline + offline verify" -- python3 review.py prep $S --redo
+./cr looks.py $S                      # sections that need a look, each with a side-by-side PNG
 ```
 
 **a. Offline look.** Read every PNG `looks.py` lists (left = HTML mockup, right = emulated .pagefly).
 Store-data sections (products, articles, forms) and 0px layers are already filtered out. For a real
 difference: fix the page JSON in `$CR_WORK/$S/full/out/work/` surgically (the element's `styles[]` or
 customCSS — follow the review-collection-pages skill rules and its `pagefly-runtime-facts.md`), then
-`python3 review.py verify $S "<page name>"` and look again. A recurring cause belongs in
+`./cr review.py verify $S "<page name>"` and look again. A recurring cause belongs in
 `extra_fixes.py`, not in one set.
 
-**b. Real render.** `python3 runner.py step $S "real render check (PageFly MCP)"`.
+**b. Real render.** `./cr runner.py step $S "real render check (PageFly MCP)"`.
 Find the imported pages — never by guessing from the number in the title (it is only the order in the
 imported file, e.g. `204 - Deepa Diwali - Home - 2026-10-19 17:33:10`):
-1. `python3 imports.py $S` prints, per page, the title keys to look for.
+1. `./cr imports.py $S` prints, per page, the title keys to look for.
 2. For each page call `PageFly:list_pages` with `query` = that page's key, limit 20, and save every
    result of the set into one JSON array file (`[{"id","title"},…]`).
-3. `python3 imports.py $S --pick <that file>` prints `{page slug: [pageId, title]}` — the newest import
+3. `./cr imports.py $S --pick <that file>` prints `{page slug: [pageId, title]}` — the newest import
    whose title matches the key exactly. A page with `null` was not imported: log it with
    `runner.py error` and treat the set as `reimport`.
 For each page `PageFly:screenshot_page(pageId)` (desktop 1440 + mobile 375) and compare with the
@@ -63,15 +58,15 @@ Product cards show the store's sample products — judge their style only.
 
 **c. Ship.**
 ```bash
-python3 runner.py run $S "upload .pagefly" -- python3 review.py ship $S               # result done  -> "Claude Done · <time>"
-python3 runner.py run $S "upload .pagefly" -- python3 review.py ship $S --reviewing   # result reimport -> stays "Claude Reviewing"
+./cr runner.py run $S "upload .pagefly" -- python3 review.py ship $S               # result done  -> "Claude Done · <time>"
+./cr runner.py run $S "upload .pagefly" -- python3 review.py ship $S --reviewing   # result reimport -> stays "Claude Reviewing"
 ```
 `ship` re-zips each page from its JSON, checks it is that page's own entry, checks the validator
 did not get worse, uploads to that page only, downloads it back and compares bytes.
 
 **d. Deliver to Tu's Mac.**
 ```bash
-SEQ=$(python3 runner.py seq); python3 runner.py run $S "build delivery folder" -- python3 export.py $S $SEQ   # prints {group, folder, files}
+SEQ=$(./cr runner.py seq); ./cr runner.py run $S "build delivery folder" -- ./cr export.py $S $SEQ   # prints {group, folder, files}
 ```
 Write each file with `device_commit_files` (stagedPath = the printed path, under
 `/mnt/user-data/outputs/claude-review/`) to
@@ -80,7 +75,7 @@ Write each file with `device_commit_files` (stagedPath = the printed path, under
 
 **e. Record.**
 ```bash
-python3 runner.py finish $S done|reimport --folder "<group>/<folder>" --note "<one line: what was fixed / what to check>"
+./cr runner.py finish $S done|reimport --folder "<group>/<folder>" --note "<one line: what was fixed / what to check>"
 ```
 On an error you cannot fix for this set: `runner.py finish $S failed --note "<why>"` and go on.
 
@@ -90,7 +85,7 @@ Tu reads errors on the admin panel (red box), not in this session. So:
 - Every script step goes through `runner.py run <slug> "<step>" -- <command>`: a failing command is
   logged automatically with the last lines of its output.
 - Anything else that goes wrong is logged by hand, in one line that says what failed and what you did:
-  `python3 runner.py error <slug> "<step>" "<what happened>"` — e.g. `list_pages` finds no import of the
+  `./cr runner.py error <slug> "<step>" "<what happened>"` — e.g. `list_pages` finds no import of the
   set, `screenshot_page` fails or hits the hourly limit, `device_commit_files` rejects a file, a real-render
   difference you could not fix, an unexpected API answer. Use `-` as the slug for run-level problems.
 - A set you give up on: `runner.py finish <slug> failed --note "<why>"` (also logged as an error), then go on.

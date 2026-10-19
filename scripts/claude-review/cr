@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# ./cr <script.py> [args...] — run a Claude Review script with a Python that has the review packages.
+#
+# The first call finds a working interpreter (packages + Playwright that launches the preinstalled
+# Chromium), installs what is missing (pinned Playwright 1.56 = the Chromium in /opt/pw-browsers),
+# and remembers it in $CR_WORK/.python. Every later call reuses it. Never runs `playwright install`.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export CR_WORK="${CR_WORK:-/tmp/claude-review}"
+mkdir -p "$CR_WORK"
+PYF="$CR_WORK/.python"
+
+works() {
+  "$1" - <<'EOF' >/dev/null 2>&1
+import numpy, PIL
+from playwright.sync_api import sync_playwright
+with sync_playwright() as p:
+    p.chromium.launch().close()
+EOF
+}
+
+if [ ! -s "$PYF" ] || ! "$(cat "$PYF")" -c "import numpy, PIL, playwright" >/dev/null 2>&1; then
+  found=""
+  for p in /usr/bin/python3 python3 python3.13 python3.12 python3.11; do
+    command -v "$p" >/dev/null 2>&1 || continue
+    p="$(command -v "$p")"
+    works "$p" && { found="$p"; break; }
+    "$p" -m pip install --break-system-packages -q pillow numpy "playwright==1.56.*" >/dev/null 2>&1 || true
+    works "$p" && { found="$p"; break; }
+  done
+  if [ -z "$found" ]; then
+    echo "cr: no Python here can import numpy/PIL/playwright and launch Chromium (pip blocked? Chromium missing?)" >&2
+    exit 3
+  fi
+  echo "$found" > "$PYF"
+fi
+
+script="$1"; shift
+case "$script" in /*) ;; *) script="$HERE/$script" ;; esac
+exec "$(cat "$PYF")" "$script" "$@"
