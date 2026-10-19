@@ -12,8 +12,8 @@
   python3 runner.py run <slug> <step> -- <command ...> -> step + run the command; on failure the error
                                                          (last lines of its output) is logged, exit code kept
 
-Queue rule: every set no TS member has taken, plus sets Claude holds that this run has not finished
-yet, in the admin's order. Hidden and paid sets are recorded as skipped (the public API gives no .pagefly).
+Queue rule: every set nobody has reviewed, plus sets Claude took but did not finish ("Claude
+Reviewing"), in the admin's order. A set with any Done review — Claude's included — is left alone. Hidden and paid sets are recorded as skipped (the public API gives no .pagefly).
 """
 import json, sys, time
 from datetime import datetime, timezone
@@ -50,6 +50,7 @@ def begin():
     for x in all_sets():
         rv = x.get("review")
         if rv and rv["reviewer"] != "Claude": continue           # a TS member has it
+        if rv and rv.get("doneAt"): continue                     # already reviewed (Claude Done too)
         if x["slug"] in finished: continue
         if x["visibility"] == "hidden" or x["access"] == "paid":
             skipped.append({"slug": x["slug"], "name": x["name"], "result": "skipped", "finishedAt": now(),
