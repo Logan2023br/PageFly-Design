@@ -56,3 +56,7 @@ lerna-debug.log*
 
 # Upsell Build Pages design files in development (UPSELL_STORAGE_DIR unset)
 .pfd-upsell
+
+# python
+__pycache__/
+*.pyc

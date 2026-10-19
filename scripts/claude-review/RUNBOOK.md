@@ -1,0 +1,89 @@
+# Claude Review — runbook for the scheduled run
+
+The admin presses **Claude Review** on `/design/admin/collections`; that only sets the run's state
+to `requested`. A scheduled Claude task (hourly) follows this runbook. Everything the admin sees
+comes from `runner.py` calls — call `step` before every stage so the panel is never stale.
+
+The sets were imported by Tu into the PageFly store **loganpagefly** before the run (the
+`.pagefly` files from admin). PageFly MCP reads them: `list_pages`, `screenshot_page`.
+
+## 0. Setup (every run)
+
+```bash
+git clone --depth 1 https://github.com/Logan2023br/PageFly-Design.git /tmp/pfd
+cd /tmp/pfd/scripts/claude-review
+pip install --break-system-packages -q pillow numpy playwright >/dev/null 2>&1 || true
+```
+
+The key lives on Tu's Mac, never in the repo: read it with `device_bash`
+(`cat "$HOME/mnt/PageFly-Design/.env.claude-review.local"`) and `export COLLECTIONS_API_KEY=...`
+in every cloud `bash` call (each call is a fresh shell — prefix the export).
+
+```bash
+python3 runner.py begin      # GO <n> sets  |  NOOP <why>  -> on NOOP stop here, nothing to do
+```
+
+## 1. Per set — loop until `runner.py next` prints NONE
+
+Before each set: `python3 runner.py stop?` — on STOP, end the run.
+
+```bash
+S=$(python3 runner.py next)
+python3 runner.py step $S "pipeline + offline verify"
+python3 review.py prep $S --redo        # download, take review as Claude, skill pipeline + extra_fixes, verify_offline
+python3 looks.py $S                      # sections that need a look, each with a side-by-side PNG
+```
+
+**a. Offline look.** Read every PNG `looks.py` lists (left = HTML mockup, right = emulated .pagefly).
+Store-data sections (products, articles, forms) and 0px layers are already filtered out. For a real
+difference: fix the page JSON in `$CR_WORK/$S/full/out/work/` surgically (the element's `styles[]` or
+customCSS — follow the review-collection-pages skill rules and its `pagefly-runtime-facts.md`), then
+`python3 review.py verify $S "<page name>"` and look again. A recurring cause belongs in
+`extra_fixes.py`, not in one set.
+
+**b. Real render.** `python3 runner.py step $S "real render check (PageFly MCP)"`.
+`PageFly:list_pages` with `query` = the set name, limit 20. Titles look like
+`3 - Forge - Collection - 2026-10-19 16:25:14`; for each page number keep the NEWEST timestamp.
+For each page `PageFly:screenshot_page(pageId)` (desktop 1440 + mobile 375) and compare with the
+HTML mockup (`$CR_WORK/$S/html/<page>.html` — render it at 1440 and 390 with playwright and Read the PNG),
+section by section: layout, fonts, spacing, image frames, icons, countdown, product media.
+Product cards show the store's sample products — judge their style only.
+- The imported page is the version BEFORE this run's fixes. A difference the offline fixes already
+  cover (font, countdown, gallery…) is fixed; say so in the note.
+- A difference only the real render shows: fix it in the JSON, verify offline, and mark the set
+  `reimport` (it must be imported again to confirm).
+- No import found for the set: note "not imported in loganpagefly", result `reimport`.
+- Hourly screenshot limit hit: `sleep 600` and retry; keep calling `runner.py step` so the
+  heartbeat stays fresh.
+
+**c. Ship.**
+```bash
+python3 runner.py step $S "uploading .pagefly to admin"
+python3 review.py ship $S               # result done  -> admin shows "Claude Done · <time>"
+python3 review.py ship $S --reviewing   # result reimport -> stays "Claude Reviewing"
+```
+`ship` re-zips each page from its JSON, checks it is that page's own entry, checks the validator
+did not get worse, uploads to that page only, downloads it back and compares bytes.
+
+**d. Deliver to Tu's Mac.**
+```bash
+python3 runner.py step $S "saving to the Documents folder"
+SEQ=$(python3 runner.py seq); python3 export.py $S $SEQ     # prints {group, folder, files}
+```
+Write each file with `device_commit_files` (stagedPath = the printed path, under
+`/mnt/user-data/outputs/claude-review/`) to
+`/Users/bbuser/Documents/<group>/<folder>/<file name>` — 20 sets per group folder
+(`21-40 collection pages`, `41-60 collection pages`, …). No zip: Tu zips after checking.
+
+**e. Record.**
+```bash
+python3 runner.py finish $S done|reimport --folder "<group>/<folder>" --note "<one line: what was fixed / what to check>"
+```
+On an error you cannot fix for this set: `runner.py finish $S failed --note "<why>"` and go on.
+
+## 2. Rules that do not bend
+
+- The HTML mockup is the truth. Reproduce it; do not improve it (name a flaw in the note).
+- Never claim "identical" for anything only checked offline.
+- Upload only to the set and page you downloaded; `ship` enforces it — never bypass it.
+- One set at a time; the panel must always say which set and which step.

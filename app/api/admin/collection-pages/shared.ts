@@ -22,9 +22,9 @@ export const COLLECTIONS_API_KEY_SHA256_FALLBACK =
   "1c2dd4255bc9488b9046ae31cb6445988d63c5821849158bdb592581131b7942";
 
 /* The review runner's key: X-API-Key against COLLECTIONS_API_KEY, or the
-   fallback hash above while that is unset. It opens three things and nothing
-   else: the set list, a .pagefly on a page that already exists, and "Claude"
-   taking and finishing a review. Creating, deleting, pricing and hiding still
+   fallback hash above while that is unset. It opens four things and nothing
+   else: the set list, a .pagefly on a page that already exists, "Claude"
+   taking and finishing a review, and the Claude Review run's progress. Creating, deleting, pricing and hiding still
    need the admin cookie. */
 export function scriptKeyOk(request: Request): boolean {
   return keyMatches(

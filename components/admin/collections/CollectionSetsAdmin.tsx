@@ -9,6 +9,7 @@ import { Button, Icon, Panel } from "../../ui";
 import { PageThumb } from "../../landing/PagePreview";
 import { AccessBadge, VisibilityBadge, api } from "./shared";
 import { TsReview } from "./TsReview";
+import { ClaudeReview } from "./ClaudeReview";
 
 /* ==========================================================================
    /design/admin/collections — every set, in the order the public page shows
@@ -125,6 +126,7 @@ export function CollectionSetsAdmin({
 
   return (
     <div className="grid gap-4">
+      <ClaudeReview />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-[13px] text-pf-muted">
           {sets.length} {sets.length === 1 ? "set" : "sets"} · {pages} pages · {visible} visible
