@@ -29,8 +29,7 @@ Before each set: `python3 runner.py stop?` — on STOP, end the run.
 
 ```bash
 S=$(python3 runner.py next)
-python3 runner.py step $S "pipeline + offline verify"
-python3 review.py prep $S --redo        # download, take review as Claude, skill pipeline + extra_fixes, verify_offline
+python3 runner.py run $S "pipeline + offline verify" -- python3 review.py prep $S --redo
 python3 looks.py $S                      # sections that need a look, each with a side-by-side PNG
 ```
 
@@ -58,17 +57,15 @@ Product cards show the store's sample products — judge their style only.
 
 **c. Ship.**
 ```bash
-python3 runner.py step $S "uploading .pagefly to admin"
-python3 review.py ship $S               # result done  -> admin shows "Claude Done · <time>"
-python3 review.py ship $S --reviewing   # result reimport -> stays "Claude Reviewing"
+python3 runner.py run $S "upload .pagefly" -- python3 review.py ship $S               # result done  -> "Claude Done · <time>"
+python3 runner.py run $S "upload .pagefly" -- python3 review.py ship $S --reviewing   # result reimport -> stays "Claude Reviewing"
 ```
 `ship` re-zips each page from its JSON, checks it is that page's own entry, checks the validator
 did not get worse, uploads to that page only, downloads it back and compares bytes.
 
 **d. Deliver to Tu's Mac.**
 ```bash
-python3 runner.py step $S "saving to the Documents folder"
-SEQ=$(python3 runner.py seq); python3 export.py $S $SEQ     # prints {group, folder, files}
+SEQ=$(python3 runner.py seq); python3 runner.py run $S "build delivery folder" -- python3 export.py $S $SEQ   # prints {group, folder, files}
 ```
 Write each file with `device_commit_files` (stagedPath = the printed path, under
 `/mnt/user-data/outputs/claude-review/`) to
@@ -80,6 +77,19 @@ Write each file with `device_commit_files` (stagedPath = the printed path, under
 python3 runner.py finish $S done|reimport --folder "<group>/<folder>" --note "<one line: what was fixed / what to check>"
 ```
 On an error you cannot fix for this set: `runner.py finish $S failed --note "<why>"` and go on.
+
+## Errors — always write them down
+
+Tu reads errors on the admin panel (red box), not in this session. So:
+- Every script step goes through `runner.py run <slug> "<step>" -- <command>`: a failing command is
+  logged automatically with the last lines of its output.
+- Anything else that goes wrong is logged by hand, in one line that says what failed and what you did:
+  `python3 runner.py error <slug> "<step>" "<what happened>"` — e.g. `list_pages` finds no import of the
+  set, `screenshot_page` fails or hits the hourly limit, `device_commit_files` rejects a file, a real-render
+  difference you could not fix, an unexpected API answer. Use `-` as the slug for run-level problems.
+- A set you give up on: `runner.py finish <slug> failed --note "<why>"` (also logged as an error), then go on.
+- If the run itself must stop (key missing, API down), log it with slug `-` before ending, when the API
+  is reachable.
 
 ## 2. Rules that do not bend
 

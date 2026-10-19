@@ -46,6 +46,7 @@ export function ClaudeReview() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
+  const [allErrors, setAllErrors] = useState(false);
   /* the clock, read when the state arrives — not during render */
   const [now, setNow] = useState(0);
 
@@ -203,6 +204,33 @@ export function ClaudeReview() {
             </div>
           )}
         </>
+      )}
+      {state.errors?.length > 0 && (
+        <div className="grid gap-1.5 rounded-pf-md border border-red-400/30 bg-red-400/5 p-3">
+          <p className="flex items-center gap-2 text-[13px] font-semibold text-red-400">
+            <Icon name="TriangleAlert" size={15} />
+            {state.errors.length} {state.errors.length === 1 ? "error" : "errors"} during the run
+          </p>
+          {[...state.errors]
+            .reverse()
+            .slice(0, allErrors ? undefined : 5)
+            .map((e, i) => (
+              <p key={e.at + i} className="text-[12.5px] text-pf-body">
+                <span className="text-pf-faint">{new Date(e.at).toLocaleString()}</span>
+                {e.name ? <> · <b>{e.name}</b></> : " · run"} · {e.step}:{" "}
+                <span className="whitespace-pre-wrap text-red-300">{e.message}</span>
+              </p>
+            ))}
+          {state.errors.length > 5 && (
+            <button
+              type="button"
+              onClick={() => setAllErrors(!allErrors)}
+              className="justify-self-start text-[12.5px] font-semibold text-pf-muted hover:text-pf-text"
+            >
+              {allErrors ? "Show the latest 5" : `Show all ${state.errors.length}`}
+            </button>
+          )}
+        </div>
       )}
       {error && <p className="text-[12.5px] text-red-400">{error}</p>}
     </Panel>

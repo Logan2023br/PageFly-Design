@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ClaudeReviewError, adminAct, readState, runnerPatch } from "@/lib/claudeReview";
+import { ClaudeReviewFailure, adminAct, readState, runnerPatch } from "@/lib/claudeReview";
 import { readAdminName } from "@/lib/session";
 import { fail, firstIssue, guardOrKey } from "../shared";
 
@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 const nocache = { headers: { "Cache-Control": "no-store" } };
 
 function failFrom(err: unknown) {
-  if (err instanceof ClaudeReviewError) return fail(err.message, err.status);
+  if (err instanceof ClaudeReviewFailure) return fail(err.message, err.status);
   console.error("[claude-review]", err);
   return fail("Could not read the review state — try again.", 500);
 }
@@ -66,6 +66,17 @@ const patch = z
     done: z.array(item).max(500),
     avgSecs: z.number().nullable(),
     message: z.string().max(2000).nullable(),
+    errors: z
+      .array(
+        z.object({
+          at: z.string(),
+          slug: z.string().nullable(),
+          name: z.string().nullable(),
+          step: z.string().max(200),
+          message: z.string().max(2000),
+        }),
+      )
+      .max(250),
   })
   .partial();
 

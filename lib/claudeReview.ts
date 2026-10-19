@@ -40,6 +40,18 @@ export type ClaudeReviewState = {
   /** mean seconds per finished set, for the ETA */
   avgSecs: number | null;
   message: string | null;
+  /** every error the runner met, newest last (kept to the last 200) */
+  errors: ClaudeReviewError[];
+};
+
+export type ClaudeReviewError = {
+  at: string;
+  /** the set it happened on, or null for the run itself */
+  slug: string | null;
+  name: string | null;
+  /** the stage, e.g. "pipeline", "real render", "upload", "save to Mac" */
+  step: string;
+  message: string;
 };
 
 export const EMPTY_STATE: ClaudeReviewState = {
@@ -53,12 +65,13 @@ export const EMPTY_STATE: ClaudeReviewState = {
   done: [],
   avgSecs: null,
   message: null,
+  errors: [],
 };
 
 let pool: Pool | null = null;
 let ensured: Promise<unknown> | null = null;
 
-export class ClaudeReviewError extends Error {
+export class ClaudeReviewFailure extends Error {
   constructor(message: string, readonly status = 400) {
     super(message);
   }
@@ -66,7 +79,7 @@ export class ClaudeReviewError extends Error {
 
 function db(): Pool {
   const url = databaseUrl();
-  if (!url) throw new ClaudeReviewError("Claude Review needs Postgres — set DATABASE_URL.", 503);
+  if (!url) throw new ClaudeReviewFailure("Claude Review needs Postgres — set DATABASE_URL.", 503);
   if (!pool) {
     pool = new Pool({
       connectionString: url,
@@ -118,6 +131,7 @@ export async function adminAct(action: "start" | "stop", who: string | null): Pr
 export async function runnerPatch(patch: Partial<ClaudeReviewState>): Promise<ClaudeReviewState> {
   const s = await readState();
   const next: ClaudeReviewState = { ...s, ...patch, heartbeatAt: new Date().toISOString() };
+  next.errors = (next.errors ?? []).slice(-200);
   /* A stop pressed while the runner was busy survives the runner's own "running". */
   if (s.status === "stopping" && patch.status === "running") next.status = "stopping";
   return writeState(next);

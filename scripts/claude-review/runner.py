@@ -8,6 +8,9 @@
   python3 runner.py stop?                 -> prints STOP when the admin pressed Stop (and records "stopped")
   python3 runner.py seq                   -> how many sets already went to an output folder (for the 20-per-folder count)
   python3 runner.py state                 -> the raw state
+  python3 runner.py error <slug|-> <step> <message>   -> log an error (shown in red on the admin panel)
+  python3 runner.py run <slug> <step> -- <command ...> -> step + run the command; on failure the error
+                                                         (last lines of its output) is logged, exit code kept
 
 Queue rule: every set no TS member has taken, plus sets Claude holds that this run has not finished
 yet, in the admin's order. Hidden and paid sets are recorded as skipped (the public API gives no .pagefly).
@@ -70,6 +73,29 @@ def step(slug, text):
     put(status="running", current={"slug": slug, "name": name, "step": text, "startedAt": started})
 
 
+def error(slug, step_name, message):
+    s = state()
+    name = None
+    if slug and slug != "-":
+        name = next((q["name"] for q in s["queue"] if q["slug"] == slug), None) \
+            or next((d["name"] for d in s.get("done", []) if d["slug"] == slug), slug)
+    e = {"at": now(), "slug": None if slug in (None, "-") else slug, "name": name,
+         "step": step_name[:200], "message": message.strip()[-2000:] or "(no message)"}
+    put(errors=(s.get("errors") or []) + [e])
+    print("error logged:", e["step"], "-", e["message"][:200])
+
+
+def run(slug, step_name, cmd):
+    import subprocess
+    step(slug, step_name)
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    sys.stdout.write(r.stdout); sys.stderr.write(r.stderr)
+    if r.returncode != 0:
+        tail = "\n".join((r.stderr or r.stdout).strip().splitlines()[-12:])
+        error(slug, step_name, f"`{' '.join(cmd)[:200]}` exited {r.returncode}:\n{tail}")
+    sys.exit(r.returncode)
+
+
 def finish(slug, result, note=None, folder=None, secs=None):
     s = state(); name = next((q["name"] for q in s["queue"] if q["slug"] == slug), slug)
     cur = s.get("current") or {}
@@ -107,4 +133,8 @@ if __name__ == "__main__":
     {"begin": begin, "next": nxt, "stop?": stopq, "seq": seq,
      "state": lambda: print(json.dumps(state(), indent=1, ensure_ascii=False))}.get(a[0], lambda: None)()
     if a[0] == "step": step(a[1], " ".join(a[2:]))
-    if a[0] == "finish": finish(a[1], a[2], opt("--note"), opt("--folder"), opt("--secs"))
+    if a[0] == "finish":
+        finish(a[1], a[2], opt("--note"), opt("--folder"), opt("--secs"))
+        if a[2] == "failed": error(a[1], "set failed", opt("--note") or "failed")
+    if a[0] == "error": error(a[1], a[2], " ".join(a[3:]))
+    if a[0] == "run": run(a[1], a[2], a[a.index("--") + 1:])
