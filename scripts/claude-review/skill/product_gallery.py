@@ -34,7 +34,7 @@ JS = """() => {
   const cm = M ? getComputedStyle(M) : null, cr = MR ? getComputedStyle(MR) : null, cp = PM ? getComputedStyle(PM) : null;
   const box = c => c ? {rad: c.borderRadius, bg: c.backgroundColor, border: c.borderTopWidth + ' ' + c.borderTopStyle + ' ' + c.borderTopColor,
                         shadow: c.boxShadow, ov: c.overflow} : null;
-  return {cols, gap: kids.length > 1 ? r1.left - rk0.right : 0, mt: pr ? lr.top - pr.bottom : parseFloat(cs.marginTop),
+  return {cols, gap: kids.length > 1 ? Math.max(r1.left - rk0.right, rk0.left - r1.right) : 0, mt: pr ? lr.top - pr.bottom : parseFloat(cs.marginTop),
     ratio: (r0.width / r0.height).toFixed(4), rad: c1.borderRadius, op: c1.opacity, fit: c1.objectFit,
     act: {op: c0.opacity, outline: c0.outlineWidth + ' ' + c0.outlineStyle + ' ' + c0.outlineColor,
           off: c0.outlineOffset, border: c0.borderTopWidth + ' ' + c0.borderTopStyle + ' ' + c0.borderTopColor},

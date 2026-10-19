@@ -17,9 +17,11 @@ JS_MEASURE = """(sel) => Array.from(document.querySelectorAll(sel)).map(cd => {
   const n = u.children[0], l = u.children[1], rn = n.getBoundingClientRect(), rl = l.getBoundingClientRect();
   const f = e => { const c = getComputedStyle(e); return {family:c.fontFamily, size:c.fontSize, weight:c.fontWeight,
      style:c.fontStyle, lh:c.lineHeight, ls:c.letterSpacing, tt:c.textTransform, color:c.color, opacity:c.opacity}; };
-  return {w:r.width, h:r.height, gap:Math.max(r2.left - r.right, r.left - r2.right),bw:parseFloat(cs.borderTopWidth), bs:cs.borderTopStyle,
+  // an ancestor may still be mid scroll-reveal (e.g. transform:scale(.7)): undo it so sizes are the CSS ones
+  const k = (u.offsetWidth && r.width) ? u.offsetWidth / r.width : 1;
+  return {w:r.width*k, h:r.height*k, gap:Math.max(r2.left - r.right, r.left - r2.right)*k,bw:parseFloat(cs.borderTopWidth), bs:cs.borderTopStyle,
     bc:cs.borderTopColor, bg:cs.backgroundColor, rad:cs.borderTopLeftRadius,
-    nTop:rn.top - r.top, nH:rn.height, gapNL:rl.top - rn.bottom, lH:rl.height, lBottom:r.bottom - rl.bottom,
+    nTop:(rn.top - r.top)*k, nH:rn.height*k, gapNL:(rl.top - rn.bottom)*k, lH:rl.height*k, lBottom:(r.bottom - rl.bottom)*k,
     num:f(n), lab:f(l)}; })"""
 
 

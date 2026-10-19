@@ -61,6 +61,7 @@ Product cards show the store's sample products — judge their style only.
 ./cr runner.py run $S "upload .pagefly" -- python3 review.py ship $S               # result done  -> "Claude Done · <time>"
 ./cr runner.py run $S "upload .pagefly" -- python3 review.py ship $S --reviewing   # result reimport -> stays "Claude Reviewing"
 ```
+With `--reviewing` the output shows `"done": null` — expected: the set stays "Claude Reviewing".
 `ship` re-zips each page from its JSON, checks it is that page's own entry, checks the validator
 did not get worse, uploads to that page only, downloads it back and compares bytes.
 

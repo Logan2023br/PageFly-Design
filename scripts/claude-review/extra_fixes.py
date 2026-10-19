@@ -15,6 +15,12 @@
    also wipes a font the mockup gives an inline word (`.pu-h1 em{font-family:Caveat}`):
    the accent words fall back to the heading font. Re-assert those fonts with !important
    (higher specificity, so they win over the parity rule while plain text still inherits).
+4. rtl_accordion: on an RTL page (`#__pf{direction:rtl}`) PageFly's Accordion3 still lays the
+   header out physically: arrowPos "right" puts the label on the LEFT and the chevron right,
+   and the closed glyph points ">" (real render, halawiyat-baghdad). The mockup has the label
+   right, chevron left pointing down. Set arrowPos "left", move editor_parity's 40px glyph
+   room to the left (keeping the mockup's own right padding), right-align the label and turn
+   the closed glyph down.
 """
 
 INLINE = r"(?:em|strong|b|i|span|a|small|mark|u|s)"
@@ -111,6 +117,26 @@ for jpath, hpath in pairs.items():
         if keep:
             d["customCSS"] += "\n/* inline fonts kept */\n" + "\n".join(keep)
             done.append("inline_font:%d" % len(keep))
+    if re.search(r"#__pf\s*\{[^}]*direction\s*:\s*rtl", d["customCSS"]) and "/* rtl accordion */" not in d["customCSS"]:
+        accs = [i for i in d["items"] if i["type"] == "Accordion3"]
+        if accs:
+            for a in accs: a["data"]["arrowPos"] = "left"
+            for st in d["styles"]:
+                if st.get("type") == "Accordion3.Header" or items.get(st["id"], {}).get("type") == "Accordion3.Header":
+                    st["styles"] = st["styles"].replace("padding-right:40px;", "padding-left:40px;")
+            rules = []
+            for sel, body in top_rules(d["customCSS"]):
+                if "Accordion3.Header" not in sel or sel.startswith("@") or "padding-right:40px" in body: continue
+                m = re.search(r"(?<![-\w])padding\s*:\s*([^;}]+)", body)
+                if not m: continue
+                v = m.group(1).replace("!important", "").split()
+                right = v[1] if len(v) > 1 else v[0]
+                rules.append(f"{sel}{{padding-left:40px !important;padding-right:{right} !important;text-align:right;}}")
+            for a in accs:
+                c = ((a["data"].get("className") or "").split() or [None])[0]
+                if c: rules.append(f"#__pf .{c} details:not([open]) > summary .pf-accordion-icon{{transform:rotate(90deg);}}")
+            d["customCSS"] += "\n/* rtl accordion */\n" + "\n".join(dict.fromkeys(rules))
+            done.append("rtl_accordion:%d" % len(accs))
     if done:
         json.dump(d, open(jpath, "w"), ensure_ascii=False)
     print(os.path.basename(jpath), "countdown_wrap:", done)

@@ -1,4 +1,5 @@
 """python3 looks.py <slug>... — the sections verify_offline flagged that need a human look."""
+import signal; signal.signal(signal.SIGPIPE, signal.SIG_DFL)  # `| head` must not crash it
 import json, os, sys
 for s in sys.argv[1:]:
     d = json.load(open(os.path.join(os.environ.get("CR_WORK", "/tmp/claude-review"), s, "report.json")))
