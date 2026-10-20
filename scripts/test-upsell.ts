@@ -538,6 +538,40 @@ async function main() {
     check((await adminQueries.tabCounts()).tracking === (await adminQueries.listLeadTab("tracking", {})).total, "its count matches its rows");
   }
 
+  console.log("unsent first messages get the new closing");
+  {
+    const { NEW_CLOSING } = await import("../lib/upsell/db");
+    const { DEFAULT_INITIAL_TEMPLATE } = await import("../lib/upsell/common");
+    check(DEFAULT_INITIAL_TEMPLATE.includes(NEW_CLOSING), "the migration writes exactly what the template now says");
+    const OLD = "Feel free to customize these pages in the PageFly editor to make them your own. If you have any questions, just reply here.";
+    const body = (n: string) => `Hi **${n}**,\n\n👉 [See your 2 pages](https://pfd.test/x)\n\n${OLD}\n\nBest regards,\n**Logan – PageFly Support**`;
+    const ids = { pending_review: "L261099MG01", approved: "L261099MG02", failed: "L261099MG03", sent: "L261099MG04" } as const;
+    const p0 = await db();
+    for (const [status, lid] of Object.entries(ids)) {
+      await leads.upsertLeads([{ lead_id: lid, store_domain: `${lid.toLowerCase()}.myshopify.com`, group: "test" }]);
+      await p0.query(
+        "insert into upsell_messages (id, lead_id, kind, content, status, created_by) values ($1,$2,'initial',$3,$4,'admin:t')",
+        [`msg_mig_${status}`, lid, body(lid), status],
+      );
+    }
+    await settings.saveSettings({ initial_message_template: `Hi **{store_name}**,\n\n👉 [See your 2 pages]({link})\n\n${OLD}\n\nBest regards,\n**{pic} – PageFly Support**` });
+    /* As a fresh server process would: a new pool runs the schema step again. */
+    await closeUpsellPool();
+    const p1 = await db();
+    const rows = (await p1.query<{ status: string; content: string }>("select status, content from upsell_messages where id like 'msg_mig_%'")).rows;
+    const by = Object.fromEntries(rows.map((r) => [r.status, r.content]));
+    for (const st of ["pending_review", "approved", "failed"])
+      check(by[st]?.includes(NEW_CLOSING) && !by[st]?.includes(OLD) && by[st]?.startsWith("Hi **"), `${st}: closing replaced, the rest kept`, by[st]);
+    check(by.sent?.includes(OLD) && !by.sent?.includes("complimentary"), "a sent message is never rewritten", by.sent);
+    const tpl = (await settings.getSettings()).initial_message_template;
+    check(tpl.includes(NEW_CLOSING) && !tpl.includes(OLD), "the saved template gets it too", tpl);
+    await closeUpsellPool();
+    await db();
+    const again = (await (await db()).query<{ content: string }>("select content from upsell_messages where id = 'msg_mig_approved'")).rows[0].content;
+    check(again === by.approved, "running it again changes nothing");
+    await settings.saveSettings({ initial_message_template: "" });
+  }
+
   console.log("phone → WhatsApp");
   {
     const { whatsappUrl } = await import("../lib/upsell/format");

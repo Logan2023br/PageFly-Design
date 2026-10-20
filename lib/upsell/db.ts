@@ -239,7 +239,7 @@ async function ensureSchema(p: Pool): Promise<void> {
      request failing for the life of the process. */
   if (!ensured) {
     ensured = p.query(SCHEMA).then(
-      () => undefined,
+      () => refreshUnsentFirstMessages(p),
       (err) => {
         ensured = null;
         throw err;
@@ -247,6 +247,39 @@ async function ensureSchema(p: Pool): Promise<void> {
     );
   }
   return ensured;
+}
+
+/* The first message's closing paragraph, as the template had it before, and
+   as it is now (see DEFAULT_INITIAL_TEMPLATE in common.ts). */
+const OLD_CLOSINGS = [
+  "Feel free to customize these pages in the PageFly editor to make them your own. If you have any questions, just reply here.",
+  "Want a different style or another page type? Just reply here and I will rebuild it for you.",
+];
+export const NEW_CLOSING =
+  "Feel free to customize these pages in the PageFly editor to make them your own.\n\n" +
+  "We also offer complimentary editing services for these two pages of yours. " +
+  "(Please note that this is a free editing service, available for a limited period of 15 days from the date of submission.)\n\n" +
+  "If you need any assistance, simply reply to this message.";
+
+/** First messages written from the old template and not sent yet — drafts,
+    waiting, failed — get the new closing paragraph, and so does a saved
+    template that still has the old one. Only that exact sentence changes, so
+    an admin's other edits stay. SENT MESSAGES ARE NEVER TOUCHED: they are the
+    record of what the customer received. Idempotent: once replaced, the old
+    sentence is not there to match. */
+async function refreshUnsentFirstMessages(p: Pool): Promise<void> {
+  for (const old of OLD_CLOSINGS) {
+    await p.query(
+      `update upsell_messages set content = replace(content, $1, $2)
+        where kind = 'initial' and status in ('pending_review', 'approved', 'failed') and position($1 in content) > 0`,
+      [old, NEW_CLOSING],
+    );
+    await p.query(
+      `update upsell_settings set value = to_jsonb(replace(value #>> '{}', $1, $2)), updated_at = now()
+        where key = 'initial_message_template' and position($1 in value #>> '{}') > 0`,
+      [old, NEW_CLOSING],
+    );
+  }
 }
 
 export type Db = Pick<PoolClient, "query">;
