@@ -109,7 +109,10 @@ export const DEFAULT_INITIAL_TEMPLATE =
   /* A plain link: Crisp renders neither **[text](url)** nor [**text**](url) —
      both arrive as raw markdown. */
   "👉 [See your 2 pages]({link})\n\n" +
-  "Feel free to customize these pages in the PageFly editor to make them your own. If you have any questions, just reply here.\n\n" +
+  "Feel free to customize these pages in the PageFly editor to make them your own.\n\n" +
+  "We also offer complimentary editing services for these two pages of yours. " +
+  "(Please note that this is a free editing service, available for a limited period of 15 days from the date of submission.)\n\n" +
+  "If you need any assistance, simply reply to this message.\n\n" +
   "Best regards,\n**{pic} – PageFly Support**";
 
 export function isoOrNull(v: unknown): string | null {

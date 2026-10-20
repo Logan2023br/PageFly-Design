@@ -515,6 +515,29 @@ async function main() {
     check((await adminQueries.listLeadTab("upgraded", { act: "'; drop table upsell_leads; --" })).total >= 0, "an unknown act filters nothing and runs no SQL from the URL");
   }
 
+  console.log("WhatsApp text and Theo dõi tất cả");
+  {
+    const { whatsappText } = await import("../lib/upsell/format");
+    const { DEFAULT_INITIAL_TEMPLATE, fillTemplate } = await import("../lib/upsell/common");
+    check(
+      DEFAULT_INITIAL_TEMPLATE.includes("We also offer complimentary editing services for these two pages of yours. (Please note that this is a free editing service, available for a limited period of 15 days from the date of submission.)") &&
+        DEFAULT_INITIAL_TEMPLATE.includes("If you need any assistance, simply reply to this message.") &&
+        !DEFAULT_INITIAL_TEMPLATE.includes("If you have any questions, just reply here."),
+      "first message carries the free-editing paragraph",
+    );
+    const md = fillTemplate(DEFAULT_INITIAL_TEMPLATE, { store_name: "God's Providence", page1_label: "Home page", page2_label: "Product page", link: "https://pfd.test/new-page?id=SNAAFGZW", pic: "Logan" });
+    const wa = whatsappText(md);
+    check(!wa.includes("*") && !wa.includes("](") && !wa.includes("["), "WhatsApp text has no markdown left", wa);
+    check(wa.startsWith("Hi God's Providence,\n\n") && wa.includes("a Home page and a Product page."), "names unbolded");
+    check(wa.includes("👉 See your 2 pages: https://pfd.test/new-page?id=SNAAFGZW\n"), "the link is written out after its text");
+    check(wa.endsWith("Best regards,\nLogan – PageFly Support"), "signature without **");
+
+    const all = (await adminQueries.listLeadTab("tracking", {})).rows;
+    const upgraded = (await adminQueries.listLeadTab("upgraded", {})).rows.filter((l) => l.status === "upgraded");
+    check(upgraded.length > 0 && upgraded.every((u) => all.some((l) => l.lead_id === u.lead_id)), "Theo dõi tất cả includes upgraded leads", { all: all.map((l) => l.lead_id), upgraded: upgraded.map((l) => l.lead_id) });
+    check((await adminQueries.tabCounts()).tracking === (await adminQueries.listLeadTab("tracking", {})).total, "its count matches its rows");
+  }
+
   console.log("phone → WhatsApp");
   {
     const { whatsappUrl } = await import("../lib/upsell/format");

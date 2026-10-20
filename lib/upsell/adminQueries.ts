@@ -45,7 +45,9 @@ export type Paged<T> = { rows: T[]; total: number; page: number; pages: number }
 /** Lead tabs: which statuses, which date column, which order. */
 export const LEAD_TABS = {
   pages: { statuses: ["pending_review"], date: "built_at", order: "l.built_at asc nulls last" },
-  tracking: { statuses: ["sent", "viewed", "downloaded", "used"], date: "sent_at", order: "l.sent_at desc nulls last" },
+  /* Theo dõi tất cả: every lead whose pages went out, upgraded ones included —
+     Đã nâng cấp is the same leads narrowed, not a place they move to. */
+  tracking: { statuses: ["sent", "viewed", "downloaded", "used", "upgraded"], date: "sent_at", order: "l.sent_at desc nulls last" },
   upgraded: { statuses: null, date: "upgraded_at", order: "l.upgraded_at desc nulls last" },
   queue: { statuses: ["new", "building", "rebuild_requested"], date: "created_at", order: "(l.priority = 'high') desc, l.lead_score desc nulls last, l.created_at asc" },
   control: { statuses: ["control"], date: "created_at", order: "l.created_at desc" },
@@ -185,7 +187,7 @@ export async function tabCounts(): Promise<Record<string, number>> {
        (select count(*) from upsell_messages where status = 'pending_review') as messages,
        (select count(*) from upsell_messages m join upsell_leads l on l.lead_id = m.lead_id where m.status = 'approved') as waiting,
        (select count(*) from upsell_messages where status = 'failed') as failed,
-       (select count(*) from upsell_leads where status in ('sent','viewed','downloaded','used')) as tracking,
+       (select count(*) from upsell_leads where status in ('sent','viewed','downloaded','used','upgraded')) as tracking,
        (select count(*) from upsell_leads where upgraded is true) as upgraded,
        (select count(*) from upsell_leads where status in ('new','building','rebuild_requested')) as queue,
        (select count(*) from upsell_leads where status = 'control') as control,

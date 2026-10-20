@@ -2,10 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { adminGate } from "@/components/admin/adminGate";
-import { CrispLink, PhoneLine, Pill, StatusBadge, WhatsappMark } from "@/components/admin/upsell/bits";
+import { CrispLink, PhoneLine, Pill, StatusBadge, WhatsappMark, WhatsappMessage } from "@/components/admin/upsell/bits";
 import { LeadMessages, PagePreviews, ReviewActions, Timeline } from "@/components/admin/upsell/LeadDetailParts";
 import { filterOptions, leadDetail } from "@/lib/upsell/adminQueries";
-import { customerClock, daysLeft, fmtVN, handleOf, money } from "@/lib/upsell/format";
+import { customerClock, daysLeft, fmtVN, handleOf, money, whatsappText } from "@/lib/upsell/format";
 import { hasUpsellDatabase } from "@/lib/upsell/db";
 import { initialDraft } from "@/lib/upsell/review";
 import { getSettings } from "@/lib/upsell/settings";
@@ -157,6 +157,7 @@ export default async function LeadPage(props: PageProps<"/design/admin/upsell/le
           {l.status === "pending_review" && design && (
             <ReviewActions leadId={l.lead_id} draft={initialDraft(l, design.design.id, cfg)} pageTypes={[l.page1_type, l.page2_type]} />
           )}
+          {design && <WhatsappMessage text={whatsappText(initialDraft(l, design.design.id, cfg))} phone={l.phone} />}
           <LeadMessages leadId={l.lead_id} messages={d.messages} ticketLink={l.ticket_link} />
           <Timeline leadId={l.lead_id} events={d.events} pic={l.pic} pics={options.pics} notes={l.internal_notes} />
         </div>

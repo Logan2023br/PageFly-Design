@@ -157,6 +157,68 @@ export function PhoneLine({ phone }: { phone: string | null | undefined }) {
   );
 }
 
+/** The first message as WhatsApp text, editable here and copied with one
+    press — and, when the phone is written internationally, opened straight
+    into a WhatsApp chat with the text filled in. */
+export function WhatsappMessage({ text: initial, phone }: { text: string; phone: string | null }) {
+  const [text, setText] = useState(initial);
+  const [copied, setCopied] = useState(false);
+  const wa = whatsappUrl(phone);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const t = document.createElement("textarea");
+      t.value = text;
+      t.style.position = "fixed";
+      t.style.opacity = "0";
+      document.body.appendChild(t);
+      t.select();
+      document.execCommand("copy");
+      t.remove();
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <section className="grid gap-2 rounded-pf-md border border-pf-success/25 bg-pf-card p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="flex items-center gap-1.5 text-[13.5px] font-semibold text-pf-text">
+          <Icon name="MessageSquare" size={14} className="text-pf-success" />
+          Tin nhắn WhatsApp
+        </h3>
+        <div className="flex items-center gap-2">
+          {wa && (
+            <a
+              href={`${wa}?text=${encodeURIComponent(text)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-8 items-center gap-1.5 rounded-pf-md border border-pf-border px-3 text-[12.5px] font-semibold text-pf-body transition-colors hover:border-pf-success/50 hover:text-pf-success"
+            >
+              Mở WhatsApp với tin này
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={() => void copy()}
+            className="inline-flex h-8 items-center gap-1.5 rounded-pf-md bg-pf-success/15 px-3 text-[12.5px] font-semibold text-pf-success transition-colors hover:bg-pf-success/25"
+          >
+            <Icon name={copied ? "Check" : "Copy"} size={13} />
+            {copied ? "Đã copy" : "Copy nội dung"}
+          </button>
+        </div>
+      </div>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        aria-label="Nội dung tin WhatsApp"
+        className="min-h-[260px] w-full rounded-pf-md border border-pf-border bg-pf-bg-deep p-3 text-[13px] leading-relaxed text-pf-body outline-none focus:border-pf-primary-hi"
+      />
+      <p className="text-[11.5px] text-pf-faint">Không có ký tự ** như trên Crisp; link ghi đầy đủ để WhatsApp tự bấm được. Sửa ở đây chỉ đổi bản để copy, không lưu.</p>
+    </section>
+  );
+}
+
 /** "Đã gửi qua WhatsApp": the mark, who set it and when, and the button that
     sets or clears it. The message itself goes from someone's phone. */
 export function WhatsappMark({ leadId, sentAt, sentBy }: { leadId: string; sentAt: string | null; sentBy: string | null }) {
