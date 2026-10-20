@@ -43,42 +43,46 @@ export function LeadTable({ rows, variant }: { rows: LeadListRow[]; variant: Tab
     { head: "Trạng thái", cell: (l) => <StatusBadge status={l.status} /> },
   ];
 
+  /* What the customer did with the pages. Written once and shown on both
+     Đang theo dõi and Đã nâng cấp, so the two tabs cannot drift apart. */
+  type Col = (typeof cols)[number];
+  const activity: Col[] = [
+    { head: "Gửi", cell: (l) => fmtVN(l.sent_at) },
+    { head: "Đọc", cell: (l) => yes(l.message_read) },
+    { head: "Xem", cell: (l) => `${l.unique_views} (${l.views})` },
+    { head: "Tải", cell: (l) => l.downloads },
+    { head: "Rating", cell: (l) => (l.rating ? `${l.rating}★` : "—") },
+    {
+      head: "Phản hồi",
+      cell: (l) =>
+        l.replied ? (
+          <div className="max-w-[260px]">
+            <Pill tone={l.sentiment === "Positive" ? "ok" : l.sentiment === "Negative" ? "bad" : "muted"}>{l.sentiment ?? "Chưa phân loại"}</Pill>
+            <p className="mt-1 line-clamp-2 text-[11.5px] text-pf-muted">{l.feedback_summary || l.last_reply_text}</p>
+          </div>
+        ) : (
+          "—"
+        ),
+    },
+    {
+      head: "Follow-up",
+      cell: (l) => [l.followup1_at && "FU1", l.followup2_at && "FU2", l.review_asked_at && "Review"].filter(Boolean).join(" · ") || "—",
+    },
+    {
+      head: "Link còn",
+      cell: (l) => {
+        const d = daysLeft(l.design_expires_at);
+        return d === null ? "—" : d <= 0 ? <span className="text-pf-danger">Hết hạn</span> : `${d} ngày`;
+      },
+    },
+  ];
+  const whatsapp: Col = {
+    head: "WhatsApp",
+    cell: (l) => <WhatsappMark leadId={l.lead_id} sentAt={l.whatsapp_sent_at} sentBy={l.whatsapp_sent_by} />,
+  };
+
   if (variant === "tracking") {
-    cols.push(
-      { head: "Gửi", cell: (l) => fmtVN(l.sent_at) },
-      { head: "Đọc", cell: (l) => yes(l.message_read) },
-      { head: "Xem", cell: (l) => `${l.unique_views} (${l.views})` },
-      { head: "Tải", cell: (l) => l.downloads },
-      { head: "Rating", cell: (l) => (l.rating ? `${l.rating}★` : "—") },
-      {
-        head: "Phản hồi",
-        cell: (l) =>
-          l.replied ? (
-            <div className="max-w-[260px]">
-              <Pill tone={l.sentiment === "Positive" ? "ok" : l.sentiment === "Negative" ? "bad" : "muted"}>{l.sentiment ?? "Chưa phân loại"}</Pill>
-              <p className="mt-1 line-clamp-2 text-[11.5px] text-pf-muted">{l.feedback_summary || l.last_reply_text}</p>
-            </div>
-          ) : (
-            "—"
-          ),
-      },
-      {
-        head: "Follow-up",
-        cell: (l) => [l.followup1_at && "FU1", l.followup2_at && "FU2", l.review_asked_at && "Review"].filter(Boolean).join(" · ") || "—",
-      },
-      {
-        head: "Link còn",
-        cell: (l) => {
-          const d = daysLeft(l.design_expires_at);
-          return d === null ? "—" : d <= 0 ? <span className="text-pf-danger">Hết hạn</span> : `${d} ngày`;
-        },
-      },
-      ticket,
-      {
-        head: "WhatsApp",
-        cell: (l) => <WhatsappMark leadId={l.lead_id} sentAt={l.whatsapp_sent_at} sentBy={l.whatsapp_sent_by} />,
-      },
-    );
+    cols.push(...activity, ticket, whatsapp);
   } else if (variant === "upgraded") {
     cols.push(
       { head: "Nhóm", cell: (l) => (l.group === "control" ? <Pill>Đối chứng</Pill> : <Pill tone="primary">Test</Pill>) },
@@ -90,7 +94,9 @@ export function LeadTable({ rows, variant }: { rows: LeadListRow[]; variant: Tab
         cell: (l) => (l.sent_at && l.upgraded_at ? `${Math.max(0, Math.round((new Date(l.upgraded_at).getTime() - new Date(l.sent_at).getTime()) / 86_400_000))} ngày` : "—"),
       },
       { head: "PIC", cell: (l) => l.pic ?? "—" },
+      ...activity,
       ticket,
+      whatsapp,
     );
   } else if (variant === "queue") {
     cols.push(
