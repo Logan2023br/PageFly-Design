@@ -546,17 +546,18 @@ async function main() {
     const { whatsappText } = await import("../lib/upsell/format");
     const { DEFAULT_INITIAL_TEMPLATE, fillTemplate } = await import("../lib/upsell/common");
     check(
-      DEFAULT_INITIAL_TEMPLATE.includes("We also offer complimentary editing services for these two pages of yours. (Please note that this is a free editing service, available for a limited period of 15 days from the date of submission.)") &&
+      DEFAULT_INITIAL_TEMPLATE.includes("We also offer **complimentary editing** services for these two pages of yours.\n(Please note that this is a **free editing** service, available for a limited period of **15 days** from the date of submission.)") &&
         DEFAULT_INITIAL_TEMPLATE.includes("If you need any assistance, simply reply to this message.") &&
         !DEFAULT_INITIAL_TEMPLATE.includes("If you have any questions, just reply here."),
       "first message carries the free-editing paragraph",
     );
     const md = fillTemplate(DEFAULT_INITIAL_TEMPLATE, { store_name: "God's Providence", page1_label: "Home page", page2_label: "Product page", link: "https://pfd.test/new-page?id=SNAAFGZW", pic: "Logan" });
     const wa = whatsappText(md);
-    check(!wa.includes("*") && !wa.includes("](") && !wa.includes("["), "WhatsApp text has no markdown left", wa);
-    check(wa.startsWith("Hi God's Providence,\n\n") && wa.includes("a Home page and a Product page."), "names unbolded");
+    check(!wa.includes("**") && !wa.includes("](") && !wa.includes("["), "WhatsApp text has no markdown left", wa);
+    check(wa.startsWith("Hi *God's Providence*,\n\n") && wa.includes("a *Home page* and a *Product page*."), "bold kept in WhatsApp's syntax (*one star*)");
+    check(wa.includes("*complimentary editing*") && wa.includes("*free editing*") && wa.includes("*15 days*"), "the free-editing words are bold");
     check(wa.includes("👉 See your 2 pages: https://pfd.test/new-page?id=SNAAFGZW\n"), "the link is written out after its text");
-    check(wa.endsWith("Best regards,\nLogan – PageFly Support"), "signature without **");
+    check(wa.endsWith("Best regards,\n*Logan – PageFly Support*"), "signature bold, WhatsApp style");
 
     const all = (await adminQueries.listLeadTab("tracking", {})).rows;
     const upgraded = (await adminQueries.listLeadTab("upgraded", {})).rows.filter((l) => l.status === "upgraded");
@@ -589,6 +590,19 @@ async function main() {
     for (const st of ["pending_review", "approved", "failed"])
       check(by[st]?.includes(NEW_CLOSING) && !by[st]?.includes(OLD) && by[st]?.startsWith("Hi **"), `${st}: closing replaced, the rest kept`, by[st]);
     check(by.sent?.includes(OLD) && !by.sent?.includes("complimentary"), "a sent message is never rewritten", by.sent);
+
+    /* A draft written from the first unbolded version of the new closing is
+       brought up to the bolded one too. */
+    const UNBOLDED =
+      "Feel free to customize these pages in the PageFly editor to make them your own.\n\n" +
+      "We also offer complimentary editing services for these two pages of yours. " +
+      "(Please note that this is a free editing service, available for a limited period of 15 days from the date of submission.)\n\n" +
+      "If you need any assistance, simply reply to this message.";
+    await leads.upsertLeads([{ lead_id: "L261099MG05", store_domain: "l261099mg05.myshopify.com", group: "test" }]);
+    await p1.query("insert into upsell_messages (id, lead_id, kind, content, status, created_by) values ('msg_mig_unbolded','L261099MG05','initial',$1,'approved','admin:t')", [`Hi,\n\n${UNBOLDED}\n\nBest regards`]);
+    await closeUpsellPool();
+    const ub = (await (await db()).query<{ content: string }>("select content from upsell_messages where id = 'msg_mig_unbolded'")).rows[0].content;
+    check(ub.includes(NEW_CLOSING) && ub.includes("**15 days**"), "an unsent message with the unbolded closing gets the bolded one", ub);
     const tpl = (await settings.getSettings()).initial_message_template;
     check(tpl.includes(NEW_CLOSING) && !tpl.includes(OLD), "the saved template gets it too", tpl);
     await closeUpsellPool();

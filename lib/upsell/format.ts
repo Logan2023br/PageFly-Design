@@ -127,11 +127,12 @@ export function whatsappUrl(phone: string | null | undefined): string | null {
   return digits.length >= 8 && digits.length <= 15 ? `https://wa.me/${digits}` : null;
 }
 
-/** A Crisp (markdown) message as WhatsApp text: no ** — WhatsApp would show
-    them, or bold with single * — and every link written out as
-    "text: url", since WhatsApp has no link syntax and makes the URL tappable. */
+/** A Crisp (markdown) message as WhatsApp text. Bold keeps being bold, in
+    WhatsApp's own syntax — one `*` each side instead of two — and every link
+    is written out as "text: url", since WhatsApp has no link syntax and makes
+    the URL tappable. */
 export function whatsappText(markdown: string): string {
   return markdown
     .replace(/\[([^\]]*)\]\(([^)\s]*)\)/g, (_, text: string, url: string) => (text.trim() ? `${text.trim()}: ${url}` : url))
-    .replace(/\*\*/g, "");
+    .replace(/\*\*([^*\n]+?)\*\*/g, "*$1*");
 }

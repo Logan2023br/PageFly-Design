@@ -110,8 +110,8 @@ export const DEFAULT_INITIAL_TEMPLATE =
      both arrive as raw markdown. */
   "👉 [See your 2 pages]({link})\n\n" +
   "Feel free to customize these pages in the PageFly editor to make them your own.\n\n" +
-  "We also offer complimentary editing services for these two pages of yours. " +
-  "(Please note that this is a free editing service, available for a limited period of 15 days from the date of submission.)\n\n" +
+  "We also offer **complimentary editing** services for these two pages of yours.\n" +
+  "(Please note that this is a **free editing** service, available for a limited period of **15 days** from the date of submission.)\n\n" +
   "If you need any assistance, simply reply to this message.\n\n" +
   "Best regards,\n**{pic} – PageFly Support**";
 

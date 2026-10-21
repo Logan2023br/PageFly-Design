@@ -261,11 +261,16 @@ async function ensureSchema(p: Pool): Promise<void> {
 const OLD_CLOSINGS = [
   "Feel free to customize these pages in the PageFly editor to make them your own. If you have any questions, just reply here.",
   "Want a different style or another page type? Just reply here and I will rebuild it for you.",
+  /* The closing as it first was, before its key words were bolded. */
+  "Feel free to customize these pages in the PageFly editor to make them your own.\n\n" +
+    "We also offer complimentary editing services for these two pages of yours. " +
+    "(Please note that this is a free editing service, available for a limited period of 15 days from the date of submission.)\n\n" +
+    "If you need any assistance, simply reply to this message.",
 ];
 export const NEW_CLOSING =
   "Feel free to customize these pages in the PageFly editor to make them your own.\n\n" +
-  "We also offer complimentary editing services for these two pages of yours. " +
-  "(Please note that this is a free editing service, available for a limited period of 15 days from the date of submission.)\n\n" +
+  "We also offer **complimentary editing** services for these two pages of yours.\n" +
+  "(Please note that this is a **free editing** service, available for a limited period of **15 days** from the date of submission.)\n\n" +
   "If you need any assistance, simply reply to this message.";
 
 /** First messages written from the old template and not sent yet — drafts,
