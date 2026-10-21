@@ -365,6 +365,7 @@ const EVENT_LABEL: Record<string, string> = {
   note_added: "Ghi chú",
   whatsapp_sent: "Đánh dấu đã gửi WhatsApp",
   whatsapp_unmarked: "Bỏ đánh dấu WhatsApp",
+  whatsapp_skipped: "Đánh dấu không dùng WhatsApp",
   status_changed: "Đổi trạng thái",
   view: "Khách xem trang",
   preview_open: "Khách mở toàn màn hình",

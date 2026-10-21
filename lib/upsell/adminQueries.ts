@@ -37,7 +37,8 @@ export const LEAD_ACTIVITY = {
   read: { label: "Đã đọc tin", sql: "l.message_read is true" },
   replied: { label: "Đã phản hồi", sql: "l.replied is true" },
   whatsapp: { label: "Đã gửi WhatsApp", sql: "l.whatsapp_sent_at is not null" },
-  no_whatsapp: { label: "Chưa gửi WhatsApp", sql: "l.whatsapp_sent_at is null" },
+  no_whatsapp: { label: "Chưa gửi WhatsApp", sql: "l.whatsapp_sent_at is null and l.whatsapp_skipped_at is null" },
+  whatsapp_skipped: { label: "Không dùng WhatsApp", sql: "l.whatsapp_skipped_at is not null" },
 } as const;
 
 export type Paged<T> = { rows: T[]; total: number; page: number; pages: number };

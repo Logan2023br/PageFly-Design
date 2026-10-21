@@ -219,38 +219,73 @@ export function WhatsappMessage({ text: initial, phone }: { text: string; phone:
   );
 }
 
-/** "Đã gửi qua WhatsApp": the mark, who set it and when, and the button that
-    sets or clears it. The message itself goes from someone's phone. */
-export function WhatsappMark({ leadId, sentAt, sentBy }: { leadId: string; sentAt: string | null; sentBy: string | null }) {
+/** The WhatsApp mark, three ways:
+    - undecided: two buttons, "Đánh dấu đã gửi" and "Không dùng WhatsApp";
+    - "Đã gửi WhatsApp" or "Không dùng WhatsApp": a badge with who and when —
+      press the badge to go back to undecided.
+    The message itself goes from someone's phone; this only records it. */
+export function WhatsappMark({
+  leadId,
+  sentAt,
+  sentBy,
+  skippedAt,
+  skippedBy,
+}: {
+  leadId: string;
+  sentAt: string | null;
+  sentBy: string | null;
+  skippedAt: string | null;
+  skippedBy: string | null;
+}) {
   const [run, busy, error] = useAct();
-  const set = (sent: boolean) => run(`/api/admin/upsell/leads/${leadId}`, { action: "whatsapp", sent });
-  return (
-    <div className="grid justify-items-start gap-1">
-      {sentAt ? (
-        <>
-          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-pf-pill border border-pf-success/30 bg-pf-success/10 px-2 py-0.5 text-[11px] font-semibold text-pf-success">
-            <Icon name="Check" size={11} />
-            Đã gửi WhatsApp
-          </span>
-          <span className="whitespace-nowrap text-[11px] text-pf-faint">
-            {fmtVN(sentAt)}
-            {sentBy ? ` · ${sentBy.replace(/^admin:/, "")}` : ""}
-          </span>
-          <button type="button" disabled={busy} onClick={() => void set(false)} className="text-[11px] text-pf-faint underline-offset-2 hover:text-pf-text hover:underline disabled:opacity-50">
-            Bỏ đánh dấu
-          </button>
-        </>
-      ) : (
+  const set = (state: "sent" | "skipped" | "none") => run(`/api/admin/upsell/leads/${leadId}`, { action: "whatsapp", state });
+  const who = (at: string | null, by: string | null) => `${fmtVN(at)}${by ? ` · ${by.replace(/^admin:/, "")}` : ""}`;
+  const button =
+    "inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-pf-md border px-2.5 text-[12px] font-semibold transition-colors disabled:opacity-50";
+
+  if (sentAt || skippedAt) {
+    const sent = Boolean(sentAt);
+    return (
+      <div className="grid justify-items-start gap-1">
         <button
           type="button"
           disabled={busy}
-          onClick={() => void set(true)}
-          className="inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-pf-md border border-pf-border px-2.5 text-[12px] font-semibold text-pf-body transition-colors hover:border-pf-success/50 hover:text-pf-success disabled:opacity-50"
+          onClick={() => void set("none")}
+          title="Bấm để bỏ đánh dấu"
+          className={`${button} ${
+            sent
+              ? "border-pf-success/30 bg-pf-success/10 text-pf-success hover:bg-pf-success/20"
+              : "border-pf-border bg-pf-card-hi text-pf-muted hover:text-pf-text"
+          }`}
         >
-          <Icon name="MessageSquare" size={13} />
-          Đánh dấu đã gửi
+          <Icon name={sent ? "Check" : "X"} size={12} />
+          {sent ? "Đã gửi WhatsApp" : "Không dùng WhatsApp"}
         </button>
-      )}
+        <span className="whitespace-nowrap text-[11px] text-pf-faint">{sent ? who(sentAt, sentBy) : who(skippedAt, skippedBy)}</span>
+        <ErrorLine error={error} />
+      </div>
+    );
+  }
+  return (
+    <div className="grid justify-items-start gap-1.5">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void set("sent")}
+        className={`${button} border-pf-border text-pf-body hover:border-pf-success/50 hover:text-pf-success`}
+      >
+        <Icon name="MessageSquare" size={13} />
+        Đánh dấu đã gửi
+      </button>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void set("skipped")}
+        className={`${button} border-pf-border text-pf-faint hover:border-pf-border-hi hover:text-pf-text`}
+      >
+        <Icon name="X" size={13} />
+        Không dùng WhatsApp
+      </button>
       <ErrorLine error={error} />
     </div>
   );

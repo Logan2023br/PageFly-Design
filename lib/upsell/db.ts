@@ -206,6 +206,9 @@ alter table upsell_messages add column if not exists failed_at timestamptz;
    sent from a phone, outside this system, so only a person can say so. */
 alter table upsell_leads add column if not exists whatsapp_sent_at timestamptz;
 alter table upsell_leads add column if not exists whatsapp_sent_by text;
+/* Or the opposite mark: this customer is not one to message on WhatsApp. */
+alter table upsell_leads add column if not exists whatsapp_skipped_at timestamptz;
+alter table upsell_leads add column if not exists whatsapp_skipped_by text;
 /* Pages built for a store whose storefront was password-protected: no real
    products could be read, so they carry example products and photos, and the
    messages must not say "built with your own products". */

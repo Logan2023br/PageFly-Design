@@ -126,7 +126,7 @@ export default async function LeadPage(props: PageProps<"/design/admin/upsell/le
               {l.reject_reason && <Row k="Lý do từ chối">{l.reject_reason}</Row>}
               {l.rebuild_note && <Row k="Ghi chú rebuild">{l.rebuild_note}</Row>}
               <Row k="WhatsApp">
-                <WhatsappMark leadId={l.lead_id} sentAt={l.whatsapp_sent_at} sentBy={l.whatsapp_sent_by} />
+                <WhatsappMark leadId={l.lead_id} sentAt={l.whatsapp_sent_at} sentBy={l.whatsapp_sent_by} skippedAt={l.whatsapp_skipped_at} skippedBy={l.whatsapp_skipped_by} />
               </Row>
               <Row k="Rebuild">{l.rebuild_count} lần</Row>
               {l.reviewed_by && <Row k="Duyệt bởi">{`${l.reviewed_by.replace(/^admin:/, "")} · ${fmtVN(l.reviewed_at)}`}</Row>}

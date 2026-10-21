@@ -78,7 +78,7 @@ export function LeadTable({ rows, variant }: { rows: LeadListRow[]; variant: Tab
   ];
   const whatsapp: Col = {
     head: "WhatsApp",
-    cell: (l) => <WhatsappMark leadId={l.lead_id} sentAt={l.whatsapp_sent_at} sentBy={l.whatsapp_sent_by} />,
+    cell: (l) => <WhatsappMark leadId={l.lead_id} sentAt={l.whatsapp_sent_at} sentBy={l.whatsapp_sent_by} skippedAt={l.whatsapp_skipped_at} skippedBy={l.whatsapp_skipped_by} />,
   };
 
   if (variant === "tracking") {

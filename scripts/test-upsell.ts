@@ -497,6 +497,19 @@ async function main() {
     const ev = await adminQueries.leadDetail("L261012AAAA");
     const types = ev!.events.map((e) => e.type);
     check(types.filter((t) => t === "whatsapp_sent").length === 1 && types.includes("whatsapp_unmarked"), "both on the timeline, once each", types);
+
+    /* The third state: not a customer to message on WhatsApp. */
+    await review.setWhatsappState("L261012AAAA", "skipped", "admin:mai");
+    const skipped = (await leads.getLead("L261012AAAA"))!;
+    check(Boolean(skipped.whatsapp_skipped_at) && skipped.whatsapp_skipped_by === "admin:mai" && !skipped.whatsapp_sent_at, "Không dùng WhatsApp is recorded, and is not 'sent'", skipped);
+    await review.setWhatsappState("L261012AAAA", "sent", "admin:mai");
+    const flipped = (await leads.getLead("L261012AAAA"))!;
+    check(Boolean(flipped.whatsapp_sent_at) && flipped.whatsapp_skipped_at === null, "the two marks exclude each other", flipped);
+    await review.setWhatsappState("L261012AAAA", "none", "admin:mai");
+    const cleared = (await leads.getLead("L261012AAAA"))!;
+    check(cleared.whatsapp_sent_at === null && cleared.whatsapp_skipped_at === null, "'none' takes it back to the two buttons", cleared);
+    const t2 = (await adminQueries.leadDetail("L261012AAAA"))!.events.map((e) => e.type);
+    check(t2.includes("whatsapp_skipped"), "skipping is on the timeline too", t2);
   }
 
   console.log("activity filter (Khách đã làm gì)");
@@ -509,7 +522,8 @@ async function main() {
       read: (l) => l.message_read === true,
       replied: (l) => l.replied === true,
       whatsapp: (l) => Boolean(l.whatsapp_sent_at),
-      no_whatsapp: (l) => !l.whatsapp_sent_at,
+      no_whatsapp: (l) => !l.whatsapp_sent_at && !l.whatsapp_skipped_at,
+      whatsapp_skipped: (l) => Boolean(l.whatsapp_skipped_at),
     };
     check(Object.keys(want).sort().join() === Object.keys(adminQueries.LEAD_ACTIVITY).sort().join(), "every activity option is tested");
     await review.setWhatsappSent("L261012AAAA", true, "admin:t");

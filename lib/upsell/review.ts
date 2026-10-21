@@ -188,16 +188,36 @@ export async function setLeadMeta(
   });
 }
 
-/** "Đã gửi qua WhatsApp": an admin marks (or unmarks) that the customer was
-    also messaged on WhatsApp. Nothing is sent from here — WhatsApp happens on
-    someone's phone — so this only records who said so, and when. */
-export async function setWhatsappSent(leadId: string, sent: boolean, actor: Actor): Promise<void> {
+export type WhatsappState = "sent" | "skipped" | "none";
+
+export function whatsappStateOf(lead: Pick<LeadRow, "whatsapp_sent_at" | "whatsapp_skipped_at">): WhatsappState {
+  return lead.whatsapp_sent_at ? "sent" : lead.whatsapp_skipped_at ? "skipped" : "none";
+}
+
+/** The WhatsApp mark on a lead, set by an admin: "sent" (also messaged on
+    WhatsApp), "skipped" (not a customer to message there), or "none" (not
+    decided — the two buttons again). The two marks exclude each other.
+    Nothing is sent from here — WhatsApp happens on someone's phone — so
+    this only records who said so, and when. */
+export async function setWhatsappState(leadId: string, state: WhatsappState, actor: Actor): Promise<void> {
   await tx(async (c) => {
     const lead = await lockLead(c, leadId);
-    if (Boolean(lead.whatsapp_sent_at) === sent) return;
-    await updateLead(c, leadId, sent ? { whatsapp_sent_at: new Date().toISOString(), whatsapp_sent_by: actor } : { whatsapp_sent_at: null, whatsapp_sent_by: null });
-    await recordEvent(c, { lead_id: leadId, type: sent ? "whatsapp_sent" : "whatsapp_unmarked", actor });
+    if (whatsappStateOf(lead) === state) return;
+    const now = new Date().toISOString();
+    await updateLead(c, leadId, {
+      whatsapp_sent_at: state === "sent" ? now : null,
+      whatsapp_sent_by: state === "sent" ? actor : null,
+      whatsapp_skipped_at: state === "skipped" ? now : null,
+      whatsapp_skipped_by: state === "skipped" ? actor : null,
+    });
+    const type = state === "sent" ? "whatsapp_sent" : state === "skipped" ? "whatsapp_skipped" : "whatsapp_unmarked";
+    await recordEvent(c, { lead_id: leadId, type, actor });
   });
+}
+
+/** The earlier on/off form, kept for callers that still send { sent }. */
+export async function setWhatsappSent(leadId: string, sent: boolean, actor: Actor): Promise<void> {
+  await setWhatsappState(leadId, sent ? "sent" : "none", actor);
 }
 
 /** Counts for the sidebar and the tab bar. */
