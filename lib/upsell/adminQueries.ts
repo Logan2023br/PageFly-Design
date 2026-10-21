@@ -251,7 +251,6 @@ const REACHED: Record<string, readonly string[]> = {
   sent: ["sent", "viewed", "downloaded", "used", "upgraded"],
   viewed: ["viewed", "downloaded", "used", "upgraded"],
   downloaded: ["downloaded", "used", "upgraded"],
-  used: ["used", "upgraded"],
 };
 
 export async function upsellStats(f: Filters): Promise<UpsellStats> {
@@ -270,7 +269,10 @@ export async function upsellStats(f: Filters): Promise<UpsellStats> {
   const wasSent = (l: LeadListRow) => Boolean(l.sent_at);
   const viewed = (l: LeadListRow) => l.unique_views > 0 || REACHED.viewed.includes(l.status);
   const downloaded = (l: LeadListRow) => l.downloads > 0 || REACHED.downloaded.includes(l.status);
-  const used = (l: LeadListRow) => l.used_page === true || REACHED.used.includes(l.status);
+  /* TEMPORARY: "Đã dùng" is the upgraded count until a real check of page use
+     exists. The old rule (pages count up after a download) also counted
+     stores that only made pages of their own. */
+  const used = (l: LeadListRow) => l.upgraded === true;
   const built = (l: LeadListRow) => Boolean(l.built_at);
   /* Approved = an admin let it through: reviewed, and not sitting in (or sent
      back to) the build or review steps, nor rejected. */
