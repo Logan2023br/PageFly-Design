@@ -43,8 +43,35 @@ function crossSite(request: NextRequest): boolean {
   }
 }
 
+/* ==========================================================================
+   THE MERCHANT APP IS OFF.
+
+   Nobody uses /design (the brief → build → library app for merchants) any
+   more, and its sign-in — a store domain, with no proof of ownership — and
+   its paid AI calls were the largest risks left on the site. So its screens
+   go to /collection-pages and its APIs answer 404, on the server, for
+   everyone. The code stays: MERCHANT_APP=on brings it all back.
+
+   Kept: /design/admin (admin), /collection-pages, the upsell and collection
+   APIs, /api/events (collection analytics) and /api/pagefly/* (admin's view
+   of a store's library exports from there).
+   ========================================================================== */
+const merchantAppOn = () => process.env.MERCHANT_APP === "on";
+const MERCHANT_PAGES = /^\/design\/(login|register|library)(\/|$)/;
+const MERCHANT_APIS = /^\/api\/(auth\/(store|register|provision)|account|build|ai|runs|generate|review)(\/|$)/;
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (!merchantAppOn()) {
+    if (MERCHANT_APIS.test(pathname))
+      return NextResponse.json({ ok: false, error: "This feature is turned off." }, { status: 404 });
+    if (MERCHANT_PAGES.test(pathname) || pathname === "/design")
+      return NextResponse.redirect(new URL("/collection-pages", request.url));
+  }
+
+  /* With the app on, sign-in and register are reachable while signed out. */
+  if (pathname === "/design/login" || pathname === "/design/register") return NextResponse.next();
 
   if (pathname.startsWith("/api/")) {
     if (crossSite(request))
@@ -67,5 +94,5 @@ export const config = {
      check only — routes answer 401 JSON themselves, so fetch callers can
      react). Key-authenticated callers (the BPU scripts, the sync) are not
      browsers and send no Sec-Fetch-Site or Origin, so they pass. */
-  matcher: ["/design", "/design/library", "/api/:path*"],
+  matcher: ["/design", "/design/library", "/design/login", "/design/register", "/design/library/:path*", "/api/:path*"],
 };
