@@ -266,11 +266,16 @@ const OLD_CLOSINGS = [
     "We also offer complimentary editing services for these two pages of yours. " +
     "(Please note that this is a free editing service, available for a limited period of 15 days from the date of submission.)\n\n" +
     "If you need any assistance, simply reply to this message.",
+  /* …and as it was bolded, before the two names were capitalised. */
+  "Feel free to customize these pages in the PageFly editor to make them your own.\n\n" +
+    "We also offer **complimentary editing** services for these two pages of yours.\n" +
+    "(Please note that this is a **free editing** service, available for a limited period of **15 days** from the date of submission.)\n\n" +
+    "If you need any assistance, simply reply to this message.",
 ];
 export const NEW_CLOSING =
   "Feel free to customize these pages in the PageFly editor to make them your own.\n\n" +
-  "We also offer **complimentary editing** services for these two pages of yours.\n" +
-  "(Please note that this is a **free editing** service, available for a limited period of **15 days** from the date of submission.)\n\n" +
+  "We also offer **Complimentary Editing** services for these two pages of yours.\n" +
+  "(Please note that this is a **Free Editing** service, available for a limited period of **15 days** from the date of submission.)\n\n" +
   "If you need any assistance, simply reply to this message.";
 
 /** First messages written from the old template and not sent yet — drafts,

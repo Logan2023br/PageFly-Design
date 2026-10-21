@@ -546,7 +546,7 @@ async function main() {
     const { whatsappText } = await import("../lib/upsell/format");
     const { DEFAULT_INITIAL_TEMPLATE, fillTemplate } = await import("../lib/upsell/common");
     check(
-      DEFAULT_INITIAL_TEMPLATE.includes("We also offer **complimentary editing** services for these two pages of yours.\n(Please note that this is a **free editing** service, available for a limited period of **15 days** from the date of submission.)") &&
+      DEFAULT_INITIAL_TEMPLATE.includes("We also offer **Complimentary Editing** services for these two pages of yours.\n(Please note that this is a **Free Editing** service, available for a limited period of **15 days** from the date of submission.)") &&
         DEFAULT_INITIAL_TEMPLATE.includes("If you need any assistance, simply reply to this message.") &&
         !DEFAULT_INITIAL_TEMPLATE.includes("If you have any questions, just reply here."),
       "first message carries the free-editing paragraph",
@@ -555,7 +555,7 @@ async function main() {
     const wa = whatsappText(md);
     check(!wa.includes("**") && !wa.includes("](") && !wa.includes("["), "WhatsApp text has no markdown left", wa);
     check(wa.startsWith("Hi *God's Providence*,\n\n") && wa.includes("a *Home page* and a *Product page*."), "bold kept in WhatsApp's syntax (*one star*)");
-    check(wa.includes("*complimentary editing*") && wa.includes("*free editing*") && wa.includes("*15 days*"), "the free-editing words are bold");
+    check(wa.includes("*Complimentary Editing*") && wa.includes("*Free Editing*") && wa.includes("*15 days*"), "the free-editing words are bold, each word capitalised");
     check(wa.includes("👉 See your 2 pages: https://pfd.test/new-page?id=SNAAFGZW\n"), "the link is written out after its text");
     check(wa.endsWith("Best regards,\n*Logan – PageFly Support*"), "signature bold, WhatsApp style");
 
