@@ -61,7 +61,7 @@ def begin():
                             "note": f"{x['visibility']}/{x['access']}: the public API gives no .pagefly"})
             continue
         queue.append({"slug": x["slug"], "name": x["name"]})
-    put(status="running", startedAt=s.get("startedAt") or now(), queue=queue, current=None,
+    put(status="running" if queue else "finished", startedAt=s.get("startedAt") or now(), queue=queue, current=None,
         done=s.get("done", []) + [k for k in skipped if k["slug"] not in finished],
         message=f"Run resumed {now()}" if s["status"] == "running" else None)
     print("GO", len(queue), "sets")
