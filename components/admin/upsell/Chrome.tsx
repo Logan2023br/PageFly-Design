@@ -24,6 +24,7 @@ export const TABS = [
   { id: "closed", label: "Từ chối / Lỗi / Bỏ qua" },
   { id: "installs", label: "Store mới cài" },
   { id: "stats", label: "Thống kê" },
+  { id: "criteria", label: "Tiêu chí lead" },
   { id: "settings", label: "Cài đặt" },
 ] as const;
 export type TabId = (typeof TABS)[number]["id"];

@@ -2,6 +2,7 @@ import { AdminShell } from "@/components/admin/AdminShell";
 import { adminGate } from "@/components/admin/adminGate";
 import { FilterBar, Pager, TABS, TabNav, type TabId } from "@/components/admin/upsell/Chrome";
 import { InstallsTable } from "@/components/admin/upsell/InstallsTable";
+import { LeadCriteria } from "@/components/admin/upsell/LeadCriteria";
 import { LeadTable } from "@/components/admin/upsell/LeadTable";
 import { MessageQueue } from "@/components/admin/upsell/MessageQueue";
 import { PendingPages } from "@/components/admin/upsell/PendingPages";
@@ -77,6 +78,8 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
     pager = <Pager tab={tab} f={f} {...r} />;
   } else if (tab === "stats") {
     body = <StatsPanel s={await upsellStats(f)} />;
+  } else if (tab === "criteria") {
+    body = <LeadCriteria threshold={cfg.score_threshold} minProducts={cfg.min_products} controlPercent={cfg.control_percent} />;
   } else if (tab === "settings") {
     body = <SettingsForm initial={maskSettings(cfg)} help={SETTING_HELP} numeric={NUMERIC_KEYS} />;
   } else {
@@ -93,7 +96,7 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
     >
       <div className="grid gap-4">
         <TabNav tab={tab} counts={counts} />
-        {tab !== "settings" && <FilterBar tab={tab} f={f} pics={options.pics} categories={options.categories} />}
+        {tab !== "settings" && tab !== "criteria" && <FilterBar tab={tab} f={f} pics={options.pics} categories={options.categories} />}
         {pager}
         {body}
         {pager}
