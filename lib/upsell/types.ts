@@ -189,6 +189,8 @@ export type DesignRow = {
   language: string | null;
   expires_at: string | null;
   files_purged_at: string | null;
+  /** built with example products: the storefront was password-protected */
+  sample: boolean;
   created_at: string;
 };
 

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { db, tx } from "./db";
-import { DEFAULT_INITIAL_TEMPLATE, designUrl, fillTemplate, newMessageId, recordEvent, recordStatus, type Actor } from "./common";
+import { DEFAULT_INITIAL_TEMPLATE, designUrl, fillTemplate, newMessageId, recordEvent, recordStatus, sampleTemplate, type Actor } from "./common";
 import { leadIdFor, lockLead, updateLead } from "./leads";
 import { getSettings, type Settings } from "./settings";
 import { PAGE_LABELS, PAGE_TYPES, UpsellError, type InstallRow, type LeadRow, type MessageRow, type PageType, type SendMode } from "./types";
@@ -13,9 +13,11 @@ import { PAGE_LABELS, PAGE_TYPES, UpsellError, type InstallRow, type LeadRow, ty
 
 const label = (t: string | null) => PAGE_LABELS[t as PageType] ?? (t ? `${t} page` : "page");
 
-/** The first message as the template makes it for this lead. */
-export function initialDraft(lead: LeadRow, designId: string | null, cfg: Settings): string {
-  const tpl = cfg.initial_message_template.trim() || DEFAULT_INITIAL_TEMPLATE;
+/** The first message as the template makes it for this lead. `sample`: the
+    pages carry example products (the storefront was password-protected). */
+export function initialDraft(lead: LeadRow, designId: string | null, cfg: Settings, sample = false): string {
+  const base = cfg.initial_message_template.trim() || DEFAULT_INITIAL_TEMPLATE;
+  const tpl = sample ? sampleTemplate(base) : base;
   return fillTemplate(tpl, {
     store_name: lead.store_name?.trim() || lead.store_domain.replace(/\.myshopify\.com$/, ""),
     page1_label: label(lead.page1_type),
@@ -35,10 +37,10 @@ export async function approveLead(
     const lead = await lockLead(c, leadId);
     if (lead.status !== "pending_review")
       throw new UpsellError(`Lead ${leadId} is ${lead.status}; only a lead waiting for review can be approved.`, 409);
-    const d = await c.query<{ id: string }>("select id from upsell_designs where lead_id = $1", [leadId]);
+    const d = await c.query<{ id: string; sample: boolean }>("select id, sample from upsell_designs where lead_id = $1", [leadId]);
     if (!d.rows[0]) throw new UpsellError(`Lead ${leadId} has no pages to approve.`, 409);
 
-    const content = opts.content?.trim() || initialDraft(lead, d.rows[0].id, cfg);
+    const content = opts.content?.trim() || initialDraft(lead, d.rows[0].id, cfg, d.rows[0].sample);
     const mode: SendMode = opts.send_mode === "now" ? "now" : "window";
 
     /* An initial message may exist already, from an approval that was taken

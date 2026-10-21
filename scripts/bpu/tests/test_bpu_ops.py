@@ -50,7 +50,8 @@ def test_sync_posts_installs_and_leads(bpu, capsys):
     w = bpu.FAKE_WORLD
     test_d = domain_in_group(False, "ziru")
     ctrl_d = domain_in_group(True, "cacao")
-    weak_d, pw_d, old_d = "my-store-123.myshopify.com", "locked.myshopify.com", "old.myshopify.com"
+    pw_d = domain_in_group(False, "locked")
+    weak_d, old_d = "my-store-123.myshopify.com", "old.myshopify.com"
     w.stores = {
         test_d: good_store(test_d),
         ctrl_d: good_store(ctrl_d, name="Cacao House"),
@@ -67,12 +68,13 @@ def test_sync_posts_installs_and_leads(bpu, capsys):
     assert set(pfd.installs) == {test_d, ctrl_d, weak_d, pw_d}, "old install is outside the lookback"
     for row in pfd.installs.values():
         assert set(row) == INSTALL_FIELDS
-    assert pfd.installs[pw_d]["storefront"] == "Password" and pfd.installs[pw_d]["skip_reason"] == "Password, no public products"
+    assert pfd.installs[pw_d]["storefront"] == "Password" and pfd.installs[pw_d]["lead"] is True
+    assert "page mẫu" in pfd.installs[pw_d]["score_reasons"]
     assert pfd.installs[weak_d]["lead"] is False and pfd.installs[weak_d]["skip_reason"].startswith("Score <")
     assert pfd.installs[test_d]["category_hint"] == "Chocolate" and pfd.installs[test_d]["email_type"] == "Business"
 
     by_domain = {l["store_domain"]: l for l in pfd.leads.values()}
-    assert set(by_domain) == {test_d, ctrl_d}
+    assert set(by_domain) == {test_d, ctrl_d, pw_d}, "a password-protected store is a lead too: it gets example pages"
     for l in by_domain.values():
         assert set(l) == LEAD_FIELDS
         assert l["lead_id"].startswith("L") and len(l["lead_id"]) == 11
@@ -81,7 +83,21 @@ def test_sync_posts_installs_and_leads(bpu, capsys):
     assert by_domain[test_d]["plan_at_send"] == "Free" and by_domain[test_d]["price_at_send"] == 0.0
 
     out = json.loads(capsys.readouterr().out)
-    assert out["checked"] == 4 and out["new_leads"] == 1 and out["control"] == 1
+    assert out["checked"] == 4 and out["new_leads"] == 2 and out["control"] == 1
+
+
+def test_sync_password_store_takes_category_from_intents(bpu, tmp_path):
+    w, pfd = bpu.FAKE_WORLD, bpu.FAKE_PFD
+    pw_d, old_d = "locked-necklaces.myshopify.com", "plain.myshopify.com"
+    w.stores = {pw_d: good_store(pw_d, name="Lumi Jewels"), old_d: good_store(old_d, name="Plain Goods")}
+    w.products = {pw_d: 401, old_d: 401}
+    f = tmp_path / "intents.json"
+    f.write_text(json.dumps({pw_d: {"intent": "create/ai", "product_type": "Necklace"},
+                             old_d: "rebuild"}))  # the old shape still reads
+    bpu.cmd_sync(["--intents", str(f)])
+    assert pfd.installs[pw_d]["category_hint"] == "Necklace"
+    assert pfd.installs[pw_d]["onboarding_intent"] == "create/ai"
+    assert pfd.installs[old_d]["onboarding_intent"] == "rebuild" and pfd.installs[old_d]["category_hint"] == ""
 
 
 def test_sync_skips_known_and_rechecks_at_24h(bpu):

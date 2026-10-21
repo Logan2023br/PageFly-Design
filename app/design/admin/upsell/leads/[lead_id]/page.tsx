@@ -155,9 +155,9 @@ export default async function LeadPage(props: PageProps<"/design/admin/upsell/le
             <p className="rounded-pf-card border border-dashed border-pf-border px-4 py-8 text-center text-[13px] text-pf-faint">Chưa có page nào được build cho lead này.</p>
           )}
           {l.status === "pending_review" && design && (
-            <ReviewActions leadId={l.lead_id} draft={initialDraft(l, design.design.id, cfg)} pageTypes={[l.page1_type, l.page2_type]} />
+            <ReviewActions leadId={l.lead_id} draft={initialDraft(l, design.design.id, cfg, design.design.sample)} pageTypes={[l.page1_type, l.page2_type]} />
           )}
-          {design && <WhatsappMessage text={whatsappText(initialDraft(l, design.design.id, cfg))} phone={l.phone} />}
+          {design && <WhatsappMessage text={whatsappText(initialDraft(l, design.design.id, cfg, design.design.sample))} phone={l.phone} />}
           <LeadMessages leadId={l.lead_id} messages={d.messages} ticketLink={l.ticket_link} />
           <Timeline leadId={l.lead_id} events={d.events} pic={l.pic} pics={options.pics} notes={l.internal_notes} />
         </div>

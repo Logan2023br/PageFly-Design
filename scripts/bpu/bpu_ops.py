@@ -6,7 +6,9 @@ Claude handles the judgment steps (Mixpanel intents, reply classification).
 
 Commands (run in this order):
   sync            New installs from AC2 -> products.json -> score -> PageFly Design (installs + leads)
-                  Optional: --intents intents.json  ({"shop.myshopify.com": "create/ai", ...})
+                  Optional: --intents intents.json  ({"shop.myshopify.com": "create/ai", ...} or
+                  {"shop.myshopify.com": {"intent": "create/ai", "product_type": "Necklace"}} — product_type from
+                  Mixpanel onboarding_v1_product_selected, the line of business for a password-protected store)
   track           AC2 plan/pages, Crisp read/replies, follow-up drafts -> PageFly Design.
                   Writes replies_to_classify.json for Claude.
   apply-sentiment classified.json  ([{"lead_id","sentiment","summary_vi","wants_changes"}]) -> sync + review drafts
@@ -170,7 +172,7 @@ def fetch_products(domain):
     return [], f"Error {s}"
 
 
-def score_store(st, intent, products, storefront, cfg):
+def score_store(st, intent, products, storefront, cfg, product_type=""):
     sc, why = 0, []
     plan = str(st.get("shopifyPlan") or "").lower()
     if re.search(r"grow|advanced|plus|professional|unlimited|shopify$", plan):
@@ -209,11 +211,17 @@ def score_store(st, intent, products, storefront, cfg):
             cnt[k] = cnt.get(k, 0) + 1
     cat = ", ".join(k for k, _ in sorted(cnt.items(), key=lambda x: -x[1])[:3]) or \
           " / ".join(str(p.get("title", ""))[:40] for p in products[:3])
+    # A password-protected store still gets pages: example products in its line
+    # of business, which Mixpanel's onboarding product_type may name.
+    if storefront == "Password":
+        why.append("Storefront password: dựng page mẫu")
+        if not cat:
+            cat = product_type
     skip = ""
     if st.get("status") and st.get("status") != "installed":
         skip = f"App {st.get('status')}"
-    elif len(products) < cfg["min_products"]:
-        skip = "Password, no public products" if storefront == "Password" else "No public products"
+    elif storefront != "Password" and len(products) < cfg["min_products"]:
+        skip = "No public products"
     elif sc < cfg["score_threshold"]:
         skip = f"Score < {int(cfg['score_threshold'])}"
     return sc, why, cat, etype, skip
@@ -256,9 +264,14 @@ def cmd_sync(args):
         d = st.get("shopDomain")
         if not d:
             continue
-        intent = intents.get(d) or (known.get(d) or {}).get("onboarding_intent") or ""
+        # intents.json: {domain: "create/ai"} or {domain: {"intent": …, "product_type": …}}
+        got = intents.get(d) or {}
+        got = got if isinstance(got, dict) else {"intent": got}
+        intent = got.get("intent") or (known.get(d) or {}).get("onboarding_intent") or ""
+        ptype = str(got.get("product_type") or "").strip()
+        ptype = "" if ptype.lower() == "unknown" else ptype
         products, storefront = fetch_products(d)
-        sc, why, cat, etype, skip = score_store(st, intent, products, storefront, cfg)
+        sc, why, cat, etype, skip = score_store(st, intent, products, storefront, cfg, ptype)
         installs.append({"store_domain": d, "installed_at": st.get("createdAt") or (known.get(d) or {}).get("installed_at"),
                          "store_name": st.get("name", ""), "email": st.get("email", ""), "phone": str(st.get("phone") or ""),
                          "country": st.get("country", ""), "timezone": st.get("timezone", ""), "shopify_plan": st.get("shopifyPlan", ""),
@@ -286,7 +299,7 @@ def cmd_sync(args):
 
 
 FU1 = ("{hi}\n\nJust a quick reminder: the 2 pages I designed for your store are still waiting for you. "
-       "They're built with your own products, so you can publish them as they are or tweak them in PageFly.\n\n"
+       "They're ready to import, so you can publish them as they are or tweak them in PageFly.\n\n"
        "👉 [See your 2 pages]({link})\n\nFeel free to customize these pages in the PageFly editor to make them your own. If you have any questions, just reply here.\n\n"
        "Best regards,\n**{pic} – PageFly Support**")
 FU2 = ("{hi}\n\n{seen}If anything stops you from using them (import steps, design, or something missing), tell me and I will sort it out for you. "

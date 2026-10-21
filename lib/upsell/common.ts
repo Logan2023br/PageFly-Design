@@ -115,6 +115,16 @@ export const DEFAULT_INITIAL_TEMPLATE =
   "If you need any assistance, simply reply to this message.\n\n" +
   "Best regards,\n**{pic} – PageFly Support**";
 
+/** Pages built for a password-protected store carry example products, so the
+    first message must not claim they use the store's own. The phrase is
+    swapped in whichever template is in use, the default or Settings'. */
+export const OWN_PRODUCTS_PHRASE = "built with your own products";
+export const SAMPLE_PRODUCTS_PHRASE = "ready for your own products and photos";
+
+export function sampleTemplate(tpl: string): string {
+  return tpl.split(OWN_PRODUCTS_PHRASE).join(SAMPLE_PRODUCTS_PHRASE);
+}
+
 export function isoOrNull(v: unknown): string | null {
   if (v === null || v === undefined || v === "") return null;
   const d = new Date(String(v));

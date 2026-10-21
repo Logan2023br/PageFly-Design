@@ -70,10 +70,13 @@ curl -sS -X POST "$PFD_BASE/api/upsell/designs" -H "X-API-Key: $PFD_API_KEY" \
   -F category="Chocolate" -F language=en \
   -F page1_type=home -F page1_title="Home" -F page2_type=product -F page2_title="Best seller" \
   -F build_note="Dùng ảnh sản phẩm thật" \
+  -F sample=0 \
   -F page1_html=@page1.html -F page1_pagefly=@page1.pagefly \
   -F page2_html=@page2.html -F page2_pagefly=@page2.pagefly \
   -F page1_thumb=@page1.png -F page2_thumb=@page2.png
 # → 201 {"id":"Q4JFADCA","url":"…/new-page?id=Q4JFADCA","version":1,"admin_url":"…/admin/upsell/leads/L261012ABCD"}
+# sample=1: page mẫu cho store để password (sản phẩm và ảnh là ví dụ). Tin nhắn đầu tiên và trang khách
+# không nói "built with your own products" nữa. Bỏ field = 0.
 ```
 
 ## Công khai (không cần key)

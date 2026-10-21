@@ -71,14 +71,30 @@ Ghi lại:
 - 6–12 sản phẩm tiêu biểu: tên, giá, ảnh, handle
 - các collection chính
 
+### Store để password: dựng page mẫu theo ngành
+
+Store vừa cài thường còn để password. Store như vậy **vẫn được dựng page**, nhưng là **page mẫu**:
+
+1. **Thử lại `products.json` một lần**: store có thể đã mở. Đọc được thì dựng như store thường.
+2. Vẫn password (trả về `401`/`403`, chuyển hướng về `/password`, hoặc trả HTML thay vì JSON) thì dựng page mẫu:
+   - **Ngành hàng:** lấy từ `category_hint` (BPU Ops lấy từ Mixpanel, là loại sản phẩm chủ store chọn lúc onboarding). Trống thì đoán từ tên store và domain. **Không đoán được ngành chắc chắn thì đánh dấu `skipped`**, không dựng page chung chung.
+   - **Tên và logo:** tên store đặt bằng chữ, làm wordmark. Không có logo thì không bịa logo.
+   - **Ngôn ngữ:** theo `country` của lead (ví dụ `CL` → tiếng Tây Ban Nha, `FR` → tiếng Pháp, `VN` → tiếng Việt). Không chắc thì dùng tiếng Anh.
+   - **Ảnh:** chỉ dùng ảnh miễn phí bản quyền từ `images.unsplash.com` hoặc `images.pexels.com`, đúng ngành, chất lượng cao. Đây là ngoại lệ duy nhất cho luật "không dùng ảnh stock".
+   - **Sản phẩm:** tên sản phẩm là ví dụ hợp ngành (ví dụ "Signature Necklace"), **không ghi giá**, không đánh giá hay số liệu. Link CTA trỏ tới `/collections/all`.
+   - Chất lượng thiết kế, 3 vòng review và chuyển `.pagefly` **giống hệt store thường**. Page mẫu vẫn phải đỉnh.
+   - Khi upload, gửi thêm `-F sample=1`. Server dùng cờ này để đổi câu trong tin nhắn gửi khách ("built with your own products" thành "ready for your own products and photos") và trên trang khách xem.
+   - `build_note` mở đầu bằng: "Page mẫu: store đang để password, ảnh và sản phẩm là ví dụ."
+
 **Dừng và đánh dấu `skipped`** nếu:
-- storefront đang để password, hoặc `products.json` không đọc được hay rỗng;
+- store không password nhưng `products.json` không đọc được hoặc rỗng;
+- store password mà không xác định được ngành hàng;
 - là store test hoặc store mẫu (sản phẩm mặc định của Shopify, tên kiểu "Example product");
 - ngành hàng mà PageFly không nên quảng bá (vũ khí, chất cấm, nội dung người lớn…).
 
 ```bash
 curl -sS "${H[@]}" -H "Content-Type: application/json" -X POST \
-  "$PFD/api/upsell/leads/$LEAD_ID/status" -d '{"status":"skipped","error":"Storefront để password, không đọc được sản phẩm"}'
+  "$PFD/api/upsell/leads/$LEAD_ID/status" -d '{"status":"skipped","error":"Store để password, không xác định được ngành hàng"}'
 ```
 
 ## Bước 4. Chọn 2 loại page
@@ -123,7 +139,7 @@ Viết mỗi page thành **một file HTML độc lập**: CSS nằm trong file,
 - **Nhịp nền thay đổi:** ít nhất 1 section nền tối hoặc màu đậm, 1 section ảnh tràn viền, và còn lại xen kẽ hai màu nền.
 - **Animation có chủ đích:** reveal khi cuộn cho các khối chính, stagger cho lưới, hover cho ảnh và nút, cộng ít nhất 2 hiệu ứng "signature" lấy từ `40-motion.md`. Luôn có `prefers-reduced-motion`. Animation phải có cách làm tương ứng trong PageFly (behavior pack của skill pagefly-builder), vì không có thì không chuyển sang `.pagefly` được.
 - **Chữ có phân cấp:** ít nhất 4 vai trò chữ (`display`, `section-head`, `body`, `eyebrow`/`label`) theo bảng trong `10-composition.md`.
-- **Dữ liệu thật:** dùng **sản phẩm, ảnh, giá, tên thật** của store. Không dùng ảnh stock, không bịa sản phẩm, không bịa đánh giá hay số liệu ("10,000 khách hàng hài lòng" là cấm). Thiếu dữ liệu để làm bằng chứng tin cậy thì dùng chính sách thật của store (ship, đổi trả) hoặc chất liệu và quy trình lấy từ mô tả sản phẩm.
+- **Dữ liệu thật:** dùng **sản phẩm, ảnh, giá, tên thật** của store. Không dùng ảnh stock, không bịa sản phẩm, không bịa đánh giá hay số liệu ("10,000 khách hàng hài lòng" là cấm). Thiếu dữ liệu để làm bằng chứng tin cậy thì dùng chính sách thật của store (ship, đổi trả) hoặc chất liệu và quy trình lấy từ mô tả sản phẩm. Riêng page mẫu cho store để password thì làm theo phần "Store để password" ở bước 3.
 - **Ngôn ngữ:** viết **bằng ngôn ngữ của store**, giọng văn hợp ngành hàng.
 - **CTA:** CTA rõ ràng, link tới đúng URL của store (`/products/{handle}`, `/collections/{handle}`).
 - **Responsive:** desktop 1280, tablet 820 và mobile 390 đều phải đẹp, không chỉ "không vỡ". Mobile cần được thiết kế riêng: thứ tự khối, cỡ ảnh, nút bấm dễ chạm.
@@ -191,12 +207,14 @@ curl -sS -X POST "$PFD/api/upsell/designs" -H "X-API-Key: $PFD_API_KEY" \
   -F page1_type="$TYPE1" -F page1_title="$TITLE1" \
   -F page2_type="$TYPE2" -F page2_title="$TITLE2" \
   -F build_note="$BUILD_NOTE" \
+  -F sample="$SAMPLE" \
   -F page1_html=@page1.html -F page1_pagefly=@page1.pagefly \
   -F page2_html=@page2.html -F page2_pagefly=@page2.pagefly \
   -F page1_thumb=@page1.png -F page2_thumb=@page2.png
 ```
 
 Các field:
+- **`sample`:** `1` nếu là page mẫu cho store để password, ngược lại `0`.
 - **`category`:** ngành hàng ngắn gọn, tiếng Anh. Ví dụ `Chocolate`, `Skincare`, `Pet supplies`.
 - **`language`:** mã ISO của ngôn ngữ page, ví dụ `en`, `es`, `vi`.
 - **`page1_title` / `page2_title`:** tên ngắn của page, ví dụ `Home — ZIRU`, `Dark 70% Bar`.

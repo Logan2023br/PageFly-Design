@@ -28,6 +28,8 @@ export type UploadFields = {
   page2_type: string;
   page2_title?: string;
   build_note?: string;
+  /** "1"/"true": example products, the storefront was password-protected */
+  sample?: string;
 };
 
 export type UploadFiles = {
@@ -78,24 +80,23 @@ export async function uploadDesign(f: UploadFields, files: UploadFiles, actor = 
     if (!UPLOAD_FROM.has(lead.status))
       throw new UpsellError(`Lead ${lead.lead_id} is ${lead.status}; pages are only accepted while it waits for a build.`, 409);
 
+    const sample = /^(1|true|yes)$/i.test(f.sample ?? "");
     const existing = await c.query<DesignRow>("select * from upsell_designs where lead_id = $1 for update", [lead.lead_id]);
     let design = existing.rows[0];
     if (design) {
       const version = design.version + 1;
-      await c.query("update upsell_designs set version = $2, category = coalesce($3, category), language = coalesce($4, language) where id = $1", [
-        design.id,
-        version,
-        f.category || null,
-        f.language || null,
-      ]);
-      design = { ...design, version };
+      await c.query(
+        "update upsell_designs set version = $2, category = coalesce($3, category), language = coalesce($4, language), sample = $5 where id = $1",
+        [design.id, version, f.category || null, f.language || null, sample],
+      );
+      design = { ...design, version, sample };
     } else {
       /* Collisions in 32^8 are not worth a retry loop's complexity — but they
          are worth not overwriting someone else's design over. */
       const id = newDesignId();
       const ins = await c.query<DesignRow>(
-        "insert into upsell_designs (id, lead_id, version, category, language) values ($1,$2,1,$3,$4) returning *",
-        [id, lead.lead_id, f.category || null, f.language || null],
+        "insert into upsell_designs (id, lead_id, version, category, language, sample) values ($1,$2,1,$3,$4,$5) returning *",
+        [id, lead.lead_id, f.category || null, f.language || null, sample],
       );
       design = ins.rows[0];
     }
@@ -137,7 +138,7 @@ export async function uploadDesign(f: UploadFields, files: UploadFiles, actor = 
       design_id: design.id,
       type: "built",
       actor,
-      detail: { from: lead.status, to: "pending_review", version: design.version, page1: f.page1_type, page2: f.page2_type },
+      detail: { from: lead.status, to: "pending_review", version: design.version, page1: f.page1_type, page2: f.page2_type, sample },
     });
     return { id: design.id, version: design.version, thumbsMissing };
   });

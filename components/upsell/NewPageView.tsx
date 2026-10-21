@@ -27,6 +27,8 @@ export type PublicDesign = {
   preview: boolean;
   /** an admin looking at an older version */
   version: number | null;
+  /** example products: the storefront was password-protected when they were built */
+  sample: boolean;
 };
 
 /* ==========================================================================
@@ -74,8 +76,17 @@ export function NewPageView({ design }: { design: PublicDesign }) {
           We designed 2 pages for <span className="pfd-grad-text">{design.storeName}</span>
         </h1>
         <p className="max-w-[640px] text-[16px] leading-relaxed text-pf-muted sm:text-[17.5px]">
-          Built with your own products and ready to import into PageFly. They&rsquo;re yours to keep, free — publish them as
-          they are, or make them your own in the editor.
+          {design.sample ? (
+            <>
+              Designed for your store and ready to import into PageFly. Swap in your own products and photos in the editor,
+              then publish. They&rsquo;re yours to keep, free.
+            </>
+          ) : (
+            <>
+              Built with your own products and ready to import into PageFly. They&rsquo;re yours to keep, free — publish them as
+              they are, or make them your own in the editor.
+            </>
+          )}
         </p>
       </section>
 

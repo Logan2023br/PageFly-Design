@@ -162,6 +162,7 @@ async function main() {
     check(r.url === `https://pfd.test/new-page?id=${r.id}` && r.admin_url.endsWith("/admin/upsell/leads/L261012AAAA"), "links in the answer", r);
     const a = await leads.getLead("L261012AAAA");
     check(a?.status === "pending_review" && a?.page1_type === "home" && a?.build_note === "Dùng màu nâu", "lead is pending_review with page types", a?.status);
+    check((await designs.getDesign(r.id))?.design.sample === false, "a design is not a sample unless the Builder says so");
     await rejects(designs.uploadDesign({ lead_id: "L261012AAAA", page1_type: "home", page2_type: "product" }, files("again")), 409, "no upload while in review");
   }
 
@@ -175,8 +176,9 @@ async function main() {
     check(a?.status === "rebuild_requested" && a?.rebuild_count === 1 && a?.rebuild_page_types?.[1] === "collection", "rebuild requested", a);
     const q = await leads.buildQueue(["rebuild_requested"], 2);
     check(q[0]?.lead_id === "L261012AAAA" && q[0]?.design_id === designId, "rebuild is queued with its design", q[0]?.design_id);
-    const r2 = await designs.uploadDesign({ lead_id: "L261012AAAA", page1_type: "home", page2_type: "collection" }, files("v2"));
+    const r2 = await designs.uploadDesign({ lead_id: "L261012AAAA", page1_type: "home", page2_type: "collection", sample: "1" }, files("v2"));
     check(r2.id === designId && r2.version === 2, "rebuild keeps the id, version 2", r2);
+    check((await designs.getDesign(designId))?.design.sample === true, "sample=1 marks the design as example products");
     const pages = await p.query("select version from upsell_pages where design_id = $1 order by version, slot", [designId]);
     check(pages.rows.map((x) => x.version).join() === "1,1,2,2", "version 1 pages kept as history");
     a = await leads.getLead("L261012AAAA");
@@ -202,6 +204,8 @@ async function main() {
     const m = (await messages.messagesForLead("L261012AAAA"))[0];
     check(m?.kind === "initial" && m.status === "approved" && m.approved_by === "admin:tester", "initial message created, approved", m);
     check(m.content.includes("Alpha Co") && m.content.includes(`https://pfd.test/new-page?id=${designId}`) && m.content.includes("Collection page"), "template filled", m.content);
+    check(m.content.includes("ready for your own products and photos") && !m.content.includes("built with your own products"),
+      "a sample design's first message does not claim the store's own products", m.content);
     const a = await leads.getLead("L261012AAAA");
     check(a?.status === "approved" && a?.reviewed_by === "admin:tester", "lead approved, reviewer recorded");
     await rejects(review.approveLead("L261012AAAA", {}, "admin:t"), 409, "cannot approve twice");

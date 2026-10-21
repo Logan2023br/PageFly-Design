@@ -59,6 +59,7 @@ export default async function NewPage(props: PageProps<"/new-page">) {
     expiresAt: view.design.expires_at,
     preview: viewer !== "customer" && state !== "ok",
     version: olderVersion,
+    sample: view.design.sample === true,
     pages: view.pages.map((p) => ({
       slot: p.slot,
       type: p.type,
