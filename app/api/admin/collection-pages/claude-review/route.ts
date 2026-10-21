@@ -49,29 +49,29 @@ export async function POST(request: Request) {
 }
 
 const item = z.object({
-  slug: z.string(),
-  name: z.string(),
+  slug: z.string().max(300),
+  name: z.string().max(300),
   result: z.enum(["done", "reimport", "skipped", "failed"]),
   note: z.string().max(2000).optional(),
-  finishedAt: z.string(),
+  finishedAt: z.string().max(300),
   secs: z.number().optional(),
-  folder: z.string().optional(),
+  folder: z.string().max(1000).optional(),
 });
 const patch = z
   .object({
     status: z.enum(["idle", "requested", "running", "stopping", "stopped", "finished"]),
-    startedAt: z.string().nullable(),
-    current: z.object({ slug: z.string(), name: z.string(), step: z.string(), startedAt: z.string() }).nullable(),
-    queue: z.array(z.object({ slug: z.string(), name: z.string() })).max(500),
+    startedAt: z.string().max(300).nullable(),
+    current: z.object({ slug: z.string().max(300), name: z.string().max(300), step: z.string().max(300), startedAt: z.string().max(300) }).nullable(),
+    queue: z.array(z.object({ slug: z.string().max(300), name: z.string().max(300) })).max(500),
     done: z.array(item).max(500),
     avgSecs: z.number().nullable(),
     message: z.string().max(2000).nullable(),
     errors: z
       .array(
         z.object({
-          at: z.string(),
-          slug: z.string().nullable(),
-          name: z.string().nullable(),
+          at: z.string().max(300),
+          slug: z.string().max(300).nullable(),
+          name: z.string().max(300).nullable(),
           step: z.string().max(200),
           message: z.string().max(2000),
         }),

@@ -72,7 +72,13 @@ const HEADERS = [
 ] as const;
 
 function fromHeader(request: Request): string | null {
-  for (const name of HEADERS) {
+  /* ONLY A HEADER THE EDGE SETS. Any of these can be written by the client
+     when nothing in front overwrites it — and nothing does on this VPS — so
+     none is read unless GEO_COUNTRY_HEADER names the one the proxy sets
+     (e.g. cf-ipcountry behind Cloudflare). Otherwise the address decides. */
+  const trusted = process.env.GEO_COUNTRY_HEADER?.trim().toLowerCase();
+  if (!trusted) return null;
+  for (const name of HEADERS.filter((h) => h === trusted)) {
     const raw = request.headers.get(name);
     if (!raw) continue;
     const code = raw.trim().toUpperCase();

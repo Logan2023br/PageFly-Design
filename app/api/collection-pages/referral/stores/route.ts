@@ -2,6 +2,9 @@ import { z } from "zod";
 import { getRepo } from "@/lib/db";
 import { publicMember, publicReferral, referralInput, saveReferralFor } from "@/lib/referralServer";
 import { currentMember } from "../member";
+import { rateLimited } from "@/lib/rateLimit";
+
+const MAX_PENDING = 25;
 
 /* ==========================================================================
    The signed-in member's referred stores.
@@ -37,6 +40,12 @@ export async function POST(request: Request) {
   if (member.status === "paused") return refuse("Your membership is paused — contact us to resume it.", 403);
   const parsed = referralInput.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return refuse(parsed.error.issues[0]?.message ?? "Check the form.");
+  /* One referrer per store, first come first served — so a member may not
+     sit on more unchecked stores than a real referrer has, nor add them in
+     a loop to block everyone else's. */
+  const pending = (await getRepo().listReferrals(member.id)).filter((r) => r.status !== "verified").length;
+  if (pending >= MAX_PENDING) return refuse(`You have ${MAX_PENDING} stores waiting for review — wait for those before adding more.`, 429);
+  if (rateLimited(`referral-add:${member.id}`, 30, 60 * 60 * 1000)) return refuse("Too many stores added this hour — try again later.", 429);
   const saved = await saveReferralFor(member, parsed.data);
   return saved.ok ? answer(member.id) : refuse(saved.error, 409);
 }

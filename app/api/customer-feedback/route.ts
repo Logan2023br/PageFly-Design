@@ -2,6 +2,8 @@ import { z } from "zod";
 import { getRepo } from "@/lib/db";
 import { forwardReview } from "@/lib/review";
 import { normalizeDomain } from "@/lib/sheet";
+import { verifyFeedback } from "@/lib/session";
+import { clientIp, rateLimited } from "@/lib/rateLimit";
 
 /* ==========================================================================
    POST /api/customer-feedback
@@ -33,6 +35,8 @@ const bodySchema = z.object({
   domain: z.string().min(1).max(255),
   stars: z.number().int().min(1).max(5),
   comment: z.string().max(2000).default(""),
+  /** the signed token from the link (see signFeedback in lib/session.ts) */
+  t: z.string().max(1000).default(""),
 });
 
 export type FeedbackResponse =
@@ -59,6 +63,8 @@ export async function POST(request: Request) {
   const domain = normalizeDomain(body.domain);
   if (!domain.includes("."))
     return fail("This feedback link is missing a store domain.");
+  if (!verifyFeedback(body.t, domain)) return fail("This feedback link is not valid. Please use the link we sent you.");
+  if (rateLimited(`feedback:${clientIp(request)}`, 10, 60 * 60 * 1000)) return fail("Too many submissions — try again later.");
 
   const repo = getRepo();
 

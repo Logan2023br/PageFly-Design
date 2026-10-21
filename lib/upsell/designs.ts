@@ -180,7 +180,11 @@ export async function captureMissingThumbs(designId: string, version: number, sl
   }
   const p = await db();
   let made = 0;
-  const browser = await pw.chromium.launch({ args: ["--no-sandbox"] });
+  /* Chromium's own sandbox stays ON. Only an operator who has to run it as
+     root (where Chromium refuses to start sandboxed) turns it off, knowingly:
+     UPSELL_THUMB_NO_SANDBOX=1. Without either, there is simply no thumbnail
+     and the screens show the live preview instead. */
+  const browser = await pw.chromium.launch(process.env.UPSELL_THUMB_NO_SANDBOX === "1" ? { args: ["--no-sandbox"] } : {});
   try {
     for (const slot of slots) {
       const { rows } = await p.query<PageRow>("select * from upsell_pages where design_id=$1 and version=$2 and slot=$3", [designId, version, slot]);

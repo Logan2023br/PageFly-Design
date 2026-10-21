@@ -3,6 +3,7 @@ import { newId } from "@/lib/collectionPagesServer";
 import { getRepo } from "@/lib/db";
 import { cleanDomain } from "@/lib/referralServer";
 import { clearReferralSession, setReferralSession } from "@/lib/session";
+import { clientIp, signInLimits } from "@/lib/rateLimit";
 
 /* ==========================================================================
    POST   /api/collection-pages/referral/session  { domain, email, name? }
@@ -28,7 +29,16 @@ const schema = z.object({
   name: z.string().trim().max(80).optional(),
 });
 
+/* A sign-in is a store and an email, so guessing is bounded per address; and
+   a new membership claims a domain for good (first email wins), so one
+   address may only claim a few a day. */
+const ATTEMPTS_PER_15_MIN = 20;
+const NEW_MEMBERS_PER_DAY = 5;
+
 export async function POST(request: Request) {
+  const ip = clientIp(request);
+  if (signInLimits.hit(`referral-login:${ip}`, ATTEMPTS_PER_15_MIN, 15 * 60 * 1000))
+    return Response.json({ ok: false, error: "Too many attempts. Try again in a few minutes." }, { status: 429 });
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return Response.json(
@@ -63,6 +73,8 @@ export async function POST(request: Request) {
     return Response.json({ ok: true, created: false });
   }
 
+  if (signInLimits.hit(`referral-join:${ip}`, NEW_MEMBERS_PER_DAY, 24 * 60 * 60 * 1000))
+    return Response.json({ ok: false, error: "Too many new memberships from here today. Try again tomorrow." }, { status: 429 });
   const id = newId();
   await repo.saveReferralMember({
     id,

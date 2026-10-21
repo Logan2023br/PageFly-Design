@@ -146,6 +146,26 @@ function check(ok: boolean, label: string, detail: unknown = null): void {
     }
   }
 
+  console.log("feedback links are signed");
+  {
+    const { mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    process.env.PFD_DEV_DB = join(mkdtempSync(join(tmpdir(), "pfd-sec-")), "db.json");
+    const { signFeedback, verifyFeedback } = await import("../lib/session");
+    const t = signFeedback("Shop-One.myshopify.com");
+    check(verifyFeedback(t, "shop-one.myshopify.com"), "a link's token verifies for its own store (normalised)");
+    check(!verifyFeedback(t, "shop-two.myshopify.com"), "…and not for another store");
+    check(!verifyFeedback(undefined, "shop-one.myshopify.com") && !verifyFeedback("forged.token", "shop-one.myshopify.com"), "no token, or a forged one, is refused");
+    const { POST } = await import("../app/api/customer-feedback/route");
+    const post = (body: unknown, ip: string) =>
+      POST(new Request("https://x/api/customer-feedback", { method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": ip }, body: JSON.stringify(body) }));
+    const r1 = await post({ domain: "shop-one.myshopify.com", stars: 1 }, "203.0.113.1");
+    check(r1.status === 400, "a review without the link's token is refused", r1.status);
+    const r2 = await post({ domain: "shop-one.myshopify.com", stars: 5, t }, "203.0.113.2");
+    check(r2.status === 200 && (await r2.json()).ok === true, "with it, the review is taken", r2.status);
+  }
+
   console.log(failures ? `\n${failures} failed` : "\nall passed");
   process.exit(failures ? 1 : 0);
 })();

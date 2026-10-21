@@ -83,6 +83,15 @@ export async function trackCustomerEvent(input: TrackInput, ctx: TrackContext): 
   if (ctx.ip && rateLimited(`ev-ip:${ctx.ip}`, 60)) return { recorded: false, reason: "rate limited" };
   if (rateLimited(`ev:${ctx.visitorId}`, 30)) return { recorded: false, reason: "rate limited" };
   if (rateLimited(`ev-design:${input.id}`, 300)) return { recorded: false, reason: "rate limited" };
+  /* One address on one page: a person opens, scrolls, downloads twice — not
+     hundreds. And feedback, which sets the rating an admin reads, a few
+     times a day at most, per browser and per address. */
+  if (ctx.ip && rateLimited(`ev-ipd:${ctx.ip}:${input.id}`, 40, 60 * 60 * 1000)) return { recorded: false, reason: "rate limited" };
+  if (input.type === "feedback") {
+    const day = 24 * 60 * 60 * 1000;
+    if (rateLimited(`fb:${ctx.visitorId}:${input.id}`, 3, day)) return { recorded: false, reason: "rate limited" };
+    if (ctx.ip && rateLimited(`fb-ip:${ctx.ip}:${input.id}`, 5, day)) return { recorded: false, reason: "rate limited" };
+  }
 
   const p = await db();
   const { rows } = await p.query<{ lead_id: string; status: LeadStatus; expires_at: string | null }>(

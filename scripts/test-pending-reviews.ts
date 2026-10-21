@@ -116,10 +116,13 @@ async function main(): Promise<void> {
   const one = rows.find((s) => s.domain === "built-no-review.myshopify.com");
   check(Boolean(one), "a store that built pages and never reviewed is listed");
   check(one?.pagesUsed === 1, "with the pages it actually built", `${one?.pagesUsed}`);
+  const link = one?.feedbackUrl ? new URL(one.feedbackUrl) : null;
+  const { verifyFeedback } = await import("@/lib/session");
   check(
-    one?.feedbackUrl ===
-      "https://pagefly-design.pagefly.io/customer-feedback?domain=built-no-review.myshopify.com",
-    "and a ready-made feedback link",
+    link?.origin + (link?.pathname ?? "") === "https://pagefly-design.pagefly.io/customer-feedback" &&
+      link?.searchParams.get("domain") === "built-no-review.myshopify.com" &&
+      verifyFeedback(link?.searchParams.get("t") ?? undefined, "built-no-review.myshopify.com"),
+    "and a ready-made feedback link, signed for that store",
     one?.feedbackUrl,
   );
   check(ok.body.count === rows.length, "count matches the rows", `${ok.body.count}`);

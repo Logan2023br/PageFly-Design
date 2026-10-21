@@ -258,6 +258,25 @@ function unseal<T>(token: string | undefined, maxAgeSeconds: number): T | null {
     enough that a link in an old inbox stops being a key eventually. */
 export const INVITE_MAX_AGE = 30 * 24 * 60 * 60;
 
+/* ==========================================================================
+   FEEDBACK LINKS ARE SIGNED. /customer-feedback writes a review with no
+   session behind it; with only ?domain= anyone could rate any store — and,
+   since the first review stands, take the real merchant's turn. The link an
+   admin hands out carries this token, which names its domain; a review is
+   taken only with a token for that domain. A purpose field (`fb`) keeps it
+   from being read as any other kind of token.
+   ========================================================================== */
+export const FEEDBACK_MAX_AGE = 180 * 24 * 60 * 60;
+
+export function signFeedback(domain: string): string {
+  return seal({ fb: normalizeDomain(domain), iat: Date.now() });
+}
+
+export function verifyFeedback(token: string | undefined, domain: string): boolean {
+  const data = unseal<{ fb?: string }>(token, FEEDBACK_MAX_AGE);
+  return data?.fb !== undefined && data.fb === normalizeDomain(domain);
+}
+
 export function signInvite(domain: string): string {
   /* `iat` is the caller's job — `unseal` refuses a payload without one, and
      that is what makes the age check below possible at all. */

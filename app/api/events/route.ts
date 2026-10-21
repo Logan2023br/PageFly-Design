@@ -2,6 +2,7 @@ import { z } from "zod";
 import { countryOf } from "@/lib/geo";
 import { getRepo } from "@/lib/db";
 import { readStoreSession } from "@/lib/session";
+import { clientIp, rateLimited } from "@/lib/rateLimit";
 
 /* ==========================================================================
    POST /api/events   product analytics, from the browser
@@ -76,7 +77,19 @@ function cleanProps(props: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
+/* PER ADDRESS. The caps above bound one request; these bound a sender.
+   Batches: generous for a person clicking around, a wall for a loop filling
+   the table. Downloads separately and far lower, because they are a public
+   number — "N downloads" on a set's card — and a rotating visitor id must not
+   make one machine count as a crowd. */
+const BATCHES_PER_10_MIN = 120;
+const DOWNLOADS_PER_HOUR = 20;
+const DOWNLOAD_EVENT = /_downloaded$/;
+
 export async function POST(request: Request) {
+  if (Number(request.headers.get("content-length") ?? 0) > 100_000) return new Response(null, { status: 204 });
+  const ip = clientIp(request);
+  if (rateLimited(`events:${ip}`, BATCHES_PER_10_MIN, 10 * 60 * 1000)) return new Response(null, { status: 204 });
   let parsed: z.infer<typeof bodySchema>;
   try {
     parsed = bodySchema.parse(await request.json());
@@ -105,9 +118,10 @@ export async function POST(request: Request) {
      rather than throwing, so the worst case is the batch is stamped unplaced.
      ========================================================================== */
   const country = await countryOf(request).catch(() => null);
+  const events = parsed.events.filter((e) => !DOWNLOAD_EVENT.test(e.name) || !rateLimited(`events-dl:${ip}`, DOWNLOADS_PER_HOUR, 60 * 60 * 1000));
 
   const now = new Date();
-  const rows = parsed.events.map((e) => {
+  const rows = events.map((e) => {
     /* The browser's clock is allowed to be wrong, but not by enough to move an
        event into another day's numbers. Anything outside a day either side of
        now is replaced by the server's clock. */

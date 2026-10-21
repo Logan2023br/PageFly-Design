@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { getRepo } from "@/lib/db";
 import { publicOrigin } from "@/lib/publicOrigin";
-import { readAdminSection } from "@/lib/session";
+import { readAdminSection, signFeedback } from "@/lib/session";
 
 /* ==========================================================================
    GET /api/admin/pending-reviews
@@ -94,7 +94,7 @@ export async function GET(request: Request) {
         pageLimit: s.pageLimit,
         runCount: s.runCount,
         lastRunAt: s.lastRunAt,
-        feedbackUrl: `${origin}/customer-feedback?domain=${encodeURIComponent(s.domain)}`,
+        feedbackUrl: `${origin}/customer-feedback?domain=${encodeURIComponent(s.domain)}&t=${encodeURIComponent(signFeedback(s.domain))}`,
       }),
     );
 

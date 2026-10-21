@@ -1,5 +1,6 @@
 import { FeedbackScreen } from "@/components/review/FeedbackScreen";
 import { normalizeDomain } from "@/lib/sheet";
+import { verifyFeedback } from "@/lib/session";
 
 /* ==========================================================================
    /customer-feedback?domain=abc.myshopify.com
@@ -18,9 +19,10 @@ export const metadata = { title: "Your feedback — PageFly Design" };
 export default async function CustomerFeedbackPage({
   searchParams,
 }: {
-  searchParams: Promise<{ domain?: string | string[] }>;
+  searchParams: Promise<{ domain?: string | string[]; t?: string | string[] }>;
 }) {
-  const { domain } = await searchParams;
+  const { domain, t } = await searchParams;
+  const token = Array.isArray(t) ? t[0] : t;
 
   /* A repeated ?domain= arrives as an array. Taking the first is the only
      reading that is not a guess — and a link with two of them is malformed
@@ -30,7 +32,8 @@ export default async function CustomerFeedbackPage({
 
   /* The same test the route handler applies, so a link that cannot possibly be
      accepted says so before the merchant has picked their stars. */
-  return (
-    <FeedbackScreen domain={normalized.includes(".") ? normalized : null} />
-  );
+  /* A link without a valid signature for its domain is treated as a link
+     with no domain: the page says it cannot be used, before any stars. */
+  const valid = normalized.includes(".") && verifyFeedback(token, normalized);
+  return <FeedbackScreen domain={valid ? normalized : null} token={valid ? (token ?? "") : ""} />;
 }

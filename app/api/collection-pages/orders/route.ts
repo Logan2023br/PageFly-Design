@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { clientIp, rateLimited } from "@/lib/rateLimit";
 import { CUSTOM_REQUEST, isPublic } from "@/lib/collectionPages";
 import { newId } from "@/lib/collectionPagesServer";
 import { getRepo } from "@/lib/db";
@@ -30,7 +31,15 @@ const schema = z.object({
   email: z.string().trim().max(200).email("That email does not look right."),
 });
 
+/* A public form, so a person's pace is allowed and a loop is not: a few
+   submissions an hour from one address, and a body no bigger than the form. */
+const PER_HOUR = 10;
+
 export async function POST(request: Request) {
+  if (Number(request.headers.get("content-length") ?? 0) > 20_000)
+    return Response.json({ ok: false, error: "That is too long." }, { status: 413 });
+  if (rateLimited(`orders:${clientIp(request)}`, PER_HOUR, 60 * 60 * 1000))
+    return Response.json({ ok: false, error: "Too many submissions — try again later." }, { status: 429 });
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return Response.json(

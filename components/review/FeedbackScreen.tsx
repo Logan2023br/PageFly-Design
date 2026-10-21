@@ -24,7 +24,7 @@ import { StarRating } from "./StarRating";
 
 type Phase = "asking" | "sending" | "thanks" | "already";
 
-export function FeedbackScreen({ domain }: { domain: string | null }) {
+export function FeedbackScreen({ domain, token }: { domain: string | null; token: string }) {
   const [phase, setPhase] = useState<Phase>("asking");
   const [stars, setStars] = useState(0);
   const [comment, setComment] = useState("");
@@ -40,7 +40,7 @@ export function FeedbackScreen({ domain }: { domain: string | null }) {
       const res = await fetch("/api/customer-feedback", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ domain, stars, comment }),
+        body: JSON.stringify({ domain, stars, comment, t: token }),
       });
 
       /* A crashed route answers with an HTML error page, and res.json() throws

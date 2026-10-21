@@ -31,6 +31,8 @@ export async function POST(
   if (kind !== "html" && kind !== "pagefly") return fail("Only .html and .pagefly files.");
   if (!SLUG_RE.test(slug) || RESERVED_PAGE_SLUGS.has(slug)) return fail("That file name cannot be a page URL.");
 
+  /* Refused on the declared size, before the body is read into memory. */
+  if (Number(request.headers.get("content-length") ?? 0) > MAX_FILE_BYTES) return fail("The file is over 4 MB.", 413);
   const bytes = new Uint8Array(await request.arrayBuffer());
   if (bytes.length > MAX_FILE_BYTES) return fail("The file is over 4 MB.", 413);
   const rejected = rejectFile(kind, bytes);

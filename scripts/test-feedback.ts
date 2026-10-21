@@ -46,14 +46,18 @@ function check(ok: boolean, label: string, detail: string | null = null): void {
   if (!ok) failures++;
 }
 
-type Body = { domain?: unknown; stars?: unknown; comment?: unknown };
+type Body = { domain?: unknown; stars?: unknown; comment?: unknown; t?: unknown };
 
 async function main(): Promise<void> {
   const { POST } = await import("@/app/api/customer-feedback/route");
   const { getRepo } = await import("@/lib/db");
   const repo = getRepo();
 
-  const send = async (body: Body) => {
+  const { signFeedback } = await import("@/lib/session");
+  /* The link a merchant is sent carries a token for its domain; unless a case
+     says otherwise, each request carries the one for the domain it names. */
+  const send = async (raw: Body) => {
+    const body = "t" in raw || typeof raw.domain !== "string" ? raw : { ...raw, t: signFeedback(raw.domain) };
     const res = await POST(
       new Request("http://localhost/api/customer-feedback", {
         method: "POST",
@@ -63,6 +67,12 @@ async function main(): Promise<void> {
     );
     return { status: res.status, body: (await res.json()) as Record<string, unknown> };
   };
+
+  console.log("\na review needs the link's signed token");
+  const unsigned = await send({ domain: "abc.myshopify.com", stars: 1, t: "" });
+  check(unsigned.status === 400, "without it the review is refused", `${unsigned.status}`);
+  const otherStore = await send({ domain: "abc.myshopify.com", stars: 1, t: signFeedback("someone-else.myshopify.com") });
+  check(otherStore.status === 400, "and with another store's token too", `${otherStore.status}`);
 
   console.log("\na review arrives with no session at all");
 
