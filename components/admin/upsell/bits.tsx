@@ -255,7 +255,7 @@ export function WhatsappMark({
           className={`${button} ${
             sent
               ? "border-pf-success/30 bg-pf-success/10 text-pf-success hover:bg-pf-success/20"
-              : "border-pf-border bg-pf-card-hi text-pf-muted hover:text-pf-text"
+              : "border-pf-danger/30 bg-pf-danger/10 text-pf-danger hover:bg-pf-danger/20"
           }`}
         >
           <Icon name={sent ? "Check" : "X"} size={12} />
