@@ -292,3 +292,19 @@ def test_settings_from_server_override_defaults(bpu):
     bpu.FAKE_PFD.settings.update({"followup1_hours": 24, "pic": "Mai"})
     cfg = bpu.settings()
     assert cfg["followup1_hours"] == 24.0 and cfg["pic"] == "Mai" and cfg["send_hour_start"] == 9.0
+
+
+def test_password_store_is_not_scored_below_an_open_one(bpu):
+    """A store still behind its password is a merchant building it: +2 makes up for the
+    open-storefront and public-products points it cannot have yet."""
+    cfg = {"score_threshold": 6, "min_products": 1}
+    st = {"shopifyPlan": "Basic", "email": "hello@lumijewels.com", "name": "Lumi Jewels",
+          "shopDomain": "lumi.myshopify.com", "status": "installed"}
+    sc, why, cat, etype, skip = bpu.score_store(st, "create/ai", [], "Password", cfg, "Necklace")
+    # Basic +1, business email +2, own name +1, onboarding create +1, building +2
+    assert sc == 7 and skip == "", (sc, why)
+    assert any("đang dựng" in w and "+2" in w for w in why)
+    assert cat == "Necklace"
+    # Without the bonus the same store would sit at 5, under the threshold.
+    sc_open, _, _, _, skip_open = bpu.score_store(st, "create/ai", [{"product_type": "Rings"}] * 3, "Open", cfg)
+    assert sc_open == 7 and skip_open == "", "open with 3 products: +1 products +1 open — the same 7"

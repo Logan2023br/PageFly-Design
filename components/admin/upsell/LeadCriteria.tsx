@@ -23,13 +23,15 @@ const RULES: Rule[] = [
   { group: "Sản phẩm công khai", when: "Từ 10 sản phẩm trở lên", points: "+2", tone: "plus" },
   { group: "Sản phẩm công khai", when: "1–9 sản phẩm", points: "+1", tone: "plus" },
   { group: "Storefront", when: "Đang mở, không để password", points: "+1", tone: "plus" },
+  { group: "Storefront", when: "Đang để password (store mới đang dựng, chưa xem được sản phẩm)", points: "+2", tone: "plus" },
 ];
 
 const EXAMPLES: { store: string; math: string; total: number; password?: boolean }[] = [
   { store: "Gói Shopify, email riêng, có phone, tên riêng, 12 sản phẩm, đang mở", math: "3 + 2 + 1 + 1 + 2 + 1", total: 10 },
   { store: "Basic, Gmail, không phone, tên riêng, 3 sản phẩm, đang mở", math: "1 + 0 + 0 + 1 + 1 + 1", total: 4 },
-  { store: "Password, gói Shopify, email riêng, tên riêng, onboarding create", math: "3 + 2 + 1 + 1", total: 7, password: true },
-  { store: "Password, Basic, Gmail, tên riêng, onboarding create", math: "1 + 1 + 1", total: 3, password: true },
+  { store: "Password, gói Shopify, email riêng, tên riêng, onboarding create", math: "3 + 2 + 1 + 1 + 2", total: 9, password: true },
+  { store: "Password, Basic, email riêng, tên riêng, onboarding create", math: "1 + 2 + 1 + 1 + 2", total: 7, password: true },
+  { store: "Password, Basic, Gmail, tên riêng, onboarding create", math: "1 + 1 + 1 + 2", total: 5, password: true },
 ];
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -74,8 +76,8 @@ export function LeadCriteria({ threshold, minProducts, controlPercent }: { thres
           </table>
         </div>
         <p className="text-[12px] text-pf-muted">
-          Tối đa <strong className="text-pf-text">13 điểm</strong> với store đang mở, <strong className="text-pf-text">10 điểm</strong> với
-          store để password (không có điểm sản phẩm và điểm storefront mở).
+          Tối đa <strong className="text-pf-text">12 điểm</strong> với store đang mở, <strong className="text-pf-text">11 điểm</strong> với
+          store để password (+2 &ldquo;đang dựng&rdquo; thay cho điểm sản phẩm và điểm storefront mở mà nó chưa thể có).
         </p>
       </Section>
 
@@ -113,7 +115,9 @@ export function LeadCriteria({ threshold, minProducts, controlPercent }: { thres
             own products and photos&rdquo; thay vì &ldquo;built with your own products&rdquo;.
           </li>
           <li>
-            Vì mất điểm sản phẩm và điểm storefront mở, phần lớn store để password nhỏ (Basic, Gmail) sẽ dưới ngưỡng {threshold} điểm.
+            Store để password là merchant mới đang dựng store, nên được <strong className="text-pf-text">+2 &ldquo;đang dựng&rdquo;</strong> bù
+            cho điểm sản phẩm và điểm storefront mở. Store Basic dùng Gmail vẫn cần thêm phone hoặc onboarding rebuild/import để đạt{" "}
+            {threshold} điểm.
           </li>
         </ul>
       </Section>

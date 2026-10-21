@@ -214,7 +214,11 @@ def score_store(st, intent, products, storefront, cfg, product_type=""):
     # A password-protected store still gets pages: example products in its line
     # of business, which Mixpanel's onboarding product_type may name.
     if storefront == "Password":
-        why.append("Storefront password: dựng page mẫu")
+        # A store still behind its password is usually a merchant building it
+        # right now — the moment pages help most. It cannot earn the open
+        # storefront (+1) or public products (+1/+2) points, so it gets them
+        # back here rather than losing to every store that already launched.
+        sc += 2; why.append("Store đang dựng (để password) +2: dựng page mẫu")
         if not cat:
             cat = product_type
     skip = ""
