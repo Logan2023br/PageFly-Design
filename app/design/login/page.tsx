@@ -32,12 +32,11 @@ export default async function LoginPage({
      the NEXT_REDIRECT it throws and the redirect silently does not happen — so
      the guard reads as working and never fires. The try is only around the
      database call, which is the part that may legitimately fail. */
-  if (signedIn) redirect(next ?? "/design");
-
-  /* Only same-site paths are honoured. Taking the raw value would turn this
-     into an open redirect: /design/login?next=https://evil.example. */
-  const target =
-    next && next.startsWith("/") && !next.startsWith("//") ? next : "/design";
+  /* Only a path on this site is honoured, and checked BEFORE either use — the
+     signed-in redirect used the raw value, which made
+     /design/login?next=https://evil.example an open redirect. */
+  const target = safeNext(next);
+  if (signedIn) redirect(target);
 
   /* Carried from the front door, where a `?login=` link found a real store
      that has no account yet: the visitor typed it once and should not have to
@@ -46,4 +45,16 @@ export default async function LoginPage({
   const prefill = domain && domain.length <= 255 ? domain : undefined;
 
   return <LoginScreen next={target} initialDomain={prefill} />;
+}
+
+/** `next` if it is a path on this site, else /design. "//host" and "/\\host"
+    are other sites to a browser, and so is anything that resolves off-origin. */
+function safeNext(next: string | undefined): string {
+  if (!next || !next.startsWith("/") || next.startsWith("//") || /[\\\s]/.test(next)) return "/design";
+  try {
+    const u = new URL(next, "https://same.invalid");
+    return u.origin === "https://same.invalid" ? `${u.pathname}${u.search}${u.hash}` : "/design";
+  } catch {
+    return "/design";
+  }
 }

@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { publicOrigin } from "@/lib/publicOrigin";
 import { normalizeDomain } from "@/lib/sheet";
-import { INVITE_MAX_AGE, readAdminSession, signInvite } from "@/lib/session";
+import { INVITE_MAX_AGE, readAdminSection, signInvite } from "@/lib/session";
 
 /* ==========================================================================
    POST /api/admin/invite-link   mint one signed invite link
@@ -43,7 +43,7 @@ function secretMatches(header: string | null): boolean {
 export async function POST(request: Request) {
   const authorised =
     secretMatches(request.headers.get("x-sync-secret")) ||
-    (await readAdminSession().catch(() => null));
+    (await readAdminSection("users").catch(() => null));
 
   if (!authorised)
     return Response.json(

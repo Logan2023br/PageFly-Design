@@ -12,6 +12,7 @@ import { storeExists } from "@/lib/storeExists";
 import { NO_REGISTER_USER_TYPE } from "@/lib/db/types";
 import { trackServer } from "@/lib/analyticsServer";
 import { EV } from "@/lib/analytics";
+import { clientIp, rateLimited } from "@/lib/rateLimit";
 
 /* ==========================================================================
    POST /api/auth/store   sign in with a store domain
@@ -83,7 +84,17 @@ export type StoreAuthResponse =
   | { ok: false; needsEmail: true; domain: string; storeName: string | null }
   | { ok: false; error: string; hint?: string };
 
+/* Sign-ins and sign-ups per address: generous for a person, a wall for a
+   loop minting accounts (each new store comes with free pages to build). */
+const PER_ADDRESS = 30;
+const WINDOW = 15 * 60 * 1000;
+
 export async function POST(request: Request) {
+  if (rateLimited(`store-login:${clientIp(request)}`, PER_ADDRESS, WINDOW))
+    return Response.json(
+      { ok: false, error: "Too many attempts. Try again in a few minutes." } satisfies StoreAuthResponse,
+      { status: 429 },
+    );
   let parsed: z.infer<typeof bodySchema>;
   try {
     parsed = bodySchema.parse(await request.json());
@@ -265,7 +276,8 @@ export async function POST(request: Request) {
         {
           ok: false,
           error: "Could not create the account.",
-          hint: (err as Error).message,
+          /* The cause stays in the server log; it is a database message. */
+          hint: (console.error("[auth/store] create", err), "Try again in a moment."),
         } satisfies StoreAuthResponse,
         { status: 500 },
       );
@@ -298,7 +310,7 @@ export async function POST(request: Request) {
       {
         ok: false,
         error: "Could not start a session.",
-        hint: (err as Error).message,
+        hint: (console.error("[auth/store] session", err), "Try again in a moment."),
       } satisfies StoreAuthResponse,
       { status: 500 },
     );

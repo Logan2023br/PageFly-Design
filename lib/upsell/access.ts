@@ -1,6 +1,6 @@
 import "server-only";
 
-import { readAdminSession } from "@/lib/session";
+import { readAdminSection } from "@/lib/session";
 import { apiKeyOk } from "./api";
 import { getDesign, type DesignView } from "./designs";
 import { VISIBLE } from "./types";
@@ -29,7 +29,7 @@ export function customerState(view: DesignView): "ok" | "expired" | "rejected" |
 
 export async function viewerOf(req: Request | null): Promise<Viewer> {
   if (req && req.headers.get("x-api-key") && apiKeyOk(req)) return "key";
-  if (await readAdminSession()) return "admin";
+  if (await readAdminSection("upsell")) return "admin";
   return "customer";
 }
 

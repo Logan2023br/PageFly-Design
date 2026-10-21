@@ -105,7 +105,7 @@ export function ScaledFrame({
         <iframe
           src={src}
           title={title}
-          sandbox="allow-scripts allow-same-origin"
+          sandbox="allow-scripts"
           loading="lazy"
           referrerPolicy="no-referrer"
           className="absolute left-0 top-0 origin-top-left border-0 bg-white"

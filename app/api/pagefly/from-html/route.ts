@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { pageflyFromHtmlSkill } from "@/lib/pagefly/fromHtmlSkill";
+import { pageflyFromHtmlSkill, splitSections } from "@/lib/pagefly/fromHtmlSkill";
 import { pageflyFromHtmlLive } from "@/lib/pagefly/htmlToTree";
 import { currentAccount } from "@/lib/account";
 import { getRepo } from "@/lib/db";
@@ -7,6 +7,7 @@ import { keyForHtml } from "@/lib/pagefly/prepared";
 import { ownerFor } from "@/lib/pagefly/fileScope";
 import { readAdminSession } from "@/lib/session";
 import { flushMeter, withMeter } from "@/lib/ai/meter";
+import { clientIp, rateLimited } from "@/lib/rateLimit";
 
 /* ==========================================================================
    POST /api/pagefly/from-html
@@ -28,7 +29,22 @@ export const dynamic = "force-dynamic";
    still minutes, and the default would cut it off mid-build. */
 export const maxDuration = 300;
 
+/* WHO MAY SPEND THE MODEL. Every band is a paid call, so this answers only a
+   signed-in store or an admin, takes a page-sized document, and a bounded
+   number of conversions an hour. Without these, anyone could post a document
+   of thousands of sections, in a loop, on the operator's key. */
+const MAX_HTML_CHARS = 2_000_000;
+const MAX_BANDS = 40;
+const PER_HOUR = 30;
+
 export async function POST(req: Request): Promise<Response> {
+  const account = await currentAccount().catch(() => null);
+  const admin = Boolean(await readAdminSession().catch(() => false));
+  if (!account && !admin) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
+  const who = admin ? `admin:${clientIp(req)}` : `store:${account!.domain}`;
+  if (rateLimited(`from-html:${who}`, PER_HOUR, 60 * 60 * 1000))
+    return NextResponse.json({ error: "Too many conversions this hour — try again later." }, { status: 429 });
+
   let body: {
     html?: unknown;
     name?: unknown;
@@ -51,9 +67,16 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const html = typeof body.html === "string" ? body.html : "";
-  const name = typeof body.name === "string" && body.name.trim() ? body.name.trim() : "page";
+  /* Into a Content-Disposition filename below: letters, digits, dot, dash,
+     space — a quote or a line break would break the header. */
+  const name =
+    (typeof body.name === "string" ? body.name : "").replace(/[^\p{L}\p{N} ._-]+/gu, "").trim().slice(0, 80) || "page";
   if (html.trim() === "")
     return NextResponse.json({ error: "no html to convert" }, { status: 400 });
+  if (html.length > MAX_HTML_CHARS)
+    return NextResponse.json({ error: "The page is too large to convert." }, { status: 413 });
+  if (splitSections(html).length > MAX_BANDS)
+    return NextResponse.json({ error: `The page has more than ${MAX_BANDS} sections.` }, { status: 413 });
 
   /* ==========================================================================
      WHICH CONVERTER, and both are kept.
@@ -113,8 +136,8 @@ export async function POST(req: Request): Promise<Response> {
        ================================================================== */
     const pageId = typeof body.pageId === "string" ? body.pageId : "";
     const owner = ownerFor({
-      session: (await currentAccount())?.domain ?? null,
-      admin: Boolean(await readAdminSession()),
+      session: account?.domain ?? null,
+      admin,
       asked: typeof body.domain === "string" ? body.domain : null,
     });
     if (owner && pageId)
@@ -167,7 +190,7 @@ export async function POST(req: Request): Promise<Response> {
     return new Response(bytes, {
       headers: {
         "content-type": "application/zip",
-        "content-disposition": `attachment; filename="${built.filename}"`,
+        "content-disposition": `attachment; filename="${built.filename.replace(/[^\w.-]+/g, "-")}"`,
         /* Read by the caller so a partial build can say so rather than looking
            like a whole one. A header, because the body is the file. */
         "x-pagefly-sections": `${built.built}/${built.sections}`,
@@ -176,6 +199,7 @@ export async function POST(req: Request): Promise<Response> {
   } catch (err) {
     const reason = err instanceof Error ? err.message : "unknown error";
     console.warn(`[pagefly] ${name} failed: ${reason}`);
-    return NextResponse.json({ error: reason }, { status: 502 });
+    /* The vendor's own text stays in the log; the caller gets a plain line. */
+    return NextResponse.json({ error: "The conversion failed — try again." }, { status: 502 });
   }
 }

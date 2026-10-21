@@ -64,6 +64,8 @@ export async function flushSlack(): Promise<boolean> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text: `*Upsell Build Pages* — ${head}\n${lines.join("\n")}` }),
       signal: AbortSignal.timeout(10_000),
+      /* Slack answers directly; a redirect would be somewhere else. */
+      redirect: "error",
     });
     return res.ok;
   } catch (err) {

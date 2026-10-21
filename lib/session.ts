@@ -409,14 +409,17 @@ export async function clearAdminSession(): Promise<void> {
 /**
  * Checked server-side only, so the values never reach the browser bundle.
  *
- * The defaults are the ones specified for launch. They are weak and shared, so
- * ADMIN_USERNAME / ADMIN_PASSWORD override them without a code change — set them
- * before this is reachable by anyone outside the team.
+ * The defaults are for local development only. They are in a public
+ * repository, so IN PRODUCTION THERE ARE NONE: with ADMIN_USERNAME or
+ * ADMIN_PASSWORD unset there, owner sign-in is simply off (admin accounts still
+ * sign in), rather than open to "admin / pf123456".
  */
 export function checkAdminCredentials(
   username: string,
   password: string,
 ): boolean {
+  const production = process.env.NODE_ENV === "production";
+  if (production && (!process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD)) return false;
   const expectedUser = process.env.ADMIN_USERNAME ?? "admin";
   const expectedPass = process.env.ADMIN_PASSWORD ?? "pf123456";
 

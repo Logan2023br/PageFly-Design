@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getRepo } from "@/lib/db";
-import { readAdminSession } from "@/lib/session";
+import { readAdminSection } from "@/lib/session";
 
 /* ==========================================================================
    POST /api/admin/pages   { runId, pageId, hidden }
@@ -23,7 +23,7 @@ const body = z.object({
 });
 
 export async function POST(req: Request): Promise<Response> {
-  if (!(await readAdminSession())) {
+  if (!(await readAdminSection("users"))) {
     return Response.json({ error: "not signed in" }, { status: 401 });
   }
 

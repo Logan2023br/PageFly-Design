@@ -314,7 +314,13 @@ async function main() {
     });
     await new Promise<void>((r) => hook.listen(0, "127.0.0.1", () => r()));
     const port = (hook.address() as { port: number }).port;
-    await settings.saveSettings({ slack_webhook_url: `http://127.0.0.1:${port}/hook` });
+    /* Written straight into the table: the setting itself only takes
+       https://hooks.slack.com/… (checked in the settings section below). */
+    await (await db()).query(
+      `insert into upsell_settings (key, value) values ('slack_webhook_url', $1::jsonb)
+       on conflict (key) do update set value = excluded.value`,
+      [JSON.stringify(`http://127.0.0.1:${port}/hook`)],
+    );
     await settings.setInternal("slack_last_at", 0);
     await settings.setInternal("slack_pending", []);
     const waitPosts = async (n: number) => {
@@ -606,7 +612,7 @@ async function main() {
       pic: "Mai",
       review_url: "https://apps.shopify.com/pagefly#reviews",
       initial_message_template: "Hi **{store_name}**, 👉 [See your 2 pages]({link})",
-      slack_webhook_url: "https://hooks.slack.test/T000/B000/xyz",
+      slack_webhook_url: "https://hooks.slack.com/services/T000/B000/xyz",
     };
     check(Object.keys(next).sort().join() === [...settings.SETTING_KEYS].sort().join(), "the test covers every setting", settings.SETTING_KEYS);
     for (const k of settings.SETTING_KEYS) {
@@ -626,6 +632,10 @@ async function main() {
     await rejects(settings.saveSettings({ max_builds_per_run: "", pic: "Nope" }), 422, "an empty number is 422");
     await rejects(settings.saveSettings({ max_builds_per_run: "abc" }), 422, "a non-number is 422");
     await rejects(settings.saveSettings({ max_build_per_run: 3 }), 422, "a misspelt key is 422");
+    await rejects(settings.saveSettings({ slack_webhook_url: "http://169.254.169.254/latest" }), 422, "a webhook that is not Slack's is 422");
+    await settings.saveSettings({ slack_webhook_url: settings.WEBHOOK_MASK });
+    check((await settings.getSettings()).slack_webhook_url === "https://hooks.slack.com/services/T000/B000/xyz", "the masked value saves nothing");
+    check(settings.maskSettings(await settings.getSettings()).slack_webhook_url === settings.WEBHOOK_MASK, "the admin screen gets the mask, not the URL");
     const still = (await readApi()).body.settings;
     check(still.max_builds_per_run === 1 && still.pic === "Logan", "a refused save writes nothing", still);
 

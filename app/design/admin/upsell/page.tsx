@@ -17,7 +17,7 @@ import {
   type Filters,
 } from "@/lib/upsell/adminQueries";
 import { hasUpsellDatabase } from "@/lib/upsell/db";
-import { NUMERIC_KEYS, SETTING_HELP, getSettings } from "@/lib/upsell/settings";
+import { NUMERIC_KEYS, SETTING_HELP, getSettings, maskSettings } from "@/lib/upsell/settings";
 
 /* /design/admin/upsell — Upsell Build Pages. Read on the server per request,
    like the other admin screens; the tab and filters are in the URL. */
@@ -78,7 +78,7 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
   } else if (tab === "stats") {
     body = <StatsPanel s={await upsellStats(f)} />;
   } else if (tab === "settings") {
-    body = <SettingsForm initial={cfg} help={SETTING_HELP} numeric={NUMERIC_KEYS} />;
+    body = <SettingsForm initial={maskSettings(cfg)} help={SETTING_HELP} numeric={NUMERIC_KEYS} />;
   } else {
     const r = await listLeadTab(tab, f);
     body = <LeadTable rows={r.rows} variant={tab} />;

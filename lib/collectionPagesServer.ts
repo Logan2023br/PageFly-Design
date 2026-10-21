@@ -3,6 +3,10 @@ import "server-only";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { unzipSync } from "fflate";
+
+/* A page export is one JSON and a few assets; these are far above any real one. */
+const MAX_ZIP_ENTRIES = 500;
+const MAX_ZIP_EXPANDED = 200 * 1024 * 1024;
 import { EV } from "./analytics";
 import { labelFromSlug } from "./collectionPages";
 import { getRepo } from "./db";
@@ -33,8 +37,23 @@ export function rejectFile(kind: CollectionFileKind, bytes: Uint8Array): string 
       : "That does not look like an HTML page.";
   }
   try {
-    const entries = Object.keys(unzipSync(bytes));
-    return entries.some((n) => n.toLowerCase().endsWith(".json"))
+    /* Read the zip's directory WITHOUT inflating anything: the filter sees
+       each entry's name and declared size and declines it. A few megabytes
+       that expand to gigabytes (a zip bomb) are refused by their declared
+       size, never unpacked. Whatever is stored is unpacked later only after
+       passing this. */
+    const names: string[] = [];
+    let expanded = 0;
+    unzipSync(bytes, {
+      filter: (f) => {
+        names.push(f.name);
+        expanded += f.originalSize;
+        return false;
+      },
+    });
+    if (names.length > MAX_ZIP_ENTRIES || expanded > MAX_ZIP_EXPANDED)
+      return "That .pagefly is far larger unpacked than any page export.";
+    return names.some((n) => n.toLowerCase().endsWith(".json"))
       ? null
       : "That .pagefly holds no page — it has no .json entry.";
   } catch {

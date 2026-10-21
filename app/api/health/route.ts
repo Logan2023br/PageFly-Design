@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import { builtinStores } from "@/lib/allowlist";
 import { canReadReferences } from "@/lib/ai/refVision";
 import { modelName, providerName } from "@/lib/ai/provider";
@@ -6,7 +7,7 @@ import { freeDesignEnabled, sectionSpecEnabled } from "@/lib/design/sectionSpec"
 import { skillNames } from "@/lib/ai/skills";
 import { stockProvider } from "@/lib/images/stock";
 import { databaseIsUnpooled, databaseSource, hasDatabase } from "@/lib/db";
-import { hasSessionSecret, hasStableSecret, keySource } from "@/lib/session";
+import { hasSessionSecret, hasStableSecret, keySource, readAdminSession } from "@/lib/session";
 import { sheetSource } from "@/lib/sheet";
 import { showcaseIds, showcasePages, showcaseSource, showcaseStore } from "@/lib/showcase";
 
@@ -26,7 +27,7 @@ import { showcaseIds, showcasePages, showcaseSource, showcaseStore } from "@/lib
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   /**
    * The front door's marquee, which fails SILENTLY by design.
    *
@@ -231,8 +232,22 @@ export async function GET() {
         "SHOWCASE_STORE, which does.",
     );
 
-  return Response.json(
-    { ok: blocking.length === 0, checks, blocking, advisory },
-    { status: blocking.length === 0 ? 200 : 503 },
-  );
+  /* THE DETAIL IS FOR OPERATORS. Which session key is in use, whether the
+     admin password is the default, which store backs the showcase — each is
+     a hint to an attacker, so an anonymous caller gets the verdict only. An
+     admin (any section), or a caller with SYNC_SECRET, gets everything. */
+  const status = blocking.length === 0 ? 200 : 503;
+  if (!(await mayReadDetail(request))) return Response.json({ ok: blocking.length === 0 }, { status });
+  return Response.json({ ok: blocking.length === 0, checks, blocking, advisory }, { status });
+}
+
+async function mayReadDetail(request: Request): Promise<boolean> {
+  const secret = process.env.SYNC_SECRET ?? "";
+  const given = request.headers.get("x-sync-secret") ?? "";
+  if (secret && given) {
+    const a = createHash("sha256").update(given).digest();
+    const b = createHash("sha256").update(secret).digest();
+    if (timingSafeEqual(a, b)) return true;
+  }
+  return Boolean(await readAdminSession().catch(() => false));
 }

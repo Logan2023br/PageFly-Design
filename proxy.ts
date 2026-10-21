@@ -18,8 +18,39 @@ import type { NextRequest } from "next/server";
 
 const STORE_COOKIE = "pfd_store";
 
+/* ==========================================================================
+   CSRF, for the APIs that act with an admin's or a store's cookie.
+
+   A state-changing request must come from this site. Browsers say where a
+   request came from in `Sec-Fetch-Site` (and `Origin`); a form or fetch from
+   another site — including a sibling *.pagefly.io, which SameSite=Lax would
+   let through — is refused. A caller that sends neither header is not a
+   browser (a script with SYNC_SECRET, a test) and carries no ambient cookie
+   to abuse, so it passes to the route's own check.
+   ========================================================================== */
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+function crossSite(request: NextRequest): boolean {
+  if (SAFE_METHODS.has(request.method)) return false;
+  const site = request.headers.get("sec-fetch-site");
+  if (site) return site !== "same-origin" && site !== "none";
+  const origin = request.headers.get("origin");
+  if (!origin) return false;
+  try {
+    return new URL(origin).host !== (request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? request.nextUrl.host);
+  } catch {
+    return true;
+  }
+}
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (pathname.startsWith("/api/")) {
+    if (crossSite(request))
+      return NextResponse.json({ ok: false, error: "Cross-site request refused." }, { status: 403 });
+    return NextResponse.next();
+  }
 
   if (request.cookies.has(STORE_COOKIE)) return NextResponse.next();
 
@@ -32,8 +63,8 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  /* Only the merchant-facing screens. /design/login must stay reachable while
-     signed out, /design/admin has its own credentials, and the API routes
-     answer with 401 JSON rather than a redirect so fetch callers can react. */
-  matcher: ["/design", "/design/library"],
+  /* The merchant-facing screens (redirect to sign-in), and the cookie-acting
+     APIs (CSRF check only — they answer 401 JSON themselves, so fetch callers
+     can react). /design/login must stay reachable while signed out. */
+  matcher: ["/design", "/design/library", "/api/admin/:path*", "/api/auth/:path*", "/api/account"],
 };

@@ -48,6 +48,11 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 function frame(width: number, height: number): HTMLIFrameElement {
   const el = document.createElement("iframe");
   el.setAttribute("aria-hidden", "true");
+  /* Read for its layout, never run: same-origin so the DOM can be measured,
+     and NO allow-scripts, because the document is model output and this can
+     run in an admin's session — a script in a same-origin frame would act
+     with the admin's cookies. */
+  el.setAttribute("sandbox", "allow-same-origin");
   el.style.cssText =
     `position:fixed;left:-20000px;top:0;border:0;` +
     `width:${width}px;height:${height}px;visibility:hidden;`;

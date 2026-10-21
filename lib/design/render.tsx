@@ -2,7 +2,7 @@
 
 import { createContext, Fragment, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { cleanBlock, previewJs } from "./customBlock";
+import { cleanBlock } from "./customBlock";
 import { MOTION_CSS, motionClasses } from "./motion";
 import { readableInk } from "../styleTokens";
 import {
@@ -815,24 +815,12 @@ function CustomBlock({ node, cls }: { node: Extract<DesignNode, { type: "custom"
     [clean.css, className],
   );
 
-  useEffect(() => {
-    if (!node.js?.trim() || !ref.current) return;
-    /* Run against THIS element rather than a document query: four device frames
-       render the same page at once, and a document-wide lookup would find the
-       desktop one from inside the phone. */
-    try {
-      /* Through `previewJs`, so the observers and timers the block registers are
-         guarded too. The bare form guarded only the setup: a block that armed an
-         IntersectionObserver and read `.style` off a null query threw from inside
-         the callback, on every scroll, and the preview carried a permanent error
-         badge for a wave divider. */
-      new Function("root", previewJs(node.js))(ref.current);
-    } catch (err) {
-      /* A decoration that throws must not take the preview with it — but it
-         should say so, or the next person debugs the page instead of the block. */
-      console.warn("[custom block] setup failed:", err);
-    }
-  }, [node.js]);
+  /* THE BLOCK'S JS IS NOT RUN IN THIS PREVIEW. It is model output a merchant's
+     brief can steer, and this preview is also drawn inside admin screens
+     (Users → a store's library), on this origin, with the admin's cookies: a
+     `new Function` here would run it as that admin. The script still ships in
+     the export, where it runs on the merchant's own storefront — this picture
+     shows the block at rest. */
 
   return (
     <div

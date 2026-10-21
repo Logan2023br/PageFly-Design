@@ -1,7 +1,7 @@
 import { timingSafeEqual, createHash } from "node:crypto";
 import { z } from "zod";
 import { getRepo } from "@/lib/db";
-import { readAdminSession } from "@/lib/session";
+import { readAdminSection } from "@/lib/session";
 import { parseCsv, pullSheet, rowsToStores, sheetSource } from "@/lib/sheet";
 
 /* ==========================================================================
@@ -49,7 +49,7 @@ export type SyncResponse =
 export async function POST(request: Request) {
   const authorised =
     secretMatches(request.headers.get("x-sync-secret")) ||
-    (await readAdminSession());
+    (await readAdminSection("users"));
 
   if (!authorised) {
     return Response.json(
@@ -121,7 +121,7 @@ export async function POST(request: Request) {
 
 /** Where the pull would read from, so the admin UI can show it. */
 export async function GET() {
-  if (!(await readAdminSession())) {
+  if (!(await readAdminSection("users"))) {
     return Response.json({ ok: false, error: "Not authorised." }, { status: 401 });
   }
   return Response.json({ ok: true, source: sheetSource() });

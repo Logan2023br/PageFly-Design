@@ -11,7 +11,13 @@ import { getFile } from "@/lib/upsell/storage";
 export const dynamic = "force-dynamic";
 
 const HEADERS = {
-  "Content-Security-Policy": "sandbox allow-scripts allow-same-origin",
+  /* NO allow-same-origin. The page is HTML a model wrote from a merchant's
+     storefront, served from this origin: with same-origin and scripts
+     together, a script in it could call /api/admin/* with the cookies of the
+     admin reviewing it. Without, it runs in an opaque origin, wherever it is
+     opened — in the admin's iframe or straight in a tab. */
+  "Content-Security-Policy": "sandbox allow-scripts",
+  "X-Content-Type-Options": "nosniff",
   "X-Robots-Tag": "noindex, nofollow",
   "Cache-Control": "private, no-store",
   "Content-Type": "text/html; charset=utf-8",

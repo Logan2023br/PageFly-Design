@@ -1,5 +1,6 @@
 import "server-only";
 
+import { lookup } from "node:dns/promises";
 import { normalizeDomain } from "./storeForm";
 
 /* ==========================================================================
@@ -84,18 +85,36 @@ export async function storeExists(raw: string): Promise<StoreExists> {
   if (!/^[a-z0-9][a-z0-9.-]*$/.test(domain))
     return { status: "no", reason: "not a hostname" };
 
+  /* NOT A WAY INTO OUR OWN NETWORK. This runs on whatever an anonymous visitor
+     types, so the host must be a public name: no IP literals, no single-label
+     or internal names, and — checked after DNS — no address in a private,
+     loopback or link-local range. Redirects are followed by hand, each hop
+     held to the same rule, so a public host cannot bounce the request to
+     169.254.169.254 or localhost. */
+  if (!(await isPublicHost(domain))) return { status: "no", reason: "not a public host" };
+
   let res: Response;
   try {
-    res = await fetch(`https://${domain}/meta.json`, {
-      headers: {
-        /* Named, because an unidentified agent is what rate limiters block
-           first and what a shop owner reading their logs cannot place. */
-        "user-agent": "PageFlyDesign/1.0 (+https://pagefly.io)",
-        accept: "application/json",
-      },
-      redirect: "follow",
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
+    let url = `https://${domain}/meta.json`;
+    for (let hop = 0; ; hop++) {
+      res = await fetch(url, {
+        headers: {
+          /* Named, because an unidentified agent is what rate limiters block
+             first and what a shop owner reading their logs cannot place. */
+          "user-agent": "PageFlyDesign/1.0 (+https://pagefly.io)",
+          accept: "application/json",
+        },
+        redirect: "manual",
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+      const location = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+      if (!location) break;
+      if (hop >= 3) return { status: "unknown", reason: "too many redirects" };
+      const next = new URL(location, url);
+      if (next.protocol !== "https:" || !(await isPublicHost(next.hostname)))
+        return { status: "no", reason: "redirect to a non-public host" };
+      url = next.toString();
+    }
   } catch (err) {
     /* NXDOMAIN IS AN ANSWER; EVERYTHING ELSE HERE IS NOT.
 
@@ -150,4 +169,43 @@ export async function storeExists(raw: string): Promise<StoreExists> {
       ? { products: shop.published_products_count }
       : {}),
   };
+}
+
+/* ---- public hosts only ----------------------------------------------------- */
+
+/** A name a store could have on the public internet, resolving only to
+    public addresses. */
+async function isPublicHost(host: string): Promise<boolean> {
+  const h = host.toLowerCase().replace(/\.$/, "");
+  /* IP literals (v4, v6, and the decimal/hex forms URL parsers accept), and
+     names without a real top-level domain. */
+  if (/^[\d.]+$/.test(h) || h.includes(":") || /^0x/i.test(h)) return false;
+  if (!/\.[a-z][a-z0-9-]*[a-z0-9]$/.test(h)) return false;
+  if (/(^|\.)(localhost|local|internal|intranet|lan|home|corp|localdomain)$/.test(h)) return false;
+  try {
+    const addrs = await lookup(h, { all: true, verbatim: true });
+    return addrs.length > 0 && addrs.every((a) => !isPrivateAddress(a.address));
+  } catch (err) {
+    /* Not resolving is the caller's "does not exist" — let the fetch say so. */
+    return (err as { code?: string })?.code === "ENOTFOUND";
+  }
+}
+
+function isPrivateAddress(ip: string): boolean {
+  if (ip.includes(":")) {
+    const v = ip.toLowerCase();
+    const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(v);
+    if (mapped) return isPrivateAddress(mapped[1]);
+    return v === "::" || v === "::1" || v.startsWith("fc") || v.startsWith("fd") || v.startsWith("fe8") || v.startsWith("fe9") || v.startsWith("fea") || v.startsWith("feb");
+  }
+  const [a, b] = ip.split(".").map(Number);
+  return (
+    a === 0 || a === 10 || a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) || // carrier-grade NAT
+    (a === 169 && b === 254) || // link-local, cloud metadata
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    a >= 224
+  );
 }

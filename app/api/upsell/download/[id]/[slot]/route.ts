@@ -24,7 +24,7 @@ export async function GET(req: Request, ctx: RouteContext<"/api/upsell/download/
   if (a.viewer === "customer") {
     const jar = await cookies();
     let visitor = jar.get(VISITOR_COOKIE)?.value;
-    if (!visitor) {
+    if (!visitor || !/^[A-Za-z0-9_-]{8,40}$/.test(visitor)) {
       visitor = newVisitorId();
       jar.set(VISITOR_COOKIE, visitor, { httpOnly: true, sameSite: "lax", path: "/", maxAge: VISITOR_MAX_AGE, secure: process.env.NODE_ENV === "production" });
     }

@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { getRepo } from "@/lib/db";
 import { publicOrigin } from "@/lib/publicOrigin";
-import { readAdminSession } from "@/lib/session";
+import { readAdminSection } from "@/lib/session";
 
 /* ==========================================================================
    GET /api/admin/pending-reviews
@@ -61,14 +61,14 @@ function secretMatches(header: string | null): boolean {
 
 export async function GET(request: Request) {
   /* The secret is checked first and short-circuits, so the cookie store is only
-     reached for a caller that did not bring one. `readAdminSession` is wrapped
+     reached for a caller that did not bring one. `readAdminSection` is wrapped
      because reading cookies throws where there is no request scope — a test
      harness, a script — and the only thing that branch can do is GRANT access.
      Treating an unavailable cookie store as "no admin session" is therefore
      both true and the safe direction to fail in. */
   const authorised =
     secretMatches(request.headers.get("x-sync-secret")) ||
-    (await readAdminSession().catch(() => null));
+    (await readAdminSection("users").catch(() => null));
 
   if (!authorised)
     return Response.json(

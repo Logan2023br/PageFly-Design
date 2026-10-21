@@ -14,6 +14,8 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   let body: Record<string, unknown> = {};
+  /* Refused before the body is read, when the size is declared. */
+  if (Number(req.headers.get("content-length") ?? 0) > 8_000) return Response.json({ recorded: false, reason: "too large" });
   try {
     const text = await req.text();
     if (text.length > 8_000) return Response.json({ recorded: false, reason: "too large" });

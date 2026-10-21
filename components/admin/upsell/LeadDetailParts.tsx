@@ -139,7 +139,7 @@ function Frame({ src, device, height = 560, fill = false, title }: { src: string
         key={src}
         src={src}
         title={title}
-        sandbox="allow-scripts allow-same-origin"
+        sandbox="allow-scripts"
         className="absolute left-1/2 top-0 origin-top border-0"
         style={{ width: w, height: `${100 / scale}%`, transform: `translateX(-50%) scale(${scale})` }}
       />

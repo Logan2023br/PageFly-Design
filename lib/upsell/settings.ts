@@ -29,6 +29,14 @@ export const SETTING_DEFAULTS = {
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;
+
+/** What the admin screen shows in place of a saved webhook URL. */
+export const WEBHOOK_MASK = "••••••••";
+
+/** Settings as the admin screen may see them: the webhook is a credential. */
+export function maskSettings<T extends { slack_webhook_url: string }>(s: T): T {
+  return { ...s, slack_webhook_url: s.slack_webhook_url ? WEBHOOK_MASK : "" };
+}
 export type Settings = { [K in SettingKey]: (typeof SETTING_DEFAULTS)[K] extends number ? number : string };
 
 export const SETTING_KEYS = Object.keys(SETTING_DEFAULTS) as SettingKey[];
@@ -84,6 +92,17 @@ export async function saveSettings(patch: Record<string, unknown>): Promise<Sett
       continue;
     }
     const def = SETTING_DEFAULTS[key as SettingKey];
+    if (key === "slack_webhook_url") {
+      const v = String(raw ?? "").trim();
+      /* The masked value the screen shows means "unchanged". */
+      if (v === WEBHOOK_MASK) continue;
+      /* The server POSTs to this URL, so only Slack's own webhook host: any
+         other value would let an admin (or a script acting as one) aim the
+         server at an internal address. */
+      if (v && !/^https:\/\/hooks\.slack\.com\/(services|workflows|triggers)\/[A-Za-z0-9/_-]+$/.test(v)) bad.push(`${key} (phải là https://hooks.slack.com/…)`);
+      else rows.push([key, v]);
+      continue;
+    }
     if (typeof def === "number") {
       const n = typeof raw === "string" ? (raw.trim() === "" ? NaN : Number(raw)) : typeof raw === "number" ? raw : NaN;
       if (!Number.isFinite(n)) bad.push(`${key} (phải là số)`);

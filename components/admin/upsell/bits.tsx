@@ -80,7 +80,7 @@ export function PageThumb({ designId, slot, version, label, height = 220 }: { de
       <iframe
         src={`/upsell/preview/${designId}/${slot}${v}`}
         title={label}
-        sandbox="allow-scripts allow-same-origin"
+        sandbox="allow-scripts"
         loading="lazy"
         tabIndex={-1}
         className="pointer-events-none absolute left-0 top-0 origin-top-left border-0"

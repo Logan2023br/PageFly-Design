@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { clearRateLimit, clientIp, isRateLimited, rateLimited } from "@/lib/rateLimit";
 import { getRepo } from "@/lib/db";
 import {
   DECOY_ADMIN_HASH,
@@ -28,6 +29,13 @@ const bodySchema = z.object({
 
 export type AdminAuthResponse = { ok: true } | { ok: false; error: string };
 
+/* BRUTE FORCE. Failures are counted per address and per username, so neither
+   rotating usernames from one address nor spreading one username's guesses
+   over many addresses gets far. Past the limit nothing is checked — not even a
+   right password — until the window passes. */
+const FAILS = 10;
+const WINDOW = 15 * 60 * 1000;
+
 export async function POST(request: Request) {
   let body: z.infer<typeof bodySchema>;
   try {
@@ -39,6 +47,14 @@ export async function POST(request: Request) {
     );
   }
 
+  const byIp = `admin-login:ip:${clientIp(request)}`;
+  const byUser = `admin-login:user:${body.username.trim().toLowerCase()}`;
+  if (isRateLimited(byIp, FAILS, WINDOW) || isRateLimited(byUser, FAILS, WINDOW))
+    return Response.json(
+      { ok: false, error: "Too many attempts. Try again in 15 minutes." } satisfies AdminAuthResponse,
+      { status: 429 },
+    );
+
   let accountId: string | undefined;
   if (!checkAdminCredentials(body.username, body.password)) {
     const account = await getRepo()
@@ -46,6 +62,8 @@ export async function POST(request: Request) {
       .catch(() => null);
     const ok = verifyAdminPassword(body.password, account?.passwordHash ?? DECOY_ADMIN_HASH);
     if (!account || !ok) {
+      rateLimited(byIp, FAILS, WINDOW);
+      rateLimited(byUser, FAILS, WINDOW);
       /* One message for a wrong username and a wrong password alike — saying
          which was wrong confirms that a username exists. */
       return Response.json(
@@ -56,6 +74,7 @@ export async function POST(request: Request) {
     accountId = account.id;
   }
 
+  clearRateLimit(byUser);
   try {
     await setAdminSession(body.username, accountId);
   } catch (err) {

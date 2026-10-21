@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { MockupBlock, PageMockup } from "@/lib/generate/types";
 import { deviceForWidth } from "@/lib/design/derive";
 import { DesignRender } from "@/lib/design/render";
@@ -228,9 +228,25 @@ export const MockupPage = memo(function MockupPage({
  * move a tall element past a short window. So the frame grows to its content
  * and stays a passive picture, exactly as the tree render does.
  *
- * `srcDoc` keeps it same-origin, which is what makes that measurement legal at
- * all; a cross-origin frame would not hand over `scrollHeight`.
+ * SANDBOXED, WITHOUT SAME-ORIGIN. The document is model output steered by a
+ * merchant's brief, and an admin opens other stores' libraries: a same-origin
+ * frame would run its scripts with the admin's cookies. In an opaque origin it
+ * cannot touch this page, so the height comes the other way — a small script
+ * added to the document posts it up, and only messages from this frame's own
+ * window are believed.
  */
+const HEIGHT_MESSAGE = "pfd-mockup-height";
+const REPORT_HEIGHT =
+  `<script>(function(){function s(){var d=document,b=d.body,e=d.documentElement;` +
+  `var h=Math.max(b?b.scrollHeight:0,e?e.scrollHeight:0);` +
+  `if(h>0)parent.postMessage({type:"${HEIGHT_MESSAGE}",h:h},"*")}` +
+  `addEventListener("load",s);setTimeout(s,0);` +
+  `if(window.ResizeObserver)new ResizeObserver(s).observe(document.documentElement)})();</script>`;
+
+function withHeightReport(html: string): string {
+  return /<\/body>/i.test(html) ? html.replace(/<\/body>(?![\s\S]*<\/body>)/i, `${REPORT_HEIGHT}</body>`) : html + REPORT_HEIGHT;
+}
+
 function HtmlMockup({ html, width, bg }: { html: string; width: number; bg: string }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(900);
@@ -254,35 +270,27 @@ function HtmlMockup({ html, width, bg }: { html: string; width: number; bg: stri
      ==================================================================== */
   /* Links held in place too: a button in a mockup must not walk the frame off
      to a 404. See `lib/stayPut.ts`. */
-  const doc = useMemo(() => stayPut(pinViewportUnits(html, width)), [html, width]);
+  const doc = useMemo(() => withHeightReport(stayPut(pinViewportUnits(html, width))), [html, width]);
 
-  const measure = useCallback(() => {
-    const doc = ref.current?.contentDocument;
-    if (!doc?.body) return;
-    /* `scrollHeight` on both, because a document whose body is floated or
-       absolutely positioned reports 0 on one of them and the real figure on the
-       other. */
-    const h = Math.max(doc.body.scrollHeight, doc.documentElement?.scrollHeight ?? 0);
-    if (h > 0) setHeight(h);
-  }, []);
-
-  /* Re-measured after load AND on the document's own size changes: webfonts
-     land late and reflow the page, and a height taken before they arrive cuts
-     the last section off. */
+  /* The document's own reports, re-sent after load and on every resize of it:
+     webfonts land late and reflow the page, and a height taken before they
+     arrive cuts the last section off. */
   useEffect(() => {
-    const doc = ref.current?.contentDocument;
-    if (!doc?.body || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(measure);
-    ro.observe(doc.body);
-    return () => ro.disconnect();
-  }, [measure, doc, width]);
+    const onMessage = (e: MessageEvent) => {
+      if (e.source !== ref.current?.contentWindow) return;
+      const d = e.data as { type?: unknown; h?: unknown } | null;
+      if (d?.type === HEIGHT_MESSAGE && typeof d.h === "number" && d.h > 0 && d.h < 200_000) setHeight(Math.ceil(d.h));
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
 
   return (
     <iframe
       ref={ref}
       title="Page mockup"
       srcDoc={doc}
-      onLoad={measure}
+      sandbox="allow-scripts"
       scrolling="no"
       style={{ width, height, border: 0, display: "block", background: bg }}
     />

@@ -200,7 +200,7 @@ columns added after a release). Point the app at an empty Postgres and it is rea
    real sign-ins: on serverless the key is otherwise derived from the platform's
    project identifiers, and moving hosts later would sign everyone out once.
 3. **Redeploy** — Vercel does not inject new variables into a running deployment.
-4. Open `/api/health`. Expect `"database": true` and `databaseFrom` naming the
+4. Open `/api/health` signed in as admin (anonymous callers get only `{ ok }`). Expect `"database": true` and `databaseFrom` naming the
    variable in use.
 
 The connection string must be the **pooled** one — `DATABASE_URL` on Neon,
