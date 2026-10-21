@@ -4,7 +4,7 @@ import { designTreeSchema, whyNotASection, type DesignTree } from "../design/sch
 import { pageflyFromTree } from "../design/toPagefly";
 import { loadSkills } from "../ai/skills";
 import { getProvider } from "../ai/provider";
-import { bandMarkup, pageScripts, splitSections } from "./fromHtmlSkill";
+import { bandMarkup, headOf, pageScripts, splitSections } from "./fromHtmlSkill";
 import { featuresInTree, missingFeatures, retryNote, NATIVE_FEATURES, type NativeFeature } from "./nativeFeatures";
 import { pageScriptFor } from "./pageScript";
 
@@ -704,10 +704,7 @@ function keptClasses(value: unknown, into = new Set<string>()): string[] {
   return [...into];
 }
 
-/** Everything in `<head>`: the model reads declared values off the stylesheet. */
-function headOf(html: string): string {
-  return /<head[^>]*>([\s\S]*?)<\/head>/i.exec(html)?.[1]?.trim() ?? "";
-}
+/* `headOf` is the linear one in fromHtmlSkill.ts (see `between` there). */
 
 export type LiveBuild = {
   blob: Blob;

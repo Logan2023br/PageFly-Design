@@ -637,7 +637,7 @@ export async function GET(request: Request) {
       ]);
   } catch (err) {
     return Response.json(
-      { ok: false, error: (err as Error).message } satisfies AnalyticsResponse,
+      { ok: false, error: (console.error("[analytics]", err), "Analytics could not be read — try again.") } satisfies AnalyticsResponse,
       { status: 503 },
     );
   }

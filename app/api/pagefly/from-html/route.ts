@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { pageflyFromHtmlSkill, splitSections } from "@/lib/pagefly/fromHtmlSkill";
+import { headOf, pageflyFromHtmlSkill, splitSections } from "@/lib/pagefly/fromHtmlSkill";
 import { pageflyFromHtmlLive } from "@/lib/pagefly/htmlToTree";
 import { currentAccount } from "@/lib/account";
 import { getRepo } from "@/lib/db";
 import { keyForHtml } from "@/lib/pagefly/prepared";
 import { ownerFor } from "@/lib/pagefly/fileScope";
-import { readAdminSession } from "@/lib/session";
+import { readAdminSection } from "@/lib/session";
 import { flushMeter, withMeter } from "@/lib/ai/meter";
 import { clientIp, rateLimited } from "@/lib/rateLimit";
 
@@ -35,11 +35,13 @@ export const maxDuration = 300;
    of thousands of sections, in a loop, on the operator's key. */
 const MAX_HTML_CHARS = 2_000_000;
 const MAX_BANDS = 40;
+/* Every band's call carries the whole <head> again, so it is capped too. */
+const MAX_HEAD_CHARS = 300_000;
 const PER_HOUR = 30;
 
 export async function POST(req: Request): Promise<Response> {
   const account = await currentAccount().catch(() => null);
-  const admin = Boolean(await readAdminSession().catch(() => false));
+  const admin = Boolean(await readAdminSection("users").catch(() => false));
   if (!account && !admin) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
   const who = admin ? `admin:${clientIp(req)}` : `store:${account!.domain}`;
   if (rateLimited(`from-html:${who}`, PER_HOUR, 60 * 60 * 1000))
@@ -75,6 +77,8 @@ export async function POST(req: Request): Promise<Response> {
     return NextResponse.json({ error: "no html to convert" }, { status: 400 });
   if (html.length > MAX_HTML_CHARS)
     return NextResponse.json({ error: "The page is too large to convert." }, { status: 413 });
+  if (headOf(html).length > MAX_HEAD_CHARS)
+    return NextResponse.json({ error: "The page's <head> is too large to convert." }, { status: 413 });
   if (splitSections(html).length > MAX_BANDS)
     return NextResponse.json({ error: `The page has more than ${MAX_BANDS} sections.` }, { status: 413 });
 

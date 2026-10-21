@@ -32,25 +32,53 @@ export type CleanBlock = {
    real Shopify Form2, and a decorative lookalike collecting nothing is worse
    than no form at all. */
 const BANNED_TAGS =
-  /<\s*\/?\s*(script|iframe|object|embed|form|link|meta|base|applet|frame|frameset|noscript)\b[^>]*>/gi;
+  /<\s*\/?\s*(script|iframe|object|embed|form|link|meta|base|applet|frame|frameset|noscript|template|portal|math|style|animate|set|animatemotion|animatetransform|isindex)\b[^>]*>/gi;
 
 /** `<script>alert(1)</script>` — the contents go too, not just the tags. */
 const SCRIPT_BLOCK = /<script\b[\s\S]*?<\/\s*script\s*>/gi;
 
 /* `onclick=`, `onerror=`, `onload=`. Quoted, unquoted, spaced — all of them.
    `onerror` on an `<img>` is the oldest accident in the book. */
-const EVENT_ATTR = /\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
+/* After whitespace, a slash or a quote: `<img src="x"/onerror=…>` and
+   `<svg/onload=…>` separate the attribute with `/`, not a space. */
+const EVENT_ATTR = /([\s/"'])on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
 
 /** `href="javascript:…"`, `src="data:text/html,…"` */
-const DANGEROUS_URL = /\s(?:href|src|xlink:href)\s*=\s*(?:"|')?\s*(?:javascript|vbscript|data:text\/html)[^"'\s>]*(?:"|')?/gi;
+const DANGEROUS_URL = /([\s/"'])(?:href|src|xlink:href|action|formaction|srcdoc|data)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
+
+/* A URL is dangerous if, once entities, control characters and whitespace a
+   browser ignores are taken out, it starts with a script scheme —
+   `jav&#x61;script:` and `java\tscript:` are both `javascript:`. */
+function scriptUrl(attr: string): boolean {
+  const value = attr.replace(/^[\s/"']*[\w:-]+\s*=\s*/, "").replace(/^["']|["']$/g, "");
+  const decoded = value
+    .replace(/&#x([0-9a-f]+);?/gi, (_, h: string) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/&#(\d+);?/g, (_, d: string) => String.fromCharCode(Number(d)))
+    .replace(/&(colon|tab|newline);/gi, (_, n: string) => ({ colon: ":", tab: "\t", newline: "\n" })[n.toLowerCase() as "colon" | "tab" | "newline"])
+    .replace(/[\u0000-\u0020]+/g, "")
+    .toLowerCase();
+  return /^(javascript|vbscript|data:text\/html|data:image\/svg)/.test(decoded);
+}
 
 export function cleanHtml(raw: string): string {
+  /* UNTIL NOTHING CHANGES. One pass of each pattern can be fooled by markup
+     that reassembles itself once a piece is cut out — `<ifr<iframe>ame …>`
+     becomes `<iframe …>`. Repeating until the text is stable closes that. */
+  let out = raw;
+  for (let i = 0; i < 10; i++) {
+    const next = cleanOnce(out);
+    if (next === out) break;
+    out = next;
+  }
+  return out.trim();
+}
+
+function cleanOnce(raw: string): string {
   return raw
     .replace(SCRIPT_BLOCK, "")
     .replace(BANNED_TAGS, "")
-    .replace(EVENT_ATTR, "")
-    .replace(DANGEROUS_URL, "")
-    .trim();
+    .replace(EVENT_ATTR, "$1")
+    .replace(DANGEROUS_URL, (m: string, lead: string) => (/^[\s/"']*srcdoc/i.test(m) || scriptUrl(m) ? lead : m));
 }
 
 /**

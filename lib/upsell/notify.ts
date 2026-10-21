@@ -2,7 +2,7 @@ import "server-only";
 
 import { upsellOrigin } from "./common";
 import { db } from "./db";
-import { getInternal, getSettings, setInternal } from "./settings";
+import { SLACK_WEBHOOK, getInternal, getSettings, setInternal } from "./settings";
 
 /* ==========================================================================
    Slack: "there is something to review" — or a message the script could not
@@ -33,6 +33,12 @@ export async function notifySlack(kind: Kind): Promise<void> {
 export async function flushSlack(): Promise<boolean> {
   const cfg = await getSettings();
   if (!cfg.slack_webhook_url) return false;
+  /* Checked again at send time: a value saved before the setting was
+     restricted to Slack's host is not trusted either. */
+  /* The one exception is a test run pointing it at a local stub — never in
+     production, whatever the environment says. */
+  const testStub = process.env.NODE_ENV !== "production" && process.env.UPSELL_SLACK_TEST_STUB === "1";
+  if (!SLACK_WEBHOOK.test(cfg.slack_webhook_url) && !testStub) return false;
   const pending = ((await getInternal("slack_pending")) as Kind[] | null) ?? [];
   if (pending.length === 0) return false;
   const last = Number((await getInternal("slack_last_at")) ?? 0);

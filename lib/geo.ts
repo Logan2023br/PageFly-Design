@@ -1,5 +1,7 @@
 import "server-only";
 
+import { clientIp as trustedClientIp } from "./rateLimit";
+
 /* ==========================================================================
    WHICH COUNTRY A REQUEST CAME FROM.
 
@@ -91,9 +93,10 @@ function fromHeader(request: Request): string | null {
  * forged header can do here is put a press in the wrong country.
  */
 function clientIp(request: Request): string | null {
-  const forwarded = request.headers.get("x-forwarded-for");
-  const first = forwarded?.split(",")[0]?.trim();
-  const ip = first || request.headers.get("x-real-ip")?.trim() || null;
+  /* The same address the rate limits use — the proxy's hop, not the
+     client-written first entry (see lib/rateLimit.ts). */
+  const found = trustedClientIp(request);
+  const ip = found === "unknown" ? null : found;
   if (!ip) return null;
 
   /* A private or loopback address has no country and asking costs a round trip

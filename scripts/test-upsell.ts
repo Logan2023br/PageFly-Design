@@ -35,6 +35,8 @@ process.env.DATABASE_URL = url;
 process.env.UPSELL_STORAGE_DIR = mkdtempSync(join(tmpdir(), "pfd-upsell-test-"));
 process.env.UPSELL_API_KEY = "test-key-0123456789abcdef";
 process.env.PFD_PUBLIC_URL = "https://pfd.test";
+/* Slack is posted to a local stub in the failures section (see notify.ts). */
+process.env.UPSELL_SLACK_TEST_STUB = "1";
 
 let failures = 0;
 function check(ok: boolean, label: string, detail: unknown = null): void {

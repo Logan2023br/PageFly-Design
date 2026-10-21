@@ -53,7 +53,10 @@ function safeNext(next: string | undefined): string {
   if (!next || !next.startsWith("/") || next.startsWith("//") || /[\\\s]/.test(next)) return "/design";
   try {
     const u = new URL(next, "https://same.invalid");
-    return u.origin === "https://same.invalid" ? `${u.pathname}${u.search}${u.hash}` : "/design";
+    const out = `${u.pathname}${u.search}${u.hash}`;
+    /* Checked again AFTER normalising: `/..//evil.com` resolves to the path
+       `//evil.com`, which a browser reads as another site. */
+    return u.origin === "https://same.invalid" && !out.startsWith("//") && !out.includes("\\") ? out : "/design";
   } catch {
     return "/design";
   }

@@ -28,7 +28,10 @@ export async function POST(req: Request) {
         else if (b.kind === "messages") await approveMessage(id, { send_mode: mode }, actor);
         else throw new UpsellError("kind must be leads or messages.");
       } catch (err) {
-        failed.push({ id, error: err instanceof Error ? err.message : String(err) });
+        /* The app's own refusals (already sent, not found) are worth reading;
+           anything else is logged, not echoed. */
+        if (!(err instanceof UpsellError)) console.error("[upsell] bulk", err);
+        failed.push({ id, error: err instanceof UpsellError ? err.message : "Server error" });
       }
     }
     return json({ ok: true, approved: ids.length - failed.length, failed });

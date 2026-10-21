@@ -75,8 +75,13 @@ export async function trackCustomerEvent(input: TrackInput, ctx: TrackContext): 
   if (isBot(ctx.userAgent)) return { recorded: false, reason: "bot" };
   /* Per visitor, and per address — a new visitor cookie on every request
      must not mean a new allowance. */
-  if (rateLimited(`ev:${ctx.visitorId}`, 30)) return { recorded: false, reason: "rate limited" };
+  /* Only an id this system could have made keys a limit (8 of the design
+     alphabet), so a body cannot park kilobytes of junk in the limiter. The
+     address is checked first, so a flood of fresh visitor cookies from one
+     place stops there rather than each minting a key. */
+  if (!/^[2-9A-HJ-NP-Z]{8}$/.test(input.id)) return { recorded: false, reason: "not visible" };
   if (ctx.ip && rateLimited(`ev-ip:${ctx.ip}`, 60)) return { recorded: false, reason: "rate limited" };
+  if (rateLimited(`ev:${ctx.visitorId}`, 30)) return { recorded: false, reason: "rate limited" };
   if (rateLimited(`ev-design:${input.id}`, 300)) return { recorded: false, reason: "rate limited" };
 
   const p = await db();

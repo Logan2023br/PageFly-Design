@@ -1,7 +1,7 @@
 import { currentAccount } from "@/lib/account";
 import { getRepo } from "@/lib/db";
 import { ownerFor } from "@/lib/pagefly/fileScope";
-import { readAdminSession } from "@/lib/session";
+import { readAdminSection } from "@/lib/session";
 
 /* ==========================================================================
    GET /api/pagefly/file?key=…   the file this page was already converted into
@@ -23,7 +23,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: Request): Promise<Response> {
   const url = new URL(req.url);
-  const [account, admin] = await Promise.all([currentAccount(), readAdminSession()]);
+  const [account, admin] = await Promise.all([currentAccount(), readAdminSection("users")]);
   const owner = ownerFor({
     session: account?.domain ?? null,
     admin: Boolean(admin),
@@ -40,7 +40,9 @@ export async function GET(req: Request): Promise<Response> {
   return new Response(new Uint8Array(file.bytes), {
     headers: {
       "content-type": "application/octet-stream",
-      "content-disposition": `attachment; filename="${file.filename.replace(/"/g, "")}"`,
+      /* ASCII only: a header cannot carry Vietnamese or emoji, and a quote or
+         line break would break it. */
+      "content-disposition": `attachment; filename="${file.filename.replace(/[^\w.-]+/g, "-")}"`,
       /* The document is in the key, so the bytes for a key never change. */
       "cache-control": "private, max-age=31536000, immutable",
     },

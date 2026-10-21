@@ -163,9 +163,14 @@ export async function uploadDesign(f: UploadFields, files: UploadFiles, actor = 
  * Loaded through a computed specifier so the bundler does not try to resolve
  * a package that is not installed.
  */
+/** What a thumbnail may load: data URIs and the public CDNs pages use. */
+const THUMB_HOSTS =
+  /^(data:|https:\/\/(cdn\.shopify\.com|[a-z0-9-]+\.myshopify\.com|fonts\.googleapis\.com|fonts\.gstatic\.com|images\.unsplash\.com|images\.pexels\.com|cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net)\/)/i;
+
 export async function captureMissingThumbs(designId: string, version: number, slots: number[]): Promise<number> {
   if (slots.length === 0) return 0;
-  type Pw = { chromium: { launch: (o: object) => Promise<{ newPage: (o: object) => Promise<{ setContent: (h: string, o: object) => Promise<void>; screenshot: (o: object) => Promise<Buffer> }>; close: () => Promise<void> }> } };
+  type PwRoute = { request: () => { url: () => string }; continue: () => Promise<void>; abort: () => Promise<void> };
+  type Pw = { chromium: { launch: (o: object) => Promise<{ newPage: (o: object) => Promise<{ route: (pattern: string, h: (r: PwRoute) => Promise<void>) => Promise<void>; setContent: (h: string, o: object) => Promise<void>; screenshot: (o: object) => Promise<Buffer> }>; close: () => Promise<void> }> } };
   let pw: Pw;
   try {
     const load = new Function("m", "return import(m)") as (m: string) => Promise<Pw>;
@@ -181,7 +186,11 @@ export async function captureMissingThumbs(designId: string, version: number, sl
       const { rows } = await p.query<PageRow>("select * from upsell_pages where design_id=$1 and version=$2 and slot=$3", [designId, version, slot]);
       const html = await getFile(rows[0]?.html_path ?? null);
       if (!html) continue;
-      const page = await browser.newPage({ viewport: { width: 1280, height: 1600 } });
+      /* The HTML is model output built from a merchant's storefront. It is
+         drawn, not run: no JavaScript, and only https requests to the CDNs a
+         page's images and fonts come from — never this server's network. */
+      const page = await browser.newPage({ viewport: { width: 1280, height: 1600 }, javaScriptEnabled: false });
+      await page.route("**/*", (r) => (THUMB_HOSTS.test(r.request().url()) ? r.continue() : r.abort()));
       await page.setContent(html.toString("utf8"), { waitUntil: "networkidle", timeout: 30_000 }).catch(() => undefined);
       const png = await page.screenshot({ type: "png", clip: { x: 0, y: 0, width: 1280, height: 1600 } });
       const rel = relPath(designId, version, slot, "png");

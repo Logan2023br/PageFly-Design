@@ -30,6 +30,9 @@ export const SETTING_DEFAULTS = {
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;
 
+/** The only webhook the server will POST to: Slack's own host. */
+export const SLACK_WEBHOOK = /^https:\/\/hooks\.slack\.com\/(services|workflows|triggers)\/[A-Za-z0-9/_-]+$/;
+
 /** What the admin screen shows in place of a saved webhook URL. */
 export const WEBHOOK_MASK = "••••••••";
 
@@ -69,7 +72,7 @@ export async function getSettings(c?: Db): Promise<Settings> {
   );
   const out: Record<string, unknown> = { ...SETTING_DEFAULTS };
   for (const r of rows) {
-    if (!(r.key in SETTING_DEFAULTS)) continue;
+    if (!Object.hasOwn(SETTING_DEFAULTS, r.key)) continue;
     const def = SETTING_DEFAULTS[r.key as SettingKey];
     out[r.key] = typeof def === "number" ? Number(r.value) : String(r.value ?? "");
     if (typeof def === "number" && !Number.isFinite(out[r.key])) out[r.key] = def;
@@ -87,7 +90,8 @@ export async function saveSettings(patch: Record<string, unknown>): Promise<Sett
   const rows: [SettingKey, number | string][] = [];
   const bad: string[] = [];
   for (const [key, raw] of Object.entries(patch)) {
-    if (!(key in SETTING_DEFAULTS)) {
+    /* Own keys only: `in` would also accept "toString" and "constructor". */
+    if (!Object.hasOwn(SETTING_DEFAULTS, key)) {
       bad.push(`${key} (không có setting này)`);
       continue;
     }
@@ -99,7 +103,7 @@ export async function saveSettings(patch: Record<string, unknown>): Promise<Sett
       /* The server POSTs to this URL, so only Slack's own webhook host: any
          other value would let an admin (or a script acting as one) aim the
          server at an internal address. */
-      if (v && !/^https:\/\/hooks\.slack\.com\/(services|workflows|triggers)\/[A-Za-z0-9/_-]+$/.test(v)) bad.push(`${key} (phải là https://hooks.slack.com/…)`);
+      if (v && !SLACK_WEBHOOK.test(v)) bad.push(`${key} (phải là https://hooks.slack.com/…)`);
       else rows.push([key, v]);
       continue;
     }

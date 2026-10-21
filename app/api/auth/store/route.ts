@@ -12,7 +12,7 @@ import { storeExists } from "@/lib/storeExists";
 import { NO_REGISTER_USER_TYPE } from "@/lib/db/types";
 import { trackServer } from "@/lib/analyticsServer";
 import { EV } from "@/lib/analytics";
-import { clientIp, rateLimited } from "@/lib/rateLimit";
+import { clientIp, signInLimits } from "@/lib/rateLimit";
 
 /* ==========================================================================
    POST /api/auth/store   sign in with a store domain
@@ -90,7 +90,7 @@ const PER_ADDRESS = 30;
 const WINDOW = 15 * 60 * 1000;
 
 export async function POST(request: Request) {
-  if (rateLimited(`store-login:${clientIp(request)}`, PER_ADDRESS, WINDOW))
+  if (signInLimits.hit(`store-login:${clientIp(request)}`, PER_ADDRESS, WINDOW))
     return Response.json(
       { ok: false, error: "Too many attempts. Try again in a few minutes." } satisfies StoreAuthResponse,
       { status: 429 },

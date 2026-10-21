@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { cache } from "react";
 import { ALL_ADMIN_SECTIONS, type AdminSection } from "./adminSections";
 import { getRepo } from "./db";
@@ -346,11 +346,30 @@ export async function clearReferralSession(): Promise<void> {
  * permissions are looked up by on every request; without it the sign-in is
  * the owner's (ADMIN_USERNAME), which opens every section.
  */
-export async function setAdminSession(username?: string, account?: string): Promise<void> {
+/* ==========================================================================
+   A CHANGED PASSWORD ENDS THE SESSIONS IT OPENED.
+
+   The cookie carries a short fingerprint of the credential it was issued for
+   (`pv`) — the account's stored hash, or the owner's configured pair — and
+   every read compares it with the current one. Change the password (or the
+   owner's ADMIN_PASSWORD) and every cookie signed in with the old one stops
+   working on its next request, instead of living out its twelve hours.
+   ========================================================================== */
+const fingerprint = (value: string) => createHash("sha256").update(`pfd-admin-pv|${value}`).digest("base64url").slice(0, 16);
+
+export function ownerFingerprint(): string {
+  return fingerprint(`owner|${process.env.ADMIN_USERNAME ?? "admin"}|${process.env.ADMIN_PASSWORD ?? "pf123456"}`);
+}
+
+export function accountFingerprint(passwordHash: string): string {
+  return fingerprint(`account|${passwordHash}`);
+}
+
+export async function setAdminSession(username?: string, account?: string, pv?: string): Promise<void> {
   const jar = await cookies();
   jar.set(
     ADMIN_COOKIE,
-    seal({ admin: true, u: username?.slice(0, 120), acct: account, iat: Date.now() }),
+    seal({ admin: true, u: username?.slice(0, 120), acct: account, pv, iat: Date.now() }),
     { ...COOKIE_OPTIONS, maxAge: ADMIN_MAX_AGE },
   );
 }
@@ -371,16 +390,19 @@ export type AdminIdentity = {
  */
 export const readAdmin = cache(async (): Promise<AdminIdentity | null> => {
   const jar = await cookies();
-  const data = unseal<{ admin: boolean; u?: string; acct?: string }>(
+  const data = unseal<{ admin: boolean; u?: string; acct?: string; pv?: string }>(
     jar.get(ADMIN_COOKIE)?.value,
     ADMIN_MAX_AGE,
   );
   if (data?.admin !== true) return null;
-  if (!data.acct) return { username: data.u ?? null, accountId: null, sections: ALL_ADMIN_SECTIONS };
+  if (!data.acct) {
+    if (data.pv !== ownerFingerprint()) return null;
+    return { username: data.u ?? null, accountId: null, sections: ALL_ADMIN_SECTIONS };
+  }
   const account = await getRepo()
     .getAdminAccount(data.acct)
     .catch(() => null);
-  if (!account) return null;
+  if (!account || data.pv !== accountFingerprint(account.passwordHash)) return null;
   return { username: account.username, accountId: account.id, sections: account.sections };
 });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, Fragment, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
+import { createContext, Fragment, useContext, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { cleanBlock } from "./customBlock";
 import { MOTION_CSS, motionClasses } from "./motion";
@@ -809,6 +809,14 @@ function CustomBlock({ node, cls }: { node: Extract<DesignNode, { type: "custom"
      that without threading a counter through every component. */
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const clean = useMemo(() => cleanBlock(node, 0), [node]);
+  /* A SECOND, STRUCTURAL PASS, in the browser only. The regex clean above is
+     shared with the export; here the markup is also parsed by the browser's
+     own (inert) parser and every handler, script URL and embedding element
+     is removed from the real DOM — what a regex might misread, the parser
+     cannot. Nothing is drawn from the server render: until it runs, the
+     block is empty, so no unparsed markup ever reaches this origin. */
+  const inBrowser = useSyncExternalStore(noSubscribe, () => true, () => false);
+  const safeHtml = useMemo(() => (inBrowser ? domSanitize(clean.html) : ""), [inBrowser, clean.html]);
   const className = `pfd-c-${uid}`;
   const css = useMemo(
     () => clean.css.replaceAll(".pfd-c-0", `.${className}`),
@@ -831,7 +839,7 @@ function CustomBlock({ node, cls }: { node: Extract<DesignNode, { type: "custom"
       style={{ width: "100%", ...sx(node, device) }}
     >
       {css && <style>{css}</style>}
-      <div dangerouslySetInnerHTML={{ __html: clean.html }} />
+      <div dangerouslySetInnerHTML={{ __html: safeHtml }} />
     </div>
   );
 }
@@ -1556,4 +1564,32 @@ export function DesignRender({
       </div>
     </DesignCtx.Provider>
   );
+}
+
+/* ---- custom block markup, cleaned by the browser's parser ------------------ */
+
+/** For useSyncExternalStore: "am I in the browser" never changes. */
+const noSubscribe = () => () => {};
+
+const DOM_BANNED =
+  "script,iframe,object,embed,form,link,meta,base,applet,frame,frameset,noscript,template,portal,style,math,animate,set,animatemotion,animatetransform,handler,listener,isindex";
+const URL_ATTRS = new Set(["href", "src", "xlink:href", "action", "formaction", "data", "poster", "background"]);
+
+function domSanitize(html: string): string {
+  if (typeof DOMParser === "undefined" || !html) return "";
+  /* DOMParser documents are inert: no script runs, no image loads. */
+  const doc = new DOMParser().parseFromString(`<body>${html}</body>`, "text/html");
+  doc.querySelectorAll(DOM_BANNED).forEach((el) => el.remove());
+  doc.body.querySelectorAll("*").forEach((el) => {
+    for (const attr of Array.from(el.attributes)) {
+      const name = attr.name.toLowerCase();
+      const value = attr.value.replace(/[\u0000-\u0020]+/g, "").toLowerCase();
+      /* URLs are allowed, not denied: web, mail, phone, in-page, relative, and
+         raster images — any other scheme is dropped. */
+      const safeUrl = /^(https?:|mailto:|tel:|#|\/(?!\/)|\.{0,2}\/|data:image\/(png|jpe?g|gif|webp|avif);)/.test(value) || !/^[a-z][a-z0-9+.-]*:/.test(value);
+      if (name.startsWith("on") || name === "srcdoc" || name === "formaction" || (URL_ATTRS.has(name) && !safeUrl))
+        el.removeAttribute(attr.name);
+    }
+  });
+  return doc.body.innerHTML;
 }

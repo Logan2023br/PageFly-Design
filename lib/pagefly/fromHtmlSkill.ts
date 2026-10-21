@@ -75,7 +75,7 @@ const ASK = [
    written, not only the ones written after the prompt changed.
    ========================================================================== */
 export function splitSections(html: string): string[] {
-  const body = /<body[^>]*>([\s\S]*)<\/body>/i.exec(html)?.[1] ?? html;
+  const body = bodyOf(html);
 
   /* `<main>` is the page's own content by definition — everything the theme
      does not already provide. Where the mockup marks one, nothing outside it is
@@ -177,26 +177,34 @@ function stripChrome(html: string): string {
  * which would cut a band in half and hand the model an unbalanced fragment.
  */
 function outermost(html: string, tags: string[]): string[] {
-  const open = new RegExp(`<(${tags.join("|")})\\b[^>]*>`, "gi");
+  /* LINEAR, ON ANY INPUT. Tag names are found by a pattern with nothing that
+     can backtrack, and each tag's `>` by `indexOf`; a tag with no `>` after it,
+     or an element that never finds its `</tag>`, ends the search instead of
+     letting every later opening rescan the rest of the document. A hostile
+     2 MB document costs one pass, not billions of steps. */
+  const open = new RegExp(`<(${tags.join("|")})\\b`, "gi");
   const found: string[] = [];
   let m: RegExpExecArray | null;
 
   while ((m = open.exec(html)) !== null) {
     const tag = m[1].toLowerCase();
-    const step = new RegExp(`<${tag}\\b[^>]*>|</${tag}>`, "gi");
+    const step = new RegExp(`<(/?)${tag}\\b`, "gi");
     step.lastIndex = m.index;
     let depth = 0;
     let end = -1;
     let s: RegExpExecArray | null;
     while ((s = step.exec(html)) !== null) {
-      if (s[0].startsWith("</")) {
+      const gt = html.indexOf(">", s.index);
+      if (gt < 0) break;
+      if (s[1] === "/") {
         if (--depth === 0) {
-          end = s.index + s[0].length;
+          end = gt + 1;
           break;
         }
       } else depth++;
+      step.lastIndex = gt + 1;
     }
-    if (end < 0) continue;
+    if (end < 0) break;
     found.push(html.slice(m.index, end));
     /* Past the whole band, so nothing inside it is picked up again. */
     open.lastIndex = end;
@@ -205,8 +213,25 @@ function outermost(html: string, tags: string[]): string[] {
 }
 
 /** Everything in `<head>`: the model needs the stylesheet to read values off. */
-function headOf(html: string): string {
-  return /<head[^>]*>([\s\S]*?)<\/head>/i.exec(html)?.[1]?.trim() ?? "";
+export function headOf(html: string): string {
+  return between(html, "head", "first")?.trim() ?? "";
+}
+
+/** The body's content, or the whole document when it has no body. */
+export function bodyOf(html: string): string {
+  return between(html, "body", "last") ?? html;
+}
+
+/* By index, not by a `[\s\S]*` regex: on `<body><body><body>…` with no
+   closing tag a backtracking pattern retries from every opening — minutes of
+   a blocked process for half a megabyte. Here it is one search each way. */
+function between(html: string, tag: "head" | "body", close: "first" | "last"): string | null {
+  const open = new RegExp(`<${tag}\\b[^>]{0,4000}>`, "i").exec(html);
+  if (!open) return null;
+  const from = open.index + open[0].length;
+  const lower = html.toLowerCase();
+  const end = close === "first" ? lower.indexOf(`</${tag}>`, from) : lower.lastIndexOf(`</${tag}>`);
+  return end >= from ? html.slice(from, end) : null;
 }
 
 /* ==========================================================================

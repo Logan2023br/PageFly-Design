@@ -80,7 +80,12 @@ export function fail(err: unknown): Response {
   return json({ ok: false, error: "Server error — try again." }, 500);
 }
 
+/* A JSON body for these routes is a few kilobytes; leads/messages batches
+   are the largest, at a few hundred KB. Refused when declared larger. */
+const MAX_JSON_BYTES = 2_000_000;
+
 export async function readJson(req: Request): Promise<Record<string, unknown>> {
+  if (Number(req.headers.get("content-length") ?? 0) > MAX_JSON_BYTES) throw new UpsellError("The body is too large.", 413);
   try {
     const body = await req.json();
     if (body && typeof body === "object" && !Array.isArray(body)) return body as Record<string, unknown>;

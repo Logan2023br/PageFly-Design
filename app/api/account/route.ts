@@ -27,7 +27,7 @@ export async function GET() {
     return Response.json({ ok: true, account } satisfies AccountResponse);
   } catch (err) {
     return Response.json(
-      { ok: false, error: (err as Error).message } satisfies AccountResponse,
+      { ok: false, error: (console.error("[account]", err), "Could not read the account — try again.") } satisfies AccountResponse,
       { status: 500 },
     );
   }

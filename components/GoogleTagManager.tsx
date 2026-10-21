@@ -87,7 +87,10 @@ export function GoogleTagManagerHead() {
          `gtm.start` timestamp and the `gtm.js` event, which are what container
          triggers fire on. */
       dangerouslySetInnerHTML={{
-        __html: `(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+        /* NOT ON ADMIN SCREENS. Anyone who can publish in the container
+           could otherwise run script in an admin's session, and tags would
+           see lead emails and phones in the page and its URLs. */
+        __html: `var p=typeof location=='undefined'?'':location.pathname;if(!(p.indexOf('/design/admin')===0||p.indexOf('/admin')===0))(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
 new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
 j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);

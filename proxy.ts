@@ -63,8 +63,9 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  /* The merchant-facing screens (redirect to sign-in), and the cookie-acting
-     APIs (CSRF check only — they answer 401 JSON themselves, so fetch callers
-     can react). /design/login must stay reachable while signed out. */
-  matcher: ["/design", "/design/library", "/api/admin/:path*", "/api/auth/:path*", "/api/account"],
+  /* The merchant-facing screens (redirect to sign-in), and every API (CSRF
+     check only — routes answer 401 JSON themselves, so fetch callers can
+     react). Key-authenticated callers (the BPU scripts, the sync) are not
+     browsers and send no Sec-Fetch-Site or Origin, so they pass. */
+  matcher: ["/design", "/design/library", "/api/:path*"],
 };

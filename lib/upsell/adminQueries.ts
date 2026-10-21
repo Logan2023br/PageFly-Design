@@ -73,7 +73,7 @@ function leadWhere(f: Filters, col: string, alias = "l"): { sql: string[]; param
   if (f.cat?.trim()) add((n) => `${alias}.category_hint ilike $${n}`, `%${f.cat.trim()}%`);
   if (f.min_score && Number.isFinite(Number(f.min_score))) add((n) => `${alias}.lead_score >= $${n}`, Number(f.min_score));
   /* Leads only (alias l): installs have no design to have been viewed. */
-  if (alias === "l" && f.act && f.act in LEAD_ACTIVITY) sql.push(`(${LEAD_ACTIVITY[f.act as keyof typeof LEAD_ACTIVITY].sql})`);
+  if (alias === "l" && f.act && Object.hasOwn(LEAD_ACTIVITY, f.act)) sql.push(`(${LEAD_ACTIVITY[f.act as keyof typeof LEAD_ACTIVITY].sql})`);
   return { sql, params };
 }
 

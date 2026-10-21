@@ -38,7 +38,10 @@ export async function GET(
   const [, pageSlug, kind] = m as unknown as [string, string, "html" | "pagefly"];
 
   /* A re-exported built-in page reaches the table before it is read. */
-  await refreshBuiltInPages(new URL(request.url).origin);
+  /* The fallback origin is the configured one, never the request's: a Host
+     header is the caller's to write, and the file fetched would be stored
+     as the set's public download. Without PFD_PUBLIC_URL, disk only. */
+  await refreshBuiltInPages(process.env.PFD_PUBLIC_URL?.trim() || undefined);
 
   const repo = getRepo();
   const set = await repo.getCollectionSetBySlug(setSlug).catch(() => null);

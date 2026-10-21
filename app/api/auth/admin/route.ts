@@ -1,8 +1,10 @@
 import { z } from "zod";
-import { clearRateLimit, clientIp, isRateLimited, rateLimited } from "@/lib/rateLimit";
+import { clientIp, signInLimits } from "@/lib/rateLimit";
 import { getRepo } from "@/lib/db";
 import {
   DECOY_ADMIN_HASH,
+  accountFingerprint,
+  ownerFingerprint,
   MissingSecretError,
   checkAdminCredentials,
   clearAdminSession,
@@ -29,11 +31,14 @@ const bodySchema = z.object({
 
 export type AdminAuthResponse = { ok: true } | { ok: false; error: string };
 
-/* BRUTE FORCE. Failures are counted per address and per username, so neither
-   rotating usernames from one address nor spreading one username's guesses
-   over many addresses gets far. Past the limit nothing is checked — not even a
-   right password — until the window passes. */
+/* BRUTE FORCE. Failures are counted per address (10) and per username (30),
+   so neither rotating usernames from one address nor spreading one
+   username's guesses over many addresses gets far. The username limit is
+   the higher one because anyone can spend it: set at 10, ten wrong guesses
+   from anywhere would lock the real owner out. Past a limit nothing is
+   checked — not even a right password — until the window passes. */
 const FAILS = 10;
+const USER_FAILS = 30;
 const WINDOW = 15 * 60 * 1000;
 
 export async function POST(request: Request) {
@@ -49,21 +54,22 @@ export async function POST(request: Request) {
 
   const byIp = `admin-login:ip:${clientIp(request)}`;
   const byUser = `admin-login:user:${body.username.trim().toLowerCase()}`;
-  if (isRateLimited(byIp, FAILS, WINDOW) || isRateLimited(byUser, FAILS, WINDOW))
+  if (signInLimits.isLimited(byIp, FAILS, WINDOW) || signInLimits.isLimited(byUser, USER_FAILS, WINDOW))
     return Response.json(
       { ok: false, error: "Too many attempts. Try again in 15 minutes." } satisfies AdminAuthResponse,
       { status: 429 },
     );
 
   let accountId: string | undefined;
+  let pv = ownerFingerprint();
   if (!checkAdminCredentials(body.username, body.password)) {
     const account = await getRepo()
       .getAdminAccountByUsername(body.username)
       .catch(() => null);
     const ok = verifyAdminPassword(body.password, account?.passwordHash ?? DECOY_ADMIN_HASH);
     if (!account || !ok) {
-      rateLimited(byIp, FAILS, WINDOW);
-      rateLimited(byUser, FAILS, WINDOW);
+      signInLimits.hit(byIp, FAILS, WINDOW);
+      signInLimits.hit(byUser, USER_FAILS, WINDOW);
       /* One message for a wrong username and a wrong password alike — saying
          which was wrong confirms that a username exists. */
       return Response.json(
@@ -72,11 +78,12 @@ export async function POST(request: Request) {
       );
     }
     accountId = account.id;
+    pv = accountFingerprint(account.passwordHash);
   }
 
-  clearRateLimit(byUser);
+  signInLimits.clear(byUser);
   try {
-    await setAdminSession(body.username, accountId);
+    await setAdminSession(body.username, accountId, pv);
   } catch (err) {
     if (err instanceof MissingSecretError)
       return Response.json(
