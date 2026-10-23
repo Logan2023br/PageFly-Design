@@ -1,7 +1,7 @@
 # Prompt cho routine "Claude Build" (collection page sets)
 
 > Dán toàn bộ phần dưới đường kẻ vào Instructions của routine.
-> Routine cần: repo `Logan2023br/PageFly-Design`, biến môi trường `PFD_API_KEY` (= `COLLECTIONS_API_KEY` trên server) và tuỳ chọn `PFD_BASE`.
+> Routine cần: repo `Logan2023br/PageFly-Design`, biến môi trường `PFD_API_KEY` (= `CLAUDE_BUILD_API_KEY` trên server — key riêng của Claude Build) và tuỳ chọn `PFD_BASE`.
 > Trigger: thêm **API** (để nút "Start build" gọi ngay) và có thể giữ thêm một lịch chạy (ví dụ mỗi giờ) làm dự phòng.
 > Tiêu chí build KHÔNG nằm ở đây: admin viết trong Admin → Collection pages → Claude Build → "Tiêu chí build", routine đọc qua API.
 

@@ -22,6 +22,21 @@ function check(ok: boolean, label: string, detail: unknown = null): void {
 }
 
 (async () => {
+  console.log("claude build key");
+  {
+    process.env.CLAUDE_BUILD_API_KEY = "b".repeat(40);
+    process.env.COLLECTIONS_API_KEY = "c".repeat(40);
+    const { buildKeyOk, scriptKeyOk } = await import("../app/api/admin/collection-pages/shared");
+    const req = (k: string) => new Request("http://x/", { headers: { "x-api-key": k } });
+    check(buildKeyOk(req("b".repeat(40))), "the build key opens the build routes");
+    check(!buildKeyOk(req("c".repeat(40))), "the collections key does not");
+    check(!scriptKeyOk(req("b".repeat(40))), "the build key opens nothing else");
+    check(scriptKeyOk(req("c".repeat(40))), "the collections key still works for review");
+    delete process.env.CLAUDE_BUILD_API_KEY;
+    check(!buildKeyOk(req("")) && !buildKeyOk(req("b".repeat(40))), "unset: the routine is refused");
+    delete process.env.COLLECTIONS_API_KEY;
+  }
+
   console.log("zip bombs");
   {
     const { rejectFile } = await import("../lib/collectionPagesServer");

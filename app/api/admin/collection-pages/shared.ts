@@ -44,6 +44,24 @@ export async function guardOrKey(request: Request): Promise<"admin" | "script" |
   return Response.json({ ok: false, error: "Not signed in." } satisfies Fail, { status: 401 });
 }
 
+/* Claude Build's own key: X-API-Key against CLAUDE_BUILD_API_KEY, accepted
+   only by the claude-build routes. It is separate from COLLECTIONS_API_KEY so
+   the build routine and the review routine never share or rotate a key
+   together. No fallback: unset means the routine cannot get in. */
+export function buildKeyOk(request: Request): boolean {
+  const expected = process.env.CLAUDE_BUILD_API_KEY ?? "";
+  return !!expected && keyMatches(request.headers.get("x-api-key") ?? "", expected, "");
+}
+
+export async function buildGuardOrKey(request: Request): Promise<"admin" | "script" | Response> {
+  if (await readAdminSection("collections")) return "admin";
+  if (buildKeyOk(request)) {
+    if (rateLimited("claude-build-key", 300)) return fail("Rate limit: 300 requests a minute.", 429);
+    return "script";
+  }
+  return Response.json({ ok: false, error: "Not signed in." } satisfies Fail, { status: 401 });
+}
+
 export const fail = (error: string, status = 400) =>
   Response.json({ ok: false, error } satisfies Fail, { status });
 

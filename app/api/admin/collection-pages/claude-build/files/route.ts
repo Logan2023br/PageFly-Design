@@ -2,7 +2,7 @@ import { SLUG_RE } from "@/lib/collectionPages";
 import { rejectFile, storeFile } from "@/lib/collectionPagesServer";
 import { ClaudeBuildFailure, jobOf } from "@/lib/claudeBuild";
 import { getRepo } from "@/lib/db";
-import { fail, failFrom, guardOrKey } from "../../shared";
+import { fail, failFrom, buildGuardOrKey } from "../../shared";
 
 /* ==========================================================================
    PUT /api/admin/collection-pages/claude-build/files?job=<id>&page=<slug>&kind=html|pagefly&label=<Label>
@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 const MAX_BYTES = 4 * 1024 * 1024;
 
 export async function PUT(request: Request) {
-  const who = await guardOrKey(request);
+  const who = await buildGuardOrKey(request);
   if (who instanceof Response) return who;
   if (who !== "script") return fail("This is the routine's upload.", 403);
   const q = new URL(request.url).searchParams;

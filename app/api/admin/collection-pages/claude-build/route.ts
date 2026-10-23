@@ -21,7 +21,7 @@ import {
 } from "@/lib/claudeBuild";
 import { getRepo } from "@/lib/db";
 import { readAdminName } from "@/lib/session";
-import { fail, failFrom, firstIssue, guardOrKey } from "../shared";
+import { fail, failFrom, firstIssue, buildGuardOrKey } from "../shared";
 
 /* ==========================================================================
    /api/admin/collection-pages/claude-build
@@ -54,7 +54,7 @@ function failBuild(err: unknown) {
 }
 
 export async function GET(request: Request) {
-  const who = await guardOrKey(request);
+  const who = await buildGuardOrKey(request);
   if (who instanceof Response) return who;
   try {
     const [jobs, criteria, trigger] = await Promise.all([listJobs(), readSetting("criteria"), readTrigger()]);
@@ -87,7 +87,7 @@ const scriptBody = z.discriminatedUnion("action", [
 ]);
 
 export async function POST(request: Request) {
-  const who = await guardOrKey(request);
+  const who = await buildGuardOrKey(request);
   if (who instanceof Response) return who;
   const raw = await request.json().catch(() => null);
   try {
