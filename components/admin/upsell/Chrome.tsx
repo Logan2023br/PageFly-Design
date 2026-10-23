@@ -14,10 +14,9 @@ const FIELD =
 
 export const TABS = [
   { id: "pages", label: "Chờ duyệt page" },
-  { id: "messages", label: "Tin chờ duyệt" },
+  { id: "messages", label: "Tin nhắn" },
   { id: "waiting", label: "Chờ gửi" },
   { id: "failed", label: "Lỗi gửi" },
-  { id: "auto", label: "Tin tự động" },
   { id: "tracking", label: "Theo dõi tất cả" },
   { id: "upgraded", label: "Đã nâng cấp" },
   { id: "queue", label: "Hàng đợi build" },
@@ -79,6 +78,7 @@ export function FilterBar({ tab, f, pics, categories }: { tab: TabId; f: Filters
   return (
     <form method="get" className="flex flex-wrap items-end gap-2">
       <input type="hidden" name="tab" value={tab} />
+      {f.group && <input type="hidden" name="group" value={f.group} />}
       <input name="q" defaultValue={f.q} placeholder="Domain, tên, email…" className={`${FIELD} w-[220px]`} aria-label="Tìm" />
       <label className="grid gap-0.5 text-[11px] text-pf-faint">
         Từ

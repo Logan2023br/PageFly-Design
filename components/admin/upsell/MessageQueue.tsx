@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { KIND_LABEL, customerClock, draftReason, fmtVN } from "@/lib/upsell/format";
+import { KIND_LABEL, customerClock, draftReason, fmtVN, whatsappText } from "@/lib/upsell/format";
 import type { MessageListRow } from "@/lib/upsell/adminQueries";
 import { REPEATED_FAILURE } from "@/lib/upsell/types";
 import { Button } from "../../ui";
 import { FIELD } from "../collections/shared";
-import { CrispLink, ErrorLine, Pill, useAct } from "./bits";
+import { CopyButton, CrispLink, ErrorLine, Pill, useAct } from "./bits";
 import { Empty } from "./PendingPages";
 
 /* ==========================================================================
@@ -169,6 +169,8 @@ function MessageCard({
               <Button size="sm" variant="danger" disabled={busy} onClick={() => run(url, { action: "reject" })}>
                 Bỏ
               </Button>
+              <CopyButton text={content} label="Copy Crisp" />
+              <CopyButton text={whatsappText(content)} label="Copy WhatsApp" />
             </>
           ) : mode === "failed" ? (
             <>

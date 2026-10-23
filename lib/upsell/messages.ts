@@ -4,6 +4,7 @@ import { db, tx } from "./db";
 import { designUrl, newMessageId, recordEvent, recordStatus, ttlDays, isoOrNull, type Actor } from "./common";
 import { lockLead, updateLead } from "./leads";
 import { notifySlack } from "./notify";
+import { getSettings } from "./settings";
 import { MESSAGE_KINDS, UpsellError, type LeadRow, type MessageKind, type MessageRow, type SendMode } from "./types";
 
 /* ==========================================================================
@@ -31,6 +32,9 @@ export type DraftResult = { created: string[]; skipped: { lead_id: string; kind:
 export async function createDrafts(items: unknown[], actor: Actor = "claude"): Promise<DraftResult> {
   const out: DraftResult = { created: [], skipped: [] };
   const p = await db();
+  /* "Tin nhắn build page" set to Tự động gửi: the script's follow-ups and
+     review asks are written approved, to go out in the customer's hours. */
+  const autoSend = (await getSettings(p)).build_message_mode === "auto";
   for (const raw of items) {
     const m = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
     const leadId = String(m.lead_id ?? "");
@@ -54,11 +58,11 @@ export async function createDrafts(items: unknown[], actor: Actor = "claude"): P
     }
     const id = newMessageId();
     const ins = await p.query(
-      `insert into upsell_messages (id, lead_id, kind, content, status, created_by)
-       values ($1,$2,$3,$4,'pending_review',$5)
+      `insert into upsell_messages (id, lead_id, kind, content, status, created_by, approved_by, approved_at)
+       values ($1,$2,$3,$4,$6,$5,case when $6 = 'approved' then 'auto' end,case when $6 = 'approved' then now() end)
        on conflict (lead_id, kind) where kind <> 'custom' do nothing
        returning id`,
-      [id, leadId, kind, content.slice(0, 20_000), actor],
+      [id, leadId, kind, content.slice(0, 20_000), actor, autoSend ? "approved" : "pending_review"],
     );
     if (!ins.rows[0]) {
       skip("already has a message of this kind");

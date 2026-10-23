@@ -195,6 +195,10 @@ async function main() {
     check(!t.recorded && t.reason === "not visible", "events before the send are not counted", t);
   }
 
+  /* The flows below were written when approving the pages approved their
+     message too — "Tin nhắn build page" on Tự động gửi. Đợi duyệt is tested
+     on its own further down. */
+  await settings.saveSettings({ build_message_mode: "auto" });
   console.log("approve → initial message");
   let initialId = "";
   {
@@ -277,6 +281,8 @@ async function main() {
     check(limited === 5, "30 events a minute per visitor", limited);
   }
 
+  /* Script drafts below are about waiting for an admin: Đợi duyệt. */
+  await settings.saveSettings({ build_message_mode: "manual" });
   console.log("drafts");
   {
     const r = await messages.createDrafts([
@@ -684,6 +690,36 @@ async function main() {
     await settings.saveSettings({ view_reminder_mode: "manual", edit_offer_mode: "manual" });
   }
 
+  console.log("Tin nhắn build page: Đợi duyệt");
+  {
+    await settings.saveSettings({ build_message_mode: "manual" });
+    const p0 = await db();
+    await leads.upsertLeads([{ lead_id: "L261099BLDM", store_domain: "bldm.myshopify.com", store_name: "Manual Co", group: "test" }]);
+    await p0.query("update upsell_leads set status = 'pending_review', page1_type = 'home', page2_type = 'product' where lead_id = 'L261099BLDM'");
+    await p0.query("insert into upsell_designs (id, lead_id) values ('DBLDM001', 'L261099BLDM')");
+    const { message_id } = await review.approveLead("L261099BLDM", { send_mode: "now" }, "admin:t");
+    const m1 = (await messages.messagesForLead("L261099BLDM")).find((m) => m.id === message_id)!;
+    check(m1.status === "pending_review" && m1.approved_by === null, "approving the pages leaves the first message waiting for its own approval", m1.status);
+    check((await leads.getLead("L261099BLDM"))!.status === "approved", "…while the pages are approved");
+    check(!(await messages.approvedForSending()).some((m) => m.id === message_id), "nothing is served to the script yet");
+    const pend = await adminQueries.listMessages("pending_review", {}, adminQueries.MESSAGE_GROUPS.build.kinds);
+    check(pend.rows.some((m) => m.id === message_id), "it is listed under Tin nhắn build page");
+    check((await adminQueries.pendingByGroup()).build >= 1, "and counted on its button");
+    await messages.approveMessage(message_id, { send_mode: "now" }, "admin:t");
+    check((await messages.approvedForSending()).some((m) => m.id === message_id), "Duyệt sends it");
+
+    /* Tự động gửi: the script's follow-ups are written approved. */
+    await settings.saveSettings({ build_message_mode: "auto" });
+    const dr = await messages.createDrafts([{ lead_id: "L261099BLDM", kind: "followup1", content: "Hi again" }]);
+    const fu = (await messages.messagesForLead("L261099BLDM")).find((m) => m.id === dr.created[0])!;
+    check(fu.status === "approved" && fu.approved_by === "auto", "auto: a follow-up from the script is written approved", fu.status);
+    await settings.saveSettings({ build_message_mode: "manual" });
+    const dr2 = await messages.createDrafts([{ lead_id: "L261099BLDM", kind: "review", content: "Review please" }]);
+    check((await messages.messagesForLead("L261099BLDM")).find((m) => m.id === dr2.created[0])!.status === "pending_review", "manual: it waits");
+    const sentList = await adminQueries.listMessagesOfKinds(adminQueries.MESSAGE_GROUPS.build.kinds, ["sent"]);
+    check(sentList.every((m) => m.status === "sent") && sentList.length > 0, "the sent list holds sent messages only", sentList.length);
+  }
+
   console.log("phone → WhatsApp");
   {
     const { whatsappUrl } = await import("../lib/upsell/format");
@@ -719,6 +755,7 @@ async function main() {
       review_url: "https://apps.shopify.com/pagefly#reviews",
       initial_message_template: "Hi **{store_name}**, 👉 [See your 2 pages]({link})",
       slack_webhook_url: "https://hooks.slack.com/services/T000/B000/xyz",
+      build_message_mode: "auto",
       view_reminder_mode: "auto",
       view_reminder_hours: "12",
       view_reminder_template: "Hi **{store_name}**, until **{expires_on}**: [Download]({link})",

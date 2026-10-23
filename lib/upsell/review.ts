@@ -42,6 +42,11 @@ export async function approveLead(
 
     const content = opts.content?.trim() || initialDraft(lead, d.rows[0].id, cfg, d.rows[0].sample);
     const mode: SendMode = opts.send_mode === "now" ? "now" : "window";
+    /* "Tin nhắn build page" on the Tin nhắn tab: Tự động gửi — approving the
+       pages approves their message too; Đợi duyệt — the message waits there
+       for its own press. */
+    const autoSend = cfg.build_message_mode === "auto";
+    const status = autoSend ? "approved" : "pending_review";
 
     /* An initial message may exist already, from an approval that was taken
        back. It is reused — one initial per lead — unless it went out. */
@@ -51,15 +56,17 @@ export async function approveLead(
       if (prev.rows[0].status === "sent") throw new UpsellError(`Lead ${leadId} already received its first message.`, 409);
       messageId = prev.rows[0].id;
       await c.query(
-        `update upsell_messages set content=$2, status='approved', send_mode=$3, approved_by=$4, approved_at=now(), error=null where id=$1`,
-        [messageId, content, mode, actor],
+        `update upsell_messages set content=$2, status=$5, send_mode=$3,
+                approved_by=case when $5 = 'approved' then $4 end, approved_at=case when $5 = 'approved' then now() end, error=null
+          where id=$1`,
+        [messageId, content, mode, actor, status],
       );
     } else {
       messageId = newMessageId();
       await c.query(
         `insert into upsell_messages (id, lead_id, kind, content, status, send_mode, created_by, approved_by, approved_at)
-         values ($1,$2,'initial',$3,'approved',$4,$5,$5,now())`,
-        [messageId, leadId, content, mode, actor],
+         values ($1,$2,'initial',$3,$6,$4,$5,case when $6 = 'approved' then $5 end,case when $6 = 'approved' then now() end)`,
+        [messageId, leadId, content, mode, actor, status],
       );
     }
 
@@ -70,7 +77,12 @@ export async function approveLead(
       review_note: opts.note?.trim() || null,
     });
     await recordStatus(c, leadId, lead.status, "approved", actor, { rebuilds: lead.rebuild_count });
-    await recordEvent(c, { lead_id: leadId, type: "message_approved", actor, detail: { message_id: messageId, kind: "initial", send_mode: mode } });
+    await recordEvent(c, {
+      lead_id: leadId,
+      type: autoSend ? "message_approved" : "message_drafted",
+      actor,
+      detail: { message_id: messageId, kind: "initial", send_mode: mode },
+    });
     return { message_id: messageId };
   });
 }

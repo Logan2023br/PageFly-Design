@@ -21,6 +21,8 @@ export type Filters = {
   min_score?: string;
   /** what the customer did — a key of LEAD_ACTIVITY */
   act?: string;
+  /** which messages on the Tin nhắn tab — a key of MESSAGE_GROUPS */
+  group?: string;
   page?: number;
 };
 
@@ -125,8 +127,28 @@ export type MessageListRow = MessageRow & {
   ticket_link: string | null;
 };
 
-export async function listMessages(status: "pending_review" | "approved" | "failed", f: Filters): Promise<Paged<MessageListRow>> {
+/* ==========================================================================
+   The Tin nhắn tab's three groups, each with the setting that decides
+   whether its messages wait for an admin (manual) or go out (auto).
+   ========================================================================== */
+export const MESSAGE_GROUPS = {
+  build: { label: "Tin nhắn build page", kinds: ["initial", "followup1", "followup2", "review", "custom"], setting: "build_message_mode" },
+  viewed: { label: "Tin nhắn đã xem", kinds: ["view_reminder"], setting: "view_reminder_mode" },
+  downloaded: { label: "Tin nhắn đã tải", kinds: ["edit_offer"], setting: "edit_offer_mode" },
+} as const;
+export type MessageGroup = keyof typeof MESSAGE_GROUPS;
+export const groupOf = (g: string | undefined): MessageGroup => (g && Object.hasOwn(MESSAGE_GROUPS, g) ? (g as MessageGroup) : "build");
+
+export async function listMessages(
+  status: "pending_review" | "approved" | "failed",
+  f: Filters,
+  kinds?: readonly string[],
+): Promise<Paged<MessageListRow>> {
   const w = leadWhere(f, "created_at");
+  if (kinds) {
+    w.params.push(kinds);
+    w.sql.push(`m.kind = any($${w.params.length}::text[])`);
+  }
   /* The date filter is on the message here, not the lead. */
   w.sql = w.sql.map((s) => s.replace("(l.created_at at time zone", "(m.created_at at time zone"));
   w.params.push(status);
@@ -160,18 +182,37 @@ export type AutoMessageRow = MessageRow & {
   lead_status: LeadStatus;
 };
 
-/** One kind's messages for the "Tin tự động" tab, the latest first. */
-export async function listAutoMessages(kind: AutoKind, limit = 100): Promise<AutoMessageRow[]> {
+/** Messages of some kinds in some statuses, the latest first — the sent
+    list under each group of the Tin nhắn tab. */
+export async function listMessagesOfKinds(kinds: readonly string[], statuses: readonly string[], limit = 100): Promise<AutoMessageRow[]> {
   const p = await db();
   const { rows } = await p.query<AutoMessageRow>(
     `select m.*, l.store_domain, l.store_name, l.phone, l.status as lead_status
        from upsell_messages m join upsell_leads l on l.lead_id = m.lead_id
-      where m.kind = $1
+      where m.kind = any($1::text[]) and m.status = any($2::text[])
       order by coalesce(m.sent_at, m.approved_at, m.created_at) desc
-      limit $2`,
-    [kind, limit],
+      limit $3`,
+    [kinds, statuses, limit],
   );
   return rows;
+}
+
+/** One kind's messages, every status (kept for tests and scripts). */
+export async function listAutoMessages(kind: AutoKind, limit = 100): Promise<AutoMessageRow[]> {
+  return listMessagesOfKinds([kind], ["pending_review", "approved", "sent", "failed", "rejected"], limit);
+}
+
+/** Messages waiting for review, per group — the numbers on the three buttons. */
+export async function pendingByGroup(): Promise<Record<MessageGroup, number>> {
+  const p = await db();
+  const { rows } = await p.query<{ kind: string; n: number }>(
+    "select kind, count(*) as n from upsell_messages where status = 'pending_review' group by kind",
+  );
+  const out = { build: 0, viewed: 0, downloaded: 0 } as Record<MessageGroup, number>;
+  for (const r of rows)
+    for (const [g, def] of Object.entries(MESSAGE_GROUPS))
+      if ((def.kinds as readonly string[]).includes(r.kind)) out[g as MessageGroup] += r.n;
+  return out;
 }
 
 export async function listInstallsPage(f: Filters): Promise<Paged<InstallRow & { lead_id: string | null }>> {
