@@ -1,5 +1,4 @@
 import Image from "next/image";
-import { Gift } from "lucide-react";
 import Link from "next/link";
 
 /* The masthead and page frame both /collection-pages screens share. Public, like
@@ -28,13 +27,6 @@ export function CollectionShell({ children }: { children: React.ReactNode }) {
               className="hidden text-[14px] font-medium text-pf-body/[.78] transition-colors hover:text-pf-text sm:inline"
             >
               Collection pages
-            </Link>
-            <Link
-              href="/collection-pages/referral"
-              className="inline-flex items-center gap-1.5 rounded-pf-pill border border-pf-warn/40 bg-pf-warn/10 px-3 py-1.5 text-[13px] font-semibold text-pf-warn transition-colors hover:border-pf-warn hover:bg-pf-warn/20"
-            >
-              <Gift size={14} strokeWidth={1.75} aria-hidden />
-              Referral program
             </Link>
           </nav>
         </div>

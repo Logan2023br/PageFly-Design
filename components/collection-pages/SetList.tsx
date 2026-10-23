@@ -7,7 +7,6 @@ import { countLabel, pagesLabel, type PublicCollectionSet } from "@/lib/collecti
 import { Icon } from "../ui";
 import { PageThumb } from "../landing/PagePreview";
 import { PromoCards } from "./PromoCards";
-import { ReferralBox } from "./ReferralBox";
 import { SetAction } from "./SetAction";
 
 const SHOW_PREMIUM = false;
@@ -88,7 +87,6 @@ export function SetList({
         premium
         section="premium"
         extra={<PromoCards />}
-        aside={<ReferralBox />}
       />}
     </>
   );

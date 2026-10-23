@@ -57,11 +57,24 @@ function crossSite(request: NextRequest): boolean {
    of a store's library exports from there).
    ========================================================================== */
 const merchantAppOn = () => process.env.MERCHANT_APP === "on";
+
+/* THE REFERRAL PROGRAM IS OFF too: its page goes to /collection-pages and the
+   member APIs answer 404. The admin's view of past members stays.
+   REFERRAL_PROGRAM=on brings it back. */
+const referralOn = () => process.env.REFERRAL_PROGRAM === "on";
+const REFERRAL_PAGE = /^\/collection-pages\/referral(\/|$)/;
+const REFERRAL_APIS = /^\/api\/collection-pages\/referral(\/|$)/;
 const MERCHANT_PAGES = /^\/design\/(login|register|library)(\/|$)/;
 const MERCHANT_APIS = /^\/api\/(auth\/(store|register|provision)|account|build|ai|runs|generate|review)(\/|$)/;
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (!referralOn()) {
+    if (REFERRAL_APIS.test(pathname))
+      return NextResponse.json({ ok: false, error: "This feature is turned off." }, { status: 404 });
+    if (REFERRAL_PAGE.test(pathname)) return NextResponse.redirect(new URL("/collection-pages", request.url));
+  }
 
   if (!merchantAppOn()) {
     if (MERCHANT_APIS.test(pathname))
@@ -94,5 +107,14 @@ export const config = {
      check only — routes answer 401 JSON themselves, so fetch callers can
      react). Key-authenticated callers (the BPU scripts, the sync) are not
      browsers and send no Sec-Fetch-Site or Origin, so they pass. */
-  matcher: ["/design", "/design/library", "/design/login", "/design/register", "/design/library/:path*", "/api/:path*"],
+  matcher: [
+    "/design",
+    "/design/library",
+    "/design/login",
+    "/design/register",
+    "/design/library/:path*",
+    "/collection-pages/referral",
+    "/collection-pages/referral/:path*",
+    "/api/:path*",
+  ],
 };
