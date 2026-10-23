@@ -6,7 +6,7 @@ import { useState, useTransition } from "react";
 import type { AutoMessageRow, MessageGroup } from "@/lib/upsell/adminQueries";
 import { KIND_LABEL, MESSAGE_STATUS_LABEL, fmtVN, whatsappText, whatsappUrl } from "@/lib/upsell/format";
 import { api } from "../collections/shared";
-import { CopyButton, ErrorLine, Pill } from "./bits";
+import { CopyButton, ErrorLine, PhoneLine, Pill, WhatsappMark } from "./bits";
 
 /* ==========================================================================
    Tab — Tin nhắn. Three buttons, one per kind of message:
@@ -150,14 +150,39 @@ function SentRow({ m }: { m: AutoMessageRow }) {
   const waLink = whatsappUrl(m.phone);
   return (
     <li className="rounded-pf-md border border-pf-border bg-pf-card">
-      <button type="button" onClick={() => setOpen(!open)} className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-left text-[12.5px]">
+      {/* The row opens the message — except a press on the phone (which
+          copies it) or its WhatsApp link, which do their own thing. */}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        onClick={(e) => {
+          if ((e.target as Element).closest("a, button")) return;
+          setOpen(!open);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen(!open);
+          }
+        }}
+        className="flex w-full cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-left text-[12.5px]"
+      >
         <span className="font-semibold text-pf-text">{m.store_name || m.store_domain}</span>
         <span className="text-pf-faint">{m.store_domain}</span>
+        <PhoneLine phone={m.phone} />
         <Pill tone="primary">{KIND_LABEL[m.kind] ?? m.kind}</Pill>
         <Pill tone="ok">{MESSAGE_STATUS_LABEL[m.status] ?? m.status}</Pill>
         {m.approved_by === "auto" && <Pill>Tự động</Pill>}
         <span className="ml-auto text-pf-faint">gửi {fmtVN(m.sent_at)}</span>
-      </button>
+        <WhatsappMark
+          leadId={m.lead_id}
+          sentAt={m.whatsapp_sent_at}
+          sentBy={m.whatsapp_sent_by}
+          skippedAt={m.whatsapp_skipped_at}
+          skippedBy={m.whatsapp_skipped_by}
+        />
+      </div>
       {open && (
         <div className="grid gap-3 border-t border-pf-border p-3">
           <Link href={`/design/admin/upsell/leads/${m.lead_id}`} className="text-[12px] text-pf-primary-hi hover:underline">

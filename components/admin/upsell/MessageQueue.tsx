@@ -7,7 +7,7 @@ import type { MessageListRow } from "@/lib/upsell/adminQueries";
 import { REPEATED_FAILURE } from "@/lib/upsell/types";
 import { Button } from "../../ui";
 import { FIELD } from "../collections/shared";
-import { CopyButton, CrispLink, ErrorLine, Pill, useAct } from "./bits";
+import { CopyButton, CrispLink, ErrorLine, PhoneLine, Pill, WhatsappMark, useAct } from "./bits";
 import { Empty } from "./PendingPages";
 
 /* ==========================================================================
@@ -121,6 +121,16 @@ function MessageCard({
               {m.store_name || m.store_domain}
             </Link>
             <p className="truncate text-[11.5px] text-pf-faint">{m.store_domain}</p>
+            <PhoneLine phone={m.phone} />
+            <div className="mt-1.5">
+              <WhatsappMark
+                leadId={m.lead_id}
+                sentAt={m.whatsapp_sent_at}
+                sentBy={m.whatsapp_sent_by}
+                skippedAt={m.whatsapp_skipped_at}
+                skippedBy={m.whatsapp_skipped_by}
+              />
+            </div>
           </div>
         </div>
         <div className="flex flex-wrap gap-1.5">

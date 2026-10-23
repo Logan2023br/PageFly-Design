@@ -125,6 +125,11 @@ export type MessageListRow = MessageRow & {
   feedback_summary: string | null;
   crisp_session: string | null;
   ticket_link: string | null;
+  phone: string | null;
+  whatsapp_sent_at: string | null;
+  whatsapp_sent_by: string | null;
+  whatsapp_skipped_at: string | null;
+  whatsapp_skipped_by: string | null;
 };
 
 /* ==========================================================================
@@ -161,7 +166,8 @@ export async function listMessages(
   const pg = paging(total, f.page);
   const { rows } = await p.query<MessageListRow>(
     `select m.*, l.store_domain, l.store_name, l.timezone, l.country, l.pic, l.status as lead_status, l.sent_at as sent_at_lead,
-            l.sentiment, l.feedback_summary, l.crisp_session, l.ticket_link,
+            l.sentiment, l.feedback_summary, l.crisp_session, l.ticket_link, l.phone,
+            l.whatsapp_sent_at, l.whatsapp_sent_by, l.whatsapp_skipped_at, l.whatsapp_skipped_by,
             coalesce((select count(distinct visitor_id) from upsell_events e where e.design_id = d.id and e.actor='customer' and e.type='view'),0) as unique_views,
             coalesce((select count(*) from upsell_events e where e.design_id = d.id and e.actor='customer' and e.type='download'),0) as downloads,
             (select rating from upsell_events e where e.design_id = d.id and e.actor='customer' and e.type='feedback' and e.rating is not null order by created_at desc limit 1) as rating
@@ -180,6 +186,10 @@ export type AutoMessageRow = MessageRow & {
   store_name: string | null;
   phone: string | null;
   lead_status: LeadStatus;
+  whatsapp_sent_at: string | null;
+  whatsapp_sent_by: string | null;
+  whatsapp_skipped_at: string | null;
+  whatsapp_skipped_by: string | null;
 };
 
 /** Messages of some kinds in some statuses, the latest first — the sent
@@ -187,7 +197,8 @@ export type AutoMessageRow = MessageRow & {
 export async function listMessagesOfKinds(kinds: readonly string[], statuses: readonly string[], limit = 100): Promise<AutoMessageRow[]> {
   const p = await db();
   const { rows } = await p.query<AutoMessageRow>(
-    `select m.*, l.store_domain, l.store_name, l.phone, l.status as lead_status
+    `select m.*, l.store_domain, l.store_name, l.phone, l.status as lead_status,
+            l.whatsapp_sent_at, l.whatsapp_sent_by, l.whatsapp_skipped_at, l.whatsapp_skipped_by
        from upsell_messages m join upsell_leads l on l.lead_id = m.lead_id
       where m.kind = any($1::text[]) and m.status = any($2::text[])
       order by coalesce(m.sent_at, m.approved_at, m.created_at) desc
