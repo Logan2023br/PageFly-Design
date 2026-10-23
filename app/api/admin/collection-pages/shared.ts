@@ -47,10 +47,19 @@ export async function guardOrKey(request: Request): Promise<"admin" | "script" |
 /* Claude Build's own key: X-API-Key against CLAUDE_BUILD_API_KEY, accepted
    only by the claude-build routes. It is separate from COLLECTIONS_API_KEY so
    the build routine and the review routine never share or rotate a key
-   together. No fallback: unset means the routine cannot get in. */
+   together. */
+/* TODO: xoá fallback này sau khi đặt CLAUDE_BUILD_API_KEY trong .env trên VPS.
+   Until then a server without CLAUDE_BUILD_API_KEY accepts the one key whose
+   SHA-256 (hex) this is — only the hash is here, never the key. */
+export const CLAUDE_BUILD_API_KEY_SHA256_FALLBACK =
+  "06b21a8ab6891d54c3f51b65882bb2f3ec96ba8d4c16e2660c6debe0e6c61330";
+
 export function buildKeyOk(request: Request): boolean {
-  const expected = process.env.CLAUDE_BUILD_API_KEY ?? "";
-  return !!expected && keyMatches(request.headers.get("x-api-key") ?? "", expected, "");
+  return keyMatches(
+    request.headers.get("x-api-key") ?? "",
+    process.env.CLAUDE_BUILD_API_KEY ?? "",
+    CLAUDE_BUILD_API_KEY_SHA256_FALLBACK,
+  );
 }
 
 export async function buildGuardOrKey(request: Request): Promise<"admin" | "script" | Response> {

@@ -33,7 +33,9 @@ function check(ok: boolean, label: string, detail: unknown = null): void {
     check(!scriptKeyOk(req("b".repeat(40))), "the build key opens nothing else");
     check(scriptKeyOk(req("c".repeat(40))), "the collections key still works for review");
     delete process.env.CLAUDE_BUILD_API_KEY;
-    check(!buildKeyOk(req("")) && !buildKeyOk(req("b".repeat(40))), "unset: the routine is refused");
+    check(!buildKeyOk(req("")) && !buildKeyOk(req("b".repeat(40))), "unset: only the fallback hash's key gets in");
+    const { CLAUDE_BUILD_API_KEY_SHA256_FALLBACK } = await import("../app/api/admin/collection-pages/shared");
+    check(/^[0-9a-f]{64}$/.test(CLAUDE_BUILD_API_KEY_SHA256_FALLBACK), "the fallback is a SHA-256 hex digest");
     delete process.env.COLLECTIONS_API_KEY;
   }
 
