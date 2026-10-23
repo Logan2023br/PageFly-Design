@@ -101,8 +101,9 @@ function check(ok: boolean, label: string, detail: unknown = null): void {
   check(listed.find((j) => j.id === j4.id)?.status === "failed", "a running job silent for 30 minutes is marked failed", listed.find((j) => j.id === j4.id));
   check(await cb.reportStep(j4.id, "html", null, null).then(() => false, () => true), "a dead job takes no more steps");
 
-  console.log("no trigger configured");
-  delete process.env.CLAUDE_BUILD_TRIGGER_URL;
+  console.log("no trigger token");
+  /* The URL has a default in code; the token is what makes it fireable. */
+  delete process.env.CLAUDE_BUILD_TRIGGER_TOKEN;
   fires.length = 0;
   await cb.startBuild(1, null, "admin");
   check(fires.length === 0 && !(await cb.readTrigger()).configured, "without one, the set waits for the schedule");

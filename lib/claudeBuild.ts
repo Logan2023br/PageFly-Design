@@ -310,9 +310,15 @@ export async function failJob(id: string, error: string): Promise<void> {
 
 /* ---- firing the routine --------------------------------------------------------- */
 
-/** The routine's API trigger, from the environment (see .env.example). */
+/* The "Claude Build PFD" routine's API trigger. The URL alone fires nothing —
+   the token (CLAUDE_BUILD_TRIGGER_TOKEN, on the VPS only) is the secret — so
+   it is kept here; CLAUDE_BUILD_TRIGGER_URL overrides it. */
+const TRIGGER_URL = "https://api.anthropic.com/v1/claude_code/routines/trig_013EEF61JVUgQdM3WfY5iYBz/fire";
+const triggerUrl = () => process.env.CLAUDE_BUILD_TRIGGER_URL || TRIGGER_URL;
+
+/** Fireable once the trigger's token is set (see .env.example). */
 function triggerConfigured(): boolean {
-  return Boolean(process.env.CLAUDE_BUILD_TRIGGER_URL && process.env.CLAUDE_BUILD_TRIGGER_TOKEN);
+  return Boolean(triggerUrl() && process.env.CLAUDE_BUILD_TRIGGER_TOKEN);
 }
 
 /**
@@ -345,7 +351,7 @@ export async function fireTrigger(reason: string, force = false): Promise<void> 
   let result: string;
   let session: string | null = null;
   try {
-    const res = await fetch(process.env.CLAUDE_BUILD_TRIGGER_URL!, {
+    const res = await fetch(triggerUrl(), {
       method: "POST",
       headers: {
         "content-type": "application/json",
