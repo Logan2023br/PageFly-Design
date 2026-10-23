@@ -17,6 +17,7 @@ export const TABS = [
   { id: "messages", label: "Tin chờ duyệt" },
   { id: "waiting", label: "Chờ gửi" },
   { id: "failed", label: "Lỗi gửi" },
+  { id: "auto", label: "Tin tự động" },
   { id: "tracking", label: "Theo dõi tất cả" },
   { id: "upgraded", label: "Đã nâng cấp" },
   { id: "queue", label: "Hàng đợi build" },

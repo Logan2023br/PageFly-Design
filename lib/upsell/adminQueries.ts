@@ -3,7 +3,7 @@ import "server-only";
 import { db } from "./db";
 import { getDesignForLead, type DesignView } from "./designs";
 import { LEAD_SELECT, shapeLead, type LeadListRow } from "./leads";
-import type { EventRow, InstallRow, LeadStatus, MessageRow } from "./types";
+import type { AutoKind, EventRow, InstallRow, LeadStatus, MessageRow } from "./types";
 
 /* ==========================================================================
    What the admin screens read. Every list goes through the same filter
@@ -149,6 +149,29 @@ export async function listMessages(status: "pending_review" | "approved" | "fail
     w.params,
   );
   return { rows, total, page: pg.page, pages: pg.pages };
+}
+
+/* ---- automatic messages --------------------------------------------------- */
+
+export type AutoMessageRow = MessageRow & {
+  store_domain: string;
+  store_name: string | null;
+  phone: string | null;
+  lead_status: LeadStatus;
+};
+
+/** One kind's messages for the "Tin tự động" tab, the latest first. */
+export async function listAutoMessages(kind: AutoKind, limit = 100): Promise<AutoMessageRow[]> {
+  const p = await db();
+  const { rows } = await p.query<AutoMessageRow>(
+    `select m.*, l.store_domain, l.store_name, l.phone, l.status as lead_status
+       from upsell_messages m join upsell_leads l on l.lead_id = m.lead_id
+      where m.kind = $1
+      order by coalesce(m.sent_at, m.approved_at, m.created_at) desc
+      limit $2`,
+    [kind, limit],
+  );
+  return rows;
 }
 
 export async function listInstallsPage(f: Filters): Promise<Paged<InstallRow & { lead_id: string | null }>> {

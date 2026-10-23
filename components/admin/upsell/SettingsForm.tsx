@@ -45,7 +45,7 @@ export function SettingsForm({
       {Object.keys(initial).map((k) => (
         <label key={k} className="grid gap-1.5">
           <span className={FIELD_LABEL}>{k}</span>
-          {k === "initial_message_template" ? (
+          {k.endsWith("_template") ? (
             <textarea className={`${FIELD} min-h-[200px] font-mono text-[12.5px]`} value={String(values[k] ?? "")} onChange={(e) => setValues({ ...values, [k]: e.target.value })} />
           ) : (
             <input

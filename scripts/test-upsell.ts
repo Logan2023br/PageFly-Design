@@ -612,6 +612,78 @@ async function main() {
     await settings.saveSettings({ initial_message_template: "" });
   }
 
+  console.log("automatic messages: viewed, not downloaded / downloaded");
+  {
+    const auto = await import("../lib/upsell/autoMessages");
+    const { DEFAULT_VIEW_REMINDER_TEMPLATE, DEFAULT_EDIT_OFFER_TEMPLATE } = await import("../lib/upsell/common");
+    await settings.saveSettings({ view_reminder_mode: "manual", edit_offer_mode: "manual", view_reminder_hours: 24, view_reminder_template: "", edit_offer_template: "" });
+    await rejects(settings.saveSettings({ edit_offer_mode: "sometimes" }), 422, "a mode is off, manual or auto");
+    for (const tpl of [DEFAULT_VIEW_REMINDER_TEMPLATE, DEFAULT_EDIT_OFFER_TEMPLATE]) {
+      const links = [...tpl.matchAll(/\[([^\]]*)\]\(([^)]*)\)/g)];
+      check(links.every((m) => !m[1].includes("*") && !tpl.slice(0, m.index).endsWith("*") && !tpl.slice(m.index! + m[0].length).startsWith("*")), "auto templates: links plain, as Crisp needs");
+    }
+    const p0 = await db();
+    /* Four fresh leads, all sent with a Crisp conversation:
+       V viewed 30 h ago, not downloaded → reminder;  W viewed 2 h ago → not yet;
+       D downloaded, sent 3 days ago → offer;          O downloaded, sent 20 days ago → too late. */
+    const mk = async (id: string, sentDaysAgo: number, crisp = true) => {
+      await leads.upsertLeads([{ lead_id: id, store_domain: `${id.toLowerCase()}.myshopify.com`, store_name: `Store ${id.slice(-2)}`, group: "test" }]);
+      await p0.query(
+        `update upsell_leads set status = 'sent', sent_at = now() - make_interval(days => $2), crisp_session = $3 where lead_id = $1`,
+        [id, sentDaysAgo, crisp ? `session_${id}` : null],
+      );
+      await p0.query("insert into upsell_designs (id, lead_id, expires_at) values ($1, $2, now() + interval '20 days')", [`D${id.slice(-7)}`, id]);
+      return `D${id.slice(-7)}`;
+    };
+    const ev = (design: string, lead: string, type: string, hoursAgo: number) =>
+      p0.query(
+        "insert into upsell_events (lead_id, design_id, type, actor, created_at) values ($1, $2, $3, 'customer', now() - make_interval(hours => $4))",
+        [lead, design, type, hoursAgo],
+      );
+    const dV = await mk("L261099AUTV", 2);
+    await ev(dV, "L261099AUTV", "view", 30);
+    const dW = await mk("L261099AUTW", 2);
+    await ev(dW, "L261099AUTW", "view", 2);
+    const dD = await mk("L261099AUTD", 3);
+    await ev(dD, "L261099AUTD", "view", 40);
+    await ev(dD, "L261099AUTD", "download", 39);
+    const dO = await mk("L261099AUTO", 20);
+    await ev(dO, "L261099AUTO", "download", 400);
+    const dN = await mk("L261099AUTN", 2, false);
+    await ev(dN, "L261099AUTN", "view", 30);
+
+    const r1 = await auto.runAutoMessages();
+    check(r1.view_reminder.includes("L261099AUTV") && !r1.view_reminder.includes("L261099AUTW"), "a reminder after 24 h of viewing without a download, not before", r1);
+    check(r1.edit_offer.includes("L261099AUTD") && !r1.edit_offer.includes("L261099AUTO"), "an edit offer after a download, only inside the 15 days", r1);
+    check(!r1.view_reminder.includes("L261099AUTN"), "no Crisp conversation, no automatic message");
+    const msgOf = async (lead: string, kind: string) =>
+      (await p0.query<{ status: string; content: string; approved_by: string | null }>("select status, content, approved_by from upsell_messages where lead_id = $1 and kind = $2", [lead, kind])).rows;
+    const v = (await msgOf("L261099AUTV", "view_reminder"))[0];
+    check(v?.status === "pending_review" && v.content.includes("Hi **Store TV**") && v.content.includes("**Limited-Time Program**") && /until \*\*[A-Z][a-z]+ \d{1,2}, 20\d\d\*\*/.test(v.content), "manual: written to Tin chờ duyệt, with the store and the expiry date", v?.content);
+    const d = (await msgOf("L261099AUTD", "edit_offer"))[0];
+    check(d?.status === "pending_review" && d.content.includes("**Complimentary Editing**") && d.content.includes("**15 days**"), "the offer names Complimentary Editing and 15 days", d?.content);
+    const r2 = await auto.runAutoMessages();
+    check(r2.view_reminder.length === 0 && r2.edit_offer.length === 0, "one of each per lead: a second run writes nothing", r2);
+
+    /* Auto: the admin decided ahead — written approved, and served to the script. */
+    await settings.saveSettings({ view_reminder_mode: "auto" });
+    await ev(dW, "L261099AUTW", "view", 30);
+    await p0.query("delete from upsell_events where design_id = $1 and created_at > now() - interval '3 hours'", [dW]);
+    const r3 = await auto.runAutoMessages();
+    const w = (await msgOf("L261099AUTW", "view_reminder"))[0];
+    check(r3.view_reminder.includes("L261099AUTW") && w?.status === "approved" && w.approved_by === "auto", "auto: written approved", w);
+    check((await messages.approvedForSending()).some((m) => m.lead_id === "L261099AUTW" && m.kind === "view_reminder"), "…and served to BPU Ops to send");
+
+    await settings.saveSettings({ view_reminder_mode: "off", edit_offer_mode: "off" });
+    const dX = await mk("L261099AUTX", 1);
+    await ev(dX, "L261099AUTX", "download", 5);
+    const r4 = await auto.runAutoMessages();
+    check(r4.edit_offer.length === 0, "off: nothing is written", r4);
+    const listed = await adminQueries.listAutoMessages("view_reminder");
+    check(listed.some((m) => m.lead_id === "L261099AUTV") && listed.some((m) => m.lead_id === "L261099AUTW"), "the tab lists each kind's messages", listed.map((m) => m.lead_id));
+    await settings.saveSettings({ view_reminder_mode: "manual", edit_offer_mode: "manual" });
+  }
+
   console.log("phone → WhatsApp");
   {
     const { whatsappUrl } = await import("../lib/upsell/format");
@@ -647,6 +719,11 @@ async function main() {
       review_url: "https://apps.shopify.com/pagefly#reviews",
       initial_message_template: "Hi **{store_name}**, 👉 [See your 2 pages]({link})",
       slack_webhook_url: "https://hooks.slack.com/services/T000/B000/xyz",
+      view_reminder_mode: "auto",
+      view_reminder_hours: "12",
+      view_reminder_template: "Hi **{store_name}**, until **{expires_on}**: [Download]({link})",
+      edit_offer_mode: "off",
+      edit_offer_template: "Hi **{store_name}**, edits until **{edit_until}**.",
     };
     check(Object.keys(next).sort().join() === [...settings.SETTING_KEYS].sort().join(), "the test covers every setting", settings.SETTING_KEYS);
     for (const k of settings.SETTING_KEYS) {

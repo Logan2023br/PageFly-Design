@@ -60,7 +60,14 @@ export const PAGE_LABELS: Record<PageType, string> = {
   contact: "Contact page",
 };
 
-export const MESSAGE_KINDS = ["initial", "followup1", "followup2", "review", "custom"] as const;
+export const MESSAGE_KINDS = ["initial", "followup1", "followup2", "review", "custom", "view_reminder", "edit_offer"] as const;
+
+/** The two messages PageFly Design writes itself, on what the customer did:
+    viewed the pages but not downloaded (a reminder before the link expires),
+    and downloaded them (the free-editing offer). See autoMessages.ts. */
+export const AUTO_KINDS = ["view_reminder", "edit_offer"] as const;
+export type AutoKind = (typeof AUTO_KINDS)[number];
+export type AutoMode = "off" | "manual" | "auto";
 export type MessageKind = (typeof MESSAGE_KINDS)[number];
 
 export const MESSAGE_STATUSES = ["pending_review", "approved", "sent", "failed", "rejected"] as const;

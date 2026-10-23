@@ -25,6 +25,11 @@ export const SETTING_DEFAULTS = {
   pic: "Logan",
   review_url: "https://apps.shopify.com/pagefly#modal-show=ReviewListingModal",
   initial_message_template: "",
+  view_reminder_mode: "manual",
+  view_reminder_hours: 24,
+  view_reminder_template: "",
+  edit_offer_mode: "manual",
+  edit_offer_template: "",
   slack_webhook_url: "",
 } as const;
 
@@ -60,6 +65,11 @@ export const SETTING_HELP: Record<SettingKey, string> = {
   install_lookback_hours: "Script quét store cài trong bao nhiêu giờ gần nhất",
   pic: "Người phụ trách mặc định, điền vào {pic}",
   review_url: "Link xin review trên Shopify App Store",
+  view_reminder_mode: "Tin nhắc tải khi khách đã xem mà chưa tải: manual = soạn sẵn chờ duyệt, auto = tự gửi, off = tắt",
+  view_reminder_hours: "Số giờ sau lần xem đầu tiên mà khách vẫn chưa tải thì soạn tin nhắc tải",
+  view_reminder_template: "Mẫu tin nhắc tải. Biến: {store_name} {link} {pic} {ttl_days} {expires_on}. Để trống dùng mẫu mặc định.",
+  edit_offer_mode: "Tin chỉnh sửa miễn phí khi khách đã tải: manual = soạn sẵn chờ duyệt, auto = tự gửi, off = tắt",
+  edit_offer_template: "Mẫu tin chỉnh sửa miễn phí. Biến: {store_name} {link} {pic} {edit_until}. Để trống dùng mẫu mặc định.",
   initial_message_template:
     "Mẫu tin đầu tiên. Biến: {store_name} {page1_label} {page2_label} {link} {pic}. Để trống dùng mẫu mặc định.",
   slack_webhook_url: "Slack incoming webhook. Để trống thì không báo.",
@@ -96,6 +106,12 @@ export async function saveSettings(patch: Record<string, unknown>): Promise<Sett
       continue;
     }
     const def = SETTING_DEFAULTS[key as SettingKey];
+    if (key.endsWith("_mode")) {
+      const v = String(raw ?? "").trim();
+      if (v !== "off" && v !== "manual" && v !== "auto") bad.push(`${key} (off, manual hoặc auto)`);
+      else rows.push([key as SettingKey, v]);
+      continue;
+    }
     if (key === "slack_webhook_url") {
       const v = String(raw ?? "").trim();
       /* The masked value the screen shows means "unchanged". */

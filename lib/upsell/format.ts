@@ -37,6 +37,8 @@ export const KIND_LABEL: Record<string, string> = {
   followup2: "Follow-up 2",
   review: "Xin review",
   custom: "Tin thủ công",
+  view_reminder: "Nhắc tải (đã xem)",
+  edit_offer: "Chỉnh sửa miễn phí (đã tải)",
 };
 
 export const MESSAGE_STATUS_LABEL: Record<string, string> = {

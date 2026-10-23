@@ -2,6 +2,9 @@ import { AdminShell } from "@/components/admin/AdminShell";
 import { adminGate } from "@/components/admin/adminGate";
 import { FilterBar, Pager, TABS, TabNav, type TabId } from "@/components/admin/upsell/Chrome";
 import { InstallsTable } from "@/components/admin/upsell/InstallsTable";
+import { AutoMessages, type AutoCard } from "@/components/admin/upsell/AutoMessages";
+import { autoMessageSample } from "@/lib/upsell/autoMessages";
+import type { AutoMode } from "@/lib/upsell/types";
 import { LeadCriteria } from "@/components/admin/upsell/LeadCriteria";
 import { LeadTable } from "@/components/admin/upsell/LeadTable";
 import { MessageQueue } from "@/components/admin/upsell/MessageQueue";
@@ -10,6 +13,7 @@ import { SettingsForm } from "@/components/admin/upsell/SettingsForm";
 import { StatsPanel } from "@/components/admin/upsell/StatsPanel";
 import {
   filterOptions,
+  listAutoMessages,
   listInstallsPage,
   listLeadTab,
   listMessages,
@@ -78,6 +82,27 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
     pager = <Pager tab={tab} f={f} {...r} />;
   } else if (tab === "stats") {
     body = <StatsPanel s={await upsellStats(f)} />;
+  } else if (tab === "auto") {
+    const [reminders, offers] = await Promise.all([listAutoMessages("view_reminder"), listAutoMessages("edit_offer")]);
+    const cards: AutoCard[] = [
+      {
+        kind: "view_reminder",
+        title: "Tin khách đã xem — nhắc tải",
+        when: `Soạn khi khách đã mở link page nhưng ${cfg.view_reminder_hours} giờ sau lần xem đầu vẫn chưa tải, và link chưa hết hạn. Mỗi lead một lần.`,
+        mode: (cfg.view_reminder_mode as AutoMode) ?? "manual",
+        sample: autoMessageSample("view_reminder", cfg),
+        rows: reminders,
+      },
+      {
+        kind: "edit_offer",
+        title: "Tin khách đã tải — chỉnh sửa miễn phí",
+        when: "Soạn khi khách đã tải file .pagefly, trong vòng 15 ngày kể từ ngày gửi page. Mỗi lead một lần.",
+        mode: (cfg.edit_offer_mode as AutoMode) ?? "manual",
+        sample: autoMessageSample("edit_offer", cfg),
+        rows: offers,
+      },
+    ];
+    body = <AutoMessages cards={cards} />;
   } else if (tab === "criteria") {
     body = <LeadCriteria threshold={cfg.score_threshold} minProducts={cfg.min_products} controlPercent={cfg.control_percent} />;
   } else if (tab === "settings") {
@@ -96,7 +121,7 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
     >
       <div className="grid gap-4">
         <TabNav tab={tab} counts={counts} />
-        {tab !== "settings" && tab !== "criteria" && <FilterBar tab={tab} f={f} pics={options.pics} categories={options.categories} />}
+        {tab !== "settings" && tab !== "criteria" && tab !== "auto" && <FilterBar tab={tab} f={f} pics={options.pics} categories={options.categories} />}
         {pager}
         {body}
         {pager}

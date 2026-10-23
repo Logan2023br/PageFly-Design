@@ -98,7 +98,7 @@ export async function approvedForSending(): Promise<OutgoingMessage[]> {
       where m.status = 'approved'
         and l.status <> 'uninstalled'
         and coalesce(l.app_status, '') <> 'uninstalled'
-        and (m.kind not in ('followup1', 'followup2', 'review') or l.crisp_session is not null)
+        and (m.kind not in ('followup1', 'followup2', 'review', 'view_reminder', 'edit_offer') or l.crisp_session is not null)
       order by (m.send_mode = 'now') desc, m.approved_at asc`,
   );
   return rows.map((r) => ({

@@ -115,6 +115,44 @@ export const DEFAULT_INITIAL_TEMPLATE =
   "If you need any assistance, simply reply to this message.\n\n" +
   "Best regards,\n**{pic} – PageFly Support**";
 
+/* ==========================================================================
+   The two automatic messages (see autoMessages.ts). Same shape as the first
+   message: greeting with the store in bold, short paragraphs, one plain link
+   (Crisp renders no bold inside or around a link), the key words in bold,
+   the signature in bold. whatsappText() turns them into WhatsApp's syntax.
+   ========================================================================== */
+
+/** Viewed the pages, not downloaded them yet: the link will not wait. */
+export const DEFAULT_VIEW_REMINDER_TEMPLATE =
+  "Hi **{store_name}**,\n\n" +
+  "Thanks for taking a look at the 2 pages our team designed for your store! 👀\n\n" +
+  "A quick reminder: these pages are part of a **Limited-Time Program**, and your link stays active for " +
+  "**{ttl_days} days** from the date we sent it — until **{expires_on}**. After that, the pages can no longer be downloaded.\n\n" +
+  "👉 [Download your 2 pages]({link})\n\n" +
+  "Importing takes about a minute: download the .pagefly file, then import it in PageFly.\n\n" +
+  "If you need any assistance, simply reply to this message.\n\n" +
+  "Best regards,\n**{pic} – PageFly Support**";
+
+/** Downloaded them: the free editing, and how long it lasts. */
+export const DEFAULT_EDIT_OFFER_TEMPLATE =
+  "Hi **{store_name}**,\n\n" +
+  "Thanks for downloading your 2 pages! 🎉 We hope they look great in your store.\n\n" +
+  "We also offer **Complimentary Editing** for these two pages: tell us what you would like changed — text, images, " +
+  "colors or sections — and our team will make the edits for you.\n" +
+  "(Please note that this is a **Free Editing** service, available for **15 days** from the date of submission — until **{edit_until}**.)\n\n" +
+  "👉 **Simply reply to this message** with the changes you need, and we will take care of it.\n\n" +
+  "Best regards,\n**{pic} – PageFly Support**";
+
+/** How long the free editing lasts, from the day the pages were sent. */
+export const EDIT_OFFER_DAYS = 15;
+
+/** A date as a customer reads it: "November 20, 2026". */
+export function longDate(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+
 /** Pages built for a password-protected store carry example products, so the
     first message must not claim they use the store's own. The phrase is
     swapped in whichever template is in use, the default or Settings'. */

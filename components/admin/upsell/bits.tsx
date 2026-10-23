@@ -110,6 +110,42 @@ export function CrispLink({ href, label = "Mở Crisp" }: { href: string | null 
   );
 }
 
+/** Copies text, with the old fallback where the clipboard API is missing. */
+export async function copyText(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const t = document.createElement("textarea");
+    t.value = text;
+    t.style.position = "fixed";
+    t.style.opacity = "0";
+    document.body.appendChild(t);
+    t.select();
+    document.execCommand("copy");
+    t.remove();
+  }
+}
+
+/** A "Copy" button that says it worked. */
+export function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        void copyText(text).then(() => {
+          setDone(true);
+          setTimeout(() => setDone(false), 1500);
+        })
+      }
+      className="inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-pf-md bg-pf-success/15 px-2.5 text-[12px] font-semibold text-pf-success transition-colors hover:bg-pf-success/25"
+    >
+      <Icon name={done ? "Check" : "Copy"} size={12} />
+      {done ? "Đã copy" : label}
+    </button>
+  );
+}
+
 /** The store's phone: a click copies it (to paste into WhatsApp, a dialer or
     a note), with a WhatsApp link beside it when the number is written
     internationally (see whatsappUrl). Nothing at all without a phone. */

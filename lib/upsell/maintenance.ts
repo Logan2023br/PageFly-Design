@@ -4,6 +4,7 @@ import { db, hasUpsellDatabase, tx } from "./db";
 import { recordStatus } from "./common";
 import { updateLead } from "./leads";
 import { flushSlack } from "./notify";
+import { runAutoMessages, type AutoResult } from "./autoMessages";
 import { removeDesignFiles } from "./storage";
 import type { LeadRow } from "./types";
 
@@ -25,7 +26,7 @@ export const BUILD_TIMEOUT_HOURS = 3;
 export const MAX_BUILD_TIMEOUTS = 2;
 export const PURGE_AFTER_DAYS = 60;
 
-export type TickResult = { requeued: string[]; errored: string[]; purged: string[]; slack: boolean };
+export type TickResult = { requeued: string[]; errored: string[]; purged: string[]; slack: boolean; auto?: AutoResult };
 
 export async function tick(): Promise<TickResult> {
   const out: TickResult = { requeued: [], errored: [], purged: [], slack: false };
@@ -68,6 +69,11 @@ export async function tick(): Promise<TickResult> {
     out.purged.push(id);
   }
 
+  /* 4. The automatic messages (view reminder, edit offer), per their modes. */
+  out.auto = await runAutoMessages().catch((err) => {
+    console.error("[upsell] auto messages", err);
+    return undefined;
+  });
   out.slack = await flushSlack().catch(() => false);
   return out;
 }
