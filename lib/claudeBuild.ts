@@ -135,13 +135,19 @@ export async function listJobs(limit = 300): Promise<BuildJob[]> {
   return rows.map(toJob);
 }
 
+type SettingKey = "criteria" | "trigger" | "trigger_token";
+
 export async function readSetting(key: "criteria" | "trigger"): Promise<string | null> {
+  return rawSetting(key);
+}
+
+async function rawSetting(key: SettingKey): Promise<string | null> {
   const p = await ready();
   const { rows } = await p.query<{ value: string | null }>("select value from claude_build_settings where key = $1", [key]);
   return rows[0]?.value ?? null;
 }
 
-async function writeSetting(key: "criteria" | "trigger", value: string): Promise<void> {
+async function writeSetting(key: SettingKey, value: string): Promise<void> {
   const p = await ready();
   await p.query(
     `insert into claude_build_settings (key, value, updated_at) values ($1, $2, now())
@@ -155,13 +161,37 @@ export async function readTrigger(): Promise<BuildTrigger> {
   const t = raw ? (JSON.parse(raw) as { at?: string; result?: string; session?: string | null }) : {};
   /* Only a claude.ai session link is shown as a link. */
   const session = t.session && /^https:\/\/claude\.ai\//.test(t.session) ? t.session : null;
-  return { configured: triggerConfigured(), lastFiredAt: t.at ?? null, lastResult: t.result ?? null, session };
+  const { token, from } = await triggerToken();
+  return {
+    configured: Boolean(triggerUrl() && token),
+    lastFiredAt: t.at ?? null,
+    lastResult: t.result ?? null,
+    session,
+    tokenFrom: from,
+    tokenEnd: token ? token.slice(-4) : null,
+  };
 }
 
 /* ---- the admin --------------------------------------------------------------- */
 
 export async function saveCriteria(text: string): Promise<void> {
   await writeSetting("criteria", text.slice(0, 50_000));
+}
+
+/* A trigger token pasted in the panel, for while CLAUDE_BUILD_TRIGGER_TOKEN is
+   not on the VPS yet (the env wins once it is). Kept in the database, never
+   sent back to a browser — the panel only ever sees its last 4 characters.
+   "" clears it. */
+export const TRIGGER_TOKEN_RE = /^sk-ant-oat01-[A-Za-z0-9_-]{20,300}$/;
+
+export async function saveTriggerToken(token: string): Promise<void> {
+  const t = token.trim();
+  if (t && !TRIGGER_TOKEN_RE.test(t)) throw new ClaudeBuildFailure("Token phải có dạng sk-ant-oat01-…");
+  if (t) await writeSetting("trigger_token", t);
+  else {
+    const p = await ready();
+    await p.query("delete from claude_build_settings where key = 'trigger_token'");
+  }
 }
 
 /** Queues `count` sets to build and fires the routine. */
@@ -311,14 +341,17 @@ export async function failJob(id: string, error: string): Promise<void> {
 /* ---- firing the routine --------------------------------------------------------- */
 
 /* The "Claude Build PFD" routine's API trigger. The URL alone fires nothing —
-   the token (CLAUDE_BUILD_TRIGGER_TOKEN, on the VPS only) is the secret — so
+   the token (CLAUDE_BUILD_TRIGGER_TOKEN, or the panel's) is the secret — so
    it is kept here; CLAUDE_BUILD_TRIGGER_URL overrides it. */
 const TRIGGER_URL = "https://api.anthropic.com/v1/claude_code/routines/trig_013EEF61JVUgQdM3WfY5iYBz/fire";
 const triggerUrl = () => process.env.CLAUDE_BUILD_TRIGGER_URL || TRIGGER_URL;
 
-/** Fireable once the trigger's token is set (see .env.example). */
-function triggerConfigured(): boolean {
-  return Boolean(triggerUrl() && process.env.CLAUDE_BUILD_TRIGGER_TOKEN);
+/** The trigger's token: the VPS env first, else the one pasted in the panel. */
+async function triggerToken(): Promise<{ token: string | null; from: "env" | "panel" | null }> {
+  const env = process.env.CLAUDE_BUILD_TRIGGER_TOKEN?.trim();
+  if (env) return { token: env, from: "env" };
+  const saved = await rawSetting("trigger_token");
+  return saved ? { token: saved, from: "panel" } : { token: null, from: null };
 }
 
 /**
@@ -334,7 +367,8 @@ function triggerConfigured(): boolean {
  * schedule — slower, nothing lost. Never throws; the panel shows the result.
  */
 export async function fireTrigger(reason: string, force = false): Promise<void> {
-  if (!triggerConfigured()) {
+  const { token } = await triggerToken();
+  if (!token) {
     await writeSetting("trigger", JSON.stringify({ at: new Date().toISOString(), result: "Chưa cấu hình API trigger — chờ lịch chạy của routine" }));
     return;
   }
@@ -355,7 +389,7 @@ export async function fireTrigger(reason: string, force = false): Promise<void> 
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${process.env.CLAUDE_BUILD_TRIGGER_TOKEN}`,
+        authorization: `Bearer ${token}`,
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({ text: `PageFly Design Claude Build (${reason}): claim and build every queued set.` }),

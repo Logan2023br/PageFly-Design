@@ -108,6 +108,26 @@ function check(ok: boolean, label: string, detail: unknown = null): void {
   await cb.startBuild(1, null, "admin");
   check(fires.length === 0 && !(await cb.readTrigger()).configured, "without one, the set waits for the schedule");
 
+  console.log("a token pasted in the panel");
+  const panelToken = "sk-ant-oat01-" + "p".repeat(40) + "WXYZ";
+  check(await cb.saveTriggerToken("not-a-token").then(() => false, () => true), "anything not sk-ant-oat01-… is refused");
+  await cb.saveTriggerToken(panelToken);
+  let tr = await cb.readTrigger();
+  check(tr.configured && tr.tokenFrom === "panel" && tr.tokenEnd === "WXYZ", "configured from the panel, showing only the last 4", tr);
+  check(!JSON.stringify(tr).includes("pppp"), "the token itself never leaves the server");
+  fires.length = 0;
+  await cb.fireTrigger("test", true);
+  check(fires[0]?.headers.authorization === `Bearer ${panelToken}`, "the routine is fired with the panel's token");
+  process.env.CLAUDE_BUILD_TRIGGER_TOKEN = "sk-ant-oat01-" + "e".repeat(40) + "ENVV";
+  tr = await cb.readTrigger();
+  check(tr.tokenFrom === "env" && tr.tokenEnd === "ENVV", "the VPS env wins once it is set", tr);
+  fires.length = 0;
+  await cb.fireTrigger("test", true);
+  check(String(fires[0]?.headers.authorization).endsWith("ENVV"), "…and is the one sent");
+  delete process.env.CLAUDE_BUILD_TRIGGER_TOKEN;
+  await cb.saveTriggerToken("");
+  check(!(await cb.readTrigger()).configured, "clearing it leaves the trigger unconfigured");
+
   await raw.end();
   stub.close();
   console.log(failures ? `\n${failures} failed` : "\nall passed");

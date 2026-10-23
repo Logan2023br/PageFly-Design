@@ -17,6 +17,7 @@ import {
   reportStep,
   retryJob,
   saveCriteria,
+  saveTriggerToken,
   startBuild,
 } from "@/lib/claudeBuild";
 import { getRepo } from "@/lib/db";
@@ -70,6 +71,7 @@ const adminBody = z.discriminatedUnion("action", [
   z.object({ action: z.literal("retry"), id: z.string().max(64) }),
   z.object({ action: z.literal("criteria"), text: z.string().max(50_000) }),
   z.object({ action: z.literal("fire") }),
+  z.object({ action: z.literal("token"), token: z.string().max(400) }),
 ]);
 
 const scriptBody = z.discriminatedUnion("action", [
@@ -99,6 +101,7 @@ export async function POST(request: Request) {
       else if (b.action === "cancel") await cancelJob(b.id);
       else if (b.action === "retry") await retryJob(b.id);
       else if (b.action === "criteria") await saveCriteria(b.text);
+      else if (b.action === "token") await saveTriggerToken(b.token);
       else await fireTrigger("by hand", true);
       return Response.json({ ok: true }, nocache);
     }

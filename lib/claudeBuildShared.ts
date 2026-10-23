@@ -41,5 +41,14 @@ export type BuildJob = {
   heartbeatAt: string | null;
 };
 
-export type BuildTrigger = { configured: boolean; lastFiredAt: string | null; lastResult: string | null; session: string | null };
+export type BuildTrigger = {
+  configured: boolean;
+  lastFiredAt: string | null;
+  lastResult: string | null;
+  session: string | null;
+  /** Where the trigger token comes from: the VPS env, the admin panel, or nowhere. */
+  tokenFrom: "env" | "panel" | null;
+  /** The token's last 4 characters, never more. */
+  tokenEnd: string | null;
+};
 

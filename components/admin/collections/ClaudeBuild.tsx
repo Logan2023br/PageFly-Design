@@ -57,6 +57,8 @@ export function ClaudeBuild() {
   const [note, setNote] = useState("");
   const [editCriteria, setEditCriteria] = useState(false);
   const [criteria, setCriteria] = useState("");
+  const [editToken, setEditToken] = useState(false);
+  const [token, setToken] = useState("");
   const [tick, setTick] = useState(0);
 
   const active = Boolean(data?.jobs.some((j) => j.status === "running" || j.status === "queued"));
@@ -202,7 +204,45 @@ export function ClaudeBuild() {
             Gọi lại routine
           </button>
         )}
+        {data.trigger.tokenFrom === "env" ? (
+          <span className="text-pf-faint">Token: trên server (…{data.trigger.tokenEnd})</span>
+        ) : (
+          <button type="button" onClick={() => (setToken(""), setEditToken(!editToken))} className="font-semibold text-pf-body hover:text-pf-text">
+            {data.trigger.tokenFrom === "panel" ? `Token: …${data.trigger.tokenEnd} · Đổi` : "Nhập trigger token"}
+          </button>
+        )}
       </div>
+
+      {/* the trigger token, until it is on the VPS */}
+      {editToken && data.trigger.tokenFrom !== "env" && (
+        <div className="grid gap-2 rounded-pf-md border border-pf-border bg-pf-bg-deep p-3">
+          <p className="text-[12px] text-pf-faint">
+            Token của API trigger (sk-ant-oat01-…), để “Start build” gọi routine ngay. Lưu trên server, không hiện lại ở đây. Khi đặt
+            CLAUDE_BUILD_TRIGGER_TOKEN trên VPS thì biến đó được dùng thay.
+          </p>
+          <input
+            type="password"
+            autoComplete="off"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder="sk-ant-oat01-…"
+            className={`${FIELD} font-mono text-[12.5px]`}
+          />
+          <div className="flex gap-2">
+            <Button icon="Check" disabled={busy || !token.trim()} onClick={() => void post({ action: "token", token }).then((ok) => ok && (setToken(""), setEditToken(false)))}>
+              Lưu token
+            </Button>
+            {data.trigger.tokenFrom === "panel" && (
+              <Button variant="ghost" disabled={busy} onClick={() => void post({ action: "token", token: "" }).then((ok) => ok && setEditToken(false))}>
+                Xoá token
+              </Button>
+            )}
+            <Button variant="quiet" onClick={() => (setToken(""), setEditToken(false))}>
+              Huỷ
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* counts */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
