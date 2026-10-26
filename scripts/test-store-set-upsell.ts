@@ -321,6 +321,26 @@ async function main() {
   assert.equal(counts.sent, 3);
   assert.equal(counts.reviewed, 2);
   assert.equal(counts.cared, 2);
+
+  // a connection pasted on the screen is stored encrypted, read back, and only its last 4 shown
+  const settingsMod = await import("../lib/storeSetUpsell/settings");
+  delete process.env.CRISP_KEY;
+  await saveSsuSettings({ crisp_key: "panel-crisp-key-9876" });
+  const stored = (await p.query("select value from ssu_settings where key = 'conn:crisp_key'")).rows[0].value;
+  assert.ok(!JSON.stringify(stored).includes("panel-crisp-key"), "stored in clear");
+  assert.equal(await settingsMod.connection("crisp_key"), "panel-crisp-key-9876");
+  const cs = (await settingsMod.connectionStates()).find((c) => c.key === "crisp_key")!;
+  assert.deepEqual([cs.from, cs.value, cs.hint, cs.broken], ["panel", null, "…9876", false]);
+  // sealed for another field (or another server's key) does not open
+  await p.query("update ssu_settings set value = (select value from ssu_settings where key = 'conn:crisp_key') where key = 'conn:ac2_token'");
+  await p.query("insert into ssu_settings (key, value) select 'conn:crisp_identifier', value from ssu_settings where key = 'conn:crisp_key'");
+  delete process.env.CRISP_IDENTIFIER;
+  const ci = (await settingsMod.connectionStates()).find((c) => c.key === "crisp_identifier")!;
+  assert.equal(ci.broken, true);
+  assert.equal(await settingsMod.connection("crisp_identifier"), "");
+  process.env.CRISP_KEY = "crisp-key";
+  process.env.CRISP_IDENTIFIER = "crisp-id";
+
   console.log("store set upsell: all checks passed", JSON.stringify(counts));
   await (await import("../lib/upsell/db")).closeUpsellPool();
 }

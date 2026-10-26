@@ -1,6 +1,8 @@
 import "server-only";
 
+import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { db } from "./db";
+import { purposeKey } from "@/lib/session";
 import { UpsellError } from "@/lib/upsell/types";
 
 /* ==========================================================================
@@ -10,6 +12,12 @@ import { UpsellError } from "@/lib/upsell/types";
    (the VPS .env), and only while that is unset from what an admin pasted on
    the Cài đặt tab — the same arrangement as Claude Build's trigger token.
    The screen only ever learns whether one is set, never its value.
+
+   A pasted connection is ENCRYPTED in the database (AES-256-GCM, the key
+   derived from SESSION_SECRET or the server's secret file, the connection's
+   name bound in), so a database dump or backup does not give the tokens away.
+   If that secret changes, the stored ones cannot be opened: the screen says
+   "cần nhập lại" and the job treats them as unset.
    ========================================================================== */
 
 export const SSU_DEFAULTS = {
@@ -83,9 +91,50 @@ export const CONNECTIONS = {
 
 export type ConnectionKey = keyof typeof CONNECTIONS;
 
-export type ConnectionState = { key: ConnectionKey; label: string; from: "env" | "panel" | "default" | null; value: string | null };
+export type ConnectionState = {
+  key: ConnectionKey;
+  label: string;
+  env: string;
+  secret: boolean;
+  from: "env" | "panel" | "default" | null;
+  /** the value of a non-secret connection */
+  value: string | null;
+  /** a secret's last 4 characters, to tell which token is in */
+  hint: string | null;
+  /** stored, but cannot be decrypted with this server's key */
+  broken: boolean;
+};
 
 const CONN_PREFIX = "conn:";
+
+type Sealed = { v: 1; iv: string; tag: string; ct: string };
+
+const connKey = () => purposeKey("ssu-connections-v1");
+
+function seal(key: string, plain: string): Sealed {
+  const iv = randomBytes(12);
+  const c = createCipheriv("aes-256-gcm", connKey(), iv);
+  c.setAAD(Buffer.from(key));
+  const ct = Buffer.concat([c.update(plain, "utf8"), c.final()]);
+  return { v: 1, iv: iv.toString("base64"), tag: c.getAuthTag().toString("base64"), ct: ct.toString("base64") };
+}
+
+/** The stored value: "" when there is none, null when it cannot be opened. */
+function unseal(key: string, raw: unknown): string | null {
+  if (raw === undefined || raw === null || raw === "") return "";
+  /* plain text from before encryption: still read, sealed on the next save */
+  if (typeof raw === "string") return raw;
+  const s = raw as Partial<Sealed>;
+  if (s.v !== 1 || !s.iv || !s.tag || !s.ct) return null;
+  try {
+    const d = createDecipheriv("aes-256-gcm", connKey(), Buffer.from(s.iv, "base64"));
+    d.setAAD(Buffer.from(key));
+    d.setAuthTag(Buffer.from(s.tag, "base64"));
+    return Buffer.concat([d.update(Buffer.from(s.ct, "base64")), d.final()]).toString("utf8");
+  } catch {
+    return null;
+  }
+}
 
 async function readRaw(): Promise<Map<string, unknown>> {
   const q = await db();
@@ -115,7 +164,7 @@ export async function saveSsuSettings(patch: Record<string, unknown>): Promise<S
     if (Object.hasOwn(CONNECTIONS, key)) {
       const v = String(raw ?? "").trim();
       if (v.length > 4000 || /\s/.test(v)) bad.push(`${key} (không hợp lệ)`);
-      else rows.push([CONN_PREFIX + key, v]);
+      else rows.push([CONN_PREFIX + key, v ? seal(key, v) : ""]);
       continue;
     }
     if (!Object.hasOwn(SSU_DEFAULTS, key)) {
@@ -155,9 +204,8 @@ export async function connection(key: ConnectionKey): Promise<string> {
   const env = process.env[def.env]?.trim();
   if (env) return env;
   const raw = await readRaw();
-  const panel = raw.get(CONN_PREFIX + key);
-  if (typeof panel === "string" && panel) return panel;
-  return def.fallback;
+  const panel = unseal(key, raw.get(CONN_PREFIX + key));
+  return panel || def.fallback;
 }
 
 export async function connectionStates(): Promise<ConnectionState[]> {
@@ -165,10 +213,19 @@ export async function connectionStates(): Promise<ConnectionState[]> {
   return (Object.keys(CONNECTIONS) as ConnectionKey[]).map((key) => {
     const def = CONNECTIONS[key];
     const env = process.env[def.env]?.trim();
-    const panel = raw.get(CONN_PREFIX + key);
-    const from = env ? "env" : typeof panel === "string" && panel ? "panel" : def.fallback ? "default" : null;
-    const value = def.secret ? null : env || (typeof panel === "string" && panel) || def.fallback || null;
-    return { key, label: `${def.label} · ${def.env}`, from, value };
+    const panel = unseal(key, raw.get(CONN_PREFIX + key));
+    const from = env ? "env" : panel ? "panel" : def.fallback ? "default" : null;
+    const current = env || panel || def.fallback || "";
+    return {
+      key,
+      label: def.label,
+      env: def.env,
+      secret: def.secret,
+      from,
+      value: def.secret ? null : current || null,
+      hint: def.secret && current.length >= 8 ? `…${current.slice(-4)}` : null,
+      broken: !env && panel === null,
+    };
   });
 }
 

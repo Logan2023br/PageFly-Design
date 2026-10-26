@@ -11,10 +11,15 @@ import { FIELD, FIELD_LABEL, api } from "../shared";
 /* ==========================================================================
    Cài đặt: the mode and templates, and the connections (Mixpanel, Crisp,
    AC2). A connection set in the VPS .env wins and cannot be changed here; a
-   secret pasted here is never shown again, only "đã đặt".
+   connection pasted here is stored encrypted and a secret is never shown
+   again, only its last 4 characters. "Kiểm tra kết nối" reads each service
+   once with what is set now.
    ========================================================================== */
 
 const API = "/api/admin/collection-pages/store-set-upsell/settings";
+const TEST_API = "/api/admin/collection-pages/store-set-upsell/connections-test";
+
+type TestResult = { service: string; ok: boolean; detail: string };
 
 const TEMPLATE_KIND: Record<string, string> = {
   thanks_template: "thanks",
@@ -44,6 +49,17 @@ export function SettingsPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [tests, setTests] = useState<TestResult[] | null>(null);
+  const [testing, setTesting] = useState(false);
+
+  const test = async () => {
+    setTesting(true);
+    setTests(null);
+    const r = await api<{ results: TestResult[] }>(TEST_API, { method: "POST" });
+    setTesting(false);
+    if (!r.ok) return setError(r.error);
+    setTests(r.results);
+  };
 
   const save = async (body: Record<string, string>) => {
     setBusy(true);
@@ -64,35 +80,64 @@ export function SettingsPanel({
       <section className="grid gap-3 rounded-pf-card border border-pf-border bg-pf-card p-4">
         <h3 className="text-[14px] font-semibold text-pf-text">Kết nối</h3>
         <p className="text-[12.5px] text-pf-muted">
+          Dán mã vào ô rồi bấm <b>Lưu kết nối</b>. Mã được <b>mã hoá</b> trước khi lưu vào database và không bao giờ hiện lại — chỉ hiện 4 ký tự cuối để biết
+          đang dùng mã nào. Khi sau này đặt cùng tên biến trong .env của VPS thì .env được dùng, mã ở đây bỏ qua. Để trống một ô và lưu = giữ nguyên.
+        </p>
+        <p className="text-[12.5px] text-pf-muted">
           Crisp và AC2 dùng chung token với BPU Ops (Upsell Build Pages). Mixpanel cần một service account của project PageFly Analytics - Production
-          (Organization settings → Service accounts) — export API của Mixpanel cho phép 60 lần đọc mỗi giờ, đúng bằng mỗi phút một lần.
+          (Organization settings → Service accounts, quyền Consumer).
         </p>
         <div className="grid gap-2">
           {connections.map((c) => (
-            <div key={c.key} className="grid items-center gap-2 md:grid-cols-[320px_1fr_auto]">
-              <span className="text-[12.5px] text-pf-body">{c.label}</span>
+            <div key={c.key} className="grid items-center gap-2 md:grid-cols-[300px_1fr_auto]">
+              <span className="text-[12.5px] text-pf-body">
+                {c.label}
+                <code className="block text-[11px] text-pf-faint">{c.env}</code>
+              </span>
               {c.from === "env" ? (
-                <span className="text-[12px] text-pf-muted">Đặt trong .env của VPS {c.value ? `· ${c.value}` : ""}</span>
+                <span className="text-[12px] text-pf-muted">Đặt trong .env của VPS {c.value ? `· ${c.value}` : c.hint ? `· ${c.hint}` : ""}</span>
               ) : (
                 <input
                   className={FIELD}
-                  type={c.value === null ? "password" : "text"}
-                  placeholder={c.from === "panel" ? (c.value ?? "đã đặt — nhập để thay") : (c.value ?? "chưa đặt")}
+                  type={c.secret ? "password" : "text"}
+                  placeholder={
+                    c.broken
+                      ? "không giải mã được — nhập lại"
+                      : c.from === "panel"
+                        ? `${c.value ?? `đã lưu ${c.hint ?? ""}`} — nhập để thay`
+                        : c.from === "default"
+                          ? `mặc định ${c.value ?? ""} — nhập để thay`
+                          : "chưa có — dán mã vào đây"
+                  }
                   value={conn[c.key] ?? ""}
                   onChange={(e) => setConn({ ...conn, [c.key]: e.target.value })}
                   autoComplete="off"
                   aria-label={c.label}
                 />
               )}
-              <Pill tone={c.from ? "ok" : "bad"}>{c.from === "env" ? ".env" : c.from === "panel" ? "đã đặt" : c.from === "default" ? "mặc định" : "chưa đặt"}</Pill>
+              <Pill tone={c.broken ? "bad" : c.from ? "ok" : "bad"}>
+                {c.broken ? "cần nhập lại" : c.from === "env" ? ".env" : c.from === "panel" ? `đã lưu (mã hoá)${c.hint ? ` ${c.hint}` : ""}` : c.from === "default" ? "mặc định" : "chưa có"}
+              </Pill>
             </div>
           ))}
         </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" disabled={busy || Object.values(conn).every((v) => !v.trim())} onClick={() => save(conn)}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" disabled={busy || Object.values(conn).every((v) => !v.trim())} onClick={() => save(Object.fromEntries(Object.entries(conn).filter(([, v]) => v.trim())))}>
             Lưu kết nối
           </Button>
+          <Button size="sm" variant="ghost" icon="RefreshCw" disabled={testing} onClick={test}>
+            {testing ? "Đang kiểm tra…" : "Kiểm tra kết nối"}
+          </Button>
         </div>
+        {tests && (
+          <ul className="grid gap-1 text-[12.5px]">
+            {tests.map((t) => (
+              <li key={t.service} className={t.ok ? "text-pf-success" : "text-pf-danger"}>
+                {t.ok ? "✓" : "✗"} <b>{t.service}</b>: {t.detail}
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="grid gap-3 rounded-pf-card border border-pf-border bg-pf-card p-4">

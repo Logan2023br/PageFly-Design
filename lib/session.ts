@@ -167,6 +167,16 @@ function secret(): string {
   return cached;
 }
 
+/**
+ * A 32-byte key for one purpose, derived from the signing key: for what this
+ * server encrypts at rest (credentials pasted on an admin screen). The same
+ * SESSION_SECRET, or the same secret file, gives the same key; a new one makes
+ * what was sealed with the old one unreadable, and it has to be pasted again.
+ */
+export function purposeKey(purpose: string): Buffer {
+  return createHmac("sha256", secret()).update(`pfd-purpose|${purpose}`).digest();
+}
+
 /** Where the signing key came from, for diagnostics. */
 export function keySource(): KeySource {
   secret();

@@ -285,3 +285,54 @@ export async function conversationMessages(sid: string): Promise<CrispMessage[]>
   if (!ok(r)) throw new Error(`Crisp messages ${r.status}`);
   return Array.isArray(r.body?.data) ? r.body.data : [];
 }
+
+/* ---------------------------------------------------------------- test */
+
+export type ConnectionTest = { service: "Mixpanel" | "Crisp" | "AC2"; ok: boolean; detail: string };
+
+/**
+ * One cheap read per service, for "Kiểm tra kết nối" on the Cài đặt tab.
+ * Mixpanel's costs one of its 60 export calls an hour; nothing is written.
+ */
+export async function testConnections(sampleDomain: string | null): Promise<ConnectionTest[]> {
+  const why = (status: number, text: string) =>
+    status === 401 || status === 403 ? `sai token (${status})` : status === 0 ? `không kết nối được: ${text.slice(0, 120)}` : `trả lời ${status}: ${text.slice(0, 120)}`;
+
+  const mixpanel = async (): Promise<ConnectionTest> => {
+    const secret = await connection("mixpanel_secret");
+    if (!secret) return { service: "Mixpanel", ok: false, detail: "chưa điền secret" };
+    const username = await connection("mixpanel_username");
+    const project = await connection("mixpanel_project_id");
+    const day = ymd(new Date(Date.now() - 86_400_000));
+    const q = new URLSearchParams({ project_id: project, from_date: day, to_date: day, event: JSON.stringify(["select_template"]), limit: "1" });
+    const r = await call<never>(`https://data.mixpanel.com/api/2.0/export?${q}`, {
+      headers: { Authorization: username ? basic(username, secret) : basic(secret, ""), Accept: "text/plain" },
+    });
+    if (r.status === 200) return { service: "Mixpanel", ok: true, detail: `đọc được project ${project}` };
+    if (r.status === 429) return { service: "Mixpanel", ok: true, detail: "token đúng, đang bị giới hạn 60 lần/giờ — thử lại sau" };
+    return { service: "Mixpanel", ok: false, detail: why(r.status, r.text) };
+  };
+
+  const crispTest = async (): Promise<ConnectionTest> => {
+    try {
+      const r = await crisp<CrispConversation[]>("GET", "/conversations/1?per_page=1");
+      return ok(r)
+        ? { service: "Crisp", ok: true, detail: `đọc được website ${r.wid}` }
+        : { service: "Crisp", ok: false, detail: why(r.status, r.body?.reason ?? r.text) };
+    } catch (err) {
+      return { service: "Crisp", ok: false, detail: err instanceof ConfigMissing ? "chưa điền identifier / key" : String(err) };
+    }
+  };
+
+  const ac2 = async (): Promise<ConnectionTest> => {
+    const token = await connection("ac2_token");
+    if (!token) return { service: "AC2", ok: false, detail: "chưa điền token" };
+    const domain = sampleDomain ?? "pagefly-demo.myshopify.com";
+    const r = await call<Ac2Store>(`https://ac2.pagefly.io/api/app-data/stores/${encodeURIComponent(domain)}?token=${encodeURIComponent(token)}`);
+    if (r.status === 200 && r.body?.shopDomain) return { service: "AC2", ok: true, detail: `đọc được store ${domain}` };
+    if (r.status === 401 || r.status === 403) return { service: "AC2", ok: false, detail: why(r.status, r.text) };
+    return { service: "AC2", ok: false, detail: `${why(r.status, r.text)} (store thử: ${domain})` };
+  };
+
+  return Promise.all([mixpanel(), crispTest(), ac2()]);
+}
