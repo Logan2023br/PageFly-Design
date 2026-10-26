@@ -265,8 +265,13 @@ export async function sendInNewConversation(o: {
     content: o.note,
     user: { type: "website", nickname: "PageFly Team" },
   });
-  await crisp("PATCH", `/conversation/${sid}/state`, { state: "resolved" });
+  await resolveConversation(sid);
   return { session_id: sid, ticket_link: ticketLink(created.wid, sid) };
+}
+
+/** Resolved after every message, as BPU Ops does: a reply from the customer reopens it. */
+export async function resolveConversation(sid: string): Promise<void> {
+  await crisp("PATCH", `/conversation/${sid}/state`, { state: "resolved" });
 }
 
 export async function sendInConversation(sid: string, content: string, sender: string): Promise<void> {

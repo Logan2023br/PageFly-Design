@@ -44,6 +44,7 @@ const world = {
   convs: [] as Conv[],
   sent: [] as { sid: string; content: string; nickname: string }[],
   exportCalls: 0,
+  resolved: [] as string[],
 };
 const reply = (body: unknown, status = 200) =>
   new Response(typeof body === "string" ? body : JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -92,7 +93,10 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     if ((m = path.match(/^\/conversation\/([^/]+)\/messages$/))) {
       return reply({ error: false, data: world.convs.find((x) => x.session_id === m![1])!.messages });
     }
-    if (path.match(/\/state$/)) return reply({ error: false, data: {} });
+    if ((m = path.match(/^\/conversation\/([^/]+)\/state$/))) {
+      if (JSON.parse(String(init!.body)).state === "resolved") world.resolved.push(m[1]);
+      return reply({ error: false, data: {} });
+    }
   }
   throw new Error(`unexpected fetch ${method} ${u}`);
 }) as typeof fetch;
@@ -218,11 +222,13 @@ async function main() {
   await customerAction("alpha.myshopify.com", "mark_checked", {}, "admin:test");
   assert.equal((await status("alpha.myshopify.com")).needs_check, false);
 
-  // review ask goes into the same conversation
+  // review ask goes into the same conversation, which is resolved again after it
+  const resolvedBefore = world.resolved.filter((x) => x === a.crisp_session).length;
   const ra = (await customerAction("alpha.myshopify.com", "draft_review", {}, "admin:test")) as { id: string };
   await messageAction(ra.id, "approve", null, "admin:test");
   assert.equal(world.sent.length, 2);
   assert.equal(world.sent[1].sid, a.crisp_session);
+  assert.equal(world.resolved.filter((x) => x === a.crisp_session).length, resolvedBefore + 1);
   assert.ok((await status("alpha.myshopify.com")).review_asked_at);
 
   // upgrade seen on AC2

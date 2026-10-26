@@ -3,7 +3,7 @@ import "server-only";
 import { getRepo } from "@/lib/db";
 import { fillTemplate, longDate, newMessageId } from "@/lib/upsell/common";
 import { UpsellError } from "@/lib/upsell/types";
-import { conversationMessages, reviewCheck, sendInConversation, sendInNewConversation } from "./clients";
+import { conversationMessages, resolveConversation, reviewCheck, sendInConversation, sendInNewConversation } from "./clients";
 import { db, logEvent, tx, type Db } from "./db";
 import { getSsuSettings, type SsuSettings } from "./settings";
 import { CARE_KINDS, titleOfSlug, type SsuCustomer, type SsuMessage, type SsuMessageKind } from "./types";
@@ -315,6 +315,7 @@ export async function sendOne(id: string, actor = "system"): Promise<SendOutcome
   try {
     if (session && m.kind !== "thanks") {
       await sendInConversation(session, content, cfg.sender_name || "Logan");
+      await resolveConversation(session);
     } else {
       const r = await sendInNewConversation({
         email: cu.email,
