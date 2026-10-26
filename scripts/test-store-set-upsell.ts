@@ -32,7 +32,8 @@ process.env.MIXPANEL_SERVICE_ACCOUNT_USERNAME = "sa.user";
 process.env.MIXPANEL_SERVICE_ACCOUNT_SECRET = "sa-secret";
 process.env.CRISP_IDENTIFIER = "crisp-id";
 process.env.CRISP_KEY = "crisp-key";
-process.env.AC2_TOKEN = "ac2-token";
+process.env.N8N_AC2_URL = "https://n8n.test/webhook/ac2";
+process.env.N8N_AC2_KEY = "bpu-key";
 
 /* ---------------------------------------------------------------- the stub */
 
@@ -58,10 +59,6 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (u.host === "n8n.test") {
     assert.equal((init?.headers as Record<string, string>)["X-BPU-Key"], "bpu-key");
     const d = decodeURIComponent(u.searchParams.get("path")!.slice(1));
-    return world.stores[d] ? reply(world.stores[d]) : reply({}, 404);
-  }
-  if (u.host === "ac2.pagefly.io") {
-    const d = decodeURIComponent(u.pathname.split("/").pop()!);
     return world.stores[d] ? reply(world.stores[d]) : reply({}, 404);
   }
   if (u.host === "api.crisp.chat") {
@@ -337,7 +334,7 @@ async function main() {
   const cs = (await settingsMod.connectionStates()).find((c) => c.key === "crisp_key")!;
   assert.deepEqual([cs.from, cs.value, cs.hint, cs.broken], ["panel", null, "…9876", false]);
   // sealed for another field (or another server's key) does not open
-  await p.query("update ssu_settings set value = (select value from ssu_settings where key = 'conn:crisp_key') where key = 'conn:ac2_token'");
+  await p.query("update ssu_settings set value = (select value from ssu_settings where key = 'conn:crisp_key') where key = 'conn:n8n_ac2_key'");
   await p.query("insert into ssu_settings (key, value) select 'conn:crisp_identifier', value from ssu_settings where key = 'conn:crisp_key'");
   delete process.env.CRISP_IDENTIFIER;
   const ci = (await settingsMod.connectionStates()).find((c) => c.key === "crisp_identifier")!;
@@ -348,13 +345,10 @@ async function main() {
 
   // AC2 through BPU Ops' n8n proxy, when its URL is set
   const clients = await import("../lib/storeSetUpsell/clients");
-  process.env.N8N_AC2_URL = "https://n8n.test/webhook/ac2";
-  process.env.N8N_AC2_KEY = "bpu-key";
   assert.equal((await clients.ac2Store("alpha.myshopify.com"))?.shopDomain, "alpha.myshopify.com");
   const ac2t = (await clients.testConnections("alpha.myshopify.com")).find((t) => t.service === "AC2")!;
   assert.equal(ac2t.ok, true);
   assert.match(ac2t.detail, /qua n8n/);
-  delete process.env.N8N_AC2_URL;
 
   console.log("store set upsell: all checks passed", JSON.stringify(counts));
   await (await import("../lib/upsell/db")).closeUpsellPool();

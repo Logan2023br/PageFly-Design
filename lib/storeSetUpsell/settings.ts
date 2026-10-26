@@ -88,7 +88,6 @@ export const CONNECTIONS = {
   crisp_key: { env: "CRISP_KEY", label: "Crisp plugin key (giống BPU Ops)", fallback: "", secret: true },
   n8n_ac2_url: { env: "N8N_AC2_URL", label: "AC2 qua n8n: URL (giống BPU Ops)", fallback: "", secret: false },
   n8n_ac2_key: { env: "N8N_AC2_KEY", label: "AC2 qua n8n: key (giống BPU Ops)", fallback: "", secret: true },
-  ac2_token: { env: "AC2_TOKEN", label: "AC2 token trực tiếp (chỉ khi không dùng n8n)", fallback: "", secret: true },
 } as const;
 
 export type ConnectionKey = keyof typeof CONNECTIONS;

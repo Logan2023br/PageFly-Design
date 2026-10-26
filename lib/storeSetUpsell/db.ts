@@ -138,6 +138,8 @@ create table if not exists ssu_settings (
   value      jsonb,
   updated_at timestamptz not null default now()
 );
+/* AC2 is read only through n8n now: a token pasted before that goes. */
+delete from ssu_settings where key = 'conn:ac2_token';
 `;
 
 let ensured: Promise<void> | null = null;

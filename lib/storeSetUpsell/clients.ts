@@ -131,22 +131,15 @@ export type Ac2Store = {
 };
 
 /**
- * GET an AC2 stores path, as BPU Ops does: through the n8n proxy when its URL
- * is set (the AC2 token then stays in n8n), else with AC2_TOKEN directly.
- * null when neither is configured.
+ * GET an AC2 stores path through BPU Ops' n8n proxy: the AC2 token stays in
+ * n8n, this server holds only the proxy's key. null when it is not configured.
  */
-async function ac2Get<T>(path: string): Promise<(Answer<T> & { via: string }) | null> {
+async function ac2Get<T>(path: string): Promise<Answer<T> | null> {
   const proxy = await connection("n8n_ac2_url");
-  if (proxy) {
-    const key = await connection("n8n_ac2_key");
-    const sep = proxy.includes("?") ? "&" : "?";
-    const r = await call<T>(`${proxy}${sep}${new URLSearchParams({ path })}`, { headers: { "X-BPU-Key": key } });
-    return { ...r, via: "n8n" };
-  }
-  const token = await connection("ac2_token");
-  if (!token) return null;
-  const r = await call<T>(`https://ac2.pagefly.io/api/app-data/stores${path}?token=${encodeURIComponent(token)}`);
-  return { ...r, via: "token" };
+  const key = await connection("n8n_ac2_key");
+  if (!proxy || !key) return null;
+  const sep = proxy.includes("?") ? "&" : "?";
+  return call<T>(`${proxy}${sep}${new URLSearchParams({ path })}`, { headers: { "X-BPU-Key": key } });
 }
 
 /** The store, or null when AC2 is not configured, does not answer, or does not know it. */
@@ -345,8 +338,8 @@ export async function testConnections(sampleDomain: string | null): Promise<Conn
   const ac2 = async (): Promise<ConnectionTest> => {
     const domain = sampleDomain ?? "pagefly-demo.myshopify.com";
     const r = await ac2Get<Ac2Store>(`/${encodeURIComponent(domain)}`);
-    if (!r) return { service: "AC2", ok: false, detail: "chưa điền (n8n URL + key, hoặc token)" };
-    const via = r.via === "n8n" ? "qua n8n" : "bằng token";
+    if (!r) return { service: "AC2", ok: false, detail: "chưa điền n8n URL + key" };
+    const via = "qua n8n";
     if (r.status === 200 && r.body?.shopDomain) return { service: "AC2", ok: true, detail: `đọc được store ${domain} ${via}` };
     if (r.status === 401 || r.status === 403) return { service: "AC2", ok: false, detail: `${why(r.status, r.text)} ${via}` };
     return { service: "AC2", ok: false, detail: `${why(r.status, r.text)} ${via} (store thử: ${domain})` };
