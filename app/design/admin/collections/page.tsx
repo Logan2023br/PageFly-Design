@@ -3,6 +3,8 @@ import { adminGate } from "@/components/admin/adminGate";
 import { CollectionsTabs } from "@/components/admin/collections/CollectionsTabs";
 import { missingBuiltIns } from "@/lib/collectionPagesServer";
 import { getRepo } from "@/lib/db";
+import { hasStoreSetDatabase } from "@/lib/storeSetUpsell/db";
+import { ssuCounts } from "@/lib/storeSetUpsell/queries";
 
 /* /design/admin/collections — the sets on /collection-pages. Read on the
    server like the other admin screens. */
@@ -29,6 +31,13 @@ export default async function AdminCollectionsPage(props: PageProps<"/design/adm
     repo.listCollectionLeads(5000).catch(() => []),
     repo.listReferrals().catch(() => []),
   ]);
+  /* What the Upsell button counts: drafts to approve and replies to read. */
+  const upsell = hasStoreSetDatabase()
+    ? await ssuCounts().then(
+        (c) => (c.pending ?? 0) + (c.needs_check ?? 0),
+        () => 0,
+      )
+    : 0;
 
   return (
     <AdminShell
@@ -43,6 +52,7 @@ export default async function AdminCollectionsPage(props: PageProps<"/design/adm
         ordersError={read.error}
         leads={leads}
         referralsToCheck={referrals.filter((r) => r.status === "pending").length}
+        upsellToCheck={upsell}
         tab={tab === "orders" || tab === "leads" ? tab : "sets"}
       />
     </AdminShell>
