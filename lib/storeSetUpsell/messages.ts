@@ -3,10 +3,10 @@ import "server-only";
 import { getRepo } from "@/lib/db";
 import { fillTemplate, longDate, newMessageId } from "@/lib/upsell/common";
 import { UpsellError } from "@/lib/upsell/types";
-import { reviewCheck, sendInConversation, sendInNewConversation } from "./clients";
+import { conversationMessages, reviewCheck, sendInConversation, sendInNewConversation } from "./clients";
 import { db, logEvent, tx, type Db } from "./db";
 import { getSsuSettings, type SsuSettings } from "./settings";
-import { titleOfSlug, type SsuCustomer, type SsuMessage, type SsuMessageKind } from "./types";
+import { CARE_KINDS, titleOfSlug, type SsuCustomer, type SsuMessage, type SsuMessageKind } from "./types";
 
 /* ==========================================================================
    The messages: written from a template, approved by an admin (or by the
@@ -19,15 +19,45 @@ import { titleOfSlug, type SsuCustomer, type SsuMessage, type SsuMessageKind } f
    ========================================================================== */
 
 /* Same shape as the Upsell Build Pages messages (common.ts): greeting with the
-   store in bold, short paragraphs, the key words bold, a bold signature. */
+   store in bold, short paragraphs, the key words bold, a bold signature.
+
+   WHAT THE FREE EDITING COVERS IS SAID IN EVERY MESSAGE THAT OFFERS IT: 15
+   days from the day the thanks is sent, and only the pages of the store set
+   they are using — {pages} names them — never the rest of the store. */
 export const DEFAULT_THANKS_TEMPLATE =
   "Hi **{store_name}**,\n\n" +
   "Thank you for choosing the **{set_name}** store set from PageFly's templates! 🎉 We hope it gives your store a great new look.\n\n" +
-  "To help you make it truly yours, we also offer **Complimentary Editing** services for your {set_name} pages: tell us what you would like " +
-  "changed — text, images, colors or sections — and our team will make the edits for you.\n" +
-  "(Please note that this is a **Free Editing** service, available for a limited period of **15 days** — until **{edit_until}**.)\n\n" +
+  "To help you make it truly yours, we offer **Complimentary Editing** for the store set pages you are using: {pages}. " +
+  "Tell us what you would like changed — text, images, colors or sections — and our team will make the edits for you.\n\n" +
+  "Please note:\n" +
+  "• This **Free Editing** service is available for **{edit_days} days from today** — until **{edit_until}**.\n" +
+  "• It covers only the pages from the **{set_name}** store set that you are using, not other pages in your store.\n\n" +
   "👉 **Simply reply to this message** with the changes you need, and we will take care of it.\n\n" +
-  "If you need any assistance, simply reply to this message.\n\n" +
+  "Best regards,\n**{pic} – PageFly Support**";
+
+/** Saw the thanks, no reply: the days left, and for which pages. */
+export const DEFAULT_EDIT_REMINDER_TEMPLATE =
+  "Hi **{store_name}**,\n\n" +
+  "A quick reminder: your **Free Editing** service for the store set pages you are using — {pages} — " +
+  "has only **{days_left} days left** (until **{edit_until}**).\n\n" +
+  "If there is anything you would like adjusted — text, images, colors or layout — just **reply to this message** and our team will help you.\n" +
+  "(Free editing covers only the pages from the **{set_name}** store set, not other pages in your store.)\n\n" +
+  "Best regards,\n**{pic} – PageFly Support**";
+
+/** Read the thanks, no reply: a check-in that asks for an answer. */
+export const DEFAULT_CARE_READ_TEMPLATE =
+  "Hi **{store_name}**,\n\n" +
+  "Just checking in — how are the **{set_name}** pages working for your store so far? 😊\n\n" +
+  "If you would like anything changed on {pages}, or you are not sure how to customize something in PageFly, " +
+  "**reply here** and I will help you right away. Your free editing for these pages is available until **{edit_until}**.\n\n" +
+  "Best regards,\n**{pic} – PageFly Support**";
+
+/** Upgraded, no reply: thanks, and an open door. */
+export const DEFAULT_CARE_UPGRADED_TEMPLATE =
+  "Hi **{store_name}**,\n\n" +
+  "Thank you for upgrading to the **{plan}** plan! 🎉 We really appreciate your trust in PageFly.\n\n" +
+  "I would be happy to help you get the most out of it — whether that is polishing your **{set_name}** pages or building a new one. " +
+  "Just **reply to this message** and tell me what you have in mind.\n\n" +
   "Best regards,\n**{pic} – PageFly Support**";
 
 export const DEFAULT_REVIEW_TEMPLATE =
@@ -38,6 +68,15 @@ export const DEFAULT_REVIEW_TEMPLATE =
   "👉 [Leave a review]({review_url})\n\n" +
   "And if you need anything else for your pages, just reply here.\n\n" +
   "Best regards,\n**{pic} – PageFly Support**";
+
+const DEFAULTS: Record<SsuMessageKind, [keyof SsuSettings | null, string]> = {
+  thanks: ["thanks_template", DEFAULT_THANKS_TEMPLATE],
+  edit_reminder: ["edit_reminder_template", DEFAULT_EDIT_REMINDER_TEMPLATE],
+  care_read: ["care_read_template", DEFAULT_CARE_READ_TEMPLATE],
+  care_upgraded: ["care_upgraded_template", DEFAULT_CARE_UPGRADED_TEMPLATE],
+  review_ask: ["review_template", DEFAULT_REVIEW_TEMPLATE],
+  custom: [null, ""],
+};
 
 let setNames: { at: number; names: Map<string, string> } | null = null;
 
@@ -58,29 +97,64 @@ export async function setName(slug: string | null | undefined): Promise<string> 
   return setNames?.names.get(slug) ?? titleOfSlug(slug);
 }
 
-/** The set the customer picked most recently. */
-export async function latestSet(c: Db, domain: string): Promise<string | null> {
-  const { rows } = await c.query<{ store_set: string }>(
-    "select store_set from ssu_selections where store_domain = $1 order by event_time desc limit 1",
+/** What a message is written from, besides the customer's row: the sets
+    and the store set pages they picked (every select, in the order made). */
+export type MessageContext = { sets: string[]; pages: string[] };
+
+export async function messageContext(c: Db, domain: string): Promise<MessageContext> {
+  const { rows } = await c.query<{ store_set: string; page: string }>(
+    `select store_set, coalesce(template_id, initcap(replace(store_set, '-', ' ')) || ' · ' || coalesce(page_type, 'page')) as page,
+            min(event_time) as first
+       from ssu_selections where store_domain = $1
+      group by 1, 2 order by first`,
     [domain],
   );
-  return rows[0]?.store_set ?? null;
+  return { sets: [...new Set(rows.map((r) => r.store_set))], pages: [...new Set(rows.map((r) => r.page))] };
 }
 
-export async function messageFor(kind: SsuMessageKind, cu: Pick<SsuCustomer, "store_name" | "store_domain">, set: string | null, cfg: SsuSettings): Promise<string> {
-  const tpl =
-    kind === "review_ask" ? cfg.review_template.trim() || DEFAULT_REVIEW_TEMPLATE : cfg.thanks_template.trim() || DEFAULT_THANKS_TEMPLATE;
+const DAY = 86_400_000;
+
+/** The last day of the free editing: `edit_days` from the thanks being sent —
+    or from now, for a thanks not sent yet. */
+export function editUntil(cu: Pick<SsuCustomer, "sent_at">, cfg: SsuSettings): Date {
+  const base = cu.sent_at ? new Date(cu.sent_at).getTime() : Date.now();
+  return new Date(base + cfg.edit_days * DAY);
+}
+
+export function daysLeft(cu: Pick<SsuCustomer, "sent_at">, cfg: SsuSettings): number {
+  return Math.max(0, Math.ceil((editUntil(cu, cfg).getTime() - Date.now()) / DAY));
+}
+
+type MessageCustomer = Pick<SsuCustomer, "store_name" | "store_domain" | "sent_at" | "pf_plan" | "upgraded_to">;
+
+export async function messageFor(kind: SsuMessageKind, cu: MessageCustomer, ctx: MessageContext, cfg: SsuSettings): Promise<string> {
+  const [key, fallback] = DEFAULTS[kind];
+  const tpl = (key ? String(cfg[key] ?? "").trim() : "") || fallback;
+  /* A thanks is about to be sent: its days start today. */
+  const from = kind === "thanks" ? { sent_at: null } : cu;
+  const names = await Promise.all((ctx.sets.length ? ctx.sets : [null]).map((s) => setName(s)));
   return fillTemplate(tpl, {
     store_name: cu.store_name?.trim() || cu.store_domain.replace(/\.myshopify\.com$/, ""),
-    set_name: await setName(set),
+    set_name: names.join(" & "),
+    pages: ctx.pages.length ? ctx.pages.map((p) => `**${p}**`).join(", ") : `your **${names.join(" & ")}** pages`,
+    page_count: String(ctx.pages.length),
+    edit_days: String(cfg.edit_days),
+    edit_until: longDate(editUntil(from, cfg).toISOString()),
+    days_left: String(daysLeft(from, cfg)),
+    plan: cu.upgraded_to || cu.pf_plan || "new",
     pic: cfg.sender_name || "Logan",
     review_url: cfg.review_url,
-    edit_until: longDate(new Date(Date.now() + cfg.edit_days * 86_400_000).toISOString()),
   });
 }
 
 export async function sampleMessage(kind: SsuMessageKind, cfg: SsuSettings): Promise<string> {
-  return messageFor(kind, { store_name: "Your Store", store_domain: "your-store.myshopify.com" }, "aurum", cfg);
+  const sent = new Date(Date.now() - (cfg.edit_days - cfg.edit_reminder_days_left) * DAY).toISOString();
+  return messageFor(
+    kind,
+    { store_name: "Your Store", store_domain: "your-store.myshopify.com", sent_at: kind === "thanks" ? null : sent, pf_plan: "Optimize", upgraded_to: null },
+    { sets: ["aurum"], pages: ["Aurum · Home", "Aurum · Product", "Aurum · About"] },
+    cfg,
+  );
 }
 
 /**
@@ -95,13 +169,16 @@ export async function draft(
   o: { auto: boolean; actor: string; content?: string; cfg?: SsuSettings },
 ): Promise<string | null> {
   const cfg = o.cfg ?? (await getSsuSettings());
-  const content = o.content ?? (await messageFor(kind, cu, await latestSet(c, cu.store_domain), cfg));
+  const content = o.content ?? (await messageFor(kind, cu, await messageContext(c, cu.store_domain), cfg));
   const id = newMessageId();
+  /* `rerender`: written from the template, so it is written again at send
+     time — the dates, the days left and the pages are those of the day it
+     goes, not of the day it was drafted. An admin's edit turns it off. */
   const ins = await c.query(
-    `insert into ssu_messages (id, store_domain, kind, content, status, created_by, approved_by, approved_at)
-     values ($1, $2, $3, $4, $5, $6, $7, case when $8 then now() end)
+    `insert into ssu_messages (id, store_domain, kind, content, status, created_by, approved_by, approved_at, rerender)
+     values ($1, $2, $3, $4, $5, $6, $7, case when $8 then now() end, $9)
      on conflict (store_domain, kind) where kind <> 'custom' do nothing returning id`,
-    [id, cu.store_domain, kind, content, o.auto ? "approved" : "pending_review", o.actor, o.auto ? "auto" : null, o.auto],
+    [id, cu.store_domain, kind, content, o.auto ? "approved" : "pending_review", o.actor, o.auto ? "auto" : null, o.auto, o.content === undefined],
   );
   if (!ins.rows[0]) return null;
   if (kind === "thanks") {
@@ -124,10 +201,11 @@ export async function approve(id: string, content: string | null, actor: string)
   await tx(async (c) => {
     const m = await loadMessage(c, id, true);
     if (m.status !== "pending_review" && m.status !== "failed") throw new UpsellError("Tin này không còn chờ duyệt.", 409);
+    const edited = !!content?.trim() && content.trim() !== m.content.trim();
     await c.query(
       `update ssu_messages set status = 'approved', approved_by = $2, approved_at = now(), error = null,
-              content = coalesce(nullif($3, ''), content) where id = $1`,
-      [id, actor, content?.trim() ?? ""],
+              content = coalesce(nullif($3, ''), content), rerender = rerender and not $4 where id = $1`,
+      [id, actor, content?.trim() ?? "", edited],
     );
     if (m.kind === "thanks") await c.query("update ssu_customers set status = 'approved', updated_at = now() where store_domain = $1", [m.store_domain]);
     await logEvent(c, m.store_domain, "message_approved", actor, { message_id: id, kind: m.kind });
@@ -198,19 +276,51 @@ export async function sendOne(id: string, actor = "system"): Promise<SendOutcome
     return "blocked_review";
   }
 
-  const set = await latestSet(p, m.store_domain);
+  const drop = async (reason: string, patch = "") => {
+    await tx(async (c) => {
+      await c.query("update ssu_messages set status = 'rejected', error = $2 where id = $1", [id, reason]);
+      if (patch) await c.query(`update ssu_customers set ${patch}, updated_at = now() where store_domain = $1`, [m.store_domain]);
+      await logEvent(c, m.store_domain, "message_dropped", actor, { message_id: id, kind: m.kind, reason });
+    });
+    return "skipped" as const;
+  };
+
+  /* A care message is for a customer who has not answered: one who has, since
+     it was drafted, gets a person instead — the message is dropped and the
+     store goes to Cần kiểm tra. And a reminder of days left needs days left. */
+  if ((CARE_KINDS as readonly string[]).includes(m.kind)) {
+    if (!cu.crisp_session) return fail("Chưa có hội thoại Crisp của tin cảm ơn");
+    let msgs;
+    try {
+      msgs = await conversationMessages(cu.crisp_session);
+    } catch (err) {
+      return fail(`Không đọc được hội thoại Crisp: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    const since = cu.sent_at ? new Date(cu.sent_at).getTime() : 0;
+    if (cu.replied || msgs.some((x) => x.from === "user" && Number(x.timestamp) >= since))
+      return drop("Khách đã phản hồi — chăm sóc trực tiếp", "replied = true, needs_check = true");
+    if (m.kind === "edit_reminder" && daysLeft(cu, cfg) <= 0) return drop("Đã hết hạn chỉnh sửa miễn phí");
+  }
+
+  const ctx = await messageContext(p, m.store_domain);
+  const set = ctx.sets[ctx.sets.length - 1] ?? null;
+  let content = m.content;
+  if (m.rerender) {
+    content = await messageFor(m.kind, cu, ctx, cfg);
+    await p.query("update ssu_messages set content = $2 where id = $1", [id, content]);
+  }
   const name = cu.store_name?.trim() || cu.store_domain.replace(/\.myshopify\.com$/, "");
   let session = cu.crisp_session;
   let ticket = cu.ticket_link;
   try {
     if (session && m.kind !== "thanks") {
-      await sendInConversation(session, m.content, cfg.sender_name || "Logan");
+      await sendInConversation(session, content, cfg.sender_name || "Logan");
     } else {
       const r = await sendInNewConversation({
         email: cu.email,
         nickname: name,
         subject: `Your ${await setName(set)} store set — free editing`,
-        content: m.content,
+        content,
         sender: cfg.sender_name || "Logan",
         note:
           `Store set upsell (${set ?? "?"}) — ${cfg.sender_name || "Logan"} sent: ${m.kind}. ` +

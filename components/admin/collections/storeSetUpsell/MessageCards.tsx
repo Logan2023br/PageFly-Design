@@ -120,6 +120,7 @@ function MessageCard({ m, mode, picked, onPick }: { m: MessageListRow; mode: Mod
             {mode === "pending" ? `Soạn ${fmtVN(m.created_at)} · ${m.created_by.replace(/^admin:/, "")}` : `Duyệt ${fmtVN(m.approved_at)} · ${m.approved_by?.replace(/^admin:/, "") ?? ""}`}
           </p>
         )}
+        {m.rerender && <p className="text-[11.5px] text-pf-faint">Soạn từ mẫu: ngày hết hạn, số ngày còn lại và danh sách page được tính lại lúc gửi.</p>}
         <CrispLink href={m.ticket_link} />
       </div>
       <div className="grid gap-2">

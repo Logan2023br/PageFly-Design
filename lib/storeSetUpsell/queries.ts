@@ -11,7 +11,8 @@ import type { SsuCustomer, SsuEvent, SsuJobState, SsuMessage, SsuSelection } fro
 
 export const SSU_TABS = [
   { id: "all", label: "Tất cả khách", where: "true" },
-  { id: "feed", label: "Lượt chọn theo phút", where: null },
+  { id: "stores", label: "Store dùng page sets", where: null },
+  { id: "feed", label: "Mỗi lượt click", where: null },
   { id: "pending", label: "Chờ duyệt", where: null },
   { id: "waiting", label: "Chờ gửi", where: null },
   { id: "sent", label: "Đã gửi", where: "c.sent_at is not null" },
@@ -19,6 +20,7 @@ export const SSU_TABS = [
   { id: "read", label: "Đã đọc", where: "c.read_at is not null" },
   { id: "replied", label: "Có phản hồi", where: "c.replied" },
   { id: "needs_check", label: "Cần kiểm tra", where: "c.needs_check" },
+  { id: "cared", label: "Đã chăm sóc", where: "exists (select 1 from ssu_messages x where x.store_domain = c.store_domain and x.status = 'sent' and x.kind in ('care_read', 'care_upgraded', 'edit_reminder'))" },
   { id: "review_asked", label: "Đã xin review", where: "c.review_asked_at is not null" },
   { id: "reviewed", label: "Đã review 5★", where: "c.app_review >= 5" },
   { id: "updated", label: "Đã nâng cấp / cập nhật", where: "(c.upgraded_at is not null or c.pages_updated_at is not null)" },
@@ -29,7 +31,7 @@ export const SSU_TABS = [
 ] as const;
 export type SsuTabId = (typeof SSU_TABS)[number]["id"];
 
-export type SsuFilters = { q?: string; set?: string; from?: string; to?: string; app?: string; status?: string; page: number };
+export type SsuFilters = { q?: string; set?: string; from?: string; to?: string; app?: string; status?: string; kind?: string; page: number };
 
 export const PAGE_SIZE = 50;
 
@@ -50,7 +52,19 @@ function customerWhere(tab: SsuTabId, f: SsuFilters): { sql: string; args: unkno
   return { sql: parts.join(" and "), args };
 }
 
-export type CustomerListRow = SsuCustomer & { last_message_status: string | null; last_message_kind: string | null };
+export type CustomerListRow = SsuCustomer & {
+  last_message_status: string | null;
+  last_message_kind: string | null;
+  /** the store set pages they picked (template names), first first */
+  pages_used: string[];
+};
+
+/* The pages a store picked: distinct template names, in the order first picked. */
+const PAGES_USED = `left join lateral (
+    select coalesce(array_agg(page order by first), '{}') as pages_used
+      from (select coalesce(template_id, store_set || ' · ' || coalesce(page_type, 'page')) as page, min(event_time) as first
+              from ssu_selections where store_domain = c.store_domain group by 1) q
+  ) pu on true`;
 
 export async function listCustomers(tab: SsuTabId, f: SsuFilters): Promise<{ rows: CustomerListRow[]; total: number; page: number; pages: number }> {
   const p = await db();
@@ -64,9 +78,10 @@ export async function listCustomers(tab: SsuTabId, f: SsuFilters): Promise<{ row
   const total = Number((await p.query(`select count(*) as n from ssu_customers c where ${w.sql}`, w.args)).rows[0].n);
   const page = Math.max(1, Math.floor(f.page) || 1);
   const { rows } = await p.query<CustomerListRow>(
-    `select c.*, m.status as last_message_status, m.kind as last_message_kind
+    `select c.*, m.status as last_message_status, m.kind as last_message_kind, pu.pages_used
        from ssu_customers c
        left join lateral (select status, kind from ssu_messages where store_domain = c.store_domain order by created_at desc limit 1) m on true
+       ${PAGES_USED}
       where ${w.sql} order by ${order} limit ${PAGE_SIZE} offset ${(page - 1) * PAGE_SIZE}`,
     w.args,
   );
@@ -89,8 +104,12 @@ export async function listMessages(statuses: string[], f: SsuFilters): Promise<{
   const p = await db();
   const w = customerWhere("all", f);
   const n = w.args.length;
-  const sql = `from ssu_messages m join ssu_customers c on c.store_domain = m.store_domain where m.status = any($${n + 1}) and ${w.sql}`;
-  const args = [...w.args, statuses];
+  let sql = `from ssu_messages m join ssu_customers c on c.store_domain = m.store_domain where m.status = any($${n + 1}) and ${w.sql}`;
+  const args: unknown[] = [...w.args, statuses];
+  if (f.kind) {
+    args.push(f.kind);
+    sql += ` and m.kind = $${args.length}`;
+  }
   const total = Number((await p.query(`select count(*) as n ${sql}`, args)).rows[0].n);
   const page = Math.max(1, Math.floor(f.page) || 1);
   const { rows } = await p.query<MessageListRow>(
@@ -130,6 +149,95 @@ export async function listSelections(f: SsuFilters, limit = 300): Promise<(SsuSe
   return rows;
 }
 
+/* ---------------------------------------------------------------- stores using page sets */
+
+export type StoreRow = CustomerListRow & { page_count: number; days_on_app: number | null };
+
+export type StoreStats = {
+  rows: StoreRow[];
+  total: number;
+  page: number;
+  pages: number;
+  summary: {
+    stores: number;
+    installed: number;
+    paid: number;
+    page_uses: number;
+    avg_pages: number;
+    avg_days_on_app: number | null;
+    by_set: { store_set: string; stores: number; pages: number }[];
+    by_plan: { plan: string; stores: number }[];
+    by_country: { country: string; stores: number }[];
+  };
+};
+
+/** One row per store that picked a Store set page: the pages it uses, and
+    the store (install date, days on the app, plans, country, pages). */
+export async function storeStats(f: SsuFilters, limit = 100): Promise<StoreStats> {
+  const p = await db();
+  const w = customerWhere("all", f);
+  const total = Number((await p.query(`select count(*) as n from ssu_customers c where ${w.sql}`, w.args)).rows[0].n);
+  const page = Math.max(1, Math.floor(f.page) || 1);
+  const { rows } = await p.query<StoreRow>(
+    `select c.*, null as last_message_status, null as last_message_kind, pu.pages_used,
+            cardinality(pu.pages_used) as page_count,
+            case when c.installed_at is not null then floor(extract(epoch from (coalesce(c.uninstalled_at, now()) - c.installed_at)) / 86400)::int end as days_on_app
+       from ssu_customers c ${PAGES_USED}
+      where ${w.sql} order by cardinality(pu.pages_used) desc, c.last_selected_at desc
+      limit ${limit} offset ${(page - 1) * limit}`,
+    w.args,
+  );
+  const sum = (
+    await p.query(
+      `select count(*) as stores,
+              count(*) filter (where coalesce(c.app_status, 'installed') = 'installed') as installed,
+              count(*) filter (where coalesce(c.pf_price, 0) > 0) as paid,
+              avg(extract(epoch from (coalesce(c.uninstalled_at, now()) - c.installed_at)) / 86400) as avg_days
+         from ssu_customers c where ${w.sql}`,
+      w.args,
+    )
+  ).rows[0];
+  const uses = (
+    await p.query(
+      `select count(distinct (s.store_domain, coalesce(s.template_id, s.store_set || s.page_type))) as n
+         from ssu_selections s join ssu_customers c on c.store_domain = s.store_domain where ${w.sql}`,
+      w.args,
+    )
+  ).rows[0];
+  const bySet = await p.query(
+    `select s.store_set, count(distinct s.store_domain) as stores, count(distinct (s.store_domain, coalesce(s.template_id, s.page_type))) as pages
+       from ssu_selections s join ssu_customers c on c.store_domain = s.store_domain where ${w.sql}
+      group by 1 order by 2 desc`,
+    w.args,
+  );
+  const byPlan = await p.query(
+    `select coalesce(c.pf_plan, 'Chưa rõ') as plan, count(*) as stores from ssu_customers c where ${w.sql} group by 1 order by 2 desc limit 12`,
+    w.args,
+  );
+  const byCountry = await p.query(
+    `select coalesce(c.country, 'Chưa rõ') as country, count(*) as stores from ssu_customers c where ${w.sql} group by 1 order by 2 desc limit 12`,
+    w.args,
+  );
+  const stores = Number(sum.stores);
+  return {
+    rows,
+    total,
+    page,
+    pages: Math.max(1, Math.ceil(total / limit)),
+    summary: {
+      stores,
+      installed: Number(sum.installed),
+      paid: Number(sum.paid),
+      page_uses: Number(uses.n),
+      avg_pages: stores ? Number(uses.n) / stores : 0,
+      avg_days_on_app: sum.avg_days === null ? null : Number(sum.avg_days),
+      by_set: bySet.rows.map((r) => ({ store_set: r.store_set, stores: Number(r.stores), pages: Number(r.pages) })),
+      by_plan: byPlan.rows.map((r) => ({ plan: r.plan, stores: Number(r.stores) })),
+      by_country: byCountry.rows.map((r) => ({ country: r.country, stores: Number(r.stores) })),
+    },
+  };
+}
+
 export async function ssuCounts(): Promise<Record<string, number>> {
   const p = await db();
   const cols = SSU_TABS.filter((t) => t.where).map((t) => `count(*) filter (where ${t.where}) as "${t.id}"`);
@@ -143,6 +251,7 @@ export async function ssuCounts(): Promise<Record<string, number>> {
     waiting: (by.approved ?? 0) + (by.sending ?? 0),
     failed: by.failed ?? 0,
     feed: Number(today.rows[0].n),
+    stores: Number(rows[0]?.all ?? 0),
   };
 }
 

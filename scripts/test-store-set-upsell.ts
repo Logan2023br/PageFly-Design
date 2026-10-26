@@ -242,9 +242,85 @@ async function main() {
   assert.equal((await status("old.myshopify.com")).status, "eligible");
   assert.equal(world.sent.length, 3);
 
+  // the thanks says what the free editing covers: the pages, 15 days, nothing else
+  const thanks = world.sent[2].content;
+  assert.match(thanks, /\*\*nordlys-home\*\*/);
+  assert.match(thanks, /15 days from today/);
+  assert.match(thanks, /not other pages in your store/);
+
+  // ONE THANKS PER STORE: eps picks again (another set) — recorded, not messaged
+  world.events.push(ev("eps.myshopify.com", "owner@eps.myshopify.com", "aurum", -1));
+  r = await runJob();
+  assert.equal(r.new_selections, 1);
+  assert.equal(world.sent.length, 3, "a second select sends nothing");
+  const e1 = await status("eps.myshopify.com");
+  assert.deepEqual(e1.sets, ["nordlys", "aurum"]);
+  assert.equal(e1.status, "sent");
+  assert.equal((await p.query("select count(*)::int as n from ssu_messages where store_domain = 'eps.myshopify.com'")).rows[0].n, 1);
+
+  // care, auto: read and silent for 48h → care_read; then 4 days left → edit_reminder with both pages
+  await saveSsuSettings({ care_mode: "auto", care_gap_hours: 0 });
+  const epsConv = world.convs.find((c) => c.session_id === e1.crisp_session)!;
+  epsConv.messages[0].read = "chat";
+  await p.query("update ssu_customers set tracked_at = null where store_domain = 'eps.myshopify.com'");
+  await p.query("delete from ssu_settings where key = '_tracked'");
+  await runJob();
+  assert.ok((await status("eps.myshopify.com")).read_at);
+  assert.equal(world.sent.length, 3, "not before care_read_hours");
+  await p.query("update ssu_customers set read_at = now() - interval '49 hours' where store_domain = 'eps.myshopify.com'");
+  await runJob();
+  assert.equal(world.sent.length, 4);
+  assert.match(world.sent[3].content, /how are the \*\*Nordlys & Aurum\*\* pages/);
+  assert.equal(world.sent[3].sid, e1.crisp_session, "care goes into the same conversation");
+  await p.query("update ssu_customers set sent_at = now() - interval '11 days' where store_domain = 'eps.myshopify.com'");
+  await runJob();
+  assert.equal(world.sent.length, 5);
+  assert.match(world.sent[4].content, /only \*\*4 days left\*\*/);
+  assert.match(world.sent[4].content, /\*\*nordlys-home\*\*, \*\*aurum-home\*\*/);
+  await runJob();
+  assert.equal(world.sent.length, 5, "each care message once");
+
+  // care, manual: written now, sent later — the days left are those of the day it goes
+  await saveSsuSettings({ care_mode: "manual" });
+  world.events.push(ev("zeta.myshopify.com", "owner@zeta.myshopify.com", "oaken", -2));
+  world.stores["zeta.myshopify.com"] = store("zeta.myshopify.com");
+  await runJob();
+  assert.equal((await status("zeta.myshopify.com")).status, "sent");
+  await p.query("update ssu_customers set sent_at = now() - interval '11 days', delivered_at = now() where store_domain = 'zeta.myshopify.com'");
+  await runJob();
+  const zr = (await p.query("select * from ssu_messages where store_domain = 'zeta.myshopify.com' and kind = 'edit_reminder'")).rows[0];
+  assert.equal(zr.status, "pending_review");
+  assert.match(zr.content, /4 days left/);
+  await p.query("update ssu_customers set sent_at = now() - interval '12 days' where store_domain = 'zeta.myshopify.com'");
+  await messageAction(zr.id, "approve", null, "admin:test");
+  assert.match(world.sent[world.sent.length - 1].content, /only \*\*3 days left\*\*/);
+
+  // a care message for a customer who replied in the meantime is dropped, not sent
+  await p.query("update ssu_customers set upgraded_at = now(), upgraded_to = 'Optimize' where store_domain = 'zeta.myshopify.com'");
+  await p.query("update ssu_messages set sent_at = now() - interval '3 days' where store_domain = 'zeta.myshopify.com'");
+  await runJob();
+  const zu = (await p.query("select * from ssu_messages where store_domain = 'zeta.myshopify.com' and kind = 'care_upgraded'")).rows[0];
+  assert.equal(zu.status, "pending_review");
+  const zSession = (await status("zeta.myshopify.com")).crisp_session;
+  const zConv = world.convs.find((c) => c.session_id === zSession)!;
+  zConv.messages.push({ type: "text", from: "user", content: "thanks!", timestamp: Date.now() });
+  const before = world.sent.length;
+  await assert.rejects(messageAction(zu.id, "approve", null, "admin:test"), /phản hồi/);
+  assert.equal(world.sent.length, before);
+  assert.equal((await status("zeta.myshopify.com")).needs_check, true);
+
+  // the stores table: one row per store, its pages
+  const { storeStats } = await import("../lib/storeSetUpsell/queries");
+  const st = await storeStats({ page: 1 });
+  const epsRow = st.rows.find((x) => x.store_domain === "eps.myshopify.com")!;
+  assert.equal(epsRow.page_count, 2);
+  assert.ok(epsRow.days_on_app !== null && epsRow.days_on_app > 0);
+  assert.equal(st.summary.stores, 7);
+
   const counts = await ssuCounts();
-  assert.equal(counts.sent, 2);
+  assert.equal(counts.sent, 3);
   assert.equal(counts.reviewed, 2);
+  assert.equal(counts.cared, 2);
   console.log("store set upsell: all checks passed", JSON.stringify(counts));
   await (await import("../lib/upsell/db")).closeUpsellPool();
 }

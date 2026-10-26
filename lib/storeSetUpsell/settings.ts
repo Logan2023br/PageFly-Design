@@ -15,8 +15,13 @@ import { UpsellError } from "@/lib/upsell/types";
 export const SSU_DEFAULTS = {
   /** manual: drafts wait on "Chờ duyệt"; auto: eligible customers are sent at once; off: nothing is written */
   mode: "manual",
+  /** the care messages after the thanks (CARE_KINDS): same three modes */
+  care_mode: "manual",
   sender_name: "Logan",
   thanks_template: "",
+  edit_reminder_template: "",
+  care_read_template: "",
+  care_upgraded_template: "",
   review_template: "",
   review_url: "https://apps.shopify.com/pagefly#modal-show=ReviewListingModal",
   /** auto mode writes only for a select this recent — never for the backlog */
@@ -27,24 +32,39 @@ export const SSU_DEFAULTS = {
   tracking_days: 30,
   /** 1: development / partner stores get no message */
   skip_dev_stores: 1,
-  /** how long the free editing lasts, for {edit_until} */
+  /** how long the free editing lasts, from the day the thanks is sent */
   edit_days: 15,
+  /** read the thanks, no reply after this many hours → care_read */
+  care_read_hours: 48,
+  /** this many days of free editing left, seen, no reply → edit_reminder */
+  edit_reminder_days_left: 5,
+  /** never two messages to one customer within this many hours */
+  care_gap_hours: 48,
 } as const;
 
 export type SsuKey = keyof typeof SSU_DEFAULTS;
 export type SsuSettings = { [K in SsuKey]: (typeof SSU_DEFAULTS)[K] extends number ? number : string };
 
+const VARS = "{store_name} {set_name} {pages} {page_count} {edit_days} {edit_until} {days_left} {plan} {pic} {review_url}";
+
 export const SSU_HELP: Record<SsuKey, string> = {
   mode: "manual = tin soạn sẵn chờ bạn duyệt rồi mới gửi · auto = khách đủ điều kiện được gửi luôn · off = không soạn tin",
+  care_mode: "Tin chăm sóc sau tin cảm ơn (đã đọc chưa trả lời, đã nâng cấp, nhắc còn X ngày chỉnh sửa): manual = chờ duyệt · auto = gửi luôn · off = tắt",
   sender_name: "Tên người gửi trên Crisp, điền vào {pic}",
-  thanks_template: "Mẫu tin cảm ơn + chỉnh sửa miễn phí. Biến: {store_name} {set_name} {pic} {edit_until}. Để trống dùng mẫu mặc định.",
-  review_template: "Mẫu tin xin review. Biến: {store_name} {set_name} {pic} {review_url}. Để trống dùng mẫu mặc định.",
+  thanks_template: `Mẫu tin cảm ơn + chỉnh sửa miễn phí. Biến: ${VARS}. Để trống dùng mẫu mặc định.`,
+  edit_reminder_template: `Mẫu tin nhắc còn X ngày chỉnh sửa (khách đã xem, chưa trả lời). Biến: ${VARS}. Để trống dùng mẫu mặc định.`,
+  care_read_template: `Mẫu tin chăm sóc khi khách đã đọc mà chưa trả lời. Biến: ${VARS}. Để trống dùng mẫu mặc định.`,
+  care_upgraded_template: `Mẫu tin chăm sóc khi khách nâng cấp mà chưa trả lời. Biến: ${VARS}. Để trống dùng mẫu mặc định.`,
+  review_template: `Mẫu tin xin review. Biến: ${VARS}. Để trống dùng mẫu mặc định.`,
   review_url: "Link review trên Shopify App Store, điền vào {review_url}",
   auto_max_age_hours: "Chế độ auto chỉ gửi cho khách chọn template trong bấy nhiêu giờ gần nhất (không gửi dồn cho khách cũ)",
   backfill_days: "Lần đọc Mixpanel đầu tiên lấy lùi bấy nhiêu ngày",
   tracking_days: "Theo dõi khách đã gửi (đọc, phản hồi, review, nâng cấp) trong bấy nhiêu ngày",
   skip_dev_stores: "1 = không gửi cho store development / partner, 0 = vẫn gửi",
-  edit_days: "Số ngày chỉnh sửa miễn phí, điền vào {edit_until}",
+  edit_days: "Số ngày chỉnh sửa miễn phí, tính từ ngày gửi tin cảm ơn ({edit_days}, {edit_until}, {days_left})",
+  care_read_hours: "Khách đã đọc tin cảm ơn mà bấy nhiêu giờ vẫn chưa trả lời thì soạn tin chăm sóc",
+  edit_reminder_days_left: "Còn bấy nhiêu ngày chỉnh sửa miễn phí (khách đã xem, chưa trả lời) thì soạn tin nhắc",
+  care_gap_hours: "Không gửi 2 tin cho cùng một khách trong vòng bấy nhiêu giờ",
 };
 
 export const SSU_NUMERIC = (Object.keys(SSU_DEFAULTS) as SsuKey[]).filter((k) => typeof SSU_DEFAULTS[k] === "number");
@@ -103,9 +123,9 @@ export async function saveSsuSettings(patch: Record<string, unknown>): Promise<S
       continue;
     }
     const def = SSU_DEFAULTS[key as SsuKey];
-    if (key === "mode") {
+    if (key === "mode" || key === "care_mode") {
       const v = String(raw ?? "").trim();
-      if (v !== "off" && v !== "manual" && v !== "auto") bad.push("mode (off, manual hoặc auto)");
+      if (v !== "off" && v !== "manual" && v !== "auto") bad.push(`${key} (off, manual hoặc auto)`);
       else rows.push([key, v]);
     } else if (typeof def === "number") {
       const n = typeof raw === "string" ? (raw.trim() === "" ? NaN : Number(raw)) : typeof raw === "number" ? raw : NaN;

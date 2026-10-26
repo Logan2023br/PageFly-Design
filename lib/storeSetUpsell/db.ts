@@ -118,6 +118,8 @@ create table if not exists ssu_messages (
   failed_at    timestamptz,
   created_at   timestamptz not null default now()
 );
+/* Written from the template and not edited since: written again at send time. */
+alter table ssu_messages add column if not exists rerender boolean not null default false;
 create unique index if not exists ssu_messages_one_per_kind on ssu_messages (store_domain, kind) where kind <> 'custom';
 create index if not exists ssu_messages_status on ssu_messages (status, created_at);
 

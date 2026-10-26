@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { fmtVN } from "@/lib/upsell/format";
 import { SSU_TABS, type SsuFilters, type SsuTabId } from "@/lib/storeSetUpsell/queries";
-import { SSU_STATUSES, SSU_STATUS_LABEL, type SsuSelection } from "@/lib/storeSetUpsell/types";
+import { SSU_KIND_LABEL, SSU_STATUSES, SSU_STATUS_LABEL, type SsuSelection } from "@/lib/storeSetUpsell/types";
 
 /* Server-rendered navigation for the Store set upsell screen: tabs, filters,
    pages, and the per-minute feed. Links and a GET form — the state is in the
@@ -76,6 +76,16 @@ export function FilterBar({ tab, f, sets }: { tab: SsuTabId; f: SsuFilters; sets
         Đến
         <input type="date" name="to" defaultValue={f.to} className={`${FIELD} w-[150px]`} />
       </label>
+      {(tab === "pending" || tab === "waiting" || tab === "failed") && (
+        <select name="kind" defaultValue={f.kind ?? ""} className={`${FIELD} w-[210px]`} aria-label="Loại tin">
+          <option value="">Mọi loại tin</option>
+          {Object.entries(SSU_KIND_LABEL).map(([k, v]) => (
+            <option key={k} value={k}>
+              {v}
+            </option>
+          ))}
+        </select>
+      )}
       {tab !== "feed" && (
         <>
           <select name="app" defaultValue={f.app ?? ""} className={`${FIELD} w-[150px]`} aria-label="Trạng thái app">
@@ -134,7 +144,7 @@ export function Pager({ tab, f, page, pages, total }: { tab: SsuTabId; f: SsuFil
   );
 }
 
-/** The selects, grouped by the minute they happened in (Vietnam time). */
+/** Every click is a row, grouped by the minute it happened in (Vietnam time). */
 export function SelectionFeed({ rows }: { rows: (SsuSelection & { store_name: string | null; status: string | null })[] }) {
   if (rows.length === 0) {
     return <p className="rounded-pf-card border border-pf-border bg-pf-card p-6 text-center text-[13px] text-pf-muted">Chưa có lượt chọn nào.</p>;

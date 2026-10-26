@@ -29,11 +29,28 @@ export const SSU_STATUS_LABEL: Record<SsuStatus, string> = {
   failed: "Lỗi gửi",
 };
 
-export const SSU_MESSAGE_KINDS = ["thanks", "review_ask", "custom"] as const;
+export const SSU_MESSAGE_KINDS = ["thanks", "edit_reminder", "care_read", "care_upgraded", "review_ask", "custom"] as const;
 export type SsuMessageKind = (typeof SSU_MESSAGE_KINDS)[number];
+
+/**
+ * The care messages: written by the job after the thanks, into the same
+ * conversation, to get the customer talking — and a conversation is where a
+ * review is asked for. One of each per store, never two within
+ * `care_gap_hours`, and none once the customer has replied.
+ *
+ *   care_upgraded  upgraded their plan, no reply
+ *   care_read      read the thanks, no reply after `care_read_hours`
+ *   edit_reminder  saw the thanks, no reply, `edit_reminder_days_left` days
+ *                  of free editing left: the pages they use, and the days
+ */
+export const CARE_KINDS = ["care_upgraded", "care_read", "edit_reminder"] as const;
+export type CareKind = (typeof CARE_KINDS)[number];
 
 export const SSU_KIND_LABEL: Record<SsuMessageKind, string> = {
   thanks: "Cảm ơn + chỉnh sửa miễn phí",
+  edit_reminder: "Nhắc còn X ngày chỉnh sửa",
+  care_read: "Chăm sóc: đã đọc, chưa trả lời",
+  care_upgraded: "Chăm sóc: đã nâng cấp",
   review_ask: "Xin review app",
   custom: "Tin tự viết",
 };
@@ -115,6 +132,7 @@ export type SsuMessage = {
   error: string | null;
   attempts: number;
   failed_at: string | null;
+  rerender: boolean;
   created_at: string;
 };
 
@@ -154,6 +172,7 @@ export type SsuJobState = {
   sent?: number;
   failed?: number;
   tracked?: number;
+  care?: number;
   errors?: string[];
 };
 

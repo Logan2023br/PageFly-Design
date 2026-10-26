@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { ConnectionState } from "@/lib/storeSetUpsell/settings";
+import { SSU_KIND_LABEL } from "@/lib/storeSetUpsell/types";
 import { Button } from "../../../ui";
 import { ErrorLine, Pill } from "../../upsell/bits";
 import { FIELD, FIELD_LABEL, api } from "../shared";
@@ -15,6 +16,14 @@ import { FIELD, FIELD_LABEL, api } from "../shared";
 
 const API = "/api/admin/collection-pages/store-set-upsell/settings";
 
+const TEMPLATE_KIND: Record<string, string> = {
+  thanks_template: "thanks",
+  edit_reminder_template: "edit_reminder",
+  care_read_template: "care_read",
+  care_upgraded_template: "care_upgraded",
+  review_template: "review_ask",
+};
+
 export function SettingsPanel({
   initial,
   help,
@@ -26,7 +35,7 @@ export function SettingsPanel({
   help: Record<string, string>;
   numeric: string[];
   connections: ConnectionState[];
-  samples: { thanks: string; review: string };
+  samples: Record<string, string>;
 }) {
   const router = useRouter();
   const [values, setValues] = useState<Record<string, string>>(Object.fromEntries(Object.entries(initial).map(([k, v]) => [k, String(v)])));
@@ -91,7 +100,7 @@ export function SettingsPanel({
         {keys.map((k) => (
           <label key={k} className="grid gap-1">
             <span className={FIELD_LABEL}>{k}</span>
-            {k === "mode" ? (
+            {k === "mode" || k === "care_mode" ? (
               <select className={FIELD} value={values[k]} onChange={(e) => setValues({ ...values, [k]: e.target.value })}>
                 <option value="manual">manual — cần duyệt</option>
                 <option value="auto">auto — không cần duyệt, gửi luôn</option>
@@ -101,7 +110,7 @@ export function SettingsPanel({
               <textarea
                 className={`${FIELD} min-h-[200px] font-mono text-[12.5px]`}
                 value={values[k]}
-                placeholder={k === "thanks_template" ? samples.thanks : samples.review}
+                placeholder={samples[TEMPLATE_KIND[k]] ?? ""}
                 onChange={(e) => setValues({ ...values, [k]: e.target.value })}
               />
             ) : (
@@ -125,10 +134,17 @@ export function SettingsPanel({
       </section>
 
       <section className="grid gap-3 rounded-pf-card border border-pf-border bg-pf-card p-4">
-        <h3 className="text-[14px] font-semibold text-pf-text">Tin mẫu (Your Store, set Aurum)</h3>
+        <h3 className="text-[14px] font-semibold text-pf-text">Tin mẫu (Your Store, set Aurum, 3 page)</h3>
+        <p className="text-[12px] text-pf-muted">
+          Tin soạn từ mẫu được viết lại lúc gửi, nên ngày hết hạn, số ngày còn lại và danh sách page là của ngày gửi. Nếu bạn sửa nội dung lúc duyệt thì gửi đúng như bạn sửa.
+        </p>
         <div className="grid gap-3 lg:grid-cols-2">
-          <pre className="whitespace-pre-wrap rounded-pf-md border border-pf-border bg-pf-bg-deep p-3 font-mono text-[12px] text-pf-body">{samples.thanks}</pre>
-          <pre className="whitespace-pre-wrap rounded-pf-md border border-pf-border bg-pf-bg-deep p-3 font-mono text-[12px] text-pf-body">{samples.review}</pre>
+          {Object.entries(samples).map(([k, text]) => (
+            <div key={k} className="grid gap-1">
+              <span className={FIELD_LABEL}>{SSU_KIND_LABEL[k as keyof typeof SSU_KIND_LABEL] ?? k}</span>
+              <pre className="whitespace-pre-wrap rounded-pf-md border border-pf-border bg-pf-bg-deep p-3 font-mono text-[12px] text-pf-body">{text}</pre>
+            </div>
+          ))}
         </div>
       </section>
     </div>

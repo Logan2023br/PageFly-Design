@@ -5,7 +5,7 @@ import { db, logEvent, tx } from "./db";
 import { check, trackOne } from "./job";
 import { approve, draft, loadSetNames, reject, sendOne, type SendOutcome } from "./messages";
 import { getSsuSettings } from "./settings";
-import type { SsuCustomer } from "./types";
+import { SSU_MESSAGE_KINDS, type SsuCustomer, type SsuMessageKind } from "./types";
 
 /* What an admin does on the screen, one function per button. */
 
@@ -21,9 +21,10 @@ export async function approveAndSend(id: string, content: string | null, actor: 
   await approve(id, content, actor);
   const r = await sendOne(id, actor);
   if (r === "blocked_review") throw new UpsellError("Không gửi: khách đã review 5★ trên Crisp — tin đã được bỏ.", 409);
-  if (r === "failed") {
+  if (r === "failed" || r === "skipped") {
     const p = await db();
     const { rows } = await p.query<{ error: string | null }>("select error from ssu_messages where id = $1", [id]);
+    if (r === "skipped") throw new UpsellError(`Không gửi: ${rows[0]?.error ?? "tin không còn chờ gửi"}.`, 409);
     throw new UpsellError(`Gửi lỗi: ${rows[0]?.error ?? "không rõ"}`, 502);
   }
   return r;
@@ -92,8 +93,12 @@ export async function customerAction(domain: string, action: string, body: Recor
     }
     case "draft_thanks":
     case "draft_review":
-    case "draft_custom": {
-      const kind = action === "draft_thanks" ? "thanks" : action === "draft_review" ? "review_ask" : "custom";
+    case "draft_custom":
+    case "draft_kind": {
+      const named: Record<string, SsuMessageKind> = { draft_thanks: "thanks", draft_review: "review_ask", draft_custom: "custom" };
+      const kind = action === "draft_kind" ? (String(body.kind) as SsuMessageKind) : named[action];
+      if (!(SSU_MESSAGE_KINDS as readonly string[]).includes(kind)) throw new UpsellError("Không có loại tin này.");
+      if (kind !== "thanks" && kind !== "custom" && !cu.sent_at) throw new UpsellError("Chưa gửi tin cảm ơn — tin này đi sau nó.", 409);
       if (cu.app_review !== null && Number(cu.app_review) >= 5 && kind !== "custom")
         throw new UpsellError("Khách đã review 5★ — không soạn tin này.", 409);
       if (!cu.email) throw new UpsellError("Store này không có email.", 409);

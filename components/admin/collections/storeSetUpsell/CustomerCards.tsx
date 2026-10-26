@@ -46,13 +46,13 @@ function statusTone(s: string): "muted" | "warn" | "ok" | "bad" | "primary" {
   return "muted";
 }
 
-export function CustomerCards({ rows }: { rows: CustomerListRow[] }) {
+export function CustomerCards({ rows, editDays }: { rows: CustomerListRow[]; editDays: number }) {
   if (rows.length === 0)
     return <p className="rounded-pf-card border border-pf-border bg-pf-card p-6 text-center text-[13px] text-pf-muted">Không có khách nào ở đây.</p>;
   return (
     <div className="grid gap-3">
       {rows.map((c) => (
-        <CustomerCard key={c.store_domain} c={c} />
+        <CustomerCard key={c.store_domain} c={c} editDays={editDays} />
       ))}
     </div>
   );
@@ -67,8 +67,18 @@ function Line({ label, children }: { label: string; children: React.ReactNode })
   );
 }
 
-function CustomerCard({ c }: { c: CustomerListRow }) {
+/** The free editing still left, in days, from the thanks being sent. */
+function editLeft(sentAt: string | null, editDays: number): number | null {
+  if (!sentAt) return null;
+  return Math.max(0, Math.ceil((new Date(sentAt).getTime() + editDays * 86_400_000 - Date.now()) / 86_400_000));
+}
+
+const FOLLOW_UPS = ["edit_reminder", "care_read", "care_upgraded", "review_ask"] as const;
+
+function CustomerCard({ c, editDays }: { c: CustomerListRow; editDays: number }) {
   const [open, setOpen] = useState(false);
+  const [followUp, setFollowUp] = useState<string>("edit_reminder");
+  const left = editLeft(c.sent_at, editDays);
   const [run, busy, error] = useAct();
   const url = `${API}/customers/${encodeURIComponent(c.store_domain)}`;
   const reviewed5 = c.app_review !== null && Number(c.app_review) >= 5;
@@ -121,7 +131,15 @@ function CustomerCard({ c }: { c: CustomerListRow }) {
               </Pill>
             ))}
           </div>
-          <Line label="Lượt chọn">{c.selections}</Line>
+          <Line label="Page dùng">
+            <span className="font-semibold text-pf-text">{c.pages_used.length}</span>
+          </Line>
+          <ul className="grid gap-0.5 pl-[94px] text-[11.5px] text-pf-muted">
+            {c.pages_used.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+          <Line label="Lượt click">{c.selections}</Line>
           <Line label="Lần đầu">{fmtVN(c.first_selected_at, true)}</Line>
           <Line label="Gần nhất">{fmtVN(c.last_selected_at, true)}</Line>
         </div>
@@ -161,6 +179,7 @@ function CustomerCard({ c }: { c: CustomerListRow }) {
         <Pill tone={statusTone(c.status)}>{SSU_STATUS_LABEL[c.status] ?? c.status}</Pill>
         {c.skip_reason && <span className="text-[12px] text-pf-muted">{c.skip_reason}</span>}
         {c.sent_at && <Pill tone="ok">Gửi {fmtVN(c.sent_at)}</Pill>}
+        {left !== null && <Pill tone={left > 0 ? "primary" : "muted"}>{left > 0 ? `Còn ${left} ngày chỉnh sửa` : "Hết hạn chỉnh sửa"}</Pill>}
         {c.delivered_at && <Pill tone="ok">Đã xem</Pill>}
         {c.read_at && <Pill tone="ok">Đã đọc {fmtVN(c.read_at)}</Pill>}
         {c.replied && <Pill tone="primary">Có phản hồi {fmtVN(c.last_reply_at)}</Pill>}
@@ -197,10 +216,19 @@ function CustomerCard({ c }: { c: CustomerListRow }) {
             Soạn tin cảm ơn
           </Button>
         )}
-        {c.sent_at && !reviewed5 && !c.review_asked_at && (
-          <Button size="sm" variant="ghost" icon="Star" disabled={busy} onClick={() => run(url, { action: "draft_review" })}>
-            Soạn tin xin review
-          </Button>
+        {c.sent_at && !reviewed5 && (
+          <span className="inline-flex items-center gap-1.5">
+            <select className={`${FIELD} !w-auto py-1 text-[12px]`} value={followUp} onChange={(e) => setFollowUp(e.target.value)} aria-label="Loại tin">
+              {FOLLOW_UPS.map((k) => (
+                <option key={k} value={k}>
+                  {SSU_KIND_LABEL[k]}
+                </option>
+              ))}
+            </select>
+            <Button size="sm" variant="ghost" icon="Mail" disabled={busy} onClick={() => run(url, { action: "draft_kind", kind: followUp })}>
+              Soạn tin
+            </Button>
+          </span>
         )}
         <Button size="sm" variant="ghost" icon="RefreshCw" disabled={busy} onClick={() => run(url, { action: "recheck" })}>
           Kiểm tra lại

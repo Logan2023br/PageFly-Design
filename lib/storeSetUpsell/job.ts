@@ -2,9 +2,9 @@ import "server-only";
 
 import { ConfigMissing, MixpanelBusy, ac2Store, conversationMessages, exportStoreSetSelects, reviewCheck, type Ac2Store, type MixpanelEvent } from "./clients";
 import { db, hasStoreSetDatabase, logEvent, tx } from "./db";
-import { draft, loadSetNames, sendOne } from "./messages";
+import { daysLeft, draft, loadSetNames, sendOne } from "./messages";
 import { getInternal, getSsuSettings, setInternal, type SsuSettings } from "./settings";
-import type { SsuCustomer, SsuJobState } from "./types";
+import type { CareKind, SsuCustomer, SsuJobState } from "./types";
 
 /* ==========================================================================
    The job, every minute (instrumentation.ts starts it; "Cập nhật ngay" on the
@@ -17,10 +17,18 @@ import type { SsuCustomer, SsuJobState } from "./types";
      3. decide    5★ → never messaged; no email / dev store / uninstalled →
                   skipped; otherwise a thanks message, waiting for an admin
                   (manual) or approved already (auto)
-     4. send      approved messages, from Logan, on Crisp
-     5. track     every 10 minutes, sent customers: delivered / read /
+     4. track     every 10 minutes, sent customers: delivered / read /
                   replies (a new reply → "Cần kiểm tra"), app_review again
                   (→ "Đã review"), AC2 again (upgrade, pages, uninstall)
+     5. care      sent, no reply, no 5★: one care message at a time
+                  (upgraded → read → days left), per `care_mode`
+     6. send      approved messages, from Logan, on Crisp
+     7. refresh   AC2 for every store once a day, for the stats table
+
+   ONE THANKS PER STORE, EVER: a store that selects again — the same set, or
+   another — is recorded (its sets, its pages, its count) and nothing more.
+   The decision is made once, for a store still `new`; the unique index on
+   (store, kind) holds it even if two runs overlap.
 
    One run at a time per process; every step is idempotent, so a run cut
    short is finished by the next.
@@ -397,6 +405,60 @@ async function track(cfg: SsuSettings, out: SsuJobState): Promise<void> {
   }
 }
 
+/* ---------------------------------------------------------------- 6. care */
+
+/** The care message due for a customer now, or null. One at a time, in this
+    order: thanks for upgrading, a check-in after reading, then the days-left
+    reminder once the free editing is nearly over. */
+export function careDue(cu: SsuCustomer, have: string[], cfg: SsuSettings): CareKind | null {
+  const left = daysLeft(cu, cfg);
+  if (cu.upgraded_at && !have.includes("care_upgraded")) return "care_upgraded";
+  if (cu.read_at && Date.now() - new Date(cu.read_at).getTime() >= cfg.care_read_hours * 3_600_000 && left > 0 && !have.includes("care_read"))
+    return "care_read";
+  if ((cu.delivered_at || cu.read_at) && left > 0 && left <= cfg.edit_reminder_days_left && !have.includes("edit_reminder")) return "edit_reminder";
+  return null;
+}
+
+async function care(cfg: SsuSettings, out: SsuJobState): Promise<void> {
+  out.care = 0;
+  if (cfg.care_mode === "off") return;
+  const p = await db();
+  const { rows } = await p.query<SsuCustomer & { kinds: string[] }>(
+    `select c.*, coalesce(array_agg(m.kind) filter (where m.kind is not null), '{}') as kinds
+       from ssu_customers c left join ssu_messages m on m.store_domain = c.store_domain
+      where c.status = 'sent' and not c.replied and coalesce(c.app_review, 0) < 5
+        and coalesce(c.app_status, 'installed') = 'installed'
+        and c.sent_at > now() - make_interval(days => $1)
+        and not exists (select 1 from ssu_messages x where x.store_domain = c.store_domain and x.status in ('pending_review', 'approved', 'sending'))
+        and not exists (select 1 from ssu_messages x where x.store_domain = c.store_domain and x.status = 'sent'
+                          and x.sent_at > now() - make_interval(hours => $2))
+      group by c.store_domain order by c.sent_at limit 50`,
+    [Math.round(cfg.tracking_days), Math.round(cfg.care_gap_hours)],
+  );
+  const auto = cfg.care_mode === "auto";
+  for (const cu of rows) {
+    const kind = careDue(cu, cu.kinds, cfg);
+    if (!kind) continue;
+    const id = await tx((c) => draft(c, cu, kind, { auto, actor: auto ? "auto" : "system", cfg }));
+    if (id) out.care++;
+  }
+}
+
+/* ---------------------------------------------------------------- 7. refresh */
+
+async function refreshStores(): Promise<void> {
+  const p = await db();
+  const { rows } = await p.query<{ store_domain: string }>(
+    `select store_domain from ssu_customers
+      where status <> 'new' and (ac2_synced_at is null or ac2_synced_at < now() - interval '24 hours')
+      order by ac2_synced_at nulls first limit 20`,
+  );
+  for (const { store_domain } of rows) {
+    const st = await ac2Store(store_domain).catch(() => null);
+    if (st) await writeAc2(store_domain, st);
+  }
+}
+
 /* ---------------------------------------------------------------- the run */
 
 let running: Promise<SsuJobState> | null = null;
@@ -421,8 +483,12 @@ async function runOnce(): Promise<SsuJobState> {
   };
   await step("Mixpanel", () => read(cfg, out));
   await step("Kiểm tra khách", () => checkNew(cfg, out));
-  await step("Gửi tin", () => sendApproved(out));
+  /* Track and care before send: a care message in auto mode goes out in
+     the same minute it is written. */
   await step("Theo dõi", () => track(cfg, out));
+  await step("Chăm sóc", () => care(cfg, out));
+  await step("Gửi tin", () => sendApproved(out));
+  await step("AC2", () => refreshStores());
   out.errors = [...new Set(out.errors)];
   await setInternal("job", out).catch(() => undefined);
   return out;
@@ -438,7 +504,7 @@ export function startStoreSetTimer(): void {
   const run = () =>
     runJob().then(
       (r) => {
-        if (r.new_selections || r.sent || r.failed || r.drafted) console.log("[store-set-upsell]", JSON.stringify(r));
+        if (r.new_selections || r.sent || r.failed || r.drafted || r.care) console.log("[store-set-upsell]", JSON.stringify(r));
       },
       (err) => console.error("[store-set-upsell] run failed", err),
     );

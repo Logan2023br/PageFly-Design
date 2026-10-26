@@ -6,6 +6,7 @@ import { CustomerCards } from "@/components/admin/collections/storeSetUpsell/Cus
 import { LiveBar } from "@/components/admin/collections/storeSetUpsell/LiveBar";
 import { MessageCards } from "@/components/admin/collections/storeSetUpsell/MessageCards";
 import { SettingsPanel } from "@/components/admin/collections/storeSetUpsell/SettingsPanel";
+import { StoresTable } from "@/components/admin/collections/storeSetUpsell/StoresTable";
 import { hasStoreSetDatabase } from "@/lib/storeSetUpsell/db";
 import { sampleMessage } from "@/lib/storeSetUpsell/messages";
 import {
@@ -16,6 +17,7 @@ import {
   listSelections,
   setOptions,
   ssuCounts,
+  storeStats,
   type SsuFilters,
   type SsuTabId,
 } from "@/lib/storeSetUpsell/queries";
@@ -25,6 +27,8 @@ import { SSU_HELP, SSU_NUMERIC, connectionStates, getSsuSettings } from "@/lib/s
    Store set template in PageFly (Mixpanel `select_template`), the thank-you
    and free-editing message from Logan on Crisp, and what came of it. A static
    segment, so it wins over `[id]`. */
+
+const SAMPLE_KINDS = ["thanks", "edit_reminder", "care_read", "care_upgraded", "review_ask"] as const;
 
 export const metadata = { title: "Store set upsell — PageFly Design Admin" };
 export const dynamic = "force-dynamic";
@@ -46,6 +50,7 @@ export default async function StoreSetUpsellPage(props: PageProps<"/design/admin
     to: one("to"),
     app: one("app"),
     status: one("status"),
+    kind: one("kind"),
     page: Number(one("page") ?? 1),
   };
 
@@ -76,7 +81,11 @@ export default async function StoreSetUpsellPage(props: PageProps<"/design/admin
 
   let body: React.ReactNode;
   let pager: React.ReactNode = null;
-  if (tab === "feed") {
+  if (tab === "stores") {
+    const r = await storeStats(f);
+    body = <StoresTable s={r} f={f} />;
+    pager = <Pager tab={tab} f={f} {...r} />;
+  } else if (tab === "feed") {
     body = <SelectionFeed rows={await listSelections(f)} />;
   } else if (tab === "pending" || tab === "waiting" || tab === "failed") {
     const statuses = tab === "pending" ? ["pending_review"] : tab === "waiting" ? ["approved", "sending"] : ["failed"];
@@ -90,18 +99,20 @@ export default async function StoreSetUpsellPage(props: PageProps<"/design/admin
         help={SSU_HELP}
         numeric={SSU_NUMERIC}
         connections={await connectionStates()}
-        samples={{ thanks: await sampleMessage("thanks", cfg), review: await sampleMessage("review_ask", cfg) }}
+        samples={Object.fromEntries(
+          await Promise.all(SAMPLE_KINDS.map(async (k) => [k, await sampleMessage(k, cfg)] as const)),
+        )}
       />
     );
   } else {
     const r = await listCustomers(tab, f);
-    body = <CustomerCards rows={r.rows} />;
+    body = <CustomerCards rows={r.rows} editDays={cfg.edit_days} />;
     pager = <Pager tab={tab} f={f} {...r} />;
   }
 
   return shell(
     <>
-      <LiveBar job={state.job} cursor={state.cursor} mode={cfg.mode} />
+      <LiveBar job={state.job} cursor={state.cursor} mode={cfg.mode} careMode={cfg.care_mode} />
       <TabNav tab={tab} counts={counts} />
       {tab !== "settings" && <FilterBar tab={tab} f={f} sets={sets} />}
       {pager}
