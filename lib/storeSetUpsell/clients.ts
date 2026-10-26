@@ -246,6 +246,58 @@ export function ticketLink(wid: string, sid: string): string {
   return `https://app.crisp.chat/website/${wid}/inbox/${sid}/`;
 }
 
+/** Who a message is from on Crisp: the name, and the operator's face when known. */
+export type CrispSender = { type: "website"; nickname: string; avatar?: string; user_id?: string };
+
+type Operator = { user_id: string; names: string[]; avatar: string | null };
+let operators: { at: number; list: Operator[] } | null = null;
+
+/**
+ * The sender for `name`: with `avatar` when one is set on the Cài đặt tab,
+ * else the Crisp operator of that name (first name or full name), whose
+ * user_id and avatar BPU Ops uses the same way. The operator list is read
+ * once an hour; if the token may not read it, the message goes with the
+ * name alone, as before.
+ */
+export async function crispSender(name: string, avatar: string): Promise<CrispSender> {
+  if (avatar.trim()) return { type: "website", nickname: name, avatar: avatar.trim() };
+  if (!operators || Date.now() - operators.at > 3_600_000) {
+    type Row = { details?: { user_id?: string; first_name?: string; last_name?: string; nickname?: string; avatar?: string | null } };
+    const r = await crisp<Row[]>("GET", "/operators/list").catch(() => null);
+    const rows = r && ok(r) && Array.isArray(r.body?.data) ? r.body.data : [];
+    operators = {
+      at: Date.now(),
+      list: rows
+        .map((x) => x.details ?? {})
+        .filter((d) => d.user_id)
+        .map((d) => ({
+          user_id: d.user_id!,
+          names: [d.first_name, d.nickname, [d.first_name, d.last_name].filter(Boolean).join(" ")]
+            .filter((n): n is string => !!n)
+            .map((n) => n.trim().toLowerCase()),
+          avatar: d.avatar ?? null,
+        })),
+    };
+  }
+  const op = operators.list.find((o) => o.names.includes(name.trim().toLowerCase()));
+  return op
+    ? { type: "website", nickname: name, user_id: op.user_id, ...(op.avatar ? { avatar: op.avatar } : {}) }
+    : { type: "website", nickname: name };
+}
+
+/**
+ * Adds a segment to a conversation, keeping the ones it has (Crisp's meta
+ * PATCH replaces the list).
+ */
+export async function addSegment(sid: string, segment: string): Promise<void> {
+  const r = await crisp<{ segments?: string[] }>("GET", `/conversation/${sid}/meta`);
+  if (!ok(r)) throw new Error(`Crisp meta ${r.status}`);
+  const have = Array.isArray(r.body?.data?.segments) ? r.body.data.segments : [];
+  if (have.includes(segment)) return;
+  const w = await crisp("PATCH", `/conversation/${sid}/meta`, { segments: [...have, segment] });
+  if (!ok(w)) throw new Error(`Crisp segment ${w.status}: ${w.body?.reason ?? w.text.slice(0, 120)}`);
+}
+
 /**
  * Opens a new conversation for the email and writes the message in it, as
  * BPU Ops does for the first upsell message: the email and store on the
@@ -257,7 +309,7 @@ export async function sendInNewConversation(o: {
   nickname: string;
   subject: string;
   content: string;
-  sender: string;
+  sender: CrispSender;
   note: string;
 }): Promise<{ session_id: string; ticket_link: string }> {
   const created = await crisp<{ session_id?: string }>("POST", "/conversation", {});
@@ -281,13 +333,13 @@ export async function resolveConversation(sid: string): Promise<void> {
   await crisp("PATCH", `/conversation/${sid}/state`, { state: "resolved" });
 }
 
-export async function sendInConversation(sid: string, content: string, sender: string): Promise<void> {
+export async function sendInConversation(sid: string, content: string, sender: CrispSender): Promise<void> {
   const r = await crisp("POST", `/conversation/${sid}/message`, {
     type: "text",
     from: "operator",
     origin: "chat",
     content,
-    user: { type: "website", nickname: sender },
+    user: sender,
   });
   if (!ok(r)) throw new Error(`Crisp message ${r.status}: ${r.body?.reason ?? r.text.slice(0, 120)}`);
 }

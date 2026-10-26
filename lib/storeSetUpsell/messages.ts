@@ -3,7 +3,7 @@ import "server-only";
 import { getRepo } from "@/lib/db";
 import { fillTemplate, longDate, newMessageId } from "@/lib/upsell/common";
 import { UpsellError } from "@/lib/upsell/types";
-import { conversationMessages, resolveConversation, reviewCheck, sendInConversation, sendInNewConversation } from "./clients";
+import { conversationMessages, crispSender, resolveConversation, reviewCheck, sendInConversation, sendInNewConversation } from "./clients";
 import { db, logEvent, tx, type Db } from "./db";
 import { getSsuSettings, type SsuSettings } from "./settings";
 import { CARE_KINDS, titleOfSlug, type SsuCustomer, type SsuMessage, type SsuMessageKind } from "./types";
@@ -329,11 +329,12 @@ export async function sendOne(id: string, actor = "system"): Promise<SendOutcome
   let session = cu.crisp_session;
   let ticket = cu.ticket_link;
   try {
+    const sender = await crispSender(cfg.sender_name || "Logan", cfg.sender_avatar);
     /* One conversation per customer for everything the upsell sends: once
        there is one (even from a message written by hand before the thanks),
        every later message — the thanks included — goes into it. */
     if (session) {
-      await sendInConversation(session, content, cfg.sender_name || "Logan");
+      await sendInConversation(session, content, sender);
       await resolveConversation(session);
     } else {
       const r = await sendInNewConversation({
@@ -341,7 +342,7 @@ export async function sendOne(id: string, actor = "system"): Promise<SendOutcome
         nickname: name,
         subject: `Your ${await setName(set)} store set — free editing`,
         content,
-        sender: cfg.sender_name || "Logan",
+        sender,
         note:
           `Store set upsell (${set ?? "?"}) — ${cfg.sender_name || "Logan"} sent: ${m.kind}. ` +
           `Customer picked a Store set template in PageFly. If they reply, please mention ${cfg.sender_name || "Logan"}.`,

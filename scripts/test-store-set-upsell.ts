@@ -37,12 +37,12 @@ process.env.N8N_AC2_KEY = "bpu-key";
 
 /* ---------------------------------------------------------------- the stub */
 
-type Conv = { session_id: string; email: string; app_review?: unknown; messages: Record<string, unknown>[] };
+type Conv = { session_id: string; email: string; app_review?: unknown; segments?: string[]; messages: Record<string, unknown>[] };
 const world = {
   events: [] as { event: string; properties: Record<string, unknown> }[],
   stores: {} as Record<string, Record<string, unknown>>,
   convs: [] as Conv[],
-  sent: [] as { sid: string; content: string; nickname: string }[],
+  sent: [] as { sid: string; content: string; nickname: string; avatar?: string; user_id?: string }[],
   exportCalls: 0,
   resolved: [] as string[],
   /* selects from before the backfill: only an export for one store returns them */
@@ -89,17 +89,24 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     }
     if ((m = path.match(/^\/conversation\/([^/]+)\/meta$/))) {
       const c = world.convs.find((x) => x.session_id === m![1])!;
-      if (method === "PATCH") c.email = JSON.parse(String(init!.body)).email;
-      return reply({ error: false, data: { data: { app_review: c.app_review } } });
+      if (method === "PATCH") {
+        const b = JSON.parse(String(init!.body));
+        if (b.email) c.email = b.email;
+        if (b.segments) c.segments = b.segments;
+      }
+      return reply({ error: false, data: { data: { app_review: c.app_review }, segments: c.segments ?? [] } });
     }
     if ((m = path.match(/^\/conversation\/([^/]+)\/message$/))) {
       const b = JSON.parse(String(init!.body));
       const c = world.convs.find((x) => x.session_id === m![1])!;
       if (b.type === "text") {
         c.messages.push({ type: "text", from: "operator", content: b.content, timestamp: Date.now() });
-        world.sent.push({ sid: c.session_id, content: b.content, nickname: b.user.nickname });
+        world.sent.push({ sid: c.session_id, content: b.content, nickname: b.user.nickname, avatar: b.user.avatar, user_id: b.user.user_id });
       }
       return reply({ error: false, data: {} });
+    }
+    if (path === "/operators/list") {
+      return reply({ error: false, data: [{ type: "website", details: { user_id: "op-logan", first_name: "Logan", last_name: "P", avatar: "https://img/logan.png" } }] });
     }
     if ((m = path.match(/^\/conversation\/([^/]+)\/messages$/))) {
       return reply({ error: false, data: world.convs.find((x) => x.session_id === m![1])!.messages });
@@ -228,6 +235,10 @@ async function main() {
   assert.ok(a2.read_at && a2.delivered_at);
   assert.equal(a2.replied, true);
   assert.equal(a2.needs_check, true);
+  // the reply tags the upsell conversation on Crisp, keeping its other segments
+  assert.deepEqual(world.convs.find((x) => x.session_id === a2.crisp_session)!.segments, ["co-pages"]);
+  // sent as Logan, with the Crisp operator's face
+  assert.deepEqual([world.sent[0].nickname, world.sent[0].user_id, world.sent[0].avatar], ["Logan", "op-logan", "https://img/logan.png"]);
   assert.match(a2.last_reply_text, /hero color/);
   assert.equal((await listCustomers("needs_check", { page: 1 })).total, 1);
   await customerAction("alpha.myshopify.com", "mark_checked", {}, "admin:test");

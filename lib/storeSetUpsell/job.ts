@@ -1,6 +1,6 @@
 import "server-only";
 
-import { ConfigMissing, MixpanelBusy, ac2Store, conversationMessages, exportStoreSetSelects, reviewCheck, type Ac2Store, type MixpanelEvent } from "./clients";
+import { ConfigMissing, MixpanelBusy, ac2Store, addSegment, conversationMessages, exportStoreSetSelects, reviewCheck, type Ac2Store, type MixpanelEvent } from "./clients";
 import { db, hasStoreSetDatabase, logEvent, tx } from "./db";
 import { daysLeft, draft, loadSetNames, sendOne } from "./messages";
 import { getInternal, getSsuSettings, setInternal, type SsuSettings } from "./settings";
@@ -344,6 +344,15 @@ export async function trackOne(cu: SsuCustomer, actor = "system"): Promise<void>
           .slice(0, 1500);
         Object.assign(patch, { last_reply_at: lastAt, last_reply_text: text, needs_check: true, checked_at: null, checked_by: null });
         events.push(["replied", { text: text.slice(0, 300) }]);
+        /* Tagged on Crisp too, so the replies can be followed from there. A
+           failure is noted, not fatal: the reply is still on "Cần kiểm tra". */
+        const segment = (await getSsuSettings()).reply_segment.trim();
+        if (segment) {
+          await addSegment(cu.crisp_session, segment).then(
+            () => events.push(["segmented", { segment }]),
+            (err) => events.push(["segment_failed", { segment, error: err instanceof Error ? err.message : String(err) }]),
+          );
+        }
       }
     }
   }

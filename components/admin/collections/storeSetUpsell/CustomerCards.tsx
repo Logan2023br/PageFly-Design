@@ -31,6 +31,8 @@ const EVENT_LABEL: Record<string, string> = {
   delivered: "Crisp đã chuyển tin (chat hoặc email)",
   read: "Khách đã đọc",
   replied: "Khách phản hồi",
+  segmented: "Gắn segment trên Crisp",
+  segment_failed: "Không gắn được segment trên Crisp",
   upgraded: "Nâng cấp plan",
   pages_updated: "Cập nhật page",
   uninstalled: "Gỡ app",

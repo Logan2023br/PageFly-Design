@@ -28,6 +28,10 @@ export const SSU_DEFAULTS = {
   /** 1: the minute job sends nothing; approved messages wait on Chờ gửi */
   send_paused: 0,
   sender_name: "Logan",
+  /** a picture URL for the sender; empty: the Crisp operator of that name, found by the token */
+  sender_avatar: "",
+  /** added to the upsell conversation on Crisp when the customer replies; empty: none */
+  reply_segment: "co-pages",
   thanks_template: "",
   edit_reminder_template: "",
   care_read_template: "",
@@ -62,6 +66,8 @@ export const SSU_HELP: Record<SsuKey, string> = {
   send_paused: "1 = tạm dừng gửi: tin đã duyệt nằm ở Chờ gửi, không gửi cho tới khi bật lại (0)",
   care_mode: "Tin chăm sóc sau tin cảm ơn (đã đọc chưa trả lời, đã nâng cấp, nhắc còn X ngày chỉnh sửa): manual = chờ duyệt · auto = gửi luôn · off = tắt",
   sender_name: "Tên người gửi trên Crisp, điền vào {pic}",
+  sender_avatar: "Link ảnh avatar người gửi. Để trống: tự lấy avatar của operator cùng tên trên Crisp (nếu token được phép đọc danh sách operator)",
+  reply_segment: "Segment gắn vào hội thoại upsell trên Crisp khi khách trả lời. Để trống: không gắn",
   thanks_template: `Mẫu tin cảm ơn + chỉnh sửa miễn phí. Biến: ${VARS}. Để trống dùng mẫu mặc định.`,
   edit_reminder_template: `Mẫu tin nhắc còn X ngày chỉnh sửa (khách chưa trả lời). Biến: ${VARS}. Để trống dùng mẫu mặc định.`,
   care_read_template: `Mẫu tin chăm sóc khi khách đã đọc mà chưa trả lời. Biến: ${VARS}. Để trống dùng mẫu mặc định.`,
