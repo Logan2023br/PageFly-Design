@@ -156,17 +156,24 @@ function CustomerCard({ c, editDays }: { c: CustomerListRow; editDays: number })
               <span className={reviewed5 ? "font-semibold text-pf-success" : "text-pf-warn"}>{Number(c.app_review)}★</span>
             )}
           </Line>
-          {c.crisp_sessions?.[0] && (
-            <Line label="Gần nhất">
-              <a
-                href={c.crisp_sessions[0].link}
-                target="_blank"
-                rel="noreferrer"
-                className="text-pf-primary-hi hover:underline"
-              >
-                {c.crisp_sessions[0].subject || "hội thoại"} · {fmtVN(c.crisp_sessions[0].updated_at)}
-              </a>
-            </Line>
+          {/* Every conversation with this email, each a link to read it in full;
+              the one the upsell messages go to is marked. */}
+          {c.crisp_sessions && c.crisp_sessions.length > 0 && (
+            <ul className="grid gap-1 pt-1 text-[12px]">
+              {c.crisp_sessions.map((s) => (
+                <li key={s.session_id} className="flex flex-wrap items-baseline gap-x-1.5">
+                  {s.session_id === c.crisp_session && <Pill tone="primary">Upsell</Pill>}
+                  <a href={s.link} target="_blank" rel="noreferrer" className="text-pf-primary-hi hover:underline">
+                    {s.subject || s.session_id.slice(0, 18)}
+                  </a>
+                  <span className="text-pf-faint">
+                    {fmtVN(s.updated_at, true)}
+                    {s.state ? ` · ${s.state}` : ""}
+                    {s.app_review !== null ? ` · ${s.app_review}★` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
           <div className="flex flex-wrap items-center gap-1.5 pt-1">
             <CrispLink href={c.ticket_link} label="Tin upsell" />
@@ -293,28 +300,6 @@ function Detail({ c, url }: { c: CustomerListRow; url: string }) {
                 </li>
               ))}
             </ul>
-          )}
-          {c.crisp_sessions && c.crisp_sessions.length > 0 && (
-            <>
-              <h4 className="pt-2 text-[12.5px] font-semibold text-pf-text">Hội thoại Crisp với email này</h4>
-              <ul className="grid gap-1 text-[12px]">
-                {c.crisp_sessions.map((s) => (
-                  <li key={s.session_id} className="flex flex-wrap gap-x-2">
-                    <a
-                      href={s.link}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-pf-primary-hi hover:underline"
-                    >
-                      {s.subject || s.session_id.slice(0, 18)}
-                    </a>
-                    <span className="text-pf-faint">{fmtVN(s.updated_at, true)}</span>
-                    <span className="text-pf-faint">{s.state}</span>
-                    <span>{s.app_review !== null ? `app_review ${s.app_review}` : ""}</span>
-                  </li>
-                ))}
-              </ul>
-            </>
           )}
         </section>
         <section className="grid content-start gap-1.5">

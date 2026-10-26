@@ -329,7 +329,10 @@ export async function sendOne(id: string, actor = "system"): Promise<SendOutcome
   let session = cu.crisp_session;
   let ticket = cu.ticket_link;
   try {
-    if (session && m.kind !== "thanks") {
+    /* One conversation per customer for everything the upsell sends: once
+       there is one (even from a message written by hand before the thanks),
+       every later message — the thanks included — goes into it. */
+    if (session) {
       await sendInConversation(session, content, cfg.sender_name || "Logan");
       await resolveConversation(session);
     } else {
