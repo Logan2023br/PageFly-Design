@@ -71,6 +71,10 @@ const ymd = (d: Date) => d.toISOString().slice(0, 10);
  * refuses a date in its future, as today's. Rows repeat between reads; the
  * caller deduplicates on $insert_id. With `domain`, only that store's — for
  * a customer added by hand, whose selects may be older than the backfill.
+ *
+ * The store_set filter is applied here, not in `where`: Mixpanel answered
+ * the minute job's `defined(…) and … != null` with a bare 400. A couple of
+ * days of select_template is small; only the one-store read filters there.
  */
 export async function exportStoreSetSelects(since: Date, domain?: string): Promise<MixpanelEvent[]> {
   if (domain !== undefined && !/^[a-z0-9][a-z0-9.-]*$/.test(domain)) throw new Error(`Domain không hợp lệ: ${domain}`);
@@ -86,11 +90,9 @@ export async function exportStoreSetSelects(since: Date, domain?: string): Promi
       from_date: from,
       to_date: to,
       event: JSON.stringify(["select_template"]),
-      where:
-        'defined(properties["store_set"]) and properties["store_set"] != null' +
-        /* "in", not ==: some values carry a leading newline; the caller keeps exact matches */
-        (domain ? ` and "${domain}" in properties["shopify_domain"]` : ""),
     });
+    /* "in", not ==: some values carry a leading newline; the caller keeps exact matches */
+    if (domain) q.set("where", `"${domain}" in properties["shopify_domain"]`);
     return call<never>(`https://data.mixpanel.com/api/2.0/export?${q}`, { headers: { Authorization: auth, Accept: "text/plain" } }, domain ? 120_000 : 60_000);
   };
   /* Which of the two the project takes is remembered, so the minute job
@@ -101,7 +103,7 @@ export async function exportStoreSetSelects(since: Date, domain?: string): Promi
     r = await attempt(ymd(new Date()));
   }
   if (r.status === 429) throw new MixpanelBusy();
-  if (r.status !== 200) throw new Error(`Mixpanel export ${r.status}: ${r.text.slice(0, 200)}`);
+  if (r.status !== 200) throw new Error(`Mixpanel export ${r.status}: ${r.text.trim().slice(0, 200) || "(Mixpanel không nói lý do)"}`);
   const out: MixpanelEvent[] = [];
   for (const line of r.text.split("\n")) {
     if (!line.trim()) continue;

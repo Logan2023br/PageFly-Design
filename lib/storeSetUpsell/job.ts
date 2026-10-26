@@ -499,7 +499,7 @@ export async function addStore(input: string, actor: string): Promise<AddResult>
     );
   } catch (err) {
     if (err instanceof MixpanelBusy) throw new UpsellError("Mixpanel đang giới hạn 60 lần đọc/giờ — thử lại sau vài phút.", 429);
-    throw err;
+    throw new UpsellError(err instanceof Error ? err.message : String(err), 502);
   }
   if (events.length === 0 && !existing)
     throw new UpsellError(`Mixpanel không có lượt Select Store set nào của ${domain} trong ${ADD_DAYS} ngày qua.`, 404);
