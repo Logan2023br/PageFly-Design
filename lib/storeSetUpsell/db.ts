@@ -140,6 +140,18 @@ create table if not exists ssu_settings (
 );
 /* AC2 is read only through n8n now: a token pasted before that goes. */
 delete from ssu_settings where key = 'conn:ac2_token';
+/* Once, on 2026-10-26: every message approved by mistake goes back to
+   Chờ duyệt, unsent. The marker row keeps it from running again. */
+do $$
+begin
+  if not exists (select 1 from ssu_settings where key = '_once_unapprove_20261026') then
+    insert into ssu_settings (key, value) values ('_once_unapprove_20261026', 'true'::jsonb);
+    update ssu_customers set status = 'pending_review', updated_at = now()
+     where status = 'approved'
+       and store_domain in (select store_domain from ssu_messages where status = 'approved' and kind = 'thanks');
+    update ssu_messages set status = 'pending_review', approved_at = null, approved_by = null where status = 'approved';
+  end if;
+end $$;
 `;
 
 let ensured: Promise<void> | null = null;

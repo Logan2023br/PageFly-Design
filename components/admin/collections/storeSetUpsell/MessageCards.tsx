@@ -31,12 +31,12 @@ export function MessageCards({ rows, mode }: { rows: MessageListRow[]; mode: Mod
   const [run, busy, error] = useAct();
   if (rows.length === 0)
     return <p className="rounded-pf-card border border-pf-border bg-pf-card p-6 text-center text-[13px] text-pf-muted">{EMPTY[mode]}</p>;
-  const bulk = (action: "approve" | "reject") =>
+  const bulk = (action: "approve" | "reject" | "unapprove") =>
     run(`${API}/bulk`, { ids: [...picked], action }).then((ok) => ok && setPicked(new Set()));
 
   return (
     <div className="grid gap-3">
-      {mode !== "waiting" && (
+      {(
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-2 text-[12.5px] text-pf-muted">
             <input
@@ -46,7 +46,12 @@ export function MessageCards({ rows, mode }: { rows: MessageListRow[]; mode: Mod
             />
             Chọn tất cả
           </label>
-          {picked.size > 0 && (
+          {picked.size > 0 && mode === "waiting" && (
+            <Button size="sm" disabled={busy} onClick={() => bulk("unapprove")}>
+              Đưa {picked.size} tin về Chờ duyệt
+            </Button>
+          )}
+          {picked.size > 0 && mode !== "waiting" && (
             <>
               <Button size="sm" icon="Check" disabled={busy} onClick={() => bulk("approve")}>
                 {mode === "failed" ? "Gửi lại" : "Duyệt"} {picked.size} tin
@@ -88,7 +93,7 @@ function MessageCard({ m, mode, picked, onPick }: { m: MessageListRow; mode: Mod
     <article className="grid gap-3 rounded-pf-card border border-pf-border bg-pf-card p-4 lg:grid-cols-[280px_1fr]">
       <div className="grid content-start gap-1.5">
         <div className="flex items-start gap-2">
-          {mode !== "waiting" && <input type="checkbox" className="mt-1" checked={picked} onChange={onPick} aria-label="Chọn tin" />}
+          <input type="checkbox" className="mt-1" checked={picked} onChange={onPick} aria-label="Chọn tin" />
           <div className="min-w-0">
             <a href={`https://${m.store_domain}`} target="_blank" rel="noreferrer" className="font-semibold text-pf-text hover:text-pf-primary-hi">
               {m.store_name || m.store_domain}
@@ -139,6 +144,11 @@ function MessageCard({ m, mode, picked, onPick }: { m: MessageListRow; mode: Mod
                 Duyệt (gửi ở lượt chạy tới)
               </Button>
             </>
+          )}
+          {mode === "waiting" && (
+            <Button size="sm" disabled={busy} onClick={() => run(url, { action: "unapprove" })}>
+              Về Chờ duyệt
+            </Button>
           )}
           <Button size="sm" variant="danger" disabled={busy} onClick={() => run(url, { action: "reject" })}>
             Bỏ

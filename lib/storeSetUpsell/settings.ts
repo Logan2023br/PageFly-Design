@@ -25,6 +25,8 @@ export const SSU_DEFAULTS = {
   mode: "manual",
   /** the care messages after the thanks (CARE_KINDS): same three modes */
   care_mode: "manual",
+  /** 1: the minute job sends nothing; approved messages wait on Chờ gửi */
+  send_paused: 0,
   sender_name: "Logan",
   thanks_template: "",
   edit_reminder_template: "",
@@ -57,6 +59,7 @@ const VARS = "{store_name} {set_name} {pages} {page_count} {edit_days} {edit_unt
 
 export const SSU_HELP: Record<SsuKey, string> = {
   mode: "manual = tin soạn sẵn chờ bạn duyệt rồi mới gửi · auto = khách đủ điều kiện được gửi luôn · off = không soạn tin",
+  send_paused: "1 = tạm dừng gửi: tin đã duyệt nằm ở Chờ gửi, không gửi cho tới khi bật lại (0)",
   care_mode: "Tin chăm sóc sau tin cảm ơn (đã đọc chưa trả lời, đã nâng cấp, nhắc còn X ngày chỉnh sửa): manual = chờ duyệt · auto = gửi luôn · off = tắt",
   sender_name: "Tên người gửi trên Crisp, điền vào {pic}",
   thanks_template: `Mẫu tin cảm ơn + chỉnh sửa miễn phí. Biến: ${VARS}. Để trống dùng mẫu mặc định.`,

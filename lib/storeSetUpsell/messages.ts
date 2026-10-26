@@ -212,6 +212,22 @@ export async function approve(id: string, content: string | null, actor: string)
   });
 }
 
+/** Back to Chờ duyệt: an approved message not sent yet, or one rejected. */
+export async function unapprove(id: string, actor: string): Promise<void> {
+  await tx(async (c) => {
+    const m = await loadMessage(c, id, true);
+    if (m.status !== "approved" && m.status !== "rejected" && m.status !== "failed")
+      throw new UpsellError(m.status === "sent" || m.status === "sending" ? "Tin đã gửi, không đưa về được." : "Tin này đã ở Chờ duyệt.", 409);
+    await c.query("update ssu_messages set status = 'pending_review', approved_at = null, approved_by = null where id = $1", [id]);
+    if (m.kind === "thanks")
+      await c.query(
+        "update ssu_customers set status = 'pending_review', skip_reason = null, updated_at = now() where store_domain = $1 and sent_at is null",
+        [m.store_domain],
+      );
+    await logEvent(c, m.store_domain, "message_unapproved", actor, { message_id: id, kind: m.kind, from: m.status });
+  });
+}
+
 export async function reject(id: string, actor: string): Promise<void> {
   await tx(async (c) => {
     const m = await loadMessage(c, id, true);

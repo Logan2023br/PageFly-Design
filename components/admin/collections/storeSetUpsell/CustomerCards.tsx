@@ -230,6 +230,11 @@ function CustomerCard({ c, editDays }: { c: CustomerListRow; editDays: number })
             </Button>
           </span>
         )}
+        {!c.sent_at && (c.skip_reason === "Admin bỏ tin" || c.skip_reason === "Admin bỏ qua") && (
+          <Button size="sm" disabled={busy} onClick={() => run(url, { action: "restore" })}>
+            Khôi phục tin về Chờ duyệt
+          </Button>
+        )}
         <Button size="sm" variant="ghost" icon="RefreshCw" disabled={busy} onClick={() => run(url, { action: "recheck" })}>
           Kiểm tra lại
         </Button>

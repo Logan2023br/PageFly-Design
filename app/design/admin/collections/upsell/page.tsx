@@ -113,7 +113,7 @@ export default async function StoreSetUpsellPage(props: PageProps<"/design/admin
 
   return shell(
     <>
-      <LiveBar job={state.job} cursor={state.cursor} mode={cfg.mode} careMode={cfg.care_mode} />
+      <LiveBar job={state.job} cursor={state.cursor} mode={cfg.mode} careMode={cfg.care_mode} paused={!!cfg.send_paused} />
       <TabNav tab={tab} counts={counts} />
       {tab === "all" && <AddStore />}
       {tab !== "settings" && <FilterBar tab={tab} f={f} sets={sets} />}

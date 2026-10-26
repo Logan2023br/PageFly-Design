@@ -343,6 +343,22 @@ async function main() {
   await assert.rejects(addStore("not a domain", "admin:test"), /domain/);
   await saveSsuSettings({ mode: "manual" });
 
+  // approved by mistake: paused, nothing goes; back to Chờ duyệt; rejected, then restored
+  const oldMsg = (await p.query("select id from ssu_messages where store_domain = 'old.myshopify.com' and kind = 'thanks'")).rows[0].id;
+  await saveSsuSettings({ send_paused: 1 });
+  await messageAction(oldMsg, "approve_later", null, "admin:test");
+  const sentPaused = world.sent.length;
+  await runJob();
+  assert.equal(world.sent.length, sentPaused);
+  await messageAction(oldMsg, "unapprove", null, "admin:test");
+  assert.equal((await status("old.myshopify.com")).status, "pending_review");
+  await messageAction(oldMsg, "reject", null, "admin:test");
+  assert.equal((await status("old.myshopify.com")).status, "skipped");
+  await customerAction("old.myshopify.com", "restore", {}, "admin:test");
+  assert.equal((await p.query("select status from ssu_messages where id = $1", [oldMsg])).rows[0].status, "pending_review");
+  assert.equal((await status("old.myshopify.com")).status, "pending_review");
+  await saveSsuSettings({ send_paused: 0 });
+
   // the stores table: one row per store, its pages
   const { storeStats } = await import("../lib/storeSetUpsell/queries");
   const st = await storeStats({ page: 1 });

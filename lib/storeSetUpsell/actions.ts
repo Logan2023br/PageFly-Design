@@ -3,7 +3,7 @@ import "server-only";
 import { UpsellError } from "@/lib/upsell/types";
 import { db, logEvent, tx } from "./db";
 import { check, trackOne } from "./job";
-import { approve, draft, loadSetNames, reject, sendOne, type SendOutcome } from "./messages";
+import { approve, draft, loadSetNames, reject, sendOne, unapprove, type SendOutcome } from "./messages";
 import { getSsuSettings } from "./settings";
 import { SSU_MESSAGE_KINDS, type SsuCustomer, type SsuMessageKind } from "./types";
 
@@ -34,6 +34,7 @@ export async function messageAction(id: string, action: string, content: string 
   if (action === "approve") await approveAndSend(id, content, actor);
   else if (action === "approve_later") await approve(id, content, actor);
   else if (action === "reject") await reject(id, actor);
+  else if (action === "unapprove") await unapprove(id, actor);
   else throw new UpsellError("Unknown action.");
 }
 
@@ -46,6 +47,7 @@ export async function bulkMessages(ids: string[], action: string, actor: string)
          page of fifty does not hold the request open for Crisp fifty times. */
       if (action === "approve") await approve(id, null, actor);
       else if (action === "reject") await reject(id, actor);
+      else if (action === "unapprove") await unapprove(id, actor);
       else throw new UpsellError("Unknown action.");
       done++;
     } catch (err) {
@@ -81,6 +83,15 @@ export async function customerAction(domain: string, action: string, body: Recor
         await logEvent(c, domain, "admin_skipped", actor, {});
       });
       return null;
+    case "restore": {
+      /* Undo "Bỏ" / "Bỏ qua": the unsent messages it rejected go back to Chờ duyệt. */
+      const { rows } = await p.query<{ id: string }>(
+        "select id from ssu_messages where store_domain = $1 and status in ('rejected', 'approved') order by created_at",
+        [domain],
+      );
+      for (const r of rows) await unapprove(r.id, actor);
+      return { restored: rows.length };
+    }
     case "recheck": {
       /* Look again: AC2, Crisp, and the decision — a skipped store whose
          review was removed, or whose email AC2 now knows. Never after a send. */

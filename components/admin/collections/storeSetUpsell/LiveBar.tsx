@@ -13,12 +13,24 @@ import { api } from "../shared";
    select shows up without a reload — unless somebody is typing in it.
    ========================================================================== */
 
-export function LiveBar({ job, cursor, mode, careMode }: { job: SsuJobState | null; cursor: string | null; mode: string; careMode: string }) {
+export function LiveBar({
+  job,
+  cursor,
+  mode,
+  careMode,
+  paused,
+}: {
+  job: SsuJobState | null;
+  cursor: string | null;
+  mode: string;
+  careMode: string;
+  paused: boolean;
+}) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [current, setCurrent] = useState<Record<string, string>>({ mode, care_mode: careMode });
+  const [current, setCurrent] = useState<Record<string, string>>({ mode, care_mode: careMode, send_paused: paused ? "1" : "0" });
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -83,9 +95,18 @@ export function LiveBar({ job, cursor, mode, careMode }: { job: SsuJobState | nu
             </div>
           ))}
         </div>
-        <Button size="sm" icon="RefreshCw" disabled={busy} onClick={runNow}>
-          {busy ? "Đang cập nhật…" : "Cập nhật ngay"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant={current.send_paused === "1" ? "danger" : "ghost"}
+            onClick={() => setMode("send_paused", current.send_paused === "1" ? "0" : "1")}
+          >
+            {current.send_paused === "1" ? "Đang tạm dừng gửi — bấm để gửi lại" : "Tạm dừng gửi"}
+          </Button>
+          <Button size="sm" icon="RefreshCw" disabled={busy} onClick={runNow}>
+            {busy ? "Đang cập nhật…" : "Cập nhật ngay"}
+          </Button>
+        </div>
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-pf-muted">
         <span className="inline-flex items-center gap-1.5">

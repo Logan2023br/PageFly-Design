@@ -286,7 +286,8 @@ async function checkNew(cfg: SsuSettings, out: SsuJobState): Promise<void> {
 
 /* ---------------------------------------------------------------- 4. send */
 
-async function sendApproved(out: SsuJobState): Promise<void> {
+async function sendApproved(cfg: SsuSettings, out: SsuJobState): Promise<void> {
+  if (cfg.send_paused) return;
   const p = await db();
   /* A send cut off mid-way (a restart) is not retried blind: it may have
      reached the customer. It is failed, with a reason that says check Crisp. */
@@ -536,7 +537,7 @@ async function runOnce(): Promise<SsuJobState> {
      the same minute it is written. */
   await step("Theo dõi", () => track(cfg, out));
   await step("Chăm sóc", () => care(cfg, out));
-  await step("Gửi tin", () => sendApproved(out));
+  await step("Gửi tin", () => sendApproved(cfg, out));
   await step("AC2", () => refreshStores());
   out.errors = [...new Set(out.errors)];
   await setInternal("job", out).catch(() => undefined);
