@@ -291,12 +291,13 @@ export async function conversationMessages(sid: string): Promise<CrispMessage[]>
 export type ConnectionTest = { service: "Mixpanel" | "Crisp" | "AC2"; ok: boolean; detail: string };
 
 /**
- * One cheap read per service, for "Kiểm tra kết nối" on the Cài đặt tab.
+ * One cheap read per service, for "Kiểm tra kết nối" on the Cài đặt tab
+ * (Crisp refuses a page smaller than 20: 416 underflow_page_size).
  * Mixpanel's costs one of its 60 export calls an hour; nothing is written.
  */
 export async function testConnections(sampleDomain: string | null): Promise<ConnectionTest[]> {
   const why = (status: number, text: string) =>
-    status === 401 || status === 403 ? `sai token (${status})` : status === 0 ? `không kết nối được: ${text.slice(0, 120)}` : `trả lời ${status}: ${text.slice(0, 120)}`;
+    status === 401 || status === 403 ? `sai token (${status}${text ? `: ${text.slice(0, 80)}` : ""})` : status === 0 ? `không kết nối được: ${text.slice(0, 120)}` : `trả lời ${status}: ${text.slice(0, 120)}`;
 
   const mixpanel = async (): Promise<ConnectionTest> => {
     const secret = await connection("mixpanel_secret");
@@ -315,7 +316,7 @@ export async function testConnections(sampleDomain: string | null): Promise<Conn
 
   const crispTest = async (): Promise<ConnectionTest> => {
     try {
-      const r = await crisp<CrispConversation[]>("GET", "/conversations/1?per_page=1");
+      const r = await crisp<CrispConversation[]>("GET", "/conversations/1?per_page=20");
       return ok(r)
         ? { service: "Crisp", ok: true, detail: `đọc được website ${r.wid}` }
         : { service: "Crisp", ok: false, detail: why(r.status, r.body?.reason ?? r.text) };
