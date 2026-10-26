@@ -37,7 +37,16 @@ process.env.N8N_AC2_KEY = "bpu-key";
 
 /* ---------------------------------------------------------------- the stub */
 
-type Conv = { session_id: string; email: string; app_review?: unknown; segments?: string[]; messages: Record<string, unknown>[] };
+type Conv = {
+  session_id: string;
+  email: string;
+  app_review?: unknown;
+  segments?: string[];
+  /* opened from a chatbox: Crisp knows the device */
+  chatbox?: boolean;
+  state?: string;
+  messages: Record<string, unknown>[];
+};
 const world = {
   events: [] as { event: string; properties: Record<string, unknown> }[],
   stores: {} as Record<string, Record<string, unknown>>,
@@ -79,7 +88,15 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     if ((m = path.match(/^\/conversations\/(\d+)$/))) {
       const q = u.searchParams.get("search_query") ?? "";
       const list = Number(m[1]) === 1 ? world.convs.filter((c) => c.email.includes(q)) : [];
-      return reply({ error: false, data: list.map((c) => ({ session_id: c.session_id, updated_at: Date.now(), meta: { email: c.email, data: { app_review: c.app_review } } })) });
+      return reply({
+        error: false,
+        data: list.map((c) => ({
+          session_id: c.session_id,
+          state: c.state,
+          updated_at: Date.now(),
+          meta: { email: c.email, data: { app_review: c.app_review }, ...(c.chatbox ? { device: { system: { os: { name: "Mac OS" }, browser: { name: "Chrome" } } } } : {}) },
+        })),
+      });
     }
     if (path.startsWith("/people/data/")) return reply({ error: true, reason: "people_not_found" }, 404);
     if (path === "/conversation" && method === "POST") {
@@ -370,6 +387,17 @@ async function main() {
   assert.equal((await status("old.myshopify.com")).status, "pending_review");
   await saveSsuSettings({ send_paused: 0 });
 
+  // a customer who has chatted from the in-app chatbox: the thanks goes into that conversation
+  // (it pops up there), with the note, and a resolved one is left resolved; no new conversation
+  world.convs.push({ session_id: "old_chat", email: "owner@old.myshopify.com", chatbox: true, state: "resolved", messages: [] });
+  const convsBefore = world.convs.length;
+  await messageAction(oldMsg, "approve", null, "admin:test");
+  assert.equal(world.sent[world.sent.length - 1].sid, "old_chat");
+  assert.equal(world.convs.length, convsBefore);
+  assert.ok(world.resolved.includes("old_chat"));
+  const oldCu = await status("old.myshopify.com");
+  assert.deepEqual([oldCu.crisp_session, oldCu.crisp_channel], ["old_chat", "inapp"]);
+
   // the stores table: one row per store, its pages
   const { storeStats } = await import("../lib/storeSetUpsell/queries");
   const st = await storeStats({ page: 1 });
@@ -379,7 +407,7 @@ async function main() {
   assert.equal(st.summary.stores, 7);
 
   const counts = await ssuCounts();
-  assert.equal(counts.sent, 3);
+  assert.equal(counts.sent, 4);
   assert.equal(counts.reviewed, 2);
   assert.equal(counts.cared, 2);
 

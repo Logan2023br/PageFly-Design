@@ -165,6 +165,7 @@ function CustomerCard({ c, editDays }: { c: CustomerListRow; editDays: number })
               {c.crisp_sessions.map((s) => (
                 <li key={s.session_id} className="flex flex-wrap items-baseline gap-x-1.5">
                   {s.session_id === c.crisp_session && <Pill tone="primary">Upsell</Pill>}
+                  {s.inapp && <Pill>In-app</Pill>}
                   <a href={s.link} target="_blank" rel="noreferrer" className="text-pf-primary-hi hover:underline">
                     {s.subject || s.session_id.slice(0, 18)}
                   </a>
@@ -179,6 +180,11 @@ function CustomerCard({ c, editDays }: { c: CustomerListRow; editDays: number })
           )}
           <div className="flex flex-wrap items-center gap-1.5 pt-1">
             <CrispLink href={c.ticket_link} label="Tin upsell" />
+            {c.crisp_channel && (
+              <span className="text-[11.5px] text-pf-muted">
+                {c.crisp_channel === "inapp" ? "gửi vào chat box in-app" : "gửi qua email (khách chưa có chat in-app)"}
+              </span>
+            )}
           </div>
         </div>
       </div>

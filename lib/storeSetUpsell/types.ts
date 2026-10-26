@@ -90,11 +90,14 @@ export type SsuCustomer = {
   ac2_synced_at: string | null;
   crisp_checked_at: string | null;
   crisp_conversations: number | null;
-  crisp_sessions: { session_id: string; link?: string; updated_at: string | null; app_review: number | null; subject: string | null; state: string | null }[] | null;
+  crisp_sessions:
+    | { session_id: string; link?: string; updated_at: string | null; app_review: number | null; subject: string | null; state: string | null; inapp?: boolean }[]
+    | null;
   app_review: number | null;
   status: SsuStatus;
   skip_reason: string | null;
   crisp_session: string | null;
+  crisp_channel: "inapp" | "email" | null;
   ticket_link: string | null;
   sent_at: string | null;
   delivered_at: string | null;

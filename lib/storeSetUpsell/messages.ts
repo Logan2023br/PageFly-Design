@@ -3,7 +3,7 @@ import "server-only";
 import { getRepo } from "@/lib/db";
 import { fillTemplate, longDate, newMessageId } from "@/lib/upsell/common";
 import { UpsellError } from "@/lib/upsell/types";
-import { conversationMessages, crispSender, resolveConversation, reviewCheck, sendInConversation, sendInNewConversation } from "./clients";
+import { conversationMessages, crispSender, resolveConversation, reviewCheck, sendInConversation, sendInNewConversation, sendNote } from "./clients";
 import { db, logEvent, tx, type Db } from "./db";
 import { getSsuSettings, type SsuSettings } from "./settings";
 import { CARE_KINDS, titleOfSlug, type SsuCustomer, type SsuMessage, type SsuMessageKind } from "./types";
@@ -328,24 +328,43 @@ export async function sendOne(id: string, actor = "system"): Promise<SendOutcome
   const name = cu.store_name?.trim() || cu.store_domain.replace(/\.myshopify\.com$/, "");
   let session = cu.crisp_session;
   let ticket = cu.ticket_link;
+  let channel = cu.crisp_channel;
+  const pic = cfg.sender_name || "Logan";
+  const note =
+    `Store set upsell (${set ?? "?"}) — ${pic} sent: ${m.kind}. ` +
+    `Customer picked a Store set template in PageFly. If they reply, please mention ${pic}.`;
   try {
-    const sender = await crispSender(cfg.sender_name || "Logan", cfg.sender_avatar);
-    /* One conversation per customer for everything the upsell sends: once
-       there is one (even from a message written by hand before the thanks),
-       every later message — the thanks included — goes into it. */
-    if (session) {
+    const sender = await crispSender(pic, cfg.sender_avatar);
+    /* ONE conversation per customer for everything the upsell sends, chosen
+       with the first message and kept:
+         in-app — the customer's latest conversation opened from the chatbox
+                  in the PageFly app: the message pops up there when they are
+                  next online. It is their support conversation, so its
+                  state is left as it was (resolved stays resolved, an open
+                  one is not closed under the support team).
+         email  — otherwise a new conversation, which Crisp can only email;
+                  ours alone, so it is resolved after each message. */
+    const inapp = review.conversations.find((c) => c.inapp);
+    if (!session && inapp) {
+      session = inapp.session_id;
+      ticket = inapp.link;
+      channel = "inapp";
       await sendInConversation(session, content, sender);
-      await resolveConversation(session);
+      await sendNote(session, note);
+      if (inapp.state === "resolved") await resolveConversation(session);
+    } else if (session) {
+      await sendInConversation(session, content, sender);
+      const was = review.conversations.find((c) => c.session_id === session)?.state;
+      if (channel !== "inapp" || was === "resolved") await resolveConversation(session);
     } else {
+      channel = "email";
       const r = await sendInNewConversation({
         email: cu.email,
         nickname: name,
         subject: `Your ${await setName(set)} store set — free editing`,
         content,
         sender,
-        note:
-          `Store set upsell (${set ?? "?"}) — ${cfg.sender_name || "Logan"} sent: ${m.kind}. ` +
-          `Customer picked a Store set template in PageFly. If they reply, please mention ${cfg.sender_name || "Logan"}.`,
+        note,
       });
       session = r.session_id;
       ticket = r.ticket_link;
@@ -360,19 +379,20 @@ export async function sendOne(id: string, actor = "system"): Promise<SendOutcome
       await c.query(
         `update ssu_customers set status = 'sent', sent_at = now(), crisp_session = $2, ticket_link = $3,
                 app_review = coalesce($4, app_review), price_at_send = pf_price, pages_at_send = pages,
-                published_at_send = published, updated_at = now()
+                published_at_send = published, crisp_channel = $5, updated_at = now()
           where store_domain = $1`,
-        [m.store_domain, session, ticket, review.app_review],
+        [m.store_domain, session, ticket, review.app_review, channel],
       );
     } else {
       await c.query(
         `update ssu_customers set crisp_session = coalesce(crisp_session, $2), ticket_link = coalesce(ticket_link, $3),
+                crisp_channel = coalesce(crisp_channel, $5),
                 review_asked_at = case when $4 then now() else review_asked_at end, updated_at = now()
           where store_domain = $1`,
-        [m.store_domain, session, ticket, m.kind === "review_ask"],
+        [m.store_domain, session, ticket, m.kind === "review_ask", channel],
       );
     }
-    await logEvent(c, m.store_domain, "message_sent", actor, { message_id: id, kind: m.kind, crisp_session: session });
+    await logEvent(c, m.store_domain, "message_sent", actor, { message_id: id, kind: m.kind, crisp_session: session, channel });
   });
   return "sent";
 }

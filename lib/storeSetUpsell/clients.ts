@@ -179,9 +179,27 @@ export type CrispConversation = {
   state?: string;
   created_at?: number;
   updated_at?: number;
-  meta?: { email?: string; nickname?: string; data?: Record<string, unknown>; subject?: string };
+  meta?: {
+    email?: string;
+    nickname?: string;
+    data?: Record<string, unknown>;
+    subject?: string;
+    origin?: string;
+    device?: { system?: { os?: { name?: string }; browser?: { name?: string }; useragent?: string } };
+  };
   last_message?: string;
 };
+
+/**
+ * Opened from a chatbox (the one in the PageFly app): Crisp records the
+ * visitor's device for those, and none for a conversation opened through the
+ * API or by email. A message into such a session shows in that chatbox when
+ * the customer is next online; any other goes out by email.
+ */
+export function fromChatbox(c: CrispConversation): boolean {
+  const s = c.meta?.device?.system;
+  return !!(s && (s.os?.name || s.browser?.name || s.useragent));
+}
 
 /** A value Crisp holds as text or number, as a number — "5", 5, " 5 " → 5. */
 export function reviewValue(v: unknown): number | null {
@@ -191,7 +209,16 @@ export function reviewValue(v: unknown): number | null {
 }
 
 export type ReviewCheck = {
-  conversations: { session_id: string; link: string; updated_at: string | null; app_review: number | null; subject: string | null; state: string | null }[];
+  conversations: {
+    session_id: string;
+    link: string;
+    updated_at: string | null;
+    app_review: number | null;
+    subject: string | null;
+    state: string | null;
+    /** opened from the in-app chatbox — see fromChatbox */
+    inapp: boolean;
+  }[];
   /** the highest app_review on any of them, or on the customer's profile */
   app_review: number | null;
 };
@@ -231,6 +258,7 @@ export async function reviewCheck(email: string): Promise<ReviewCheck> {
       app_review: v,
       subject: c.meta?.subject ?? null,
       state: c.state ?? null,
+      inapp: fromChatbox(c),
     });
   }
   const p = await crisp<{ data?: Record<string, unknown> }>("GET", `/people/data/${encodeURIComponent(want)}`).catch(() => null);
@@ -326,6 +354,17 @@ export async function sendInNewConversation(o: {
   });
   await resolveConversation(sid);
   return { session_id: sid, ticket_link: ticketLink(created.wid, sid) };
+}
+
+/** A private note in a conversation: the customer never sees it. */
+export async function sendNote(sid: string, content: string): Promise<void> {
+  await crisp("POST", `/conversation/${sid}/message`, {
+    type: "note",
+    from: "operator",
+    origin: "chat",
+    content,
+    user: { type: "website", nickname: "PageFly Team" },
+  });
 }
 
 /** Resolved after every message, as BPU Ops does: a reply from the customer reopens it. */
