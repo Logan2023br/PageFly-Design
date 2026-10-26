@@ -52,6 +52,9 @@ const reply = (body: unknown, status = 200) =>
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const u = new URL(String(input));
   const method = init?.method ?? "GET";
+  if (u.host === "mixpanel.com" && u.pathname === "/api/app/me") {
+    return reply({ status: "ok", results: { projects: { "3429567": { name: "PageFly Analytics - Production" } } } });
+  }
   if (u.host === "data.mixpanel.com") {
     world.exportCalls++;
     assert.match(String((init?.headers as Record<string, string>).Authorization), /^Basic /);
@@ -355,6 +358,8 @@ async function main() {
   const ac2t = (await clients.testConnections("alpha.myshopify.com")).find((t) => t.service === "AC2")!;
   assert.equal(ac2t.ok, true);
   assert.match(ac2t.detail, /qua n8n/);
+  const mpt = (await clients.testConnections(null)).find((t) => t.service === "Mixpanel")!;
+  assert.deepEqual([mpt.ok, /3429567/.test(mpt.detail)], [true, true]);
   // a whole .env line pasted keeps only its value
   delete process.env.N8N_AC2_KEY;
   await saveSsuSettings({ n8n_ac2_key: 'N8N_AC2_KEY="bpu-key"' });

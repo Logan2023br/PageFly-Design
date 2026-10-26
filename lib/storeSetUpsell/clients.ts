@@ -314,18 +314,30 @@ export async function testConnections(sampleDomain: string | null): Promise<Conn
   const why = (status: number, text: string) =>
     status === 401 || status === 403 ? `sai token (${status}${text ? `: ${text.slice(0, 80)}` : ""})` : status === 0 ? `không kết nối được: ${text.slice(0, 120)}` : `trả lời ${status}: ${text.slice(0, 120)}`;
 
+  /* A service account is checked with /api/app/me — instant, and it lists the
+     projects the account may read. Only a bare project secret (no username)
+     falls back to a one-row export, which can take a while. */
   const mixpanel = async (): Promise<ConnectionTest> => {
     const secret = await connection("mixpanel_secret");
     if (!secret) return { service: "Mixpanel", ok: false, detail: "chưa điền secret" };
     const username = await connection("mixpanel_username");
     const project = await connection("mixpanel_project_id");
+    if (username) {
+      const r = await call<{ results?: { projects?: Record<string, { name?: string }> } }>("https://mixpanel.com/api/app/me", {
+        headers: { Authorization: basic(username, secret) },
+      });
+      if (r.status !== 200) return { service: "Mixpanel", ok: false, detail: why(r.status, r.text) };
+      const projects = r.body?.results?.projects;
+      if (!projects || Object.keys(projects).length === 0) return { service: "Mixpanel", ok: true, detail: "service account đúng" };
+      return projects[project]
+        ? { service: "Mixpanel", ok: true, detail: `đọc được project ${project} (${projects[project].name ?? ""})` }
+        : { service: "Mixpanel", ok: false, detail: `service account đúng nhưng không có quyền vào project ${project}` };
+    }
     const day = ymd(new Date(Date.now() - 86_400_000));
     const q = new URLSearchParams({ project_id: project, from_date: day, to_date: day, event: JSON.stringify(["select_template"]), limit: "1" });
-    const r = await call<never>(`https://data.mixpanel.com/api/2.0/export?${q}`, {
-      headers: { Authorization: username ? basic(username, secret) : basic(secret, ""), Accept: "text/plain" },
-    });
+    const r = await call<never>(`https://data.mixpanel.com/api/2.0/export?${q}`, { headers: { Authorization: basic(secret, ""), Accept: "text/plain" } }, 60_000);
     if (r.status === 200) return { service: "Mixpanel", ok: true, detail: `đọc được project ${project}` };
-    if (r.status === 429) return { service: "Mixpanel", ok: true, detail: "token đúng, đang bị giới hạn 60 lần/giờ — thử lại sau" };
+    if (r.status === 429) return { service: "Mixpanel", ok: true, detail: "mã đúng, đang bị giới hạn 60 lần/giờ — thử lại sau" };
     return { service: "Mixpanel", ok: false, detail: why(r.status, r.text) };
   };
 
