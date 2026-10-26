@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { adminGate } from "@/components/admin/adminGate";
 import { FilterBar, Pager, SelectionFeed, TabNav } from "@/components/admin/collections/storeSetUpsell/Chrome";
+import { AddStore } from "@/components/admin/collections/storeSetUpsell/AddStore";
 import { CustomerCards } from "@/components/admin/collections/storeSetUpsell/CustomerCards";
 import { LiveBar } from "@/components/admin/collections/storeSetUpsell/LiveBar";
 import { MessageCards } from "@/components/admin/collections/storeSetUpsell/MessageCards";
@@ -114,6 +115,7 @@ export default async function StoreSetUpsellPage(props: PageProps<"/design/admin
     <>
       <LiveBar job={state.job} cursor={state.cursor} mode={cfg.mode} careMode={cfg.care_mode} />
       <TabNav tab={tab} counts={counts} />
+      {tab === "all" && <AddStore />}
       {tab !== "settings" && <FilterBar tab={tab} f={f} sets={sets} />}
       {pager}
       {body}

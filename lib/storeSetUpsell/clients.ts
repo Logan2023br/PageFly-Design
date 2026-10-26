@@ -69,9 +69,11 @@ const ymd = (d: Date) => d.toISOString().slice(0, 10);
  * The export takes whole days in the PROJECT's timezone, which may be ahead
  * of UTC: `to_date` is asked as tomorrow's UTC date first and, if Mixpanel
  * refuses a date in its future, as today's. Rows repeat between reads; the
- * caller deduplicates on $insert_id.
+ * caller deduplicates on $insert_id. With `domain`, only that store's — for
+ * a customer added by hand, whose selects may be older than the backfill.
  */
-export async function exportStoreSetSelects(since: Date): Promise<MixpanelEvent[]> {
+export async function exportStoreSetSelects(since: Date, domain?: string): Promise<MixpanelEvent[]> {
+  if (domain !== undefined && !/^[a-z0-9][a-z0-9.-]*$/.test(domain)) throw new Error(`Domain không hợp lệ: ${domain}`);
   const secret = await connection("mixpanel_secret");
   if (!secret) throw new ConfigMissing("Mixpanel (service account secret)");
   const username = await connection("mixpanel_username");
@@ -84,9 +86,12 @@ export async function exportStoreSetSelects(since: Date): Promise<MixpanelEvent[
       from_date: from,
       to_date: to,
       event: JSON.stringify(["select_template"]),
-      where: 'defined(properties["store_set"]) and properties["store_set"] != null',
+      where:
+        'defined(properties["store_set"]) and properties["store_set"] != null' +
+        /* "in", not ==: some values carry a leading newline; the caller keeps exact matches */
+        (domain ? ` and "${domain}" in properties["shopify_domain"]` : ""),
     });
-    return call<never>(`https://data.mixpanel.com/api/2.0/export?${q}`, { headers: { Authorization: auth, Accept: "text/plain" } }, 60_000);
+    return call<never>(`https://data.mixpanel.com/api/2.0/export?${q}`, { headers: { Authorization: auth, Accept: "text/plain" } }, domain ? 120_000 : 60_000);
   };
   /* Which of the two the project takes is remembered, so the minute job
      spends one of Mixpanel's 60 export calls an hour, not two. */

@@ -45,6 +45,8 @@ const world = {
   sent: [] as { sid: string; content: string; nickname: string }[],
   exportCalls: 0,
   resolved: [] as string[],
+  /* selects from before the backfill: only an export for one store returns them */
+  oldEvents: [] as { event: string; properties: Record<string, unknown> }[],
 };
 const reply = (body: unknown, status = 200) =>
   new Response(typeof body === "string" ? body : JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -58,7 +60,13 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (u.host === "data.mixpanel.com") {
     world.exportCalls++;
     assert.match(String((init?.headers as Record<string, string>).Authorization), /^Basic /);
-    return reply(world.events.map((e) => JSON.stringify(e)).join("\n"));
+    const one = u.searchParams.get("where")?.match(/"([^"]+)" in properties\["shopify_domain"\]/)?.[1];
+    return reply(
+      [...world.events, ...(one ? world.oldEvents : [])]
+        .filter((e) => !one || String(e.properties.shopify_domain).includes(one))
+        .map((e) => JSON.stringify(e))
+        .join("\n"),
+    );
   }
   if (u.host === "n8n.test") {
     assert.equal((init?.headers as Record<string, string>)["X-BPU-Key"], "bpu-key");
@@ -319,6 +327,21 @@ async function main() {
   await assert.rejects(messageAction(zu.id, "approve", null, "admin:test"), /phản hồi/);
   assert.equal(world.sent.length, before);
   assert.equal((await status("zeta.myshopify.com")).needs_check, true);
+
+  // a store added by hand (here one left "eligible" above, too old for auto): its old selects read for it
+  // alone, checked, and only DRAFTED — even in auto mode
+  const { addStore } = await import("../lib/storeSetUpsell/job");
+  await saveSsuSettings({ mode: "auto" });
+  world.oldEvents = [ev("old.myshopify.com", "owner@old.myshopify.com", "nordlys", 30 * 24 * 60), ev("old.myshopify.com", "owner@old.myshopify.com", "nordlys", 30 * 24 * 60 - 5, { template_id: "nordlys-product" })];
+  world.stores["old.myshopify.com"] = store("old.myshopify.com");
+  const sentBeforeAdd = world.sent.length;
+  const added = await addStore("https://old.myshopify.com/admin", "admin:test");
+  assert.deepEqual([added.result, added.selections, added.status], ["drafted", 3, "pending_review"]);
+  assert.equal(world.sent.length, sentBeforeAdd);
+  assert.equal((await addStore("old.myshopify.com", "admin:test")).result, "exists");
+  await assert.rejects(addStore("nobody.myshopify.com", "admin:test"), /không có lượt/);
+  await assert.rejects(addStore("not a domain", "admin:test"), /domain/);
+  await saveSsuSettings({ mode: "manual" });
 
   // the stores table: one row per store, its pages
   const { storeStats } = await import("../lib/storeSetUpsell/queries");

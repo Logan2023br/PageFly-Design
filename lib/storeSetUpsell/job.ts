@@ -5,6 +5,7 @@ import { db, hasStoreSetDatabase, logEvent, tx } from "./db";
 import { daysLeft, draft, loadSetNames, sendOne } from "./messages";
 import { getInternal, getSsuSettings, setInternal, type SsuSettings } from "./settings";
 import type { CareKind, SsuCustomer, SsuJobState } from "./types";
+import { UpsellError } from "@/lib/upsell/types";
 
 /* ==========================================================================
    The job, every minute (instrumentation.ts starts it; "Cập nhật ngay" on the
@@ -462,6 +463,54 @@ async function refreshStores(): Promise<void> {
 /* ---------------------------------------------------------------- the run */
 
 let running: Promise<SsuJobState> | null = null;
+
+/* ---------------------------------------------------------------- by hand */
+
+export type AddResult = {
+  domain: string;
+  selections: number;
+  /** what became of them: drafted (waiting on Chờ duyệt), reviewed, skipped, eligible, or already handled */
+  result: "drafted" | "reviewed" | "skipped" | "eligible" | "exists";
+  status: string;
+  skip_reason: string | null;
+};
+
+const ADD_DAYS = 90;
+
+/**
+ * One store added by hand — a customer from before the backfill, say. Its
+ * own selects (last 90 days) are read from Mixpanel, so the pages and sets
+ * are the real ones, then it is checked like a new store: AC2, every Crisp
+ * conversation for the 5★ rule. A thanks is only ever DRAFTED here, for
+ * approval, whatever the mode — the select may be weeks old.
+ */
+export async function addStore(input: string, actor: string): Promise<AddResult> {
+  const domain = domainOf(input);
+  if (!domain || !/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(domain))
+    throw new UpsellError("Nhập Shopify domain dạng abc-123.myshopify.com.", 422);
+  const existing = await load(domain);
+  if (existing && existing.status !== "new" && existing.status !== "eligible") {
+    return { domain, selections: existing.selections, result: "exists", status: existing.status, skip_reason: existing.skip_reason };
+  }
+  let events: MixpanelEvent[];
+  try {
+    events = (await exportStoreSetSelects(new Date(Date.now() - ADD_DAYS * 86_400_000), domain)).filter(
+      (e) => domainOf(e.properties?.shopify_domain) === domain,
+    );
+  } catch (err) {
+    if (err instanceof MixpanelBusy) throw new UpsellError("Mixpanel đang giới hạn 60 lần đọc/giờ — thử lại sau vài phút.", 429);
+    throw err;
+  }
+  if (events.length === 0 && !existing)
+    throw new UpsellError(`Mixpanel không có lượt Select Store set nào của ${domain} trong ${ADD_DAYS} ngày qua.`, 404);
+  await ingest(events);
+  const cfg = await getSsuSettings();
+  await loadSetNames();
+  await logEvent(await db(), domain, "added", actor, { selections: events.length });
+  const result = (await check(domain, { ...cfg, mode: "manual" }, actor)) as AddResult["result"];
+  const cu = (await load(domain))!;
+  return { domain, selections: cu.selections, result, status: cu.status, skip_reason: cu.skip_reason };
+}
 
 export function runJob(): Promise<SsuJobState> {
   if (!running) running = runOnce().finally(() => (running = null));
