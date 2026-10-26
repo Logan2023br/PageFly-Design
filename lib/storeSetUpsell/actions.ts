@@ -21,6 +21,8 @@ export async function approveAndSend(id: string, content: string | null, actor: 
   await approve(id, content, actor);
   const r = await sendOne(id, actor);
   if (r === "blocked_review") throw new UpsellError("Không gửi: khách đã review 5★ trên Crisp — tin đã được bỏ.", 409);
+  if (r === "deferred")
+    throw new UpsellError("Chưa gửi: khách đang chat với support. Tin nằm ở Chờ gửi và tự gửi khi support xong.", 409);
   if (r === "failed" || r === "skipped") {
     const p = await db();
     const { rows } = await p.query<{ error: string | null }>("select error from ssu_messages where id = $1", [id]);

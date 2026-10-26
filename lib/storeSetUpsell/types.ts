@@ -135,6 +135,7 @@ export type SsuMessage = {
   error: string | null;
   attempts: number;
   failed_at: string | null;
+  defer_until: string | null;
   rerender: boolean;
   created_at: string;
 };

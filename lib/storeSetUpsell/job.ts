@@ -296,7 +296,7 @@ async function sendApproved(cfg: SsuSettings, out: SsuJobState): Promise<void> {
       where status = 'sending' and coalesce(approved_at, created_at) < now() - interval '10 minutes'`,
   );
   const { rows } = await p.query<{ id: string }>(
-    "select id from ssu_messages where status = 'approved' order by approved_at limit $1",
+    "select id from ssu_messages where status = 'approved' and (defer_until is null or defer_until <= now()) order by approved_at limit $1",
     [SEND_BATCH],
   );
   out.sent = 0;

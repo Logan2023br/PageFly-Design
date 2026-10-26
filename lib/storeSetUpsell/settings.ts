@@ -54,6 +54,10 @@ export const SSU_DEFAULTS = {
   edit_reminder_days_left: 5,
   /** never two messages to one customer within this many hours */
   care_gap_hours: 48,
+  /** a conversation with a message this recent: support may be mid-chat, the message waits */
+  support_quiet_minutes: 60,
+  /** a conversation not resolved and active within this many hours: support is on it, the message waits */
+  support_open_hours: 24,
 } as const;
 
 export type SsuKey = keyof typeof SSU_DEFAULTS;
@@ -82,6 +86,8 @@ export const SSU_HELP: Record<SsuKey, string> = {
   care_read_hours: "Khách đã đọc tin cảm ơn mà bấy nhiêu giờ vẫn chưa trả lời thì soạn tin chăm sóc",
   edit_reminder_days_left: "Còn bấy nhiêu ngày chỉnh sửa miễn phí (khách chưa trả lời) thì soạn tin nhắc",
   care_gap_hours: "Không gửi 2 tin cho cùng một khách trong vòng bấy nhiêu giờ",
+  support_quiet_minutes: "Khách có tin nhắn với support trong bấy nhiêu phút gần nhất thì tin upsell đợi, thử lại sau 10 phút",
+  support_open_hours: "Khách có hội thoại chưa resolved, hoạt động trong bấy nhiêu giờ gần nhất (support đang xử lý) thì tin upsell đợi tới khi resolved",
 };
 
 export const SSU_NUMERIC = (Object.keys(SSU_DEFAULTS) as SsuKey[]).filter((k) => typeof SSU_DEFAULTS[k] === "number");

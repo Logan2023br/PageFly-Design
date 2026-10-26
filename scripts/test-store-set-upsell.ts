@@ -45,6 +45,8 @@ type Conv = {
   /* opened from a chatbox: Crisp knows the device */
   chatbox?: boolean;
   state?: string;
+  /* last activity; three days ago when not said */
+  updated_at?: number;
   messages: Record<string, unknown>[];
 };
 const world = {
@@ -93,7 +95,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         data: list.map((c) => ({
           session_id: c.session_id,
           state: c.state,
-          updated_at: Date.now(),
+          updated_at: c.updated_at ?? Date.now() - 3 * 86_400_000,
           meta: { email: c.email, data: { app_review: c.app_review }, ...(c.chatbox ? { device: { system: { os: { name: "Mac OS" }, browser: { name: "Chrome" } } } } : {}) },
         })),
       });
@@ -389,9 +391,21 @@ async function main() {
 
   // a customer who has chatted from the in-app chatbox: the thanks goes into that conversation
   // (it pops up there), with the note, and a resolved one is left resolved; no new conversation
-  world.convs.push({ session_id: "old_chat", email: "owner@old.myshopify.com", chatbox: true, state: "resolved", messages: [] });
+  // …but not while support is on it: an unresolved chat active an hour ago — the message waits
+  world.convs.push({ session_id: "old_chat", email: "owner@old.myshopify.com", chatbox: true, state: "unresolved", updated_at: Date.now() - 3_600_000, messages: [] });
   const convsBefore = world.convs.length;
-  await messageAction(oldMsg, "approve", null, "admin:test");
+  const sentBeforeSupport = world.sent.length;
+  await assert.rejects(messageAction(oldMsg, "approve", null, "admin:test"), /support/);
+  assert.equal(world.sent.length, sentBeforeSupport);
+  const deferred = (await p.query("select status, defer_until from ssu_messages where id = $1", [oldMsg])).rows[0];
+  assert.equal(deferred.status, "approved");
+  assert.ok(deferred.defer_until);
+  await runJob();
+  assert.equal(world.sent.length, sentBeforeSupport, "not retried before defer_until");
+  // support resolves it: the next try sends
+  Object.assign(world.convs.find((x) => x.session_id === "old_chat")!, { state: "resolved", updated_at: Date.now() - 2 * 3_600_000 });
+  await p.query("update ssu_messages set defer_until = now() - interval '1 second' where id = $1", [oldMsg]);
+  await runJob();
   assert.equal(world.sent[world.sent.length - 1].sid, "old_chat");
   assert.equal(world.convs.length, convsBefore);
   assert.ok(world.resolved.includes("old_chat"));

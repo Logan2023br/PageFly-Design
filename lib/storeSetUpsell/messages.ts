@@ -218,7 +218,7 @@ export async function unapprove(id: string, actor: string): Promise<void> {
     const m = await loadMessage(c, id, true);
     if (m.status !== "approved" && m.status !== "rejected" && m.status !== "failed")
       throw new UpsellError(m.status === "sent" || m.status === "sending" ? "Tin đã gửi, không đưa về được." : "Tin này đã ở Chờ duyệt.", 409);
-    await c.query("update ssu_messages set status = 'pending_review', approved_at = null, approved_by = null where id = $1", [id]);
+    await c.query("update ssu_messages set status = 'pending_review', approved_at = null, approved_by = null, defer_until = null, error = null where id = $1", [id]);
     if (m.kind === "thanks")
       await c.query(
         "update ssu_customers set status = 'pending_review', skip_reason = null, updated_at = now() where store_domain = $1 and sent_at is null",
@@ -241,7 +241,31 @@ export async function reject(id: string, actor: string): Promise<void> {
   });
 }
 
-export type SendOutcome = "sent" | "failed" | "blocked_review" | "skipped";
+export type SendOutcome = "sent" | "failed" | "blocked_review" | "skipped" | "deferred";
+
+const DEFER_MS = 10 * 60_000;
+
+/**
+ * The conversation where support is talking to this customer now, if any —
+ * one with a message in the last support_quiet_minutes, or not resolved and
+ * active within support_open_hours. Our own email ticket does not count.
+ * An upsell message never cuts into a support chat: it waits.
+ */
+export function supportBusy(
+  conversations: { session_id: string; updated_at: string | null; state: string | null; link: string }[],
+  cu: Pick<SsuCustomer, "crisp_session" | "crisp_channel">,
+  cfg: Pick<SsuSettings, "support_quiet_minutes" | "support_open_hours">,
+  now = Date.now(),
+) {
+  const own = cu.crisp_channel === "email" ? cu.crisp_session : null;
+  return (
+    conversations.find((c) => {
+      if (c.session_id === own || !c.updated_at) return false;
+      const age = now - new Date(c.updated_at).getTime();
+      return age < cfg.support_quiet_minutes * 60_000 || (c.state !== "resolved" && age < cfg.support_open_hours * 3_600_000);
+    }) ?? null
+  );
+}
 
 /**
  * Sends one approved message. Claimed first (approved → sending) so the
@@ -290,6 +314,20 @@ export async function sendOne(id: string, actor = "system"): Promise<SendOutcome
       await logEvent(c, m.store_domain, "blocked_by_review", actor, { message_id: id, app_review: review.app_review });
     });
     return "blocked_review";
+  }
+
+  const busy = supportBusy(review.conversations, cu, cfg);
+  if (busy) {
+    const why = `Đợi support xong — khách đang có hội thoại ${busy.state === "resolved" ? "vừa có tin nhắn" : "chưa resolved"} (${busy.link})`;
+    await tx(async (c) => {
+      await c.query("update ssu_messages set status = 'approved', defer_until = now() + $2 * interval '1 millisecond', error = $3 where id = $1", [
+        id,
+        DEFER_MS,
+        why,
+      ]);
+      if (!m.defer_until) await logEvent(c, m.store_domain, "deferred_support", actor, { message_id: id, kind: m.kind, session: busy.session_id });
+    });
+    return "deferred";
   }
 
   const drop = async (reason: string, patch = "") => {
@@ -374,7 +412,7 @@ export async function sendOne(id: string, actor = "system"): Promise<SendOutcome
   }
 
   await tx(async (c) => {
-    await c.query("update ssu_messages set status = 'sent', sent_at = now(), error = null where id = $1", [id]);
+    await c.query("update ssu_messages set status = 'sent', sent_at = now(), error = null, defer_until = null where id = $1", [id]);
     if (m.kind === "thanks") {
       await c.query(
         `update ssu_customers set status = 'sent', sent_at = now(), crisp_session = $2, ticket_link = $3,

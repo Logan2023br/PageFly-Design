@@ -120,6 +120,8 @@ create table if not exists ssu_messages (
 );
 /* Written from the template and not edited since: written again at send time. */
 alter table ssu_messages add column if not exists rerender boolean not null default false;
+/* approved, but the customer is talking to support: not tried again before this */
+alter table ssu_messages add column if not exists defer_until timestamptz;
 /* inapp: the customer's chatbox conversation in the PageFly app; email: one we opened */
 alter table ssu_customers add column if not exists crisp_channel text;
 /* everything sent before the in-app choice opened its own conversation */
