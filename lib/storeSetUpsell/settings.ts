@@ -163,7 +163,13 @@ export async function saveSsuSettings(patch: Record<string, unknown>): Promise<S
   const bad: string[] = [];
   for (const [key, raw] of Object.entries(patch)) {
     if (Object.hasOwn(CONNECTIONS, key)) {
-      const v = String(raw ?? "").trim();
+      /* a whole .env line pasted ("N8N_AC2_KEY=bpu_…", maybe quoted) keeps only its value */
+      const envName = CONNECTIONS[key as ConnectionKey].env;
+      const v = String(raw ?? "")
+        .trim()
+        .replace(new RegExp(`^(export\\s+)?${envName}\\s*=\\s*`), "")
+        .replace(/^(["'])(.*)\1$/, "$2")
+        .trim();
       if (v.length > 4000 || /\s/.test(v)) bad.push(`${key} (không hợp lệ)`);
       else rows.push([CONN_PREFIX + key, v ? seal(key, v) : ""]);
       continue;

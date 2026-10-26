@@ -349,6 +349,10 @@ async function main() {
   const ac2t = (await clients.testConnections("alpha.myshopify.com")).find((t) => t.service === "AC2")!;
   assert.equal(ac2t.ok, true);
   assert.match(ac2t.detail, /qua n8n/);
+  // a whole .env line pasted keeps only its value
+  delete process.env.N8N_AC2_KEY;
+  await saveSsuSettings({ n8n_ac2_key: 'N8N_AC2_KEY="bpu-key"' });
+  assert.equal(await settingsMod.connection("n8n_ac2_key"), "bpu-key");
 
   console.log("store set upsell: all checks passed", JSON.stringify(counts));
   await (await import("../lib/upsell/db")).closeUpsellPool();

@@ -341,7 +341,10 @@ export async function testConnections(sampleDomain: string | null): Promise<Conn
     if (!r) return { service: "AC2", ok: false, detail: "chưa điền n8n URL + key" };
     const via = "qua n8n";
     if (r.status === 200 && r.body?.shopDomain) return { service: "AC2", ok: true, detail: `đọc được store ${domain} ${via}` };
-    if (r.status === 401 || r.status === 403) return { service: "AC2", ok: false, detail: `${why(r.status, r.text)} ${via}` };
+    if (r.status === 401 || r.status === 403) {
+      const key = await connection("n8n_ac2_key");
+      return { service: "AC2", ok: false, detail: `${why(r.status, r.text)} ${via} — key đang lưu: bắt đầu "${key.slice(0, 4)}", ${key.length} ký tự` };
+    }
     return { service: "AC2", ok: false, detail: `${why(r.status, r.text)} ${via} (store thử: ${domain})` };
   };
 
