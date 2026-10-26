@@ -63,7 +63,7 @@ export const SSU_HELP: Record<SsuKey, string> = {
   care_mode: "Tin chăm sóc sau tin cảm ơn (đã đọc chưa trả lời, đã nâng cấp, nhắc còn X ngày chỉnh sửa): manual = chờ duyệt · auto = gửi luôn · off = tắt",
   sender_name: "Tên người gửi trên Crisp, điền vào {pic}",
   thanks_template: `Mẫu tin cảm ơn + chỉnh sửa miễn phí. Biến: ${VARS}. Để trống dùng mẫu mặc định.`,
-  edit_reminder_template: `Mẫu tin nhắc còn X ngày chỉnh sửa (khách đã xem, chưa trả lời). Biến: ${VARS}. Để trống dùng mẫu mặc định.`,
+  edit_reminder_template: `Mẫu tin nhắc còn X ngày chỉnh sửa (khách chưa trả lời). Biến: ${VARS}. Để trống dùng mẫu mặc định.`,
   care_read_template: `Mẫu tin chăm sóc khi khách đã đọc mà chưa trả lời. Biến: ${VARS}. Để trống dùng mẫu mặc định.`,
   care_upgraded_template: `Mẫu tin chăm sóc khi khách nâng cấp mà chưa trả lời. Biến: ${VARS}. Để trống dùng mẫu mặc định.`,
   review_template: `Mẫu tin xin review. Biến: ${VARS}. Để trống dùng mẫu mặc định.`,
@@ -74,7 +74,7 @@ export const SSU_HELP: Record<SsuKey, string> = {
   skip_dev_stores: "1 = không gửi cho store development / partner, 0 = vẫn gửi",
   edit_days: "Số ngày chỉnh sửa miễn phí, tính từ ngày gửi tin cảm ơn ({edit_days}, {edit_until}, {days_left})",
   care_read_hours: "Khách đã đọc tin cảm ơn mà bấy nhiêu giờ vẫn chưa trả lời thì soạn tin chăm sóc",
-  edit_reminder_days_left: "Còn bấy nhiêu ngày chỉnh sửa miễn phí (khách đã xem, chưa trả lời) thì soạn tin nhắc",
+  edit_reminder_days_left: "Còn bấy nhiêu ngày chỉnh sửa miễn phí (khách chưa trả lời) thì soạn tin nhắc",
   care_gap_hours: "Không gửi 2 tin cho cùng một khách trong vòng bấy nhiêu giờ",
 };
 

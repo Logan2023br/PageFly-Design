@@ -28,7 +28,7 @@ const EVENT_LABEL: Record<string, string> = {
   message_sent: "Đã gửi tin",
   message_failed: "Gửi lỗi",
   blocked_by_review: "Chặn gửi vì đã review 5★",
-  delivered: "Khách đã xem",
+  delivered: "Crisp đã chuyển tin (chat hoặc email)",
   read: "Khách đã đọc",
   replied: "Khách phản hồi",
   upgraded: "Nâng cấp plan",
@@ -180,7 +180,6 @@ function CustomerCard({ c, editDays }: { c: CustomerListRow; editDays: number })
         {c.skip_reason && <span className="text-[12px] text-pf-muted">{c.skip_reason}</span>}
         {c.sent_at && <Pill tone="ok">Gửi {fmtVN(c.sent_at)}</Pill>}
         {left !== null && <Pill tone={left > 0 ? "primary" : "muted"}>{left > 0 ? `Còn ${left} ngày chỉnh sửa` : "Hết hạn chỉnh sửa"}</Pill>}
-        {c.delivered_at && <Pill tone="ok">Đã xem</Pill>}
         {c.read_at && <Pill tone="ok">Đã đọc {fmtVN(c.read_at)}</Pill>}
         {c.replied && <Pill tone="primary">Có phản hồi {fmtVN(c.last_reply_at)}</Pill>}
         {c.needs_check && <Pill tone="warn">Cần kiểm tra</Pill>}

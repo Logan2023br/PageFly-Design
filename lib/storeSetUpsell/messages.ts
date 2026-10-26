@@ -35,7 +35,7 @@ export const DEFAULT_THANKS_TEMPLATE =
   "👉 **Simply reply to this message** with the changes you need, and we will take care of it.\n\n" +
   "Best regards,\n**{pic} – PageFly Support**";
 
-/** Saw the thanks, no reply: the days left, and for which pages. */
+/** Sent the thanks, no reply: the days left, and for which pages. */
 export const DEFAULT_EDIT_REMINDER_TEMPLATE =
   "Hi **{store_name}**,\n\n" +
   "A quick reminder: your **Free Editing** service for the store set pages you are using — {pages} — " +

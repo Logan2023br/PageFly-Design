@@ -417,7 +417,9 @@ export function careDue(cu: SsuCustomer, have: string[], cfg: SsuSettings): Care
   if (cu.upgraded_at && !have.includes("care_upgraded")) return "care_upgraded";
   if (cu.read_at && Date.now() - new Date(cu.read_at).getTime() >= cfg.care_read_hours * 3_600_000 && left > 0 && !have.includes("care_read"))
     return "care_read";
-  if ((cu.delivered_at || cu.read_at) && left > 0 && left <= cfg.edit_reminder_days_left && !have.includes("edit_reminder")) return "edit_reminder";
+  /* Not on Crisp's "delivered": it is set the moment a message is emailed to an
+     offline customer, so it says nothing about them having seen it. */
+  if (cu.sent_at && left > 0 && left <= cfg.edit_reminder_days_left && !have.includes("edit_reminder")) return "edit_reminder";
   return null;
 }
 

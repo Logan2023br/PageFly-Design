@@ -16,7 +16,6 @@ export const SSU_TABS = [
   { id: "pending", label: "Chờ duyệt", where: null },
   { id: "waiting", label: "Chờ gửi", where: null },
   { id: "sent", label: "Đã gửi", where: "c.sent_at is not null" },
-  { id: "delivered", label: "Đã xem", where: "c.delivered_at is not null" },
   { id: "read", label: "Đã đọc", where: "c.read_at is not null" },
   { id: "replied", label: "Có phản hồi", where: "c.replied" },
   { id: "needs_check", label: "Cần kiểm tra", where: "c.needs_check" },
@@ -72,7 +71,7 @@ export async function listCustomers(tab: SsuTabId, f: SsuFilters): Promise<{ row
   const order =
     tab === "needs_check" || tab === "replied"
       ? "c.last_reply_at desc nulls last"
-      : tab === "sent" || tab === "delivered" || tab === "read"
+      : tab === "sent" || tab === "read"
         ? "c.sent_at desc nulls last"
         : "c.last_selected_at desc nulls last";
   const total = Number((await p.query(`select count(*) as n from ssu_customers c where ${w.sql}`, w.args)).rows[0].n);
