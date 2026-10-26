@@ -130,12 +130,29 @@ export type Ac2Store = {
   uninstalledAt?: string;
 };
 
-/** The store, or null when AC2 has no token, does not answer, or does not know it. */
-export async function ac2Store(domain: string): Promise<Ac2Store | null> {
+/**
+ * GET an AC2 stores path, as BPU Ops does: through the n8n proxy when its URL
+ * is set (the AC2 token then stays in n8n), else with AC2_TOKEN directly.
+ * null when neither is configured.
+ */
+async function ac2Get<T>(path: string): Promise<(Answer<T> & { via: string }) | null> {
+  const proxy = await connection("n8n_ac2_url");
+  if (proxy) {
+    const key = await connection("n8n_ac2_key");
+    const sep = proxy.includes("?") ? "&" : "?";
+    const r = await call<T>(`${proxy}${sep}${new URLSearchParams({ path })}`, { headers: { "X-BPU-Key": key } });
+    return { ...r, via: "n8n" };
+  }
   const token = await connection("ac2_token");
   if (!token) return null;
-  const r = await call<Ac2Store>(`https://ac2.pagefly.io/api/app-data/stores/${encodeURIComponent(domain)}?token=${encodeURIComponent(token)}`);
-  return r.status === 200 && r.body?.shopDomain ? r.body : null;
+  const r = await call<T>(`https://ac2.pagefly.io/api/app-data/stores${path}?token=${encodeURIComponent(token)}`);
+  return { ...r, via: "token" };
+}
+
+/** The store, or null when AC2 is not configured, does not answer, or does not know it. */
+export async function ac2Store(domain: string): Promise<Ac2Store | null> {
+  const r = await ac2Get<Ac2Store>(`/${encodeURIComponent(domain)}`);
+  return r && r.status === 200 && r.body?.shopDomain ? r.body : null;
 }
 
 /* ---------------------------------------------------------------- Crisp */
@@ -326,13 +343,13 @@ export async function testConnections(sampleDomain: string | null): Promise<Conn
   };
 
   const ac2 = async (): Promise<ConnectionTest> => {
-    const token = await connection("ac2_token");
-    if (!token) return { service: "AC2", ok: false, detail: "chưa điền token" };
     const domain = sampleDomain ?? "pagefly-demo.myshopify.com";
-    const r = await call<Ac2Store>(`https://ac2.pagefly.io/api/app-data/stores/${encodeURIComponent(domain)}?token=${encodeURIComponent(token)}`);
-    if (r.status === 200 && r.body?.shopDomain) return { service: "AC2", ok: true, detail: `đọc được store ${domain}` };
-    if (r.status === 401 || r.status === 403) return { service: "AC2", ok: false, detail: why(r.status, r.text) };
-    return { service: "AC2", ok: false, detail: `${why(r.status, r.text)} (store thử: ${domain})` };
+    const r = await ac2Get<Ac2Store>(`/${encodeURIComponent(domain)}`);
+    if (!r) return { service: "AC2", ok: false, detail: "chưa điền (n8n URL + key, hoặc token)" };
+    const via = r.via === "n8n" ? "qua n8n" : "bằng token";
+    if (r.status === 200 && r.body?.shopDomain) return { service: "AC2", ok: true, detail: `đọc được store ${domain} ${via}` };
+    if (r.status === 401 || r.status === 403) return { service: "AC2", ok: false, detail: `${why(r.status, r.text)} ${via}` };
+    return { service: "AC2", ok: false, detail: `${why(r.status, r.text)} ${via} (store thử: ${domain})` };
   };
 
   return Promise.all([mixpanel(), crispTest(), ac2()]);

@@ -55,6 +55,11 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     assert.match(String((init?.headers as Record<string, string>).Authorization), /^Basic /);
     return reply(world.events.map((e) => JSON.stringify(e)).join("\n"));
   }
+  if (u.host === "n8n.test") {
+    assert.equal((init?.headers as Record<string, string>)["X-BPU-Key"], "bpu-key");
+    const d = decodeURIComponent(u.searchParams.get("path")!.slice(1));
+    return world.stores[d] ? reply(world.stores[d]) : reply({}, 404);
+  }
   if (u.host === "ac2.pagefly.io") {
     const d = decodeURIComponent(u.pathname.split("/").pop()!);
     return world.stores[d] ? reply(world.stores[d]) : reply({}, 404);
@@ -340,6 +345,16 @@ async function main() {
   assert.equal(await settingsMod.connection("crisp_identifier"), "");
   process.env.CRISP_KEY = "crisp-key";
   process.env.CRISP_IDENTIFIER = "crisp-id";
+
+  // AC2 through BPU Ops' n8n proxy, when its URL is set
+  const clients = await import("../lib/storeSetUpsell/clients");
+  process.env.N8N_AC2_URL = "https://n8n.test/webhook/ac2";
+  process.env.N8N_AC2_KEY = "bpu-key";
+  assert.equal((await clients.ac2Store("alpha.myshopify.com"))?.shopDomain, "alpha.myshopify.com");
+  const ac2t = (await clients.testConnections("alpha.myshopify.com")).find((t) => t.service === "AC2")!;
+  assert.equal(ac2t.ok, true);
+  assert.match(ac2t.detail, /qua n8n/);
+  delete process.env.N8N_AC2_URL;
 
   console.log("store set upsell: all checks passed", JSON.stringify(counts));
   await (await import("../lib/upsell/db")).closeUpsellPool();
