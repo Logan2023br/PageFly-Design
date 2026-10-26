@@ -97,9 +97,18 @@ export function SettingsPanel({
               {c.from === "env" ? (
                 <span className="text-[12px] text-pf-muted">Đặt trong .env của VPS {c.value ? `· ${c.value}` : c.hint ? `· ${c.hint}` : ""}</span>
               ) : (
+                /* Never type="password", and no name a password manager knows: a
+                   browser filled the admin login into the Mixpanel pair, and
+                   "Lưu kết nối" then saved it over the real credentials. A secret
+                   is masked with CSS instead. */
                 <input
-                  className={FIELD}
-                  type={c.secret ? "password" : "text"}
+                  className={`${FIELD} ${c.secret && conn[c.key] ? "[-webkit-text-security:disc]" : ""}`}
+                  type="text"
+                  name={`ssu-conn-${c.key}`}
+                  data-1p-ignore
+                  data-lpignore="true"
+                  data-form-type="other"
+                  spellCheck={false}
                   placeholder={
                     c.broken
                       ? "không giải mã được — nhập lại"
