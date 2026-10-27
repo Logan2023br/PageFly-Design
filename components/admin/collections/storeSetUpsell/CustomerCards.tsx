@@ -81,7 +81,7 @@ const FOLLOW_UPS = ["edit_reminder", "care_read", "care_upgraded", "review_ask"]
 function CustomerCard({ c, editDays }: { c: CustomerListRow; editDays: number }) {
   const [open, setOpen] = useState(false);
   const [followUp, setFollowUp] = useState<string>("edit_reminder");
-  const left = editLeft(c.sent_at, editDays);
+  const left = editLeft(c.sent_at, c.edit_days_at_send ?? editDays);
   const [run, busy, error] = useAct();
   const url = `${API}/customers/${encodeURIComponent(c.store_domain)}`;
   const reviewed5 = c.app_review !== null && Number(c.app_review) >= 5;

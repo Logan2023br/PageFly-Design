@@ -47,11 +47,11 @@ export const SSU_DEFAULTS = {
   /** 1: development / partner stores get no message */
   skip_dev_stores: 1,
   /** how long the free editing lasts, from the day the thanks is sent */
-  edit_days: 15,
+  edit_days: 3,
   /** read the thanks, no reply after this many hours → care_read */
   care_read_hours: 48,
   /** this many days of free editing left, seen, no reply → edit_reminder */
-  edit_reminder_days_left: 5,
+  edit_reminder_days_left: 1,
   /** never two messages to one customer within this many hours */
   care_gap_hours: 48,
   /** a conversation with a message this recent: support may be mid-chat, the message waits */

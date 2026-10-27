@@ -191,6 +191,15 @@ async function main() {
   const { messageAction, customerAction } = await import("../lib/storeSetUpsell/actions");
   const { listCustomers, ssuCounts } = await import("../lib/storeSetUpsell/queries");
 
+  // the free editing is 3 days now, said in one line with its end date
+  const { sampleMessage } = await import("../lib/storeSetUpsell/messages");
+  const { getSsuSettings } = await import("../lib/storeSetUpsell/settings");
+  const three = await sampleMessage("thanks", await getSsuSettings());
+  assert.match(three, /Our experts will help you edit them \*\*for free for 3 days\*\* — until \*\*/);
+  assert.doesNotMatch(three, /Please note|It covers only/);
+  // the scenarios below were written for the 15-day offer: customers sent under it keep it
+  await saveSsuSettings({ edit_days: 15, edit_reminder_days_left: 5 });
+
   // a: fresh customer; b: already reviewed 5★ ("5" as text); c: dev store; d: same store twice
   world.events = [
     ev("alpha.myshopify.com", "owner@alpha.myshopify.com", "aurum", 3),
@@ -307,11 +316,10 @@ async function main() {
   assert.equal((await status("old.myshopify.com")).status, "eligible");
   assert.equal(world.sent.length, 3);
 
-  // the thanks says what the free editing covers: the pages, 15 days, nothing else
+  // the thanks names the pages and how long the free editing lasts, until when
   const thanks = world.sent[2].content;
   assert.match(thanks, /\*\*nordlys-home\*\*/);
-  assert.match(thanks, /15 days from today/);
-  assert.match(thanks, /not other pages in your store/);
+  assert.match(thanks, /for free for 15 days\*\* — until \*\*/);
 
   // ONE THANKS PER STORE: eps picks again (another set) — recorded, not messaged
   world.events.push(ev("eps.myshopify.com", "owner@eps.myshopify.com", "aurum", -1));
@@ -359,6 +367,12 @@ async function main() {
   await p.query("update ssu_customers set sent_at = now() - interval '12 days' where store_domain = 'zeta.myshopify.com'");
   await messageAction(zr.id, "approve", null, "admin:test");
   assert.match(world.sent[world.sent.length - 1].content, /only \*\*3 days left\*\*/);
+  // 15 days was promised to zeta: going to 3 for new customers does not cut theirs short
+  assert.equal((await status("zeta.myshopify.com")).edit_days_at_send, 15);
+  await saveSsuSettings({ edit_days: 3 });
+  const { daysLeft } = await import("../lib/storeSetUpsell/messages");
+  assert.equal(daysLeft(await status("zeta.myshopify.com"), await getSsuSettings()), 3);
+  await saveSsuSettings({ edit_days: 15 });
 
   // a care message for a customer who replied in the meantime is dropped, not sent
   await p.query("update ssu_customers set upgraded_at = now(), upgraded_to = 'Optimize' where store_domain = 'zeta.myshopify.com'");

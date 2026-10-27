@@ -127,6 +127,8 @@ alter table ssu_customers add column if not exists crisp_channel text;
 /* the plan the thanks found, and the upgrade: from what, to what price, and
    whether its time is AC2's (the charge activated) or when it was noticed */
 alter table ssu_customers add column if not exists plan_at_send text;
+/* the free-editing days this customer was promised in their thanks */
+alter table ssu_customers add column if not exists edit_days_at_send int;
 alter table ssu_customers add column if not exists upgraded_from text;
 alter table ssu_customers add column if not exists upgraded_price numeric;
 alter table ssu_customers add column if not exists upgrade_exact boolean;
@@ -165,6 +167,19 @@ begin
      where status = 'approved'
        and store_domain in (select store_domain from ssu_messages where status = 'approved' and kind = 'thanks');
     update ssu_messages set status = 'pending_review', approved_at = null, approved_by = null where status = 'approved';
+  end if;
+end $$;
+/* Once, on 2026-10-27: free editing went from 15 days to 3. Who was sent the
+   thanks before keeps their 15; the saved settings move to 3 days, reminded
+   with 1 left. */
+do $$
+begin
+  if not exists (select 1 from ssu_settings where key = '_once_edit3_20261027') then
+    insert into ssu_settings (key, value) values ('_once_edit3_20261027', 'true'::jsonb);
+    update ssu_customers set edit_days_at_send = coalesce((select (value #>> '{}')::int from ssu_settings where key = 'edit_days'), 15)
+     where sent_at is not null and edit_days_at_send is null;
+    update ssu_settings set value = '3'::jsonb, updated_at = now() where key = 'edit_days';
+    update ssu_settings set value = '1'::jsonb, updated_at = now() where key = 'edit_reminder_days_left';
   end if;
 end $$;
 `;

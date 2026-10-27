@@ -21,17 +21,15 @@ import { CARE_KINDS, titleOfSlug, type SsuCustomer, type SsuMessage, type SsuMes
 /* Same shape as the Upsell Build Pages messages (common.ts): greeting with the
    store in bold, short paragraphs, the key words bold, a bold signature.
 
-   WHAT THE FREE EDITING COVERS IS SAID IN EVERY MESSAGE THAT OFFERS IT: 15
-   days from the day the thanks is sent, and only the pages of the store set
-   they are using — {pages} names them — never the rest of the store. */
+   The free editing is said with its end date in every message that offers
+   it: `edit_days` from the day the thanks is sent (each customer keeps the
+   number they were promised), for the store set pages {pages} names. */
 export const DEFAULT_THANKS_TEMPLATE =
   "Hi **{store_name}**,\n\n" +
   "Thank you for choosing the **{set_name}** store set from PageFly's templates! 🎉 We hope it gives your store a great new look.\n\n" +
   "To help you make it truly yours, we offer **Complimentary Editing** for the store set pages you are using: {pages}. " +
   "Tell us what you would like changed — text, images, colors or sections — and our team will make the edits for you.\n\n" +
-  "Please note:\n" +
-  "• This **Free Editing** service is available for **{edit_days} days from today** — until **{edit_until}**.\n" +
-  "• It covers only the pages from the **{set_name}** store set that you are using, not other pages in your store.\n\n" +
+  "Our experts will help you edit them **for free for {edit_days} days** — until **{edit_until}**.\n\n" +
   "👉 **Simply reply to this message** with the changes you need, and we will take care of it.\n\n" +
   "Best regards,\n**{pic} – PageFly Support**";
 
@@ -40,8 +38,7 @@ export const DEFAULT_EDIT_REMINDER_TEMPLATE =
   "Hi **{store_name}**,\n\n" +
   "A quick reminder: your **Free Editing** service for the store set pages you are using — {pages} — " +
   "has only **{days_left} days left** (until **{edit_until}**).\n\n" +
-  "If there is anything you would like adjusted — text, images, colors or layout — just **reply to this message** and our team will help you.\n" +
-  "(Free editing covers only the pages from the **{set_name}** store set, not other pages in your store.)\n\n" +
+  "If there is anything you would like adjusted — text, images, colors or layout — just **reply to this message** and our team will help you.\n\n" +
   "Best regards,\n**{pic} – PageFly Support**";
 
 /** Read the thanks, no reply: a check-in that asks for an answer. */
@@ -116,16 +113,18 @@ const DAY = 86_400_000;
 
 /** The last day of the free editing: `edit_days` from the thanks being sent —
     or from now, for a thanks not sent yet. */
-export function editUntil(cu: Pick<SsuCustomer, "sent_at">, cfg: SsuSettings): Date {
+export function editUntil(cu: Pick<SsuCustomer, "sent_at"> & { edit_days_at_send?: number | null }, cfg: SsuSettings): Date {
   const base = cu.sent_at ? new Date(cu.sent_at).getTime() : Date.now();
-  return new Date(base + cfg.edit_days * DAY);
+  /* What this customer was promised, not today's setting. */
+  const days = cu.sent_at && cu.edit_days_at_send != null ? Number(cu.edit_days_at_send) : cfg.edit_days;
+  return new Date(base + days * DAY);
 }
 
-export function daysLeft(cu: Pick<SsuCustomer, "sent_at">, cfg: SsuSettings): number {
+export function daysLeft(cu: Pick<SsuCustomer, "sent_at"> & { edit_days_at_send?: number | null }, cfg: SsuSettings): number {
   return Math.max(0, Math.ceil((editUntil(cu, cfg).getTime() - Date.now()) / DAY));
 }
 
-type MessageCustomer = Pick<SsuCustomer, "store_name" | "store_domain" | "sent_at" | "pf_plan" | "upgraded_to">;
+type MessageCustomer = Pick<SsuCustomer, "store_name" | "store_domain" | "sent_at" | "pf_plan" | "upgraded_to"> & { edit_days_at_send?: number | null };
 
 export async function messageFor(kind: SsuMessageKind, cu: MessageCustomer, ctx: MessageContext, cfg: SsuSettings): Promise<string> {
   const [key, fallback] = DEFAULTS[kind];
@@ -138,7 +137,7 @@ export async function messageFor(kind: SsuMessageKind, cu: MessageCustomer, ctx:
     set_name: names.join(" & "),
     pages: ctx.pages.length ? ctx.pages.map((p) => `**${p}**`).join(", ") : `your **${names.join(" & ")}** pages`,
     page_count: String(ctx.pages.length),
-    edit_days: String(cfg.edit_days),
+    edit_days: String(from.sent_at && from.edit_days_at_send != null ? Number(from.edit_days_at_send) : cfg.edit_days),
     edit_until: longDate(editUntil(from, cfg).toISOString()),
     days_left: String(daysLeft(from, cfg)),
     plan: cu.upgraded_to || cu.pf_plan || "new",
@@ -416,10 +415,10 @@ export async function sendOne(id: string, actor = "system"): Promise<SendOutcome
     if (m.kind === "thanks") {
       await c.query(
         `update ssu_customers set status = 'sent', sent_at = now(), crisp_session = $2, ticket_link = $3,
-                app_review = coalesce($4, app_review), price_at_send = pf_price, plan_at_send = pf_plan, pages_at_send = pages,
+                app_review = coalesce($4, app_review), price_at_send = pf_price, plan_at_send = pf_plan, edit_days_at_send = $6, pages_at_send = pages,
                 published_at_send = published, crisp_channel = $5, updated_at = now()
           where store_domain = $1`,
-        [m.store_domain, session, ticket, review.app_review, channel],
+        [m.store_domain, session, ticket, review.app_review, channel, cfg.edit_days],
       );
     } else {
       await c.query(
