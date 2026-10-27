@@ -182,6 +182,16 @@ begin
     update ssu_settings set value = '1'::jsonb, updated_at = now() where key = 'edit_reminder_days_left';
   end if;
 end $$;
+-- the thanks for upgrading is no longer written by the job: drop the ones
+-- it wrote that have not gone yet
+do $$
+begin
+  if not exists (select 1 from ssu_settings where key = '_once_noupgrade_20261027') then
+    insert into ssu_settings (key, value) values ('_once_noupgrade_20261027', 'true'::jsonb);
+    update ssu_messages set status = 'rejected'
+     where kind = 'care_upgraded' and status in ('pending_review', 'approved', 'failed');
+  end if;
+end $$;
 `;
 
 let ensured: Promise<void> | null = null;

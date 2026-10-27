@@ -434,11 +434,11 @@ async function track(cfg: SsuSettings, out: SsuJobState): Promise<void> {
 /* ---------------------------------------------------------------- 6. care */
 
 /** The care message due for a customer now, or null. One at a time, in this
-    order: thanks for upgrading, a check-in after reading, then the days-left
-    reminder once the free editing is nearly over. */
+    order: a check-in after reading, then the days-left reminder once the
+    free editing is nearly over. Never a thanks for upgrading, nor a review
+    ask: those are written by hand from the customer's card, if ever. */
 export function careDue(cu: SsuCustomer, have: string[], cfg: SsuSettings): CareKind | null {
   const left = daysLeft(cu, cfg);
-  if (cu.upgraded_at && !have.includes("care_upgraded")) return "care_upgraded";
   if (cu.read_at && Date.now() - new Date(cu.read_at).getTime() >= cfg.care_read_hours * 3_600_000 && left > 0 && !have.includes("care_read"))
     return "care_read";
   /* Not on Crisp's "delivered": it is set the moment a message is emailed to an

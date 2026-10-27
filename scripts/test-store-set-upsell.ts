@@ -384,6 +384,9 @@ async function main() {
   await p.query("update ssu_customers set upgraded_at = now(), upgraded_to = 'Optimize' where store_domain = 'zeta.myshopify.com'");
   await p.query("update ssu_messages set sent_at = now() - interval '3 days' where store_domain = 'zeta.myshopify.com'");
   await runJob();
+  // an upgrade alone writes nothing: the thanks for upgrading is written by hand only
+  assert.equal((await p.query("select 1 from ssu_messages where store_domain = 'zeta.myshopify.com' and kind = 'care_upgraded'")).rowCount, 0);
+  await customerAction("zeta.myshopify.com", "draft_kind", { kind: "care_upgraded" }, "admin:test");
   const zu = (await p.query("select * from ssu_messages where store_domain = 'zeta.myshopify.com' and kind = 'care_upgraded'")).rows[0];
   assert.equal(zu.status, "pending_review");
   const zSession = (await status("zeta.myshopify.com")).crisp_session;
