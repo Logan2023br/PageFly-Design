@@ -1,6 +1,6 @@
 import "server-only";
 
-import { ConfigMissing, MixpanelBusy, ac2Store, addSegment, conversationMessages, exportStoreSetSelects, reviewCheck, type Ac2Store, type MixpanelEvent } from "./clients";
+import { ConfigMissing, MixpanelBusy, ac2Store, ac2UpgradeTime, addSegment, conversationMessages, exportStoreSetSelects, reviewCheck, type Ac2Store, type MixpanelEvent } from "./clients";
 import { db, hasStoreSetDatabase, logEvent, tx } from "./db";
 import { daysLeft, draft, loadSetNames, sendOne } from "./messages";
 import { getInternal, getSsuSettings, setInternal, type SsuSettings } from "./settings";
@@ -372,8 +372,17 @@ export async function trackOne(cu: SsuCustomer, actor = "system"): Promise<void>
       await writeAc2(cu.store_domain, st);
       const f = ac2Fields(st);
       if (!cu.upgraded_at && cu.price_at_send !== null && (f.pf_price ?? 0) > Number(cu.price_at_send)) {
-        Object.assign(patch, { upgraded_at: new Date().toISOString(), upgraded_to: f.pf_plan });
-        events.push(["upgraded", { from: cu.price_at_send, to: f.pf_price, plan: f.pf_plan }]);
+        /* When it happened, from AC2's charge — else when it was noticed (within the hour). */
+        const at = await ac2UpgradeTime(cu.store_domain, cu.sent_at);
+        const from = cu.plan_at_send ?? (Number(cu.price_at_send) === 0 ? "Free" : `$${cu.price_at_send}`);
+        Object.assign(patch, {
+          upgraded_at: at ?? new Date().toISOString(),
+          upgrade_exact: !!at,
+          upgraded_from: from,
+          upgraded_to: f.pf_plan,
+          upgraded_price: f.pf_price,
+        });
+        events.push(["upgraded", { from, from_price: cu.price_at_send, to: f.pf_plan, to_price: f.pf_price, at }]);
       }
       const morePages = cu.pages_at_send !== null && (f.pages ?? 0) > Number(cu.pages_at_send);
       const morePublished = cu.published_at_send !== null && (f.published ?? 0) > Number(cu.published_at_send);
@@ -383,6 +392,12 @@ export async function trackOne(cu: SsuCustomer, actor = "system"): Promise<void>
       }
       if (f.app_status === "uninstalled" && cu.app_status !== "uninstalled") events.push(["uninstalled", {}]);
     }
+  }
+
+  /* Upgrades seen before AC2's time was read: looked up once. */
+  if (cu.upgraded_at && cu.upgrade_exact === null && !("upgrade_exact" in patch)) {
+    const at = await ac2UpgradeTime(cu.store_domain, cu.sent_at);
+    Object.assign(patch, at ? { upgraded_at: at, upgrade_exact: true } : { upgrade_exact: false });
   }
 
   const keys = Object.keys(patch);

@@ -141,12 +141,30 @@ export type Ac2Store = {
  * GET an AC2 stores path through BPU Ops' n8n proxy: the AC2 token stays in
  * n8n, this server holds only the proxy's key. null when it is not configured.
  */
-async function ac2Get<T>(path: string): Promise<Answer<T> | null> {
+async function ac2Get<T>(path: string, query: Record<string, string> = {}): Promise<Answer<T> | null> {
   const proxy = await connection("n8n_ac2_url");
   const key = await connection("n8n_ac2_key");
   if (!proxy || !key) return null;
   const sep = proxy.includes("?") ? "&" : "?";
-  return call<T>(`${proxy}${sep}${new URLSearchParams({ path })}`, { headers: { "X-BPU-Key": key } });
+  return call<T>(`${proxy}${sep}${new URLSearchParams({ ...query, path })}`, { headers: { "X-BPU-Key": key } });
+}
+
+/**
+ * When the store's paid plan started: the latest SUBSCRIPTION_CHARGE_ACTIVATED
+ * in its AC2 activities at or after `since` — what BPU Ops reads for the same
+ * question. null when AC2 has none (or does not answer).
+ */
+export async function ac2UpgradeTime(domain: string, since: string | null): Promise<string | null> {
+  type Activity = { type?: string; occurredAt?: string };
+  const r = await ac2Get<{ items?: Activity[] }>(`/${encodeURIComponent(domain)}/activities`, { limit: "50" }).catch(() => null);
+  if (!r || r.status !== 200 || !Array.isArray(r.body?.items)) return null;
+  const from = since ? new Date(since).getTime() - 60_000 : 0;
+  const times = r.body.items
+    .filter((a) => a.type === "SUBSCRIPTION_CHARGE_ACTIVATED" && a.occurredAt)
+    .map((a) => new Date(a.occurredAt!).getTime())
+    .filter((t) => Number.isFinite(t) && t >= from)
+    .sort((a, b) => b - a);
+  return times.length ? new Date(times[0]).toISOString() : null;
 }
 
 /** The store, or null when AC2 is not configured, does not answer, or does not know it. */

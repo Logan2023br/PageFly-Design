@@ -202,8 +202,18 @@ function CustomerCard({ c, editDays }: { c: CustomerListRow; editDays: number })
         {c.checked_at && !c.needs_check && <Pill>Đã kiểm tra · {c.checked_by?.replace(/^admin:/, "")}</Pill>}
         {c.review_asked_at && <Pill tone="primary">Đã xin review {fmtVN(c.review_asked_at)}</Pill>}
         {c.reviewed_at && c.sent_at && <Pill tone="ok">Review 5★ sau khi gửi</Pill>}
-        {c.upgraded_at && <Pill tone="ok">Nâng cấp → {c.upgraded_to}</Pill>}
-        {c.pages_updated_at && <Pill tone="ok">Cập nhật page</Pill>}
+        {c.upgraded_at && (
+          <Pill tone="ok">
+            Nâng cấp {c.upgraded_from ?? "?"} → {c.upgraded_to ?? "?"}
+            {c.upgraded_price !== null ? ` ($${Number(c.upgraded_price)})` : ""} · {fmtVN(c.upgraded_at)}
+            {c.upgrade_exact === false ? " (lúc phát hiện)" : ""}
+          </Pill>
+        )}
+        {c.pages_updated_at && (
+          <Pill tone="ok">
+            Cập nhật page {c.pages_at_send ?? "?"} → {c.pages ?? "?"} page · {c.published_at_send ?? "?"} → {c.published ?? "?"} publish · {fmtVN(c.pages_updated_at)}
+          </Pill>
+        )}
         {c.last_message_status && c.last_message_status !== "sent" && (
           <Pill>
             Tin {SSU_KIND_LABEL[c.last_message_kind as keyof typeof SSU_KIND_LABEL] ?? c.last_message_kind}: {SSU_MESSAGE_STATUS_LABEL[c.last_message_status] ?? c.last_message_status}

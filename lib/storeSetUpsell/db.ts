@@ -124,6 +124,15 @@ alter table ssu_messages add column if not exists rerender boolean not null defa
 alter table ssu_messages add column if not exists defer_until timestamptz;
 /* inapp: the customer's chatbox conversation in the PageFly app; email: one we opened */
 alter table ssu_customers add column if not exists crisp_channel text;
+/* the plan the thanks found, and the upgrade: from what, to what price, and
+   whether its time is AC2's (the charge activated) or when it was noticed */
+alter table ssu_customers add column if not exists plan_at_send text;
+alter table ssu_customers add column if not exists upgraded_from text;
+alter table ssu_customers add column if not exists upgraded_price numeric;
+alter table ssu_customers add column if not exists upgrade_exact boolean;
+update ssu_customers set plan_at_send = 'Free' where plan_at_send is null and sent_at is not null and price_at_send = 0;
+update ssu_customers set upgraded_from = coalesce(plan_at_send, case when price_at_send = 0 then 'Free' else '$' || price_at_send end)
+ where upgraded_at is not null and upgraded_from is null;
 /* everything sent before the in-app choice opened its own conversation */
 update ssu_customers set crisp_channel = 'email' where crisp_channel is null and crisp_session is not null;
 create unique index if not exists ssu_messages_one_per_kind on ssu_messages (store_domain, kind) where kind <> 'custom';

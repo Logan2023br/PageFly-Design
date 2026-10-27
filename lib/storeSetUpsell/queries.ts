@@ -22,7 +22,8 @@ export const SSU_TABS = [
   { id: "cared", label: "Đã chăm sóc", where: "exists (select 1 from ssu_messages x where x.store_domain = c.store_domain and x.status = 'sent' and x.kind in ('care_read', 'care_upgraded', 'edit_reminder'))" },
   { id: "review_asked", label: "Đã xin review", where: "c.review_asked_at is not null" },
   { id: "reviewed", label: "Đã review 5★", where: "c.app_review >= 5" },
-  { id: "updated", label: "Đã nâng cấp / cập nhật", where: "(c.upgraded_at is not null or c.pages_updated_at is not null)" },
+  { id: "updated", label: "Đã nâng cấp plan", where: "c.upgraded_at is not null" },
+  { id: "pages_updated", label: "Cập nhật page", where: "c.pages_updated_at is not null" },
   { id: "eligible", label: "Đủ điều kiện, chưa gửi", where: "c.status in ('eligible', 'new')" },
   { id: "skipped", label: "Bỏ qua", where: "c.status in ('skipped', 'reviewed')" },
   { id: "failed", label: "Lỗi gửi", where: null },
@@ -71,6 +72,10 @@ export async function listCustomers(tab: SsuTabId, f: SsuFilters): Promise<{ row
   const order =
     tab === "needs_check" || tab === "replied"
       ? "c.last_reply_at desc nulls last"
+      : tab === "updated"
+        ? "c.upgraded_at desc nulls last"
+        : tab === "pages_updated"
+          ? "c.pages_updated_at desc nulls last"
       : tab === "sent" || tab === "read"
         ? "c.sent_at desc nulls last"
         : "c.last_selected_at desc nulls last";

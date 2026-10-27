@@ -56,6 +56,7 @@ const world = {
   sent: [] as { sid: string; content: string; nickname: string; avatar?: string; user_id?: string }[],
   exportCalls: 0,
   resolved: [] as string[],
+  activities: {} as Record<string, { type: string; occurredAt: string }[]>,
   /* selects from before the backfill: only an export for one store returns them */
   oldEvents: [] as { event: string; properties: Record<string, unknown> }[],
 };
@@ -81,7 +82,10 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   }
   if (u.host === "n8n.test") {
     assert.equal((init?.headers as Record<string, string>)["X-BPU-Key"], "bpu-key");
-    const d = decodeURIComponent(u.searchParams.get("path")!.slice(1));
+    const path = u.searchParams.get("path")!;
+    const acts = path.match(/^\/([^/]+)\/activities$/);
+    if (acts) return reply({ items: world.activities[decodeURIComponent(acts[1])] ?? [] });
+    const d = decodeURIComponent(path.slice(1));
     return world.stores[d] ? reply(world.stores[d]) : reply({}, 404);
   }
   if (u.host === "api.crisp.chat") {
@@ -273,10 +277,22 @@ async function main() {
   assert.ok((await status("alpha.myshopify.com")).review_asked_at);
 
   // upgrade seen on AC2
+  // — from which plan to which, at the time AC2's charge was activated
   world.stores["alpha.myshopify.com"] = store("alpha.myshopify.com", { pageflyPlan: "Pay as you go", pageflyPrice: 24, totalPages: 5 });
+  const chargedAt = new Date(Date.now() + 60_000).toISOString();
+  world.activities["alpha.myshopify.com"] = [
+    { type: "SUBSCRIPTION_CHARGE_ACTIVATED", occurredAt: new Date(Date.now() - 400 * 86_400_000).toISOString() },
+    { type: "SUBSCRIPTION_CHARGE_ACTIVATED", occurredAt: chargedAt },
+    { type: "PAGE_PUBLISHED", occurredAt: new Date().toISOString() },
+  ];
   await customerAction("alpha.myshopify.com", "recheck", {}, "admin:test");
   const a3 = await status("alpha.myshopify.com");
   assert.ok(a3.upgraded_at && a3.pages_updated_at);
+  assert.deepEqual(
+    [a3.upgraded_from, a3.upgraded_to, Number(a3.upgraded_price), new Date(a3.upgraded_at).toISOString().slice(0, 16), a3.upgrade_exact],
+    [a3.plan_at_send, "Pay as you go", 24, chargedAt.slice(0, 16), true],
+  );
+  assert.ok(a3.plan_at_send);
   assert.equal(a3.needs_check, false, "the same reply read again is not a new one");
 
   // auto mode: a new customer is sent at once; an old select is only eligible

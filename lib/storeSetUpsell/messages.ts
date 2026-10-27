@@ -416,7 +416,7 @@ export async function sendOne(id: string, actor = "system"): Promise<SendOutcome
     if (m.kind === "thanks") {
       await c.query(
         `update ssu_customers set status = 'sent', sent_at = now(), crisp_session = $2, ticket_link = $3,
-                app_review = coalesce($4, app_review), price_at_send = pf_price, pages_at_send = pages,
+                app_review = coalesce($4, app_review), price_at_send = pf_price, plan_at_send = pf_plan, pages_at_send = pages,
                 published_at_send = published, crisp_channel = $5, updated_at = now()
           where store_domain = $1`,
         [m.store_domain, session, ticket, review.app_review, channel],

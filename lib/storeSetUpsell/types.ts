@@ -115,6 +115,10 @@ export type SsuCustomer = {
   published_at_send: number | null;
   upgraded_at: string | null;
   upgraded_to: string | null;
+  upgraded_from: string | null;
+  upgraded_price: number | null;
+  upgrade_exact: boolean | null;
+  plan_at_send: string | null;
   pages_updated_at: string | null;
   tracked_at: string | null;
   notes: string | null;
