@@ -197,6 +197,11 @@ async function main() {
   const three = await sampleMessage("thanks", await getSsuSettings());
   assert.match(three, /\*\*complimentary editing services\*\* for the pages included in this template \(.+\) \*\*for the next 3 days\*\* — until the end of \*\*/);
   assert.doesNotMatch(three, /Our experts will help you edit|for free/);
+  // the reminder goes with 1 day left: "1 day", never "1 days"
+  const oneLeft = await sampleMessage("edit_reminder", await getSsuSettings());
+  assert.match(oneLeft, /end in \*\*1 day\*\* — until the end of \*\*/);
+  for (const k of ["edit_reminder", "care_read", "care_upgraded", "review_ask"] as const)
+    assert.match(await sampleMessage(k, await getSsuSettings()), /PageFly Support Team\*\*$/);
   assert.doesNotMatch(three, /Please note|It covers only/);
   // the scenarios below were written for the 15-day offer: customers sent under it keep it
   await saveSsuSettings({ edit_days: 15, edit_reminder_days_left: 5 });
@@ -344,12 +349,12 @@ async function main() {
   await p.query("update ssu_customers set read_at = now() - interval '49 hours' where store_domain = 'eps.myshopify.com'");
   await runJob();
   assert.equal(world.sent.length, 4);
-  assert.match(world.sent[3].content, /how are the \*\*Nordlys & Aurum\*\* pages/);
+  assert.match(world.sent[3].content, /how is the \*\*Nordlys & Aurum\*\* template/);
   assert.equal(world.sent[3].sid, e1.crisp_session, "care goes into the same conversation");
   await p.query("update ssu_customers set sent_at = now() - interval '11 days' where store_domain = 'eps.myshopify.com'");
   await runJob();
   assert.equal(world.sent.length, 5);
-  assert.match(world.sent[4].content, /only \*\*4 days left\*\*/);
+  assert.match(world.sent[4].content, /end in \*\*4 days\*\* — until the end of/);
   assert.match(world.sent[4].content, /\*\*nordlys-home\*\*, \*\*aurum-home\*\*/);
   await runJob();
   assert.equal(world.sent.length, 5, "each care message once");
@@ -364,10 +369,10 @@ async function main() {
   await runJob();
   const zr = (await p.query("select * from ssu_messages where store_domain = 'zeta.myshopify.com' and kind = 'edit_reminder'")).rows[0];
   assert.equal(zr.status, "pending_review");
-  assert.match(zr.content, /4 days left/);
+  assert.match(zr.content, /end in \*\*4 days\*\*/);
   await p.query("update ssu_customers set sent_at = now() - interval '12 days' where store_domain = 'zeta.myshopify.com'");
   await messageAction(zr.id, "approve", null, "admin:test");
-  assert.match(world.sent[world.sent.length - 1].content, /only \*\*3 days left\*\*/);
+  assert.match(world.sent[world.sent.length - 1].content, /end in \*\*3 days\*\* — until the end of/);
   // 15 days was promised to zeta: going to 3 for new customers does not cut theirs short
   assert.equal((await status("zeta.myshopify.com")).edit_days_at_send, 15);
   await saveSsuSettings({ edit_days: 3 });

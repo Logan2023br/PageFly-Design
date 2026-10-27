@@ -63,7 +63,7 @@ export const SSU_DEFAULTS = {
 export type SsuKey = keyof typeof SSU_DEFAULTS;
 export type SsuSettings = { [K in SsuKey]: (typeof SSU_DEFAULTS)[K] extends number ? number : string };
 
-const VARS = "{store_name} {set_name} {pages} {page_count} {edit_days} {edit_until} {days_left} {plan} {pic} {review_url}";
+const VARS = "{store_name} {set_name} {pages} {page_count} {edit_days} {edit_until} {days_left} {days_left_text} {plan} {pic} {review_url}";
 
 export const SSU_HELP: Record<SsuKey, string> = {
   mode: "manual = tin soạn sẵn chờ bạn duyệt rồi mới gửi · auto = khách đủ điều kiện được gửi luôn · off = không soạn tin",

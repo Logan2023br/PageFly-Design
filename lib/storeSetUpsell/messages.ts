@@ -37,35 +37,40 @@ export const DEFAULT_THANKS_TEMPLATE =
 /** Sent the thanks, no reply: the days left, and for which pages. */
 export const DEFAULT_EDIT_REMINDER_TEMPLATE =
   "Hi **{store_name}**,\n\n" +
-  "A quick reminder: your **Free Editing** service for the store set pages you are using — {pages} — " +
-  "has only **{days_left} days left** (until **{edit_until}**).\n\n" +
-  "If there is anything you would like adjusted — text, images, colors or layout — just **reply to this message** and our team will help you.\n\n" +
-  "Best regards,\n**{pic} – PageFly Support**";
+  "Just a friendly reminder: the **complimentary editing services** for the pages included in your **{set_name}** template ({pages}) " +
+  "end in **{days_left_text}** — until the end of **{edit_until}**. ⏳\n\n" +
+  "If there is anything you'd like changed — whether it's text, images, colors, or specific content sections — " +
+  "our team of experts will take care of it for you.\n\n" +
+  "👉 **Just reply to this message**, and we'll get right on it!\n\n" +
+  "Best regards,\n**{pic} – PageFly Support Team**";
 
 /** Read the thanks, no reply: a check-in that asks for an answer. */
 export const DEFAULT_CARE_READ_TEMPLATE =
   "Hi **{store_name}**,\n\n" +
-  "Just checking in — how are the **{set_name}** pages working for your store so far? 😊\n\n" +
-  "If you would like anything changed on {pages}, or you are not sure how to customize something in PageFly, " +
-  "**reply here** and I will help you right away. Your free editing for these pages is available until **{edit_until}**.\n\n" +
-  "Best regards,\n**{pic} – PageFly Support**";
+  "Just checking in — how is the **{set_name}** template working for your store so far? 😊\n\n" +
+  "Our **complimentary editing services** for the pages included in this template ({pages}) are still available " +
+  "until the end of **{edit_until}**. Simply let us know what changes you'd like — whether it's text, images, colors, " +
+  "or specific content sections — or if you're not sure how to customize something in PageFly, and our team of experts will take care of it for you.\n\n" +
+  "👉 **Just reply to this message**, and we'll get right on it!\n\n" +
+  "Best regards,\n**{pic} – PageFly Support Team**";
 
 /** Upgraded, no reply: thanks, and an open door. */
 export const DEFAULT_CARE_UPGRADED_TEMPLATE =
   "Hi **{store_name}**,\n\n" +
-  "Thank you for upgrading to the **{plan}** plan! 🎉 We really appreciate your trust in PageFly.\n\n" +
-  "I would be happy to help you get the most out of it — whether that is polishing your **{set_name}** pages or building a new one. " +
-  "Just **reply to this message** and tell me what you have in mind.\n\n" +
-  "Best regards,\n**{pic} – PageFly Support**";
+  "Thank you for upgrading to the **{plan}** plan! 🎉 We truly appreciate your trust in PageFly.\n\n" +
+  "Our team of experts would be happy to help you get the most out of it — whether that's polishing the pages of your " +
+  "**{set_name}** template or building a brand-new one.\n\n" +
+  "👉 **Just reply to this message** and tell us what you have in mind — we'll get right on it!\n\n" +
+  "Best regards,\n**{pic} – PageFly Support Team**";
 
 export const DEFAULT_REVIEW_TEMPLATE =
   "Hi **{store_name}**,\n\n" +
-  "Thank you for building your store with the **{set_name}** set — it means a lot to our team! 🙌\n\n" +
+  "Thank you for building your store with the **{set_name}** template from the PageFly template library — it means a lot to our team! 🙌\n\n" +
   "If PageFly has been helpful so far, would you mind leaving us a quick review on the Shopify App Store? " +
-  "It takes about 30 seconds and helps other merchants find us.\n\n" +
+  "It only takes about 30 seconds and helps other merchants discover us.\n\n" +
   "👉 [Leave a review]({review_url})\n\n" +
-  "And if you need anything else for your pages, just reply here.\n\n" +
-  "Best regards,\n**{pic} – PageFly Support**";
+  "And if you need anything else for your pages, just reply to this message — we'll get right on it!\n\n" +
+  "Best regards,\n**{pic} – PageFly Support Team**";
 
 const DEFAULTS: Record<SsuMessageKind, [keyof SsuSettings | null, string]> = {
   thanks: ["thanks_template", DEFAULT_THANKS_TEMPLATE],
@@ -141,6 +146,7 @@ export async function messageFor(kind: SsuMessageKind, cu: MessageCustomer, ctx:
     edit_days: String(from.sent_at && from.edit_days_at_send != null ? Number(from.edit_days_at_send) : cfg.edit_days),
     edit_until: longDate(editUntil(from, cfg).toISOString()),
     days_left: String(daysLeft(from, cfg)),
+    days_left_text: daysLeft(from, cfg) === 1 ? "1 day" : `${daysLeft(from, cfg)} days`,
     plan: cu.upgraded_to || cu.pf_plan || "new",
     pic: cfg.sender_name || "Logan",
     review_url: cfg.review_url,
