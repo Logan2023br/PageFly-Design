@@ -26,12 +26,13 @@ import { CARE_KINDS, titleOfSlug, type SsuCustomer, type SsuMessage, type SsuMes
    number they were promised), for the store set pages {pages} names. */
 export const DEFAULT_THANKS_TEMPLATE =
   "Hi **{store_name}**,\n\n" +
-  "Thank you for choosing the **{set_name}** store set from PageFly's templates! 🎉 We hope it gives your store a great new look.\n\n" +
-  "To help you make it truly yours, we offer **Complimentary Editing** for the store set pages you are using ({pages}) " +
-  "**for {edit_days} days** — until **{edit_until}**. Tell us what you would like changed — text, images, colors or sections — " +
-  "and our experts will make the edits for you.\n\n" +
-  "👉 **Simply reply to this message** and we will take care of it.\n\n" +
-  "Best regards,\n**{pic} – PageFly Support**";
+  "Thank you for choosing the **{set_name}** template from the PageFly template library! 🎉 We hope this design brings a striking new look to your store.\n\n" +
+  "To help you customize your store exactly as you envision, our experts are offering **complimentary editing services** " +
+  "for the pages included in this template ({pages}) **for the next {edit_days} days** — until the end of **{edit_until}**. " +
+  "Simply let us know what changes you'd like — whether it's text, images, colors, or specific content sections — " +
+  "and our team of experts will take care of it for you.\n\n" +
+  "👉 **Just reply to this message**, and we'll get right on it!\n\n" +
+  "Best regards,\n**{pic} – PageFly Support Team**";
 
 /** Sent the thanks, no reply: the days left, and for which pages. */
 export const DEFAULT_EDIT_REMINDER_TEMPLATE =
