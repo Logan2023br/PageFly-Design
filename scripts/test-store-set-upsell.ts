@@ -195,7 +195,8 @@ async function main() {
   const { sampleMessage } = await import("../lib/storeSetUpsell/messages");
   const { getSsuSettings } = await import("../lib/storeSetUpsell/settings");
   const three = await sampleMessage("thanks", await getSsuSettings());
-  assert.match(three, /Our experts will help you edit them \*\*for free for 3 days\*\* — until \*\*/);
+  assert.match(three, /\*\*Complimentary Editing\*\* for the store set pages you are using \(.+\) \*\*for 3 days\*\* — until \*\*/);
+  assert.doesNotMatch(three, /Our experts will help you edit|for free/);
   assert.doesNotMatch(three, /Please note|It covers only/);
   // the scenarios below were written for the 15-day offer: customers sent under it keep it
   await saveSsuSettings({ edit_days: 15, edit_reminder_days_left: 5 });
@@ -319,7 +320,7 @@ async function main() {
   // the thanks names the pages and how long the free editing lasts, until when
   const thanks = world.sent[2].content;
   assert.match(thanks, /\*\*nordlys-home\*\*/);
-  assert.match(thanks, /for free for 15 days\*\* — until \*\*/);
+  assert.match(thanks, /\*\*for 15 days\*\* — until \*\*/);
 
   // ONE THANKS PER STORE: eps picks again (another set) — recorded, not messaged
   world.events.push(ev("eps.myshopify.com", "owner@eps.myshopify.com", "aurum", -1));

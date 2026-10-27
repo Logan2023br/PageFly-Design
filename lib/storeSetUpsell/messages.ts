@@ -27,10 +27,10 @@ import { CARE_KINDS, titleOfSlug, type SsuCustomer, type SsuMessage, type SsuMes
 export const DEFAULT_THANKS_TEMPLATE =
   "Hi **{store_name}**,\n\n" +
   "Thank you for choosing the **{set_name}** store set from PageFly's templates! 🎉 We hope it gives your store a great new look.\n\n" +
-  "To help you make it truly yours, we offer **Complimentary Editing** for the store set pages you are using: {pages}. " +
-  "Tell us what you would like changed — text, images, colors or sections — and our team will make the edits for you.\n\n" +
-  "Our experts will help you edit them **for free for {edit_days} days** — until **{edit_until}**.\n\n" +
-  "👉 **Simply reply to this message** with the changes you need, and we will take care of it.\n\n" +
+  "To help you make it truly yours, we offer **Complimentary Editing** for the store set pages you are using ({pages}) " +
+  "**for {edit_days} days** — until **{edit_until}**. Tell us what you would like changed — text, images, colors or sections — " +
+  "and our experts will make the edits for you.\n\n" +
+  "👉 **Simply reply to this message** and we will take care of it.\n\n" +
   "Best regards,\n**{pic} – PageFly Support**";
 
 /** Sent the thanks, no reply: the days left, and for which pages. */
