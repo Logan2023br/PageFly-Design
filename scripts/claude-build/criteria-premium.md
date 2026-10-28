@@ -34,7 +34,7 @@ A set is checked in 4 tiers. Tier 1 is pass/fail, tier 2 is scored per page, tie
 2. **A look none of them has.** Pick one distinct art direction, from a range like:
    editorial magazine · Swiss / grid-strict · quiet luxury (ivory, serif, airy) · dark luxe (black, gold or metal, high contrast) · brutalist / raw · retro 70s · Japanese minimal · Scandinavian soft · Mediterranean warm · bold colour-blocking · organic / earthy textures · techno-futuristic · art-deco · handcrafted / artisanal · playful pop.
    Make it specific before any HTML: the exact palette (4–6 hex values with their roles), a font pairing (Google Fonts; one display face with character + one readable text face), button and card shapes, the image treatment (full-bleed, framed, duotone, cut-out on colour…), and one signature layout idea that recurs across the set.
-3. **The Home layout must not repeat another set's Home.** If your concept and look are close to an existing blurb, choose again.
+3. **Neither the structure nor the style may repeat an existing template.** Structure: no page's section sequence and layouts match the same page of an existing set (`public/collection-sets/<slug>/*.html` holds most of them — compare against the real HTML, not just the names). Style: no same display font, no near-identical palette. If your concept and look are close to an existing blurb, choose again.
 4. Write it in the `blurb`: `<industry label> · <look: palette, type, signature layout> · <what makes it worth paying for>`.
 
 # Tier 1 — technical floor (every page, pass/fail)
@@ -68,7 +68,7 @@ Score every page on these 7 criteria. **A page's grade is its weakest criterion,
 
 **Thresholds for this $500 set (Builder):** weakest criterion **≥ 8 on Home, Product and Sale**, **≥ 7 on About, Collection, Contact and Blog Article**. Aim higher — these are floors.
 
-**How to score:** score from screenshots at **1440 px desktop and 375 px mobile**. Score each page **3 times independently** (separate subagents if you can, otherwise three separate passes that do not see each other's scores) and take the **median**. A difference under ~1.5 points is noise. If you cannot render the mobile view, leave criterion 5 blank — do not guess — and say so in the summary. Any criterion below threshold: fix the page and score it again.
+**How to score:** score from screenshots at **1440 px desktop and 375 px mobile**. Score each page **3 times independently** (separate subagents if you can, otherwise three separate passes that do not see each other's scores) and take the **median**. A difference under ~1.5 points is noise. If you cannot render the mobile view, leave criterion 5 blank — do not guess — and say so in the summary. Any criterion below threshold: fix the page and score it again. Every page gets **at least 3 full review-and-improve rounds**, and more until it is genuinely premium — tokens and time are not a reason to stop.
 
 # Tier 4 — rules per section type
 
