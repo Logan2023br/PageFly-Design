@@ -111,7 +111,10 @@ export async function POST(request: Request) {
     const b = parsed.data;
     if (b.action === "claim") {
       const job = await claimJob();
-      return Response.json({ ok: true, job, criteria: job ? ((await readSetting("criteria")) ?? "") : null }, nocache);
+      /* Every set we already have, so the routine builds something none of
+         them is: a new industry and concept, a look of its own. */
+      const existing = job ? (await getRepo().listCollectionSets()).map((s) => ({ name: s.name, blurb: s.blurb })) : null;
+      return Response.json({ ok: true, job, criteria: job ? ((await readSetting("criteria")) ?? "") : null, existing }, nocache);
     }
     if (b.action === "step") {
       if (!isBuildStep(b.step)) return fail("step must be one of: claimed, idea, style, html, review, pagefly, check, upload.");

@@ -25,7 +25,7 @@ If `PFD_API_KEY` is missing, stop and report it. Never print it.
 Repeat until `claim` returns `"job": null`, then end with the summary:
 
 1. **Claim:** `curl -sS "${H[@]}" -X POST "$API" -d '{"action":"claim"}'`
-   → `{ "job": { "id", "note", … }, "criteria": "…" }`. `criteria` is the admin's build criteria — follow them exactly (what to build, how many pages, which page types, style, quality bar). `job.note` is the admin's note for this batch (an industry, a theme) — apply it on top of the criteria. If `criteria` is empty, call `fail` with "Chưa có tiêu chí build" and stop.
+   → `{ "job": { "id", "note", … }, "criteria": "…", "existing": [{ "name", "blurb" }, …] }`. `existing` is every set already in PageFly Design (including the ones you built earlier in this run): the new set must not repeat any of them — not the store concept, and not the look (palette, typography, layout idea) its blurb describes. `criteria` is the admin's build criteria — follow them exactly (what to build, how many pages, which page types, style, quality bar). `job.note` is the admin's note for this batch (an industry, a theme) — apply it on top of the criteria. If `criteria` is empty, call `fail` with "Chưa có tiêu chí build" and stop.
 2. **Report every step** as you reach it, and **stop this job at once if the answer says `"cancel": true`** (the admin pressed Dừng; do not call fail or finish):
    ```bash
    curl -sS "${H[@]}" -X POST "$API" -d '{"action":"step","id":"<job id>","step":"<step>","detail":"<short, e.g. page 3/7 · review round 2>","progress":<0-100>}'
@@ -36,6 +36,7 @@ Repeat until `claim` returns `"job": null`, then end with the summary:
    ```bash
    curl -sS "${H[@]}" -X POST "$API" -d '{"action":"set","id":"<job id>","name":"<Store name>","blurb":"<one line: what the store is, its look>"}'
    ```
+   The `blurb` is how later builds know what this set looks like, so name the industry and the look in it (e.g. "Skincare boutique · ivory and sage, editorial serif, asymmetric grid").
    → `{ "set": { "id", "slug" } }`. It is created as **Preview** (not on the public list until the team checks it).
 5. **Upload every page**, both files, as you finish them (step `upload`):
    ```bash
