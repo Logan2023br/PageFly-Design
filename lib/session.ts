@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { cache } from "react";
 import { ALL_ADMIN_SECTIONS, type AdminSection } from "./adminSections";
 import { getRepo } from "./db";
@@ -384,7 +384,10 @@ export async function clearReferralSession(): Promise<void> {
    owner's ADMIN_PASSWORD) and every cookie signed in with the old one stops
    working on its next request, instead of living out its twelve hours.
    ========================================================================== */
-const fingerprint = (value: string) => createHash("sha256").update(`pfd-admin-pv|${value}`).digest("base64url").slice(0, 16);
+/* Keyed with the session secret: the cookie is signed, not encrypted, so a
+   bare hash of the owner's password in it could be cracked offline by
+   whoever got hold of one cookie. */
+const fingerprint = (value: string) => createHmac("sha256", purposeKey("admin-pv")).update(value).digest("base64url").slice(0, 16);
 
 export function ownerFingerprint(): string {
   return fingerprint(`owner|${process.env.ADMIN_USERNAME ?? "admin"}|${process.env.ADMIN_PASSWORD ?? "pf123456"}`);

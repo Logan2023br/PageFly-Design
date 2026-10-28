@@ -6,7 +6,12 @@ import { storeStats } from "@/lib/storeSetUpsell/queries";
    "Store dùng page sets" table, every row, as CSV. */
 export const dynamic = "force-dynamic";
 
-const cell = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+/* A store name or city comes from the merchant: one starting with = + - @
+   would run as a formula in Excel / Sheets, so it is written as text. */
+const cell = (v: unknown) => {
+  const t = String(v ?? "");
+  return `"${(/^[=+\-@\t\r]/.test(t) ? `'${t}` : t).replace(/"/g, '""')}"`;
+};
 
 export async function GET(req: Request) {
   const denied = await guard();

@@ -101,7 +101,9 @@ export const CONNECTIONS = {
   crisp_website_id: { env: "CRISP_WEBSITE_ID", label: "Crisp website id", fallback: "7cd1799e-e8eb-476e-8cb7-33778fc41c2a", secret: false },
   crisp_identifier: { env: "CRISP_IDENTIFIER", label: "Crisp plugin identifier (giống BPU Ops)", fallback: "", secret: true },
   crisp_key: { env: "CRISP_KEY", label: "Crisp plugin key (giống BPU Ops)", fallback: "", secret: true },
-  n8n_ac2_url: { env: "N8N_AC2_URL", label: "AC2 qua n8n: URL (giống BPU Ops)", fallback: "", secret: false },
+  /* Not secret, but where the n8n key is sent: set in the .env only, so an
+     admin account cannot point it (and the key) at another host. */
+  n8n_ac2_url: { env: "N8N_AC2_URL", label: "AC2 qua n8n: URL (giống BPU Ops)", fallback: "", secret: false, envOnly: true },
   n8n_ac2_key: { env: "N8N_AC2_KEY", label: "AC2 qua n8n: key (giống BPU Ops)", fallback: "", secret: true },
 } as const;
 
@@ -112,6 +114,8 @@ export type ConnectionState = {
   label: string;
   env: string;
   secret: boolean;
+  /** set in the .env only, though not secret (shown in full) */
+  envOnly: boolean;
   from: "env" | "panel" | "default" | null;
   /** the value of a non-secret connection */
   value: string | null;
@@ -188,8 +192,9 @@ export async function saveSsuSettings(patch: Record<string, unknown>): Promise<S
   for (const [key, raw] of Object.entries(patch)) {
     if (Object.hasOwn(CONNECTIONS, key)) {
       const def = CONNECTIONS[key as ConnectionKey];
-      /* A secret lives in the VPS .env only — never pasted into the database. */
-      if (def.secret) {
+      /* A secret lives in the VPS .env only — never pasted into the database —
+         and so does the URL a secret is sent to. */
+      if (def.secret || ("envOnly" in def && def.envOnly)) {
         bad.push(`${key} (mã bí mật chỉ đặt trong .env của VPS)`);
         continue;
       }
@@ -262,6 +267,7 @@ export async function connectionStates(): Promise<ConnectionState[]> {
       label: def.label,
       env: def.env,
       secret: def.secret,
+      envOnly: def.secret || ("envOnly" in def && def.envOnly === true),
       from,
       value: def.secret ? null : current || null,
       hint: def.secret && current.length >= 8 ? `…${current.slice(-4)}` : null,

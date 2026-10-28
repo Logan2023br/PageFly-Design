@@ -146,7 +146,8 @@ async function ac2Get<T>(path: string, query: Record<string, string> = {}): Prom
   const key = await connection("n8n_ac2_key");
   if (!proxy || !key) return null;
   const sep = proxy.includes("?") ? "&" : "?";
-  return call<T>(`${proxy}${sep}${new URLSearchParams({ ...query, path })}`, { headers: { "X-BPU-Key": key } });
+  /* never follow a redirect: the key would go wherever it points */
+  return call<T>(`${proxy}${sep}${new URLSearchParams({ ...query, path })}`, { headers: { "X-BPU-Key": key }, redirect: "error" });
 }
 
 /**
@@ -474,11 +475,9 @@ export async function testConnections(sampleDomain: string | null): Promise<Conn
     if (!r) return { service: "AC2", ok: false, detail: "chưa điền n8n URL + key" };
     const via = "qua n8n";
     if (r.status === 200 && r.body?.shopDomain) return { service: "AC2", ok: true, detail: `đọc được store ${domain} ${via}` };
-    if (r.status === 401 || r.status === 403) {
-      const key = await connection("n8n_ac2_key");
-      return { service: "AC2", ok: false, detail: `${why(r.status, r.text)} ${via} — key đang lưu: bắt đầu "${key.slice(0, 4)}", ${key.length} ký tự` };
-    }
-    return { service: "AC2", ok: false, detail: `${why(r.status, r.text)} ${via} (store thử: ${domain})` };
+    /* the status only: never what the proxy answered, nor any of the key */
+    if (r.status === 401 || r.status === 403) return { service: "AC2", ok: false, detail: `sai key (${r.status}) ${via}` };
+    return { service: "AC2", ok: false, detail: `${r.status === 0 ? "không kết nối được" : `trả lời ${r.status}`} ${via} (store thử: ${domain})` };
   };
 
   return Promise.all([mixpanel(), crispTest(), ac2()]);

@@ -496,10 +496,14 @@ async function main() {
   const mpt = (await clients.testConnections(null)).find((t) => t.service === "Mixpanel")!;
   assert.deepEqual([mpt.ok, /3429567/.test(mpt.detail)], [true, true]);
   // a whole .env line pasted keeps only its value
+  delete process.env.MIXPANEL_PROJECT_ID;
+  await saveSsuSettings({ mixpanel_project_id: 'MIXPANEL_PROJECT_ID="1234567"' });
+  assert.equal(await settingsMod.connection("mixpanel_project_id"), "1234567");
+  await saveSsuSettings({ mixpanel_project_id: "3429567" });
+  // the n8n URL is where the key goes: the .env only, even while unset there
   const ac2Url = process.env.N8N_AC2_URL;
   delete process.env.N8N_AC2_URL;
-  await saveSsuSettings({ n8n_ac2_url: 'N8N_AC2_URL="https://n8n.example/webhook/x"' });
-  assert.equal(await settingsMod.connection("n8n_ac2_url"), "https://n8n.example/webhook/x");
+  await assert.rejects(saveSsuSettings({ n8n_ac2_url: "https://attacker.example/x" }), /chỉ đặt trong \.env/);
   process.env.N8N_AC2_URL = ac2Url;
 
   console.log("store set upsell: all checks passed", JSON.stringify(counts));

@@ -4,6 +4,7 @@ import { adminGate } from "@/components/admin/adminGate";
 import { CollectionSetEditor } from "@/components/admin/collections/CollectionSetEditor";
 import { refreshBuiltInPages } from "@/lib/collectionPagesServer";
 import { getRepo } from "@/lib/db";
+import { readAdminSection } from "@/lib/session";
 
 /* /design/admin/collections/<id> — one set's pages, files and settings. */
 
@@ -11,7 +12,8 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata(props: PageProps<"/design/admin/collections/[id]">) {
   const { id } = await props.params;
-  const set = await getRepo().getCollectionSet(id).catch(() => null);
+  /* the title is rendered before the gate: a hidden set's name is for admins only */
+  const set = (await readAdminSection("collections")) ? await getRepo().getCollectionSet(id).catch(() => null) : null;
   return { title: `${set?.name ?? "Set"} — Collection pages — PageFly Design Admin` };
 }
 
