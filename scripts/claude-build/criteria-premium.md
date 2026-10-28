@@ -88,11 +88,31 @@ Any other section type: give it what that type needs to do its job, by the same 
 
 - Spacing on an 8-px scale; a clear type scale (display / headings / body / caption); body 16–18 px, line length 60–75 characters, line-height 1.5–1.7.
 - One accent colour, used deliberately; text contrast at least WCAG AA.
-- Subtle, purposeful motion (fade/slide on scroll, hover states on every link, button and card); refined dividers, eyebrow labels, numbered sections; one consistent icon set; nothing default-looking.
+- Refined dividers, eyebrow labels, numbered sections; one consistent icon set; nothing default-looking.
 - Only what PageFly can reproduce (follow the pagefly-builder rules), and the `.pagefly` must render identically to its HTML.
+
+# Motion (required — a $500 set must feel alive)
+
+Every set has a **motion system**: designed once with the look, used the same way on all 7 pages. Motion draws the eye to what sells, never decorates for its own sake. Use only the tested pagefly-builder pieces — the `behaviors(...)` pack, `animationHover`, CSS transitions — so it works the same in the PageFly editor and on the live store; never hand-written scroll JS.
+
+Required on every set:
+- **Scroll reveal** (`reveal`, class `pu-rv`) on section headings, cards and images — staggered in grids and lists, short (300–700 ms), small distance (16–32 px). Never on the hero headline or the first CTA: those are visible at once.
+- **Hover on everything clickable:** buttons (colour or fill sweep + slight lift), links (underline that draws in), product and blog cards (image zoom 1.03–1.06 inside its frame, or `animationHover`), category tiles.
+- **Home:** at least one moving strip — a `marquee` of press logos, USPs or the brand line — and `count-up` on any stats row (customers, years, reviews).
+- **Product:** gallery thumbnails with a clear active/hover state; add-to-cart button with a hover state that stands out; reviews and FAQ open and close smoothly.
+- **Sale:** a live `countdown` next to its CTA (tier 4); a discount code with `copy-code` if there is one.
+- **Header:** `sticky` that shrinks or gains a background on scroll, and a mobile `drawer` menu.
+
+Then give the set **one signature motion** of its own, matching its art direction, and say it in the `blurb` — e.g. a slow Ken Burns on the hero image (quiet luxury), split-text heading reveal (editorial), a tilt-on-hover product card (techno), a hand-drawn underline on links (artisanal), a horizontal scroll lookbook strip (fashion). Not the same signature as an existing set.
+
+Limits:
+- Content is fully visible and usable with motion off: honour `prefers-reduced-motion`, and nothing stays hidden if a script fails.
+- Smooth: animate only `transform` and `opacity`; no layout jumps, no scroll-jacking, no autoplaying carousels faster than 5 s.
+- On mobile (375 px), lighter: shorter distances, no hover-only information.
+- At most one looping animation in view at a time.
 
 # Before upload
 
-For each page, after scoring: tier 1 all required lines pass, tier 2 weakest criterion meets its threshold, every section meets tier 4. Then for the set: every tier 3 line passes and the set is clearly different from everything in `existing`. Only then upload.
+For each page, after scoring: tier 1 all required lines pass, tier 2 weakest criterion meets its threshold, every section meets tier 4, and the motion list above is in place and matches between the HTML and the `.pagefly`. Then for the set: every tier 3 line passes and the set is clearly different from everything in `existing`. Only then upload.
 
-In the final summary, for each set add: the industry label; each page's 7 tier-2 scores (median) and its weakest criterion; any tier-1 "should have" not met; the proposed meta title and description of each page; and the source of every image.
+In the final summary, for each set add: the industry label; each page's 7 tier-2 scores (median) and its weakest criterion; any tier-1 "should have" not met; the proposed meta title and description of each page; the set's signature motion; and the source of every image.
