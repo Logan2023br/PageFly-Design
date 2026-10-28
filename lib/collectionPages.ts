@@ -81,6 +81,11 @@ export const pagesLabel = (n: number) => `${n} ${n === 1 ? "page" : "pages"}`;
 export const CUSTOM_REQUEST = { slug: "custom", name: "Custom template request" } as const;
 export const customRequestUrl = "/collection-pages/checkout?request=custom";
 
+/** Premium sets and made-to-order templates on sale. Off: the section is not
+    listed, the checkout page is a 404 and the orders API refuses — hiding the
+    button alone left the form a URL away. */
+export const ORDERS_OPEN = false;
+
 /** Where a paid set's Buy button goes. */
 export const checkoutUrl = (setSlug: string) =>
   `/collection-pages/checkout?set=${encodeURIComponent(setSlug)}`;

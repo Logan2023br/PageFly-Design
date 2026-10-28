@@ -3,13 +3,12 @@
 import Link from "next/link";
 import { EV, track } from "@/lib/analytics";
 import { entryFor, refHost, screenBucket, useSeenOnce, useTrackOnce } from "./cpTrack";
-import { countLabel, pagesLabel, type PublicCollectionSet } from "@/lib/collectionPages";
+import { ORDERS_OPEN, countLabel, pagesLabel, type PublicCollectionSet } from "@/lib/collectionPages";
 import { Icon } from "../ui";
 import { PageThumb } from "../landing/PagePreview";
 import { PromoCards } from "./PromoCards";
 import { SetAction } from "./SetAction";
 
-const SHOW_PREMIUM = false;
 
 /* ==========================================================================
    EVERY SET, ONE CARD EACH — FREE FIRST, THEN PREMIUM.
@@ -76,10 +75,10 @@ export function SetList({
         />
       )}
 
-      {/* Hidden for now: the paid offer is off the list. Flip SHOW_PREMIUM to
+      {/* Hidden for now: the paid offer is off the list. Flip ORDERS_OPEN (lib/collectionPages) to
           bring the section back — with no premium set yet, it still carries
           the two ways to get a store that is not here. */}
-      {SHOW_PREMIUM && <Group
+      {ORDERS_OPEN && <Group
         eyebrow="Premium templates"
         title="Premium page sets"
         sub="Fuller stores with more pages and more polish. Preview every page for free — when you buy, we check your order and send the files to your email."

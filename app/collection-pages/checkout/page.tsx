@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { CheckoutForm } from "@/components/collection-pages/CheckoutForm";
 import { CollectionShell } from "@/components/collection-pages/Shell";
-import { isPublic, toPublicSet } from "@/lib/collectionPages";
+import { ORDERS_OPEN, isPublic, toPublicSet } from "@/lib/collectionPages";
 import { getRepo } from "@/lib/db";
 
 /* ==========================================================================
@@ -16,6 +17,7 @@ export const metadata = { title: "Checkout — PageFly Design" };
 export const dynamic = "force-dynamic";
 
 export default async function CheckoutPage(props: PageProps<"/collection-pages/checkout">) {
+  if (!ORDERS_OPEN) notFound();
   const { set: raw, request } = await props.searchParams;
   if (request === "custom") {
     return (

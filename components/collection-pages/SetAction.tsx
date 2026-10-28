@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { EV, track } from "@/lib/analytics";
-import { checkoutUrl, pagesLabel, type PublicCollectionSet } from "@/lib/collectionPages";
+import { ORDERS_OPEN, checkoutUrl, pagesLabel, type PublicCollectionSet } from "@/lib/collectionPages";
 import { Icon } from "../ui";
 import { DownloadGate } from "./DownloadGate";
 
@@ -34,6 +34,8 @@ export function SetAction({
   const count = set.pages.length;
 
   if (set.access === "paid") {
+    /* Orders closed: no Buy button to a checkout that answers 404. */
+    if (!ORDERS_OPEN) return null;
     return (
       <Link
         href={checkoutUrl(set.id)}

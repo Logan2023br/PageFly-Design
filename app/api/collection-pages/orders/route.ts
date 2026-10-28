@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { clientIp, rateLimited } from "@/lib/rateLimit";
-import { CUSTOM_REQUEST, isPublic } from "@/lib/collectionPages";
+import { CUSTOM_REQUEST, ORDERS_OPEN, isPublic } from "@/lib/collectionPages";
 import { newId } from "@/lib/collectionPagesServer";
 import { getRepo } from "@/lib/db";
 import { normalizeDomain } from "@/lib/storeForm";
@@ -36,6 +36,7 @@ const schema = z.object({
 const PER_HOUR = 10;
 
 export async function POST(request: Request) {
+  if (!ORDERS_OPEN) return Response.json({ ok: false, error: "Orders are closed." }, { status: 403 });
   if (Number(request.headers.get("content-length") ?? 0) > 20_000)
     return Response.json({ ok: false, error: "That is too long." }, { status: 413 });
   if (rateLimited(`orders:${clientIp(request)}`, PER_HOUR, 60 * 60 * 1000))
