@@ -310,7 +310,7 @@ function RunningJob({ job, now, busy, onCancel }: { job: BuildJob; now: number; 
             bắt đầu {since(job.startedAt, now)} trước{job.note ? ` · ${job.note}` : ""}
           </span>
         </p>
-        <Button size="sm" variant="danger" icon="X" disabled={busy || job.cancelRequested} onClick={onCancel}>
+        <Button size="sm" variant="danger" icon="X" className="border-transparent bg-pf-danger text-white hover:bg-pf-danger/85 disabled:bg-pf-card disabled:text-pf-faint" disabled={busy || job.cancelRequested} onClick={onCancel}>
           {job.cancelRequested ? "Đang dừng…" : "Dừng build"}
         </Button>
       </div>
@@ -376,7 +376,7 @@ function JobRow({ job, busy, onCancel, onRetry }: { job: BuildJob; busy: boolean
           </a>
         )}
         {job.status === "queued" && (
-          <Button size="sm" variant="danger" icon="X" disabled={busy} onClick={onCancel}>
+          <Button size="sm" variant="danger" icon="X" className="border-transparent bg-pf-danger text-white hover:bg-pf-danger/85 disabled:bg-pf-card disabled:text-pf-faint" disabled={busy} onClick={onCancel}>
             Huỷ
           </Button>
         )}
