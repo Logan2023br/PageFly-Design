@@ -331,6 +331,18 @@ export async function finishJob(id: string, pages: number): Promise<void> {
   });
 }
 
+/** Builds that ended (done or failed) in the last `hours` — the admin's sound notice. */
+export async function endedJobs(hours: number): Promise<{ id: string; status: string; setName: string | null; pages: number; finishedAt: string }[]> {
+  const p = await ready();
+  const { rows } = await p.query(
+    `select id, status, set_name, pages, finished_at from claude_build_jobs
+      where status in ('done', 'failed') and finished_at > now() - make_interval(hours => $1)
+      order by finished_at`,
+    [hours],
+  );
+  return rows.map((r) => ({ id: r.id, status: r.status, setName: r.set_name ?? null, pages: Number(r.pages ?? 0), finishedAt: new Date(r.finished_at).toISOString() }));
+}
+
 export async function failJob(id: string, error: string): Promise<void> {
   await inTx(async (c) => {
     await running(c, id);

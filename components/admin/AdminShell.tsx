@@ -8,6 +8,7 @@ import type { AdminSection } from "@/lib/adminSections";
 import type { IconName } from "@/lib/icons";
 import { Icon } from "../ui";
 import { useAdminAccess } from "./AdminAccess";
+import { AdminNotifier } from "./AdminNotifier";
 
 /* ==========================================================================
    Admin chrome: left sidebar, content on the right.
@@ -173,6 +174,10 @@ export function AdminShell({
                 );
               })}
 
+              <div className="ml-auto lg:ml-0 lg:mt-2">
+                <AdminNotifier />
+              </div>
+
               <form
                 action="/api/auth/admin"
                 onSubmit={(e) => {
@@ -181,7 +186,7 @@ export function AdminShell({
                     window.location.assign("/design/admin"),
                   );
                 }}
-                className="ml-auto lg:ml-0 lg:mt-2"
+                className="lg:ml-0"
               >
                 <button
                   type="submit"

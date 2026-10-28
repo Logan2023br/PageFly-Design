@@ -4,6 +4,8 @@
    Instagram/UGC page uses `Camera`. */
 
 import {
+  Bell,
+  BellOff,
   ArrowDown,
   ArrowUp,
   ArrowLeft,
@@ -103,6 +105,8 @@ import {
 } from "lucide-react";
 
 export const ICONS = {
+  Bell,
+  BellOff,
   ArrowDown,
   ArrowUp,
   ArrowLeft,
