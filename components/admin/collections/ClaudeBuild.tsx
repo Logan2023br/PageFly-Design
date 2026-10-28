@@ -167,14 +167,14 @@ export function ClaudeBuild() {
               Bắt đầu build {count} bộ
             </Button>
           </div>
-          {!data.criteria.trim() && <p className="text-[12px] text-pf-warn">Chưa có tiêu chí build — routine sẽ không biết build gì. Bấm “Tiêu chí build” để viết trước.</p>}
+          {!data.criteria.trim() && <p className="text-[12px] text-pf-faint">Chưa có ý tưởng thêm — routine build theo tiêu chí tổng.</p>}
         </div>
       )}
 
       {/* criteria editor */}
       {editCriteria && (
         <div className="grid gap-2 rounded-pf-md border border-pf-border bg-pf-bg-deep p-3">
-          <p className="text-[12px] text-pf-faint">Tiêu chí build: build bộ nào, mấy page, phong cách, chất lượng… Routine đọc phần này mỗi lần nhận một bộ.</p>
+          <p className="text-[12px] text-pf-faint">Ý tưởng thêm cho các lần build (không bắt buộc): phong cách, ngành, section hay hiệu ứng bạn muốn thấy… Routine kết hợp phần này với tiêu chí tổng (scripts/claude-build/criteria-premium.md); để trống thì chỉ dùng tiêu chí tổng.</p>
           <textarea value={criteria} onChange={(e) => setCriteria(e.target.value)} className={`${FIELD} min-h-[220px] font-mono text-[12.5px]`} />
           <div className="flex gap-2">
             <Button icon="Check" disabled={busy} onClick={() => void post({ action: "criteria", text: criteria }).then((ok) => ok && setEditCriteria(false))}>

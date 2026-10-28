@@ -1,7 +1,7 @@
-# Tiêu chí build — bộ premium ($500 / bộ)
+# Tiêu chí tổng — bộ premium ($500 / bộ)
 
-> Dán phần dưới đường kẻ vào Admin → Collection pages → Claude Build → "Tiêu chí build" → Lưu.
-> Routine đọc phần này mỗi lần nhận một bộ. Ghi chú của từng lượt (ngành, dịp lễ…) được áp thêm lên trên.
+> Routine đọc file này từ repo (nhánh main) mỗi lần nhận một bộ — sửa ở đây rồi push là routine dùng bản mới, không cần dán lại đâu cả.
+> Ô "Tiêu chí build" trên giao diện là ý tưởng thêm của admin, áp lên trên file này; để trống thì chỉ dùng file này. Ghi chú của từng lượt (ngành, dịp lễ…) áp thêm lên trên cùng.
 > Gộp từ "Bộ tiêu chí chất lượng cho Store sets" (21/10/2026): tầng 1 sàn kỹ thuật, tầng 2 chấm 7 tiêu chí, tầng 3 cả bộ, tầng 4 luật từng loại section, ngưỡng của bộ khoá gói Builder.
 
 ---
@@ -9,6 +9,10 @@
 # What we sell
 
 Each set is sold for **$500** — it is a Builder-plan set, so it must pass the **Builder threshold** below, not just the free one. A merchant pays that to make their store look like a top-tier brand, the kind of site a design agency charges $10,000+ for. If a set would not make a merchant say "this looks expensive" in the first three seconds, it is not finished. When in doubt, cut, refine and polish instead of adding.
+
+# Learn from the best in the market
+
+Before choosing the look, study **3–5 leading brand websites** in the set's industry and adjacent premium brands (for example Aesop, Glossier, Le Labo, Apple, Allbirds, Gentle Monster, Bang & Olufsen, Kinfolk — pick the ones that fit the industry). Note what makes them feel premium: hero composition, type, how products are shown, the motion and 3D, how they sell. Use what you learn as patterns, **never copy** a layout, copy text, logo or image. List the sites you studied in the summary.
 
 A set is checked in 4 tiers. Tier 1 is pass/fail, tier 2 is scored per page, tier 3 is the set as a whole, tier 4 is the rules for each section type. Build to all four from the start — do not design first and patch later.
 
@@ -104,6 +108,15 @@ Required on every set:
 - **Header:** `sticky` that shrinks or gains a background on scroll, and a mobile `drawer` menu.
 
 Then give the set **one signature motion** of its own, matching its art direction, and say it in the `blurb` — e.g. a slow Ken Burns on the hero image (quiet luxury), split-text heading reveal (editorial), a tilt-on-hover product card (techno), a hand-drawn underline on links (artisanal), a horizontal scroll lookbook strip (fashion). Not the same signature as an existing set.
+
+## 3D — when it fits the set
+
+Use **3D depth where it suits the industry and the look** — not on every set, and never just to show off. Choose like the best sites in that industry do:
+- Tech, audio, eyewear, sneakers, watches, furniture, beauty bottles: a product that **turns, tilts or floats** — a tilt-on-hover product card with depth (perspective + rotateX/Y), a hero product that rotates a few degrees as you scroll, layered cut-outs moving at different depths.
+- Fashion, lifestyle, editorial: **depth through layers** — parallax layers, cards that flip to show details, a stacked-card gallery.
+- Quiet luxury, minimal, artisanal: usually **no 3D**, or only a very soft depth (a gentle shadow lift, a slow parallax).
+
+Build 3D with **CSS 3D transforms** (`perspective`, `rotateX/Y`, `translateZ`, `transform-style: preserve-3d`) and the reveal / hover pieces above — these reproduce in PageFly. Do not use WebGL, three.js or 3D model viewers: they are not verified in PageFly and are heavy on mobile. On mobile, 3D becomes a flat, lighter version (no hover-tilt on touch). Say in the summary whether the set uses 3D and why.
 
 Limits:
 - Content is fully visible and usable with motion off: honour `prefers-reduced-motion`, and nothing stays hidden if a script fails.

@@ -3,7 +3,7 @@
 > Dán toàn bộ phần dưới đường kẻ vào Instructions của routine.
 > Routine cần: repo `Logan2023br/PageFly-Design`, biến môi trường `PFD_API_KEY` (= `CLAUDE_BUILD_API_KEY` trên server — key riêng của Claude Build) và tuỳ chọn `PFD_BASE`.
 > Trigger: thêm **API** (để nút "Start build" gọi ngay) và có thể giữ thêm một lịch chạy (ví dụ mỗi giờ) làm dự phòng.
-> Tiêu chí build KHÔNG nằm ở đây: admin viết trong Admin → Collection pages → Claude Build → "Tiêu chí build", routine đọc qua API.
+> Tiêu chí tổng nằm ở `scripts/claude-build/criteria-premium.md` (routine đọc từ repo, sửa xong push là có hiệu lực). Ô "Tiêu chí build" trên giao diện là ý tưởng thêm, không bắt buộc. Routine cần quyền web (fetch / search) để tham khảo các website lớn.
 
 ---
 
@@ -25,13 +25,16 @@ If `PFD_API_KEY` is missing, stop and report it. Never print it.
 Repeat until `claim` returns `"job": null`, then end with the summary:
 
 1. **Claim:** `curl -sS "${H[@]}" -X POST "$API" -d '{"action":"claim"}'`
-   → `{ "job": { "id", "note", … }, "criteria": "…", "existing": [{ "name", "blurb" }, …] }`. `existing` is every set already in PageFly Design (including the ones you built earlier in this run): the new set must not repeat any of them — not the store concept, and not the look (palette, typography, layout idea) its blurb describes. `criteria` is the admin's build criteria — follow them exactly (what to build, how many pages, which page types, style, quality bar). `job.note` is the admin's note for this batch (an industry, a theme) — apply it on top of the criteria. If `criteria` is empty, call `fail` with "Chưa có tiêu chí build" and stop.
+   → `{ "job": { "id", "note", … }, "criteria": "…", "existing": [{ "name", "blurb" }, …] }`. `existing` is every set already in PageFly Design (including the ones you built earlier in this run): the new set must not repeat any of them — not the store concept, and not the look (palette, typography, layout idea) its blurb describes. What to build comes from three layers, each applied on top of the one before:
+   1. **The master criteria** — `scripts/claude-build/criteria-premium.md` in this repository (read it from the `main` branch, fresh, for every job). Always required: quality bar, the 4 tiers, motion and 3D, how to review. If the file is missing, call `fail` with "Không tìm thấy tiêu chí tổng" and stop.
+   2. **`criteria`** — the admin's extra ideas from the panel (a style, an industry, a feature they want to see). Follow them where they ask for something; where they conflict with the master criteria, the admin's idea wins on *what* to build (industry, style, sections), the master criteria still win on *quality* (the tiers and thresholds). Empty means: use the master criteria only.
+   3. **`job.note`** — the admin's note for this batch (an industry, a theme); apply it on top of both.
 2. **Report every step** as you reach it, and **stop this job at once if the answer says `"cancel": true`** (the admin pressed Dừng; do not call fail or finish):
    ```bash
    curl -sS "${H[@]}" -X POST "$API" -d '{"action":"step","id":"<job id>","step":"<step>","detail":"<short, e.g. page 3/7 · review round 2>","progress":<0-100>}'
    ```
    Steps, in order: `idea` (industry, store concept, page list) → `style` (palette, fonts, art direction) → `html` (building the HTML mockups) → `review` (review-and-improve rounds) → `pagefly` (converting to .pagefly) → `check` (validating / render check) → `upload`. Report the same step again with a new `detail` as you move through pages (`"detail":"page 4/7 · Product"`), and keep `progress` rising — the admin watches this live. Report at least every 10 minutes; a job silent for 30 minutes is marked failed.
-3. **Design the set** following the criteria. Use the `pagefly-builder` skill for everything PageFly-specific, and read its rules before designing so the mockups only use what PageFly can reproduce. Build each page as standalone HTML first, review and improve it until it is genuinely good, then convert to `.pagefly` and check that the `.pagefly` matches its HTML.
+3. **Design the set** following the three layers above. Use the `pagefly-builder` skill for everything PageFly-specific, and read its rules before designing so the mockups only use what PageFly can reproduce. Build each page as standalone HTML first, review and improve it until it is genuinely good, then convert to `.pagefly` and check that the `.pagefly` matches its HTML.
 4. **Create the set** (once, when you know its name):
    ```bash
    curl -sS "${H[@]}" -X POST "$API" -d '{"action":"set","id":"<job id>","name":"<Store name>","blurb":"<one line: what the store is, its look>"}'
