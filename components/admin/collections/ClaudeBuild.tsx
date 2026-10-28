@@ -310,8 +310,8 @@ function RunningJob({ job, now, busy, onCancel }: { job: BuildJob; now: number; 
             bắt đầu {since(job.startedAt, now)} trước{job.note ? ` · ${job.note}` : ""}
           </span>
         </p>
-        <Button size="sm" variant="ghost" icon="X" disabled={busy || job.cancelRequested} onClick={onCancel}>
-          {job.cancelRequested ? "Đang dừng…" : "Dừng"}
+        <Button size="sm" variant="danger" icon="X" disabled={busy || job.cancelRequested} onClick={onCancel}>
+          {job.cancelRequested ? "Đang dừng…" : "Dừng build"}
         </Button>
       </div>
       <div className="grid gap-1">
@@ -376,14 +376,14 @@ function JobRow({ job, busy, onCancel, onRetry }: { job: BuildJob; busy: boolean
           </a>
         )}
         {job.status === "queued" && (
-          <button type="button" disabled={busy} onClick={onCancel} className="font-semibold text-pf-faint hover:text-pf-danger">
+          <Button size="sm" variant="danger" icon="X" disabled={busy} onClick={onCancel}>
             Huỷ
-          </button>
+          </Button>
         )}
         {(job.status === "failed" || job.status === "cancelled") && (
-          <button type="button" disabled={busy} onClick={onRetry} className="font-semibold text-pf-body hover:text-pf-text">
+          <Button size="sm" icon="RefreshCw" disabled={busy} onClick={onRetry}>
             Build lại
-          </button>
+          </Button>
         )}
       </div>
       {open && (
