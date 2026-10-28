@@ -152,8 +152,17 @@ function unseal(key: string, raw: unknown): string | null {
   }
 }
 
+let shadowDropped = false;
+
 async function readRaw(): Promise<Map<string, unknown>> {
   const q = await db();
+  /* Once per process: a value set in the .env is the only copy — the one
+     pasted on the screen before it is deleted from the database. */
+  if (!shadowDropped) {
+    const keys = (Object.keys(CONNECTIONS) as ConnectionKey[]).filter((k) => process.env[CONNECTIONS[k].env]?.trim()).map((k) => CONN_PREFIX + k);
+    if (keys.length) await q.query("delete from ssu_settings where key = any($1)", [keys]);
+    shadowDropped = true;
+  }
   const { rows } = await q.query<{ key: string; value: unknown }>("select key, value from ssu_settings");
   return new Map(rows.map((r) => [r.key, r.value]));
 }
@@ -178,8 +187,18 @@ export async function saveSsuSettings(patch: Record<string, unknown>): Promise<S
   const bad: string[] = [];
   for (const [key, raw] of Object.entries(patch)) {
     if (Object.hasOwn(CONNECTIONS, key)) {
-      /* a whole .env line pasted ("N8N_AC2_KEY=bpu_…", maybe quoted) keeps only its value */
-      const envName = CONNECTIONS[key as ConnectionKey].env;
+      const def = CONNECTIONS[key as ConnectionKey];
+      /* A secret lives in the VPS .env only — never pasted into the database. */
+      if (def.secret) {
+        bad.push(`${key} (mã bí mật chỉ đặt trong .env của VPS)`);
+        continue;
+      }
+      if (process.env[def.env]?.trim()) {
+        bad.push(`${key} (đang đặt trong .env của VPS)`);
+        continue;
+      }
+      /* a whole .env line pasted ("N8N_AC2_URL=https://…", maybe quoted) keeps only its value */
+      const envName = def.env;
       const v = String(raw ?? "")
         .trim()
         .replace(new RegExp(`^(export\\s+)?${envName}\\s*=\\s*`), "")

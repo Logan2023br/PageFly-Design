@@ -464,24 +464,28 @@ async function main() {
   assert.equal(counts.reviewed, 2);
   assert.equal(counts.cared, 2);
 
-  // a connection pasted on the screen is stored encrypted, read back, and only its last 4 shown
+  // a secret is never stored from the screen: the VPS .env only
   const settingsMod = await import("../lib/storeSetUpsell/settings");
   delete process.env.CRISP_KEY;
-  await saveSsuSettings({ crisp_key: "panel-crisp-key-9876" });
-  const stored = (await p.query("select value from ssu_settings where key = 'conn:crisp_key'")).rows[0].value;
-  assert.ok(!JSON.stringify(stored).includes("panel-crisp-key"), "stored in clear");
-  assert.equal(await settingsMod.connection("crisp_key"), "panel-crisp-key-9876");
-  const cs = (await settingsMod.connectionStates()).find((c) => c.key === "crisp_key")!;
-  assert.deepEqual([cs.from, cs.value, cs.hint, cs.broken], ["panel", null, "…9876", false]);
+  await assert.rejects(saveSsuSettings({ crisp_key: "panel-crisp-key-9876" }), /chỉ đặt trong \.env/);
+  assert.equal((await p.query("select 1 from ssu_settings where key = 'conn:crisp_key'")).rowCount, 0);
+  // a non-secret one is stored encrypted, read back
+  delete process.env.MIXPANEL_SERVICE_ACCOUNT_USERNAME;
+  await saveSsuSettings({ mixpanel_username: "panel-user.mp-service-account" });
+  const stored = (await p.query("select value from ssu_settings where key = 'conn:mixpanel_username'")).rows[0].value;
+  assert.ok(!JSON.stringify(stored).includes("panel-user"), "stored in clear");
+  assert.equal(await settingsMod.connection("mixpanel_username"), "panel-user.mp-service-account");
   // sealed for another field (or another server's key) does not open
-  await p.query("update ssu_settings set value = (select value from ssu_settings where key = 'conn:crisp_key') where key = 'conn:n8n_ac2_key'");
-  await p.query("insert into ssu_settings (key, value) select 'conn:crisp_identifier', value from ssu_settings where key = 'conn:crisp_key'");
+  await p.query("insert into ssu_settings (key, value) select 'conn:crisp_identifier', value from ssu_settings where key = 'conn:mixpanel_username'");
   delete process.env.CRISP_IDENTIFIER;
   const ci = (await settingsMod.connectionStates()).find((c) => c.key === "crisp_identifier")!;
   assert.equal(ci.broken, true);
   assert.equal(await settingsMod.connection("crisp_identifier"), "");
   process.env.CRISP_KEY = "crisp-key";
   process.env.CRISP_IDENTIFIER = "crisp-id";
+  // set in the .env: cannot be changed on the screen
+  process.env.MIXPANEL_SERVICE_ACCOUNT_USERNAME = "sa.user";
+  await assert.rejects(saveSsuSettings({ mixpanel_username: "x" }), /đang đặt trong \.env/);
 
   // AC2 through BPU Ops' n8n proxy, when its URL is set
   const clients = await import("../lib/storeSetUpsell/clients");
@@ -492,9 +496,11 @@ async function main() {
   const mpt = (await clients.testConnections(null)).find((t) => t.service === "Mixpanel")!;
   assert.deepEqual([mpt.ok, /3429567/.test(mpt.detail)], [true, true]);
   // a whole .env line pasted keeps only its value
-  delete process.env.N8N_AC2_KEY;
-  await saveSsuSettings({ n8n_ac2_key: 'N8N_AC2_KEY="bpu-key"' });
-  assert.equal(await settingsMod.connection("n8n_ac2_key"), "bpu-key");
+  const ac2Url = process.env.N8N_AC2_URL;
+  delete process.env.N8N_AC2_URL;
+  await saveSsuSettings({ n8n_ac2_url: 'N8N_AC2_URL="https://n8n.example/webhook/x"' });
+  assert.equal(await settingsMod.connection("n8n_ac2_url"), "https://n8n.example/webhook/x");
+  process.env.N8N_AC2_URL = ac2Url;
 
   console.log("store set upsell: all checks passed", JSON.stringify(counts));
   await (await import("../lib/upsell/db")).closeUpsellPool();

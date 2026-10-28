@@ -80,8 +80,8 @@ export function SettingsPanel({
       <section className="grid gap-3 rounded-pf-card border border-pf-border bg-pf-card p-4">
         <h3 className="text-[14px] font-semibold text-pf-text">Kết nối</h3>
         <p className="text-[12.5px] text-pf-muted">
-          Dán mã vào ô rồi bấm <b>Lưu kết nối</b>. Mã được <b>mã hoá</b> trước khi lưu vào database và không bao giờ hiện lại — chỉ hiện 4 ký tự cuối để biết
-          đang dùng mã nào. Khi sau này đặt cùng tên biến trong .env của VPS thì .env được dùng, mã ở đây bỏ qua. Để trống một ô và lưu = giữ nguyên.
+          Mã bí mật (secret, key) <b>chỉ đặt trong .env của VPS</b> — không lưu vào database, ở đây chỉ hiện 4 ký tự cuối để biết đang dùng mã nào. Các giá trị
+          không bí mật (project id, website id, username, URL) có thể đổi ở đây khi chưa đặt trong .env. Đổi .env xong cần restart app.
         </p>
         <p className="text-[12.5px] text-pf-muted">
           Crisp và AC2 dùng chung token với BPU Ops (Upsell Build Pages). Mixpanel cần một service account của project PageFly Analytics - Production
@@ -96,6 +96,10 @@ export function SettingsPanel({
               </span>
               {c.from === "env" ? (
                 <span className="text-[12px] text-pf-muted">Đặt trong .env của VPS {c.value ? `· ${c.value}` : c.hint ? `· ${c.hint}` : ""}</span>
+              ) : c.secret ? (
+                <span className="text-[12px] text-pf-warn">
+                  {c.from === "panel" ? `Đang dùng mã cũ lưu trong database ${c.hint ?? ""} — ` : "Chưa có — "}thêm {c.env} vào .env của VPS rồi restart app
+                </span>
               ) : (
                 /* Never type="password", and no name a password manager knows: a
                    browser filled the admin login into the Mixpanel pair, and
