@@ -64,8 +64,12 @@ const merchantAppOn = () => process.env.MERCHANT_APP === "on";
 const referralOn = () => process.env.REFERRAL_PROGRAM === "on";
 const REFERRAL_PAGE = /^\/collection-pages\/referral(\/|$)/;
 const REFERRAL_APIS = /^\/api\/collection-pages\/referral(\/|$)/;
-const MERCHANT_PAGES = /^\/design\/(login|register|library)(\/|$)/;
-const MERCHANT_APIS = /^\/api\/(auth\/(store|register|provision)|account|build|ai|runs|generate|review)(\/|$)/;
+const MERCHANT_PAGES = /^\/(design\/(login|register|library)|customer-feedback)(\/|$)/;
+/* With them: the front door's showcase (`/` now goes to /collection-pages),
+   the n8n invite links (they land on `/`), and the review mail for pages the
+   app built — its list for n8n and the feedback form it links to. */
+const MERCHANT_APIS =
+  /^\/api\/(auth\/(store|register|provision)|account|build|ai|runs|generate|review|showcase|customer-feedback|admin\/(invite-link|pending-reviews))(\/|$)/;
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -85,6 +89,8 @@ export function proxy(request: NextRequest) {
 
   /* With the app on, sign-in and register are reachable while signed out. */
   if (pathname === "/design/login" || pathname === "/design/register") return NextResponse.next();
+  /* The feedback form opens from its signed link, signed out. */
+  if (/^\/customer-feedback(\/|$)/.test(pathname)) return NextResponse.next();
 
   if (pathname.startsWith("/api/")) {
     if (crossSite(request))
@@ -113,6 +119,8 @@ export const config = {
     "/design/login",
     "/design/register",
     "/design/library/:path*",
+    "/customer-feedback",
+    "/customer-feedback/:path*",
     "/collection-pages/referral",
     "/collection-pages/referral/:path*",
     "/api/:path*",
