@@ -111,7 +111,7 @@ export const DEFAULT_INITIAL_TEMPLATE =
   "👉 [See your 2 pages]({link})\n\n" +
   "Feel free to customize these pages in the PageFly editor to make them your own.\n\n" +
   "We also offer **Complimentary Editing** services for these two pages of yours.\n" +
-  "(Please note that this is a **Free Editing** service, available for a limited period of **15 days** from the date of submission.)\n\n" +
+  "(Please note that this is a **Free Editing** service, available for a limited period of **3 days** from the date of submission.)\n\n" +
   "If you need any assistance, simply reply to this message.\n\n" +
   "Best regards,\n**{pic} – PageFly Support**";
 
@@ -136,15 +136,16 @@ export const DEFAULT_VIEW_REMINDER_TEMPLATE =
 /** Downloaded them: the free editing, and how long it lasts. */
 export const DEFAULT_EDIT_OFFER_TEMPLATE =
   "Hi **{store_name}**,\n\n" +
-  "Thanks for downloading your 2 pages! 🎉 We hope they look great in your store.\n\n" +
-  "We also offer **Complimentary Editing** for these two pages: tell us what you would like changed — text, images, " +
-  "colors or sections — and our team will make the edits for you.\n" +
-  "(Please note that this is a **Free Editing** service, available for **15 days** from the date of submission — until **{edit_until}**.)\n\n" +
-  "👉 **Simply reply to this message** with the changes you need, and we will take care of it.\n\n" +
-  "Best regards,\n**{pic} – PageFly Support**";
+  "Thanks for downloading your 2 pages! 🎉 We hope they bring a striking new look to your store.\n\n" +
+  "To help you customize them exactly as you envision, **OUR EXPERTS** are offering **complimentary editing services** " +
+  "for these 2 pages **for the next {days_left_text}** — until the end of **{edit_until}**.\n\n" +
+  "Simply let us know what changes you'd like — whether it's text, images, colors, or specific content sections — " +
+  "and our team of experts will take care of it for you.\n\n" +
+  "👉 **Just reply to this message**, and we'll get right on it!\n\n" +
+  "Best regards,\n**{pic} – PageFly Support Team**";
 
 /** How long the free editing lasts, from the day the pages were sent. */
-export const EDIT_OFFER_DAYS = 15;
+export const EDIT_OFFER_DAYS = 3;
 
 /** A date as a customer reads it: "November 20, 2026". */
 export function longDate(iso: string | null | undefined): string {

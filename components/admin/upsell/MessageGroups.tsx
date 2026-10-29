@@ -21,7 +21,7 @@ import { CopyButton, ErrorLine, PhoneLine, Pill, WhatsappMark } from "./bits";
    row each, opening to its Crisp text and its WhatsApp copy.
    ========================================================================== */
 
-export type GroupNavItem = { id: MessageGroup; label: string; pending: number };
+export type GroupNavItem = { id: MessageGroup; label: string; pending: number; sent: number; read: number };
 
 export function GroupNav({ groups, current }: { groups: GroupNavItem[]; current: MessageGroup }) {
   return (
@@ -38,6 +38,11 @@ export function GroupNav({ groups, current }: { groups: GroupNavItem[]; current:
           {g.label}
           {g.pending > 0 && (
             <span className={`rounded-pf-pill px-1.5 text-[11px] ${g.id === current ? "bg-white/20" : "bg-pf-warn/20 text-pf-warn"}`}>{g.pending}</span>
+          )}
+          {g.sent > 0 && (
+            <span className={`text-[11px] font-medium ${g.id === current ? "text-white/80" : "text-pf-faint"}`} title="Khách đã đọc / tin đã gửi">
+              đã đọc {g.read}/{g.sent}
+            </span>
           )}
         </Link>
       ))}
@@ -143,11 +148,46 @@ function TextBox({ title, text, extra }: { title: string; text: string; extra?: 
   );
 }
 
-/** Everything already sent in a group, one row each. */
-export function SentList({ rows }: { rows: AutoMessageRow[] }) {
+/** Everything already sent in a group, one row each — all of it, or only
+    what the customer read (or has not), by the `read` link in the URL. */
+export function SentList({
+  rows,
+  group,
+  read,
+  counts,
+}: {
+  rows: AutoMessageRow[];
+  group: MessageGroup;
+  read: "1" | "0" | undefined;
+  counts: { sent: number; read: number };
+}) {
+  const href = (r?: "1" | "0") => `/design/admin/upsell?tab=messages&group=${group}${r ? `&read=${r}` : ""}`;
+  const chips: [string, "1" | "0" | undefined, number][] = [
+    ["Tất cả", undefined, counts.sent],
+    ["Khách đã đọc", "1", counts.read],
+    ["Chưa đọc", "0", counts.sent - counts.read],
+  ];
   return (
     <section className="grid gap-2">
-      <h3 className="text-[13.5px] font-semibold text-pf-text">Đã gửi ({rows.length})</h3>
+      <div className="flex flex-wrap items-center gap-3">
+        <h3 className="text-[13.5px] font-semibold text-pf-text">Đã gửi ({counts.sent})</h3>
+        <nav aria-label="Đã đọc" className="flex gap-1 rounded-xl border border-pf-border bg-pf-surface/60 p-1">
+          {chips.map(([label, r, n]) => (
+            <Link
+              key={label}
+              href={href(r)}
+              aria-current={read === r ? "page" : undefined}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1 text-[12px] font-semibold transition-colors ${
+                read === r ? "bg-pf-primary text-white" : "text-pf-muted hover:text-pf-text"
+              }`}
+            >
+              {label}
+              <span className={`rounded-pf-pill px-1.5 text-[11px] ${read === r ? "bg-white/20" : "bg-pf-card-hi text-pf-faint"}`}>{n}</span>
+            </Link>
+          ))}
+        </nav>
+        {rows.length >= 100 && <span className="text-[11.5px] text-pf-faint">Hiện 100 tin mới nhất.</span>}
+      </div>
       {rows.length === 0 ? (
         <p className="text-[12.5px] text-pf-faint">Chưa có tin nào được gửi.</p>
       ) : (
@@ -190,6 +230,7 @@ function SentRow({ m }: { m: AutoMessageRow }) {
         <PhoneLine phone={m.phone} />
         <Pill tone="primary">{KIND_LABEL[m.kind] ?? m.kind}</Pill>
         <Pill tone="ok">{MESSAGE_STATUS_LABEL[m.status] ?? m.status}</Pill>
+        {m.message_read ? <Pill tone="primary">Khách đã đọc</Pill> : <Pill tone="muted">Chưa đọc</Pill>}
         {m.approved_by === "auto" && <Pill>Tự động</Pill>}
         <span className="ml-auto text-pf-faint">gửi {fmtVN(m.sent_at)}</span>
         <WhatsappMark

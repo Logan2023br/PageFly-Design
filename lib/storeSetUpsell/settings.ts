@@ -49,11 +49,11 @@ export const SSU_DEFAULTS = {
   /** how long the free editing lasts, from the day the thanks is sent */
   edit_days: 3,
   /** read the thanks, no reply after this many hours → care_read */
-  care_read_hours: 48,
+  care_read_hours: 24,
   /** this many days of free editing left, seen, no reply → edit_reminder */
   edit_reminder_days_left: 1,
   /** never two messages to one customer within this many hours */
-  care_gap_hours: 48,
+  care_gap_hours: 24,
   /** a conversation with a message this recent: support may be mid-chat, the message waits */
   support_quiet_minutes: 60,
   /** a conversation not resolved and active within this many hours: support is on it, the message waits */
@@ -68,7 +68,7 @@ const VARS = "{store_name} {set_name} {pages} {page_count} {edit_days} {edit_unt
 export const SSU_HELP: Record<SsuKey, string> = {
   mode: "manual = tin soạn sẵn chờ bạn duyệt rồi mới gửi · auto = khách đủ điều kiện được gửi luôn · off = không soạn tin",
   send_paused: "1 = tạm dừng gửi: tin đã duyệt nằm ở Chờ gửi, không gửi cho tới khi bật lại (0)",
-  care_mode: "Tin chăm sóc sau tin cảm ơn (đã đọc chưa trả lời, đã nâng cấp, nhắc còn X ngày chỉnh sửa): manual = chờ duyệt · auto = gửi luôn · off = tắt",
+  care_mode: "Tin chăm sóc sau tin cảm ơn (đã đọc chưa trả lời, nhắc còn X ngày chỉnh sửa): manual = chờ duyệt · auto = gửi luôn · off = tắt",
   sender_name: "Tên người gửi trên Crisp, điền vào {pic}",
   sender_avatar: "Link ảnh avatar người gửi. Để trống: tự lấy avatar của operator cùng tên trên Crisp (nếu token được phép đọc danh sách operator)",
   reply_segment: "Segment gắn vào hội thoại upsell trên Crisp khi khách trả lời. Để trống: không gắn",

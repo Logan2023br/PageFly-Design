@@ -14,7 +14,7 @@ import { Empty } from "./PendingPages";
    shows what someone opens it to check.
    ========================================================================== */
 
-export type TableVariant = "tracking" | "upgraded" | "read" | "replied" | "queue" | "control" | "closed";
+export type TableVariant = "tracking" | "upgraded" | "replied" | "queue" | "control" | "closed";
 
 const yes = (b: boolean | null | undefined) => (b ? "✓" : "—");
 
@@ -23,7 +23,7 @@ export function LeadTable({ rows, variant }: { rows: LeadListRow[]; variant: Tab
   if (rows.length === 0) return <Empty text="Không có lead nào." />;
   /* On Đang theo dõi the whole row opens the lead — except a press on a link
      or button inside it, which does its own thing. */
-  const rowOpens = variant === "tracking" || variant === "read" || variant === "replied";
+  const rowOpens = variant === "tracking" || variant === "replied";
   const ticket = { head: "Ticket", cell: (l: LeadListRow) => <CrispLink href={l.ticket_link} /> };
   const cols: { head: string; cell: (l: LeadListRow) => React.ReactNode; className?: string }[] = [
     {
@@ -88,7 +88,7 @@ export function LeadTable({ rows, variant }: { rows: LeadListRow[]; variant: Tab
     cell: (l) => <WhatsappMark leadId={l.lead_id} sentAt={l.whatsapp_sent_at} sentBy={l.whatsapp_sent_by} skippedAt={l.whatsapp_skipped_at} skippedBy={l.whatsapp_skipped_by} />,
   };
 
-  if (variant === "tracking" || variant === "read" || variant === "replied") {
+  if (variant === "tracking" || variant === "replied") {
     cols.push(...activity, ticket, whatsapp);
   } else if (variant === "upgraded") {
     cols.push(

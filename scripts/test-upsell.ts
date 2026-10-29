@@ -552,7 +552,7 @@ async function main() {
     const { whatsappText } = await import("../lib/upsell/format");
     const { DEFAULT_INITIAL_TEMPLATE, fillTemplate } = await import("../lib/upsell/common");
     check(
-      DEFAULT_INITIAL_TEMPLATE.includes("We also offer **Complimentary Editing** services for these two pages of yours.\n(Please note that this is a **Free Editing** service, available for a limited period of **15 days** from the date of submission.)") &&
+      DEFAULT_INITIAL_TEMPLATE.includes("We also offer **Complimentary Editing** services for these two pages of yours.\n(Please note that this is a **Free Editing** service, available for a limited period of **3 days** from the date of submission.)") &&
         DEFAULT_INITIAL_TEMPLATE.includes("If you need any assistance, simply reply to this message.") &&
         !DEFAULT_INITIAL_TEMPLATE.includes("If you have any questions, just reply here."),
       "first message carries the free-editing paragraph",
@@ -561,7 +561,7 @@ async function main() {
     const wa = whatsappText(md);
     check(!wa.includes("**") && !wa.includes("](") && !wa.includes("["), "WhatsApp text has no markdown left", wa);
     check(wa.startsWith("Hi *God's Providence*,\n\n") && wa.includes("a *Home page* and a *Product page*."), "bold kept in WhatsApp's syntax (*one star*)");
-    check(wa.includes("*Complimentary Editing*") && wa.includes("*Free Editing*") && wa.includes("*15 days*"), "the free-editing words are bold, each word capitalised");
+    check(wa.includes("*Complimentary Editing*") && wa.includes("*Free Editing*") && wa.includes("*3 days*"), "the free-editing words are bold, each word capitalised");
     check(wa.includes("👉 See your 2 pages: https://pfd.test/new-page?id=SNAAFGZW\n"), "the link is written out after its text");
     check(wa.endsWith("Best regards,\n*Logan – PageFly Support*"), "signature bold, WhatsApp style");
 
@@ -608,7 +608,7 @@ async function main() {
     await p1.query("insert into upsell_messages (id, lead_id, kind, content, status, created_by) values ('msg_mig_unbolded','L261099MG05','initial',$1,'approved','admin:t')", [`Hi,\n\n${UNBOLDED}\n\nBest regards`]);
     await closeUpsellPool();
     const ub = (await (await db()).query<{ content: string }>("select content from upsell_messages where id = 'msg_mig_unbolded'")).rows[0].content;
-    check(ub.includes(NEW_CLOSING) && ub.includes("**15 days**"), "an unsent message with the unbolded closing gets the bolded one", ub);
+    check(ub.includes(NEW_CLOSING) && ub.includes("**3 days**"), "an unsent message with the unbolded closing gets the bolded one", ub);
     const tpl = (await settings.getSettings()).initial_message_template;
     check(tpl.includes(NEW_CLOSING) && !tpl.includes(OLD), "the saved template gets it too", tpl);
     await closeUpsellPool();
@@ -650,7 +650,7 @@ async function main() {
     await ev(dV, "L261099AUTV", "view", 30);
     const dW = await mk("L261099AUTW", 2);
     await ev(dW, "L261099AUTW", "view", 2);
-    const dD = await mk("L261099AUTD", 3);
+    const dD = await mk("L261099AUTD", 1);
     await ev(dD, "L261099AUTD", "view", 40);
     await ev(dD, "L261099AUTD", "download", 39);
     const dO = await mk("L261099AUTO", 20);
@@ -659,15 +659,16 @@ async function main() {
     await ev(dN, "L261099AUTN", "view", 30);
 
     const r1 = await auto.runAutoMessages();
-    check(r1.view_reminder.includes("L261099AUTV") && !r1.view_reminder.includes("L261099AUTW"), "a reminder after 24 h of viewing without a download, not before", r1);
-    check(r1.edit_offer.includes("L261099AUTD") && !r1.edit_offer.includes("L261099AUTO"), "an edit offer after a download, only inside the 15 days", r1);
+    check(r1.view_reminder.includes("L261099AUTV") && !r1.view_reminder.includes("L261099AUTW"), "a reminder after 12 h of viewing without a download, not before", r1);
+    check(r1.edit_offer.includes("L261099AUTD") && !r1.edit_offer.includes("L261099AUTO"), "an edit offer after a download, only inside the 3 days", r1);
     check(!r1.view_reminder.includes("L261099AUTN"), "no Crisp conversation, no automatic message");
     const msgOf = async (lead: string, kind: string) =>
       (await p0.query<{ status: string; content: string; approved_by: string | null }>("select status, content, approved_by from upsell_messages where lead_id = $1 and kind = $2", [lead, kind])).rows;
     const v = (await msgOf("L261099AUTV", "view_reminder"))[0];
     check(v?.status === "pending_review" && v.content.includes("Hi **Store TV**") && v.content.includes("**Limited-Time Program**") && /until \*\*[A-Z][a-z]+ \d{1,2}, 20\d\d\*\*/.test(v.content), "manual: written to Tin chờ duyệt, with the store and the expiry date", v?.content);
     const d = (await msgOf("L261099AUTD", "edit_offer"))[0];
-    check(d?.status === "pending_review" && d.content.includes("**Complimentary Editing**") && d.content.includes("**15 days**"), "the offer names Complimentary Editing and 15 days", d?.content);
+    check(d?.status === "pending_review" && d.content.includes("**OUR EXPERTS**") && d.content.includes("**complimentary editing services**") && /\*\*for the next 2 days\*\* — until the end of \*\*[A-Z][a-z]+ \d{1,2}, 20\d\d\*\*/.test(d.content),
+      "the offer: our experts, complimentary editing, the days left and the end date", d?.content);
     const r2 = await auto.runAutoMessages();
     check(r2.view_reminder.length === 0 && r2.edit_offer.length === 0, "one of each per lead: a second run writes nothing", r2);
 

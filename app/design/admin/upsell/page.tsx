@@ -18,6 +18,7 @@ import {
   groupOf,
   listMessagesOfKinds,
   pendingByGroup,
+  sentByGroup,
   listInstallsPage,
   listLeadTab,
   listMessages,
@@ -31,7 +32,7 @@ import { NUMERIC_KEYS, SETTING_HELP, getSettings, maskSettings } from "@/lib/ups
 /* /design/admin/upsell — Upsell Build Pages. Read on the server per request,
    like the other admin screens; the tab and filters are in the URL. */
 
-export const metadata = { title: "Upsell Build Pages — PageFly Design Admin" };
+export const metadata = { title: "Upsell Build 2 pages — PageFly Design Admin" };
 export const dynamic = "force-dynamic";
 
 export default async function UpsellAdminPage(props: PageProps<"/design/admin/upsell">) {
@@ -53,14 +54,15 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
     min_score: one("min_score"),
     act: one("act"),
     group: one("group"),
+    read: one("read"),
     page: Number(one("page") ?? 1),
   };
 
   if (!hasUpsellDatabase()) {
     return (
-      <AdminShell current="upsell" title="Upsell Build Pages">
+      <AdminShell current="upsell" title="Upsell Build 2 pages">
         <p className="rounded-pf-card border border-pf-warn/30 bg-pf-warn/10 p-4 text-[13px] text-pf-warn">
-          Upsell Build Pages cần Postgres. Đặt DATABASE_URL rồi khởi động lại — bộ lưu file không hỗ trợ module này.
+          Upsell Build 2 pages cần Postgres. Đặt DATABASE_URL rồi khởi động lại — bộ lưu file không hỗ trợ module này.
         </p>
       </AdminShell>
     );
@@ -93,10 +95,12 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
   } else if (tab === "messages") {
     const group = groupOf(f.group);
     const def = MESSAGE_GROUPS[group];
-    const [pending, sent, perGroup] = await Promise.all([
+    const read = f.read === "1" || f.read === "0" ? f.read : undefined;
+    const [pending, sent, perGroup, sentCounts] = await Promise.all([
       listMessages("pending_review", f, def.kinds),
-      listMessagesOfKinds(def.kinds, ["sent"]),
+      listMessagesOfKinds(def.kinds, ["sent"], 100, read === undefined ? null : read === "1"),
       pendingByGroup(),
+      sentByGroup(),
     ]);
     const sample =
       group === "build"
@@ -109,19 +113,19 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
     const description = {
       build: "Tin đầu tiên gửi kèm 2 page (tạo khi bạn duyệt page), các follow-up và tin xin review do BPU Ops soạn.",
       viewed: `Tạo khi khách đã mở link page nhưng ${cfg.view_reminder_hours} giờ sau lần xem đầu vẫn chưa tải, và link còn hạn. Mỗi khách một lần.`,
-      downloaded: "Tạo khi khách đã tải file .pagefly, trong vòng 15 ngày kể từ ngày gửi page. Mỗi khách một lần.",
+      downloaded: "Tạo khi khách đã tải file .pagefly, trong vòng 3 ngày chỉnh sửa miễn phí kể từ ngày gửi page. Mỗi khách một lần.",
     }[group];
     const mode = cfg[def.setting] === "auto" ? "auto" : "manual";
     body = (
       <div className="grid gap-4">
-        <GroupNav groups={(Object.keys(MESSAGE_GROUPS) as (keyof typeof MESSAGE_GROUPS)[]).map((id) => ({ id, label: MESSAGE_GROUPS[id].label, pending: perGroup[id] }))} current={group} />
+        <GroupNav groups={(Object.keys(MESSAGE_GROUPS) as (keyof typeof MESSAGE_GROUPS)[]).map((id) => ({ id, label: MESSAGE_GROUPS[id].label, pending: perGroup[id], ...sentCounts[id] }))} current={group} />
         <GroupHeader setting={def.setting} mode={mode} description={description} sample={sample} />
         <section className="grid gap-2">
           <h3 className="text-[13.5px] font-semibold text-pf-text">Chờ duyệt ({pending.total})</h3>
           <MessageQueue rows={pending.rows} mode="drafts" window={window} />
           {pending.pages > 1 && <Pager tab={tab} f={{ ...f, group }} {...pending} />}
         </section>
-        <SentList rows={sent} />
+        <SentList rows={sent} group={group} read={read} counts={sentCounts[group]} />
       </div>
     );
   } else if (tab === "waiting" || tab === "failed") {
@@ -149,7 +153,7 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
   return (
     <AdminShell
       current="upsell"
-      title="Upsell Build Pages"
+      title="Upsell Build 2 pages"
       subtitle="BPU: page Claude dựng cho store mới cài — duyệt page, duyệt tin, theo dõi kết quả. Không tin nào tới khách khi chưa được duyệt."
     >
       <div className="grid gap-4">

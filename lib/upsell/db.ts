@@ -238,6 +238,17 @@ create table if not exists upsell_settings (
   value      jsonb,
   updated_at timestamptz not null default now()
 );
+/* Once, on 2026-10-29: the follow-ups come sooner — 24 and 48 hours, not 48
+   and 96; the download reminder 12 hours after the first view, not 24. */
+do $$
+begin
+  if not exists (select 1 from upsell_settings where key = '_once_hours_20261029') then
+    insert into upsell_settings (key, value) values ('_once_hours_20261029', 'true'::jsonb);
+    update upsell_settings set value = '24'::jsonb, updated_at = now() where key = 'followup1_hours';
+    update upsell_settings set value = '48'::jsonb, updated_at = now() where key = 'followup2_hours';
+    update upsell_settings set value = '12'::jsonb, updated_at = now() where key = 'view_reminder_hours';
+  end if;
+end $$;
 `;
 
 async function ensureSchema(p: Pool): Promise<void> {
@@ -271,11 +282,16 @@ const OLD_CLOSINGS = [
     "We also offer **complimentary editing** services for these two pages of yours.\n" +
     "(Please note that this is a **free editing** service, available for a limited period of **15 days** from the date of submission.)\n\n" +
     "If you need any assistance, simply reply to this message.",
+  /* …and with 15 days, before the free editing became 3. */
+  "Feel free to customize these pages in the PageFly editor to make them your own.\n\n" +
+    "We also offer **Complimentary Editing** services for these two pages of yours.\n" +
+    "(Please note that this is a **Free Editing** service, available for a limited period of **15 days** from the date of submission.)\n\n" +
+    "If you need any assistance, simply reply to this message.",
 ];
 export const NEW_CLOSING =
   "Feel free to customize these pages in the PageFly editor to make them your own.\n\n" +
   "We also offer **Complimentary Editing** services for these two pages of yours.\n" +
-  "(Please note that this is a **Free Editing** service, available for a limited period of **15 days** from the date of submission.)\n\n" +
+  "(Please note that this is a **Free Editing** service, available for a limited period of **3 days** from the date of submission.)\n\n" +
   "If you need any assistance, simply reply to this message.";
 
 /** First messages written from the old template and not sent yet — drafts,

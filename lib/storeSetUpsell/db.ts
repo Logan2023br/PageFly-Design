@@ -192,6 +192,15 @@ begin
      where kind = 'care_upgraded' and status in ('pending_review', 'approved', 'failed');
   end if;
 end $$;
+/* Once, on 2026-10-29: the care messages come sooner — read and no reply
+   after 24 hours, not 48; two messages 24 hours apart, not 48. */
+do $$
+begin
+  if not exists (select 1 from ssu_settings where key = '_once_hours24_20261029') then
+    insert into ssu_settings (key, value) values ('_once_hours24_20261029', 'true'::jsonb);
+    update ssu_settings set value = '24'::jsonb, updated_at = now() where key in ('care_read_hours', 'care_gap_hours');
+  end if;
+end $$;
 `;
 
 let ensured: Promise<void> | null = null;

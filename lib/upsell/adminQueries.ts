@@ -23,6 +23,8 @@ export type Filters = {
   act?: string;
   /** which messages on the Tin nhắn tab — a key of MESSAGE_GROUPS */
   group?: string;
+  /** the sent list on the Tin nhắn tab: "1" read by the customer, "0" not yet */
+  read?: string;
   page?: number;
 };
 
@@ -53,15 +55,14 @@ export const LEAD_TABS: Record<string, { statuses: readonly string[] | null; whe
      Đã nâng cấp is the same leads narrowed, not a place they move to. */
   tracking: { statuses: ["sent", "viewed", "downloaded", "used", "upgraded"], date: "sent_at", order: "l.sent_at desc nulls last" },
   upgraded: { statuses: null, where: "l.upgraded is true", date: "upgraded_at", order: "l.upgraded_at desc nulls last" },
-  /* Đã đọc / Có phản hồi: the same leads as Theo dõi tất cả, narrowed — as
-     on Store set upsell. */
-  read: { statuses: null, where: "l.message_read is true", date: "sent_at", order: "l.sent_at desc nulls last" },
+  /* Có phản hồi: the same leads as Theo dõi tất cả, narrowed — as on Store
+     set upsell. Đã đọc lives on the Tin nhắn tab, under each message. */
   replied: { statuses: null, where: "l.replied is true", date: "last_reply_at", order: "l.last_reply_at desc nulls last" },
   queue: { statuses: ["new", "building", "rebuild_requested"], date: "created_at", order: "(l.priority = 'high') desc, l.lead_score desc nulls last, l.created_at asc" },
   control: { statuses: ["control"], date: "created_at", order: "l.created_at desc" },
   closed: { statuses: ["rejected", "error", "skipped", "uninstalled"], date: "updated_at", order: "l.updated_at desc" },
 };
-export type LeadTab = "pages" | "tracking" | "upgraded" | "read" | "replied" | "queue" | "control" | "closed";
+export type LeadTab = "pages" | "tracking" | "upgraded" | "replied" | "queue" | "control" | "closed";
 
 /* Dates are typed in Vietnam time (the team's) and compared as such. */
 const VN = "Asia/Ho_Chi_Minh";
@@ -142,8 +143,8 @@ export type MessageListRow = MessageRow & {
    ========================================================================== */
 export const MESSAGE_GROUPS = {
   build: { label: "Tin nhắn build page", kinds: ["initial", "followup1", "followup2", "review", "custom"], setting: "build_message_mode" },
-  viewed: { label: "Tin nhắn đã xem", kinds: ["view_reminder"], setting: "view_reminder_mode" },
-  downloaded: { label: "Tin nhắn đã tải", kinds: ["edit_offer"], setting: "edit_offer_mode" },
+  viewed: { label: "Tin nhắn khách đã xem", kinds: ["view_reminder"], setting: "view_reminder_mode" },
+  downloaded: { label: "Tin nhắn khách đã tải", kinds: ["edit_offer"], setting: "edit_offer_mode" },
 } as const;
 export type MessageGroup = keyof typeof MESSAGE_GROUPS;
 export const groupOf = (g: string | undefined): MessageGroup => (g && Object.hasOwn(MESSAGE_GROUPS, g) ? (g as MessageGroup) : "build");
@@ -194,22 +195,50 @@ export type AutoMessageRow = MessageRow & {
   whatsapp_sent_by: string | null;
   whatsapp_skipped_at: string | null;
   whatsapp_skipped_by: string | null;
+  /** Crisp's read receipt, for the conversation: BPU Ops sets it once the
+      customer has read a message we sent there. */
+  message_read: boolean | null;
 };
 
 /** Messages of some kinds in some statuses, the latest first — the sent
-    list under each group of the Tin nhắn tab. */
-export async function listMessagesOfKinds(kinds: readonly string[], statuses: readonly string[], limit = 100): Promise<AutoMessageRow[]> {
+    list under each group of the Tin nhắn tab. `read` narrows it to the
+    customers who read it (true) or have not yet (false). */
+export async function listMessagesOfKinds(
+  kinds: readonly string[],
+  statuses: readonly string[],
+  limit = 100,
+  read: boolean | null = null,
+): Promise<AutoMessageRow[]> {
   const p = await db();
   const { rows } = await p.query<AutoMessageRow>(
     `select m.*, l.store_domain, l.store_name, l.phone, l.status as lead_status,
-            l.whatsapp_sent_at, l.whatsapp_sent_by, l.whatsapp_skipped_at, l.whatsapp_skipped_by
+            l.whatsapp_sent_at, l.whatsapp_sent_by, l.whatsapp_skipped_at, l.whatsapp_skipped_by, l.message_read
        from upsell_messages m join upsell_leads l on l.lead_id = m.lead_id
       where m.kind = any($1::text[]) and m.status = any($2::text[])
+        and ($4::boolean is null or coalesce(l.message_read, false) = $4)
       order by coalesce(m.sent_at, m.approved_at, m.created_at) desc
       limit $3`,
-    [kinds, statuses, limit],
+    [kinds, statuses, limit, read],
   );
   return rows;
+}
+
+/** Per group: how many were sent, and how many of those the customer read. */
+export async function sentByGroup(): Promise<Record<MessageGroup, { sent: number; read: number }>> {
+  const p = await db();
+  const { rows } = await p.query<{ kind: string; sent: number; read: number }>(
+    `select m.kind, count(*)::int as sent, count(*) filter (where l.message_read)::int as read
+       from upsell_messages m join upsell_leads l on l.lead_id = m.lead_id
+      where m.status = 'sent' group by m.kind`,
+  );
+  const out = { build: { sent: 0, read: 0 }, viewed: { sent: 0, read: 0 }, downloaded: { sent: 0, read: 0 } } as Record<MessageGroup, { sent: number; read: number }>;
+  for (const r of rows)
+    for (const [g, def] of Object.entries(MESSAGE_GROUPS))
+      if ((def.kinds as readonly string[]).includes(r.kind)) {
+        out[g as MessageGroup].sent += r.sent;
+        out[g as MessageGroup].read += r.read;
+      }
+  return out;
 }
 
 /** One kind's messages, every status (kept for tests and scripts). */
@@ -269,7 +298,6 @@ export async function tabCounts(): Promise<Record<string, number>> {
        (select count(*) from upsell_messages where status = 'failed') as failed,
        (select count(*) from upsell_leads where status in ('sent','viewed','downloaded','used','upgraded')) as tracking,
        (select count(*) from upsell_leads where upgraded is true) as upgraded,
-       (select count(*) from upsell_leads where message_read is true) as read,
        (select count(*) from upsell_leads where replied is true) as replied,
        (select count(*) from upsell_leads where status in ('new','building','rebuild_requested')) as queue,
        (select count(*) from upsell_leads where status = 'control') as control,

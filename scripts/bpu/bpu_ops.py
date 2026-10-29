@@ -141,7 +141,7 @@ def local_hour(tz):
 def settings():
     s, j = pfd("GET", "/api/upsell/settings")
     cfg = (j or {}).get("settings", {}) if s == 200 else {}
-    d = {"score_threshold": 6, "control_percent": 20, "min_products": 1, "followup1_hours": 48, "followup2_hours": 96,
+    d = {"score_threshold": 6, "control_percent": 20, "min_products": 1, "followup1_hours": 24, "followup2_hours": 48,
          "send_hour_start": 9, "send_hour_end": 19, "tracking_days": 30, "install_lookback_hours": 3, "pic": "Logan",
          "review_url": "https://apps.shopify.com/pagefly#modal-show=ReviewListingModal"}
     for k, v in cfg.items():

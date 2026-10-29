@@ -23,7 +23,7 @@ import type { AutoKind, AutoMode, LeadRow } from "./types";
      view_reminder  viewed, not downloaded `view_reminder_hours` after the
                     first view: the link is part of a limited program and
                     expires on a date — download now.
-     edit_offer     downloaded: Complimentary Editing for 15 days from the
+     edit_offer     downloaded: Complimentary Editing for 3 days from the
                     date the pages were sent — reply to ask for changes.
 
    EACH HAS A MODE, chosen by an admin on the "Tin tự động" tab:
@@ -37,7 +37,7 @@ import type { AutoKind, AutoMode, LeadRow } from "./types";
    if two ticks overlap. Only test-group leads with a Crisp conversation
    (both go into the conversation the first message opened), still
    installed, and only while the message is still true: a link that has
-   expired is not worth a reminder, and an offer whose 15 days have passed
+   expired is not worth a reminder, and an offer whose 3 days have passed
    is not an offer.
 
    Run from the maintenance tick (every 5 minutes on the VPS).
@@ -62,6 +62,8 @@ export function autoMessageFor(kind: AutoKind, lead: Candidate, cfg: Settings): 
       : cfg.edit_offer_template.trim() || DEFAULT_EDIT_OFFER_TEMPLATE;
   const sent = lead.sent_at ? new Date(lead.sent_at) : null;
   const editUntil = sent ? new Date(sent.getTime() + EDIT_OFFER_DAYS * 86_400_000).toISOString() : null;
+  /* Whole days left, counted up: on the day it ends, "1 day". */
+  const left = editUntil ? Math.max(1, Math.ceil((new Date(editUntil).getTime() - Date.now()) / 86_400_000)) : EDIT_OFFER_DAYS;
   return fillTemplate(tpl, {
     store_name: lead.store_name?.trim() || lead.store_domain.replace(/\.myshopify\.com$/, ""),
     link: designUrl(lead.design_id),
@@ -69,6 +71,7 @@ export function autoMessageFor(kind: AutoKind, lead: Candidate, cfg: Settings): 
     ttl_days: String(ttlDays()),
     expires_on: longDate(lead.expires_at),
     edit_until: longDate(editUntil),
+    days_left_text: left === 1 ? "1 day" : `${left} days`,
   });
 }
 
