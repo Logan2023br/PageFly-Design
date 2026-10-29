@@ -25,6 +25,8 @@ export type Filters = {
   group?: string;
   /** the sent list on the Tin nhắn tab: "1" read by the customer, "0" not yet */
   read?: string;
+  /** Có phản hồi: "0" not checked yet, "1" checked */
+  check?: string;
   page?: number;
 };
 
@@ -235,6 +237,59 @@ export async function listMessagesOfKinds(
   return rows;
 }
 
+/* ---- replies, by the message they answer ---------------------------------- */
+
+/** The kind of the last message sent before the customer's reply — what the
+    reply answers. A reply before any recorded send counts as the first. */
+const REPLY_TO = `coalesce((select m.kind from upsell_messages m
+    where m.lead_id = l.lead_id and m.status = 'sent' and m.sent_at <= l.last_reply_at
+    order by m.sent_at desc limit 1), 'initial')`;
+const UNCHECKED = "(l.reply_checked_at is null or l.reply_checked_at < l.last_reply_at)";
+
+const groupOfKind = (kind: string): MessageGroup =>
+  (Object.entries(MESSAGE_GROUPS).find(([, d]) => (d.kinds as readonly string[]).includes(kind))?.[0] as MessageGroup) ?? "build";
+
+export type ReplyRow = LeadListRow & { reply_to_kind: string };
+
+/** Per group: replies, and how many of them nobody has checked. */
+export async function replyCounts(): Promise<Record<MessageGroup, { total: number; unchecked: number }>> {
+  const { rows } = await (await db()).query<{ kind: string; total: number; unchecked: number }>(
+    `select ${REPLY_TO} as kind, count(*)::int as total, count(*) filter (where ${UNCHECKED})::int as unchecked
+       from upsell_leads l where l.replied is true and l.last_reply_at is not null group by 1`,
+  );
+  const out = { build: { total: 0, unchecked: 0 }, viewed: { total: 0, unchecked: 0 }, downloaded: { total: 0, unchecked: 0 } } as Record<
+    MessageGroup,
+    { total: number; unchecked: number }
+  >;
+  for (const r of rows) {
+    out[groupOfKind(r.kind)].total += r.total;
+    out[groupOfKind(r.kind)].unchecked += r.unchecked;
+  }
+  return out;
+}
+
+/** Có phản hồi, one group: the customers whose latest reply answers one of
+    its messages, unchecked first, then the latest reply. */
+export async function listReplies(group: MessageGroup, f: Filters): Promise<Paged<ReplyRow>> {
+  const w = leadWhere(f, "last_reply_at");
+  w.sql.push("l.replied is true", "l.last_reply_at is not null");
+  w.params.push(MESSAGE_GROUPS[group].kinds);
+  w.sql.push(`${REPLY_TO} = any($${w.params.length}::text[])`);
+  if (f.check === "0") w.sql.push(UNCHECKED);
+  if (f.check === "1") w.sql.push(`not ${UNCHECKED}`);
+  const where = `where ${w.sql.join(" and ")}`;
+  const p = await db();
+  const count = await p.query<{ n: number }>(`select count(*)::int as n from upsell_leads l ${where}`, w.params);
+  const total = count.rows[0].n;
+  const pg = paging(total, f.page);
+  const { rows } = await p.query(
+    `${LEAD_SELECT.replace("select l.*,", `select l.*, ${REPLY_TO} as reply_to_kind,`)} ${where}
+      order by ${UNCHECKED} desc, l.last_reply_at desc limit ${PAGE_SIZE} offset ${pg.offset}`,
+    w.params,
+  );
+  return { rows: rows.map((r) => ({ ...shapeLead(r), reply_to_kind: String(r.reply_to_kind) })), total, page: pg.page, pages: pg.pages };
+}
+
 /** Per group: how many were sent, and how many of those the customer read. */
 export async function sentByGroup(): Promise<Record<MessageGroup, { sent: number; read: number }>> {
   const p = await db();
@@ -310,7 +365,8 @@ export async function tabCounts(): Promise<Record<string, number>> {
        (select count(*) from upsell_messages where status = 'failed') as failed,
        (select count(*) from upsell_leads where status in ('sent','viewed','downloaded','used','upgraded')) as tracking,
        (select count(*) from upsell_leads where upgraded is true) as upgraded,
-       (select count(*) from upsell_leads where replied is true) as replied,
+       (select count(*) from upsell_leads where replied is true
+          and (reply_checked_at is null or reply_checked_at < last_reply_at)) as replied,
        (select count(*) from upsell_leads where status in ('new','building','rebuild_requested')) as queue,
        (select count(*) from upsell_leads where status = 'control') as control,
        (select count(*) from upsell_leads where status in ('rejected','error','skipped','uninstalled')) as closed,

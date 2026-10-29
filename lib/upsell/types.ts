@@ -174,6 +174,9 @@ export type LeadRow = {
   submit_state: "submitted" | "not_submitted" | null;
   submit_at: string | null;
   submit_by: string | null;
+  /** "Đã kiểm tra" on the customer's reply; older than last_reply_at = unchecked */
+  reply_checked_at: string | null;
+  reply_checked_by: string | null;
   last_synced_at: string | null;
   created_at: string;
   updated_at: string;

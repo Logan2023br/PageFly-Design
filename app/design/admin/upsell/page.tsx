@@ -10,6 +10,7 @@ import { LeadCriteria } from "@/components/admin/upsell/LeadCriteria";
 import { LeadTable } from "@/components/admin/upsell/LeadTable";
 import { MessageQueue } from "@/components/admin/upsell/MessageQueue";
 import { PendingPages } from "@/components/admin/upsell/PendingPages";
+import { ReplyCards, ReplyNav } from "@/components/admin/upsell/Replies";
 import { SettingsForm } from "@/components/admin/upsell/SettingsForm";
 import { StatsPanel } from "@/components/admin/upsell/StatsPanel";
 import {
@@ -17,6 +18,8 @@ import {
   filterOptions,
   fullFunnelCount,
   groupOf,
+  listReplies,
+  replyCounts,
   listMessagesOfKinds,
   pendingByGroup,
   sentByGroup,
@@ -56,6 +59,7 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
     act: one("act"),
     group: one("group"),
     read: one("read"),
+    check: one("check"),
     page: Number(one("page") ?? 1),
   };
 
@@ -93,6 +97,17 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
       </div>
     );
     pager = <Pager tab={tab} f={f} {...r} />;
+  } else if (tab === "replied") {
+    const group = groupOf(f.group);
+    const check = f.check === "0" || f.check === "1" ? f.check : undefined;
+    const [r, counts] = await Promise.all([listReplies(group, { ...f, check }), replyCounts()]);
+    body = (
+      <div className="grid gap-4">
+        <ReplyNav current={group} check={check} counts={counts} />
+        <ReplyCards rows={r.rows} />
+      </div>
+    );
+    pager = <Pager tab={tab} f={{ ...f, group }} {...r} />;
   } else if (tab === "messages" && f.group === "full") {
     /* Khách đã xem + đã đọc + đã tải + đã nâng cấp: leads, not messages. */
     const [r, perGroup, sentCounts, full] = await Promise.all([listLeadTab("full", f), pendingByGroup(), sentByGroup(), fullFunnelCount()]);

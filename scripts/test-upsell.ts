@@ -762,6 +762,29 @@ async function main() {
     check((await leads.getLead("L261099FULL"))?.submit_state === "not_submitted", "Chưa submit is kept");
   }
 
+  console.log("Có phản hồi: by the message replied to, Đã kiểm tra");
+  {
+    const p0 = await db();
+    await leads.upsertLeads([{ lead_id: "L261099RPLY", store_domain: "rply.myshopify.com", group: "test" }]);
+    await p0.query("update upsell_leads set status = 'downloaded', sent_at = now() - interval '2 days' where lead_id = 'L261099RPLY'");
+    await p0.query(
+      `insert into upsell_messages (id, lead_id, kind, content, status, created_by, sent_at) values
+         ('msg_rp1', 'L261099RPLY', 'initial', 'x', 'sent', 'admin:t', now() - interval '2 days'),
+         ('msg_rp2', 'L261099RPLY', 'edit_offer', 'y', 'sent', 'system', now() - interval '3 hours')`,
+    );
+    await p0.query("update upsell_leads set replied = true, last_reply_at = now() - interval '1 hour', last_reply_text = 'Please change the banner' where lead_id = 'L261099RPLY'");
+    const c1 = await adminQueries.replyCounts();
+    const dl = await adminQueries.listReplies("downloaded", {});
+    check(dl.rows.some((l) => l.lead_id === "L261099RPLY" && l.reply_to_kind === "edit_offer"), "a reply after the edit offer is listed under khách đã tải");
+    check(!(await adminQueries.listReplies("build", {})).rows.some((l) => l.lead_id === "L261099RPLY"), "…not under build page");
+    check(c1.downloaded.unchecked >= 1, "and counted unchecked", c1);
+    await review.setReplyChecked("L261099RPLY", true, "admin:t");
+    check((await adminQueries.replyCounts()).downloaded.unchecked === c1.downloaded.unchecked - 1, "Đã kiểm tra takes it off the unchecked count");
+    check((await adminQueries.listReplies("downloaded", { check: "1" })).rows.some((l) => l.lead_id === "L261099RPLY"), "…and lists it under Đã kiểm tra");
+    await p0.query("update upsell_leads set last_reply_at = now() where lead_id = 'L261099RPLY'");
+    check((await adminQueries.listReplies("downloaded", { check: "0" })).rows.some((l) => l.lead_id === "L261099RPLY"), "a newer reply is unchecked again");
+  }
+
   console.log("phone → WhatsApp");
   {
     const { whatsappUrl } = await import("../lib/upsell/format");

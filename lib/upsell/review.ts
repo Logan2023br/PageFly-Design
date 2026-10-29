@@ -245,6 +245,18 @@ export async function setSubmitState(leadId: string, state: SubmitState, actor: 
   });
 }
 
+/** "Đã kiểm tra" on the customer's latest reply, or taken back. */
+export async function setReplyChecked(leadId: string, checked: boolean, actor: Actor): Promise<void> {
+  await tx(async (c) => {
+    await lockLead(c, leadId);
+    await updateLead(c, leadId, {
+      reply_checked_at: checked ? new Date().toISOString() : null,
+      reply_checked_by: checked ? actor : null,
+    });
+    await recordEvent(c, { lead_id: leadId, type: checked ? "reply_checked" : "reply_unchecked", actor });
+  });
+}
+
 /** The earlier on/off form, kept for callers that still send { sent }. */
 export async function setWhatsappSent(leadId: string, sent: boolean, actor: Actor): Promise<void> {
   await setWhatsappState(leadId, sent ? "sent" : "none", actor);

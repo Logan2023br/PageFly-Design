@@ -31,7 +31,7 @@ export const TABS = [
 export type TabId = (typeof TABS)[number]["id"];
 
 /** Tabs whose count is work waiting — drawn amber; something broken — red. */
-const URGENT = new Set(["pages", "messages"]);
+const URGENT = new Set(["pages", "messages", "replied"]);
 const BROKEN = new Set(["failed"]);
 
 export function TabNav({ tab, counts }: { tab: TabId; counts: Record<string, number> }) {
