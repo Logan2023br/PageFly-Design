@@ -6,8 +6,8 @@ import { Icon } from "../ui";
 
 /* ==========================================================================
    The sound notice: while an admin page is open, every 30 seconds it asks
-   what happened — a new upgrade in Build 2 page or Store set upsell, a Claude
-   Build set finished or failed — and says it out loud in Vietnamese, with a
+   what happened — a new upgrade or a customer's reply in Build 2 page or
+   Store set upsell, a Claude Build set finished or failed — and says it out loud in Vietnamese, with a
    chime and a card in the corner.
 
    A browser plays sound only after a click on the page, so the sound is
@@ -48,7 +48,7 @@ const saveHeard = (s: Set<string>) => write(HEARD_KEY, JSON.stringify([...s].sli
 function chime(tone: AdminNotice["tone"]) {
   try {
     const ctx = new AudioContext();
-    const notes = tone === "celebrate" ? [523, 659, 784, 1047] : tone === "done" ? [659, 880] : [330, 247];
+    const notes = tone === "celebrate" ? [523, 659, 784, 1047] : tone === "done" ? [659, 880] : tone === "reply" ? [880, 988, 880] : [330, 247];
     notes.forEach((f, i) => {
       const o = ctx.createOscillator();
       const g = ctx.createGain();
@@ -152,7 +152,7 @@ export function AdminNotifier() {
         type="button"
         onClick={toggle}
         aria-pressed={on}
-        title={on ? "Đang bật: đọc to khi có user upgrade mới hoặc Claude Build xong" : "Bật để nghe thông báo khi có user upgrade mới hoặc Claude Build xong"}
+        title={on ? "Đang bật: đọc to khi có user upgrade mới, khách phản hồi hoặc Claude Build xong" : "Bật để nghe thông báo khi có user upgrade mới, khách phản hồi hoặc Claude Build xong"}
         className={`flex shrink-0 items-center gap-2 rounded-pf-md px-3 py-2 text-[13px] font-semibold transition-colors ${
           on ? "text-pf-success" : "text-pf-faint hover:text-pf-text"
         }`}
@@ -166,13 +166,22 @@ export function AdminNotifier() {
             <div
               key={n.id}
               className={`flex items-start gap-2 rounded-pf-card border bg-pf-card p-3 text-[13px] text-pf-text shadow-lg ${
-                n.tone === "error" ? "border-pf-danger/50" : n.tone === "celebrate" ? "border-pf-warn/50" : "border-pf-success/50"
+                n.tone === "error"
+                  ? "border-pf-danger/50"
+                  : n.tone === "celebrate"
+                    ? "border-pf-warn/50"
+                    : n.tone === "reply"
+                      ? "border-pf-primary/50"
+                      : "border-pf-success/50"
               }`}
             >
               <span aria-hidden className="text-[16px]">
-                {n.tone === "celebrate" ? "🎉" : n.tone === "done" ? "✅" : "⚠️"}
+                {n.tone === "celebrate" ? "🎉" : n.tone === "done" ? "✅" : n.tone === "reply" ? "💬" : "⚠️"}
               </span>
-              <p className="flex-1">{n.text}</p>
+              <div className="flex-1">
+                <p>{n.text}</p>
+                {n.detail && <p className="mt-1 line-clamp-3 text-[12px] italic text-pf-muted">“{n.detail}”</p>}
+              </div>
               <button type="button" aria-label="Đóng" onClick={() => setCards((c) => c.filter((x) => x.id !== n.id))} className="text-pf-faint hover:text-pf-text">
                 <Icon name="X" size={14} />
               </button>
