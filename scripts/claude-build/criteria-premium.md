@@ -1,4 +1,4 @@
-# Tiêu chí tổng — bộ premium ($500 / bộ)
+# Tiêu chí tổng — bộ premium, không giới hạn
 
 > Routine đọc file này từ repo (nhánh main) mỗi lần nhận một bộ — sửa ở đây rồi push là routine dùng bản mới, không cần dán lại đâu cả.
 > Ô "Tiêu chí build" trên giao diện là ý tưởng thêm của admin, áp lên trên file này; để trống thì chỉ dùng file này. Ghi chú của từng lượt (ngành, dịp lễ…) áp thêm lên trên cùng.
@@ -8,7 +8,7 @@
 
 # What we sell
 
-Each set is sold for **$500** — it is a Builder-plan set, so it must pass the **Builder threshold** below, not just the free one. A merchant pays that to make their store look like a top-tier brand, the kind of site a design agency charges $10,000+ for. If a set would not make a merchant say "this looks expensive" in the first three seconds, it is not finished. When in doubt, cut, refine and polish instead of adding.
+Each set is a **premium, no-limits set** — the best work we can make, with no cap on effort, rounds or polish. It is a Builder-plan set, so it must pass the **Builder threshold** below, not just the free one. It should make a merchant's store look like a top-tier brand, the kind of site a leading design agency would be proud to ship. If a set would not make a merchant say "this looks expensive" in the first three seconds, it is not finished. When in doubt, cut, refine and polish instead of adding.
 
 # Learn from the best in the market
 
@@ -66,7 +66,7 @@ Score every page on these 7 criteria. **A page's grade is its weakest criterion,
 6. **Consistency** — one palette, type scale, radius and button style across the page.
 7. **Section standard** — every section has everything tier 4 requires of its type.
 
-**Thresholds for this $500 set (Builder):** weakest criterion **≥ 8 on Home, Product and Sale**, **≥ 7 on About, Collection, Contact and Blog Article**. Aim higher — these are floors.
+**Thresholds for this premium set (Builder):** weakest criterion **≥ 8 on Home, Product and Sale**, **≥ 7 on About, Collection, Contact and Blog Article**. Aim higher — these are floors.
 
 **How to score:** score from screenshots at **1440 px desktop and 375 px mobile**. Score each page **3 times independently** (separate subagents if you can, otherwise three separate passes that do not see each other's scores) and take the **median**. A difference under ~1.5 points is noise. If you cannot render the mobile view, leave criterion 5 blank — do not guess — and say so in the summary. Any criterion below threshold: fix the page and score it again. Every page gets **at least 3 full review-and-improve rounds**, and more until it is genuinely premium — tokens and time are not a reason to stop.
 
@@ -95,7 +95,7 @@ Any other section type: give it what that type needs to do its job, by the same 
 - Refined dividers, eyebrow labels, numbered sections; one consistent icon set; nothing default-looking.
 - Only what PageFly can reproduce (follow the pagefly-builder rules), and the `.pagefly` must render identically to its HTML.
 
-# Motion (required — a $500 set must feel alive)
+# Motion (required — a premium set must feel alive)
 
 Every set has a **motion system**: designed once with the look, used the same way on all 7 pages. Motion draws the eye to what sells, never decorates for its own sake. Use only the tested pagefly-builder pieces — the `behaviors(...)` pack, `animationHover`, CSS transitions — so it works the same in the PageFly editor and on the live store; never hand-written scroll JS.
 
