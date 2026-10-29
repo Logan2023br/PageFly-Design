@@ -18,6 +18,8 @@ import { SetAction } from "./SetAction";
    should not mean going back to the list first. `preview` is an admin looking
    at a hidden set, which gets a banner saying nobody else can see this.
    ========================================================================== */
+const PILLS_FOLDED = 12;
+
 export function SetDetail({
   set,
   others,
@@ -30,6 +32,14 @@ export function SetDetail({
   const [open, setOpen] = useState<ShowcasePage | null>(null);
   /* A single page asked for from inside its preview. */
   const [gate, setGate] = useState<ShowcasePage | null>(null);
+  /* The pills fold to two short rows; the set on screen is always among
+     them, wherever it falls in the order. */
+  const [allSets, setAllSets] = useState(false);
+  const folded = others.length > PILLS_FOLDED;
+  const pills =
+    !folded || allSets
+      ? others
+      : others.slice(0, PILLS_FOLDED).concat(others.slice(PILLS_FOLDED).filter((o) => o.id === set.id));
 
   /* Not while an admin previews a hidden set — that is checking, not traffic. */
   useTrackOnce(preview ? "" : set.id, () => {
@@ -79,7 +89,7 @@ export function SetDetail({
 
       {others.length > 1 && (
         <div className="mt-6 flex flex-wrap gap-2">
-          {others.map((other) => (
+          {pills.map((other) => (
             <Link
               key={other.id}
               href={`/collection-pages/${other.id}`}
@@ -94,6 +104,17 @@ export function SetDetail({
               {other.name}
             </Link>
           ))}
+          {folded && (
+            <button
+              type="button"
+              onClick={() => setAllSets(!allSets)}
+              aria-expanded={allSets}
+              className="inline-flex items-center gap-1.5 rounded-pf-pill border border-dashed border-pf-border-hi px-4 py-[9px] text-[14px] font-semibold text-pf-primary-hi transition-colors hover:border-pf-primary-hi"
+            >
+              {allSets ? "Show less" : `Show all · ${others.length - pills.length} more`}
+              <Icon name={allSets ? "ChevronUp" : "ChevronDown"} size={14} />
+            </button>
+          )}
         </div>
       )}
 
