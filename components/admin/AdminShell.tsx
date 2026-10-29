@@ -167,9 +167,6 @@ export function AdminShell({
               <span className="font-display text-[15px] font-semibold tracking-[-0.02em] text-pf-text">
                 PageFly <span className="text-pf-muted">Admin</span>
               </span>
-              <div className="ml-auto">
-                <NotificationBell />
-              </div>
             </div>
 
             {/* Horizontal on small screens: a fixed left rail costs a third of a
@@ -255,7 +252,12 @@ export function AdminShell({
                   <p className="text-[12.5px] text-pf-muted">{subtitle}</p>
                 )}
               </div>
-              {actions}
+              {/* The bell sits at the top right of every admin screen; its list
+                  opens down and to the left from there. */}
+              <div className="flex items-center gap-3">
+                {actions}
+                <NotificationBell />
+              </div>
             </header>
 
             <div className="pt-5">{children}</div>

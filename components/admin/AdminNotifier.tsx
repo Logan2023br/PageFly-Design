@@ -224,7 +224,7 @@ export function AdminNotifier() {
       {cards.length > 0 && (
         <div role="status" aria-live="polite" className="fixed bottom-4 right-4 z-50 grid w-[min(360px,calc(100vw-32px))] gap-2">
           {cards.map((n) => (
-            <div key={n.id} className={`flex items-start gap-2 rounded-pf-card border bg-pf-card p-3 text-[13px] text-pf-text shadow-lg ${BORDER[n.tone]}`}>
+            <div key={n.id} className={`flex items-start gap-2 rounded-pf-card border bg-pf-bg-deep p-3 text-[13px] text-pf-text shadow-2xl shadow-black/60 ${BORDER[n.tone]}`}>
               <span aria-hidden className="text-[16px]">
                 {ICON[n.tone]}
               </span>
@@ -277,7 +277,7 @@ export function NotificationBell() {
         onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-label={count > 0 ? `Thông báo, ${count} mới` : "Thông báo"}
-        className="relative grid size-9 place-items-center rounded-pf-md border border-pf-border bg-pf-card/70 text-pf-text transition-colors hover:border-pf-primary-hi/50"
+        className="relative grid size-9 place-items-center rounded-pf-md border border-pf-border bg-pf-bg-deep text-pf-text transition-colors hover:border-pf-primary-hi/50"
       >
         <Icon name="Bell" size={16} />
         {count > 0 && (
@@ -287,7 +287,7 @@ export function NotificationBell() {
         )}
       </button>
       {open && (
-        <div className="absolute right-0 top-11 z-50 grid max-h-[70vh] w-[min(380px,calc(100vw-32px))] grid-rows-[auto_1fr] overflow-hidden rounded-pf-card border border-pf-border bg-pf-card shadow-2xl lg:left-0 lg:right-auto">
+        <div className="absolute right-0 top-11 z-50 grid max-h-[70vh] w-[min(400px,calc(100vw-32px))] grid-rows-[auto_1fr] overflow-hidden rounded-pf-card border border-pf-primary-hi/30 bg-pf-bg-deep shadow-2xl shadow-black/70">
           <div className="flex items-center justify-between border-b border-pf-border px-4 py-2.5">
             <span className="text-[13px] font-semibold text-pf-text">Thông báo</span>
             <span className="text-[11.5px] text-pf-faint">48 giờ qua</span>
