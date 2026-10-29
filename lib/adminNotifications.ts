@@ -78,7 +78,7 @@ export async function recentNotices(sections: AdminSection[]): Promise<AdminNoti
       })(),
     );
   }
-  if (sections.includes("collections")) {
+  if (sections.includes("ssu")) {
     if (hasUpsellDatabase())
       reads.push(
         (async () => {
@@ -93,7 +93,7 @@ export async function recentNotices(sections: AdminSection[]): Promise<AdminNoti
               at: new Date(r.upgraded_at).toISOString(),
               tone: "celebrate",
               href: ssuHref(r.store_domain),
-              text: `Xin chúc mừng! Store set upsell có user upgrade mới: ${store(r.store_name, r.store_domain)}${r.upgraded_to ? `, lên gói ${r.upgraded_to}` : ""}.`,
+              text: `Xin chúc mừng! Upsell Collection Pages có user upgrade mới: ${store(r.store_name, r.store_domain)}${r.upgraded_to ? `, lên gói ${r.upgraded_to}` : ""}.`,
             });
         })(),
       );
@@ -105,9 +105,11 @@ export async function recentNotices(sections: AdminSection[]): Promise<AdminNoti
               where replied and last_reply_at > now() - make_interval(hours => $1)`,
             [WINDOW_HOURS],
           );
-          for (const r of rows) out.push(reply("ssu", "Store set upsell", r));
+          for (const r of rows) out.push(reply("ssu", "Upsell Collection Pages", r));
         })(),
       );
+  }
+  if (sections.includes("collections")) {
     reads.push(
       (async () => {
         for (const j of await endedJobs(WINDOW_HOURS))

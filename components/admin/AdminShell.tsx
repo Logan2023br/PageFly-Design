@@ -19,13 +19,7 @@ import { AdminNotifier, NotificationBell } from "./AdminNotifier";
 
 export type { AdminSection };
 
-/* A sidebar item: `id` is what a page names as `current`; `section` is the
-   permission that shows it (the item's own id when not given). Upsell
-   Collection Pages is its own item but part of the "collections" permission:
-   its screens and API sit under Collection pages'. */
-export type AdminNavId = AdminSection | "collections-upsell";
-
-const NAV: { id: AdminNavId; section?: AdminSection; label: string; href: string; icon: IconName }[] = [
+const NAV: { id: AdminSection; label: string; href: string; icon: IconName }[] = [
   { id: "stats", label: "Thống kê", href: "/design/admin", icon: "ChartColumn" },
   { id: "users", label: "Users", href: "/design/admin/users", icon: "Users" },
   /* Under Users, as asked. "Thống kê" above it counts what the product has
@@ -50,8 +44,7 @@ const NAV: { id: AdminNavId; section?: AdminSection; label: string; href: string
     icon: "LayoutGrid",
   },
   {
-    id: "collections-upsell",
-    section: "collections",
+    id: "ssu",
     label: "Upsell Collection Pages",
     href: "/design/admin/collections/upsell",
     icon: "Megaphone",
@@ -128,7 +121,7 @@ export function AdminShell({
   actions,
   children,
 }: {
-  current: AdminNavId;
+  current: AdminSection;
   title: string;
   subtitle?: string;
   actions?: ReactNode;
@@ -136,9 +129,9 @@ export function AdminShell({
 }) {
   /* Only the sections this sign-in has; the server refuses the rest anyway. */
   const access = useAdminAccess();
-  const nav = NAV.filter((item) => access.sections.includes(item.section ?? (item.id as AdminSection)));
+  const nav = NAV.filter((item) => access.sections.includes(item.id));
   const upsellPending = useUpsellPending(access.sections.includes("upsell"));
-  const ssuPending = useSsuPending(access.sections.includes("collections"));
+  const ssuPending = useSsuPending(access.sections.includes("ssu"));
   return (
     <MotionConfig reducedMotion="user">
       <div
@@ -206,7 +199,7 @@ export function AdminShell({
                           {upsellPending.n}
                         </span>
                       )}
-                      {item.id === "collections-upsell" && ssuPending > 0 && (
+                      {item.id === "ssu" && ssuPending > 0 && (
                         <span className="rounded-pf-pill bg-pf-warn/25 px-1.5 text-[11px] text-pf-warn">{ssuPending}</span>
                       )}
                     </span>

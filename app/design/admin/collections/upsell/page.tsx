@@ -34,7 +34,7 @@ export const metadata = { title: "Upsell Collection Pages — PageFly Design Adm
 export const dynamic = "force-dynamic";
 
 export default async function StoreSetUpsellPage(props: PageProps<"/design/admin/collections/upsell">) {
-  const gate = await adminGate("collections");
+  const gate = await adminGate("ssu");
   if (gate) return gate;
 
   const sp = await props.searchParams;
@@ -56,7 +56,7 @@ export default async function StoreSetUpsellPage(props: PageProps<"/design/admin
 
   const shell = (children: React.ReactNode) => (
     <AdminShell
-      current="collections-upsell"
+      current="ssu"
       title="Upsell Collection Pages"
       subtitle="Ai đã bấm Select template của Store set trong PageFly — thông tin store, Crisp, tin cảm ơn + chỉnh sửa miễn phí từ Logan, và kết quả"
     >

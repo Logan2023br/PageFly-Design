@@ -1,4 +1,4 @@
-import { guard } from "../../shared";
+import { ssuGuard as guard } from "../../shared";
 import { fail, json } from "@/lib/upsell/api";
 import { testConnections } from "@/lib/storeSetUpsell/clients";
 import { db } from "@/lib/storeSetUpsell/db";

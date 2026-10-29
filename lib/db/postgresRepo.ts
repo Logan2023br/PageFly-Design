@@ -518,6 +518,19 @@ create table if not exists admin_accounts (
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
 );
+/* One-time changes to existing rows, each run once and remembered here. */
+create table if not exists schema_once (key text primary key, at timestamptz not null default now());
+/* 2026-10-29: Upsell Collection Pages became its own permission ("ssu"). An
+   account that could open it through Collection pages keeps it; untick it
+   on the Accounts screen to take it away. */
+do $$
+begin
+  if not exists (select 1 from schema_once where key = 'ssu_section_20261029') then
+    insert into schema_once (key) values ('ssu_section_20261029');
+    update admin_accounts set sections = sections || '["ssu"]'::jsonb, updated_at = now()
+     where sections ? 'collections' and not sections ? 'ssu';
+  end if;
+end $$;
 
 create table if not exists referral_members (
   id            text primary key,

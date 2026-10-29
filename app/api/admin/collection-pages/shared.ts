@@ -15,6 +15,12 @@ export async function guard(): Promise<Response | null> {
   return Response.json({ ok: false, error: "Not signed in." } satisfies Fail, { status: 401 });
 }
 
+/** Upsell Collection Pages (store-set-upsell/*): its own permission. */
+export async function ssuGuard(): Promise<Response | null> {
+  if (await readAdminSection("ssu")) return null;
+  return Response.json({ ok: false, error: "Not signed in." } satisfies Fail, { status: 401 });
+}
+
 /* TODO: xoá fallback này sau khi đặt COLLECTIONS_API_KEY trong .env trên VPS.
    Until then a server without COLLECTIONS_API_KEY accepts the one key whose
    SHA-256 (hex) this is — only the hash is here, never the key. */
