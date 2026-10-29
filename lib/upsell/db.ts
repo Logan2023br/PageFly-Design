@@ -209,6 +209,11 @@ alter table upsell_leads add column if not exists whatsapp_sent_by text;
 /* Or the opposite mark: this customer is not one to message on WhatsApp. */
 alter table upsell_leads add column if not exists whatsapp_skipped_at timestamptz;
 alter table upsell_leads add column if not exists whatsapp_skipped_by text;
+/* An admin's mark on an upgraded lead: whether it was submitted as an upsell
+   (submitted / not_submitted; null = not decided yet). */
+alter table upsell_leads add column if not exists submit_state text;
+alter table upsell_leads add column if not exists submit_at timestamptz;
+alter table upsell_leads add column if not exists submit_by text;
 /* Pages built for a store whose storefront was password-protected: no real
    products could be read, so they carry example products and photos, and the
    messages must not say "built with your own products". */

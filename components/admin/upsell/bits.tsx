@@ -327,6 +327,65 @@ export function WhatsappMark({
   );
 }
 
+/* Đã submit / Chưa submit on an upgraded lead. Undecided: both buttons.
+   Decided: only the one chosen — pressing it again takes the mark back and
+   both buttons return. */
+export function SubmitMark({
+  leadId,
+  state,
+  at,
+  by,
+}: {
+  leadId: string;
+  state: "submitted" | "not_submitted" | null;
+  at: string | null;
+  by: string | null;
+}) {
+  const [run, busy, error] = useAct();
+  const set = (next: "submitted" | "not_submitted" | "none") => run(`/api/admin/upsell/leads/${leadId}`, { action: "submit", state: next });
+  const button =
+    "inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-pf-md border px-2.5 text-[12px] font-semibold transition-colors disabled:opacity-50";
+  if (state) {
+    const yes = state === "submitted";
+    return (
+      <div className="grid justify-items-start gap-1">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void set("none")}
+          title="Bấm để bỏ đánh dấu"
+          className={`${button} ${
+            yes
+              ? "border-pf-success/30 bg-pf-success/10 text-pf-success hover:bg-pf-success/20"
+              : "border-pf-warn/30 bg-pf-warn/10 text-pf-warn hover:bg-pf-warn/20"
+          }`}
+        >
+          <Icon name={yes ? "Check" : "X"} size={12} />
+          {yes ? "Đã submit" : "Chưa submit"}
+        </button>
+        <span className="whitespace-nowrap text-[11px] text-pf-faint">
+          {fmtVN(at)}
+          {by ? ` · ${by.replace(/^admin:/, "")}` : ""}
+        </span>
+        <ErrorLine error={error} />
+      </div>
+    );
+  }
+  return (
+    <div className="grid justify-items-start gap-1.5">
+      <button type="button" disabled={busy} onClick={() => void set("submitted")} className={`${button} border-pf-border text-pf-body hover:border-pf-success/50 hover:text-pf-success`}>
+        <Icon name="Check" size={12} />
+        Đã submit
+      </button>
+      <button type="button" disabled={busy} onClick={() => void set("not_submitted")} className={`${button} border-pf-border text-pf-faint hover:border-pf-warn/50 hover:text-pf-warn`}>
+        <Icon name="X" size={12} />
+        Chưa submit
+      </button>
+      <ErrorLine error={error} />
+    </div>
+  );
+}
+
 export function ErrorLine({ error }: { error: string | null }) {
   if (!error) return null;
   return <p className="text-[12.5px] font-medium text-pf-danger">{error}</p>;

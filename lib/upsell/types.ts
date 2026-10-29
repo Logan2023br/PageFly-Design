@@ -170,6 +170,10 @@ export type LeadRow = {
   /** marked by an admin: WhatsApp is not used for this customer */
   whatsapp_skipped_at: string | null;
   whatsapp_skipped_by: string | null;
+  /** marked by an admin on an upgraded lead: submitted as an upsell or not */
+  submit_state: "submitted" | "not_submitted" | null;
+  submit_at: string | null;
+  submit_by: string | null;
   last_synced_at: string | null;
   created_at: string;
   updated_at: string;

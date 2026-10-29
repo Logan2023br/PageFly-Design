@@ -23,7 +23,7 @@ import { CopyButton, ErrorLine, PhoneLine, Pill, WhatsappMark } from "./bits";
 
 export type GroupNavItem = { id: MessageGroup; label: string; pending: number; sent: number; read: number };
 
-export function GroupNav({ groups, current }: { groups: GroupNavItem[]; current: MessageGroup }) {
+export function GroupNav({ groups, current, full }: { groups: GroupNavItem[]; current: MessageGroup | "full"; full: number }) {
   return (
     <nav aria-label="Loại tin" className="flex flex-wrap gap-1 rounded-xl border border-pf-border bg-pf-surface/60 p-1">
       {groups.map((g) => (
@@ -46,6 +46,17 @@ export function GroupNav({ groups, current }: { groups: GroupNavItem[]; current:
           )}
         </Link>
       ))}
+      {/* Not a kind of message: the leads who did all four, whatever they were sent. */}
+      <Link
+        href="/design/admin/upsell?tab=messages&group=full"
+        aria-current={current === "full" ? "page" : undefined}
+        className={`flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-semibold transition-colors ${
+          current === "full" ? "bg-pf-success text-white" : "text-pf-muted hover:text-pf-text"
+        }`}
+      >
+        Khách đã xem + đã đọc + đã tải + đã nâng cấp
+        <span className={`rounded-pf-pill px-1.5 text-[11px] ${current === "full" ? "bg-white/20" : "bg-pf-success/15 text-pf-success"}`}>{full}</span>
+      </Link>
     </nav>
   );
 }

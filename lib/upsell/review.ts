@@ -228,6 +228,23 @@ export async function setWhatsappState(leadId: string, state: WhatsappState, act
   });
 }
 
+export type SubmitState = "submitted" | "not_submitted" | "none";
+
+/** Đã submit / Chưa submit on an upgraded lead; "none" takes the mark back. */
+export async function setSubmitState(leadId: string, state: SubmitState, actor: Actor): Promise<void> {
+  await tx(async (c) => {
+    const lead = await lockLead(c, leadId);
+    if ((lead.submit_state ?? "none") === state) return;
+    const on = state !== "none";
+    await updateLead(c, leadId, {
+      submit_state: on ? state : null,
+      submit_at: on ? new Date().toISOString() : null,
+      submit_by: on ? actor : null,
+    });
+    await recordEvent(c, { lead_id: leadId, type: on ? `upsell_${state}` : "upsell_submit_unmarked", actor });
+  });
+}
+
 /** The earlier on/off form, kept for callers that still send { sent }. */
 export async function setWhatsappSent(leadId: string, sent: boolean, actor: Actor): Promise<void> {
   await setWhatsappState(leadId, sent ? "sent" : "none", actor);

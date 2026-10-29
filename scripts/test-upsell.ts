@@ -740,6 +740,28 @@ async function main() {
     check(!r2.auto_approved && (await leads.getLead("L261099MANU"))?.status === "pending_review", "Duyệt thủ công: the pages wait in Chờ duyệt page");
   }
 
+  console.log("Loại Upsell: Đã submit / Chưa submit, and all four signals");
+  {
+    const p0 = await db();
+    await leads.upsertLeads([{ lead_id: "L261099FULL", store_domain: "full.myshopify.com", group: "test" }]);
+    await p0.query("update upsell_leads set status = 'upgraded', sent_at = now(), message_read = true, upgraded = true, upgraded_at = now() where lead_id = 'L261099FULL'");
+    await p0.query("insert into upsell_designs (id, lead_id) values ('DFULL001', 'L261099FULL')");
+    const before = await adminQueries.fullFunnelCount();
+    for (const type of ["view", "download"])
+      await p0.query("insert into upsell_events (lead_id, design_id, type, actor) values ('L261099FULL', 'DFULL001', $1, 'customer')", [type]);
+    check((await adminQueries.fullFunnelCount()) === before + 1, "viewed + read + downloaded + upgraded counts once all four are there");
+    const list = await adminQueries.listLeadTab("full", {});
+    check(list.rows.some((l) => l.lead_id === "L261099FULL"), "…and is listed");
+    await review.setSubmitState("L261099FULL", "submitted", "admin:t");
+    let l = await leads.getLead("L261099FULL");
+    check(l?.submit_state === "submitted" && l?.submit_by === "admin:t" && l?.submit_at !== null, "Đã submit is kept, with who and when", l?.submit_state);
+    await review.setSubmitState("L261099FULL", "none", "admin:t");
+    l = await leads.getLead("L261099FULL");
+    check(l?.submit_state === null && l?.submit_at === null, "pressing it again takes the mark back");
+    await review.setSubmitState("L261099FULL", "not_submitted", "admin:t");
+    check((await leads.getLead("L261099FULL"))?.submit_state === "not_submitted", "Chưa submit is kept");
+  }
+
   console.log("phone → WhatsApp");
   {
     const { whatsappUrl } = await import("../lib/upsell/format");

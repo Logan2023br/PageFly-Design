@@ -45,6 +45,9 @@ export const LEAD_ACTIVITY = {
   whatsapp_skipped: { label: "Không dùng WhatsApp", sql: "l.whatsapp_skipped_at is not null" },
 } as const;
 
+/** Viewed + read + downloaded + upgraded: the lead counted as "Upsell Submit". */
+export const FULL_FUNNEL = `${customerDid("view")} and ${customerDid("download")} and l.message_read is true and l.upgraded is true`;
+
 export type Paged<T> = { rows: T[]; total: number; page: number; pages: number };
 
 /** Lead tabs: which statuses (or a fixed condition), which date column,
@@ -58,11 +61,20 @@ export const LEAD_TABS: Record<string, { statuses: readonly string[] | null; whe
   /* Có phản hồi: the same leads as Theo dõi tất cả, narrowed — as on Store
      set upsell. Đã đọc lives on the Tin nhắn tab, under each message. */
   replied: { statuses: null, where: "l.replied is true", date: "last_reply_at", order: "l.last_reply_at desc nulls last" },
+  /* On the Tin nhắn tab: viewed the pages, read the message, downloaded and
+     upgraded — all four. */
+  full: { statuses: null, where: FULL_FUNNEL, date: "upgraded_at", order: "l.upgraded_at desc nulls last" },
   queue: { statuses: ["new", "building", "rebuild_requested"], date: "created_at", order: "(l.priority = 'high') desc, l.lead_score desc nulls last, l.created_at asc" },
   control: { statuses: ["control"], date: "created_at", order: "l.created_at desc" },
   closed: { statuses: ["rejected", "error", "skipped", "uninstalled"], date: "updated_at", order: "l.updated_at desc" },
 };
-export type LeadTab = "pages" | "tracking" | "upgraded" | "replied" | "queue" | "control" | "closed";
+export type LeadTab = "pages" | "tracking" | "upgraded" | "replied" | "full" | "queue" | "control" | "closed";
+
+/** How many leads did all four: viewed, read, downloaded, upgraded. */
+export async function fullFunnelCount(): Promise<number> {
+  const { rows } = await (await db()).query<{ n: number }>(`select count(*)::int as n from upsell_leads l where ${FULL_FUNNEL}`);
+  return rows[0]?.n ?? 0;
+}
 
 /* Dates are typed in Vietnam time (the team's) and compared as such. */
 const VN = "Asia/Ho_Chi_Minh";

@@ -15,6 +15,7 @@ import { StatsPanel } from "@/components/admin/upsell/StatsPanel";
 import {
   MESSAGE_GROUPS,
   filterOptions,
+  fullFunnelCount,
   groupOf,
   listMessagesOfKinds,
   pendingByGroup,
@@ -92,15 +93,31 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
       </div>
     );
     pager = <Pager tab={tab} f={f} {...r} />;
+  } else if (tab === "messages" && f.group === "full") {
+    /* Khách đã xem + đã đọc + đã tải + đã nâng cấp: leads, not messages. */
+    const [r, perGroup, sentCounts, full] = await Promise.all([listLeadTab("full", f), pendingByGroup(), sentByGroup(), fullFunnelCount()]);
+    body = (
+      <div className="grid gap-4">
+        <GroupNav
+          groups={(Object.keys(MESSAGE_GROUPS) as (keyof typeof MESSAGE_GROUPS)[]).map((id) => ({ id, label: MESSAGE_GROUPS[id].label, pending: perGroup[id], ...sentCounts[id] }))}
+          current="full"
+          full={full}
+        />
+        <p className="text-[12.5px] text-pf-muted">Khách đã mở link xem page, đã đọc tin nhắn, đã tải file .pagefly và đã nâng cấp plan — đủ cả 4. Mới nâng cấp xếp trước.</p>
+        <LeadTable rows={r.rows} variant="upgraded" />
+      </div>
+    );
+    pager = <Pager tab={tab} f={f} {...r} />;
   } else if (tab === "messages") {
     const group = groupOf(f.group);
     const def = MESSAGE_GROUPS[group];
     const read = f.read === "1" || f.read === "0" ? f.read : undefined;
-    const [pending, sent, perGroup, sentCounts] = await Promise.all([
+    const [pending, sent, perGroup, sentCounts, full] = await Promise.all([
       listMessages("pending_review", f, def.kinds),
       listMessagesOfKinds(def.kinds, ["sent"], 100, read === undefined ? null : read === "1"),
       pendingByGroup(),
       sentByGroup(),
+      fullFunnelCount(),
     ]);
     const sample =
       group === "build"
@@ -118,7 +135,7 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
     const mode = cfg[def.setting] === "auto" ? "auto" : "manual";
     body = (
       <div className="grid gap-4">
-        <GroupNav groups={(Object.keys(MESSAGE_GROUPS) as (keyof typeof MESSAGE_GROUPS)[]).map((id) => ({ id, label: MESSAGE_GROUPS[id].label, pending: perGroup[id], ...sentCounts[id] }))} current={group} />
+        <GroupNav groups={(Object.keys(MESSAGE_GROUPS) as (keyof typeof MESSAGE_GROUPS)[]).map((id) => ({ id, label: MESSAGE_GROUPS[id].label, pending: perGroup[id], ...sentCounts[id] }))} current={group} full={full} />
         <GroupHeader setting={def.setting} mode={mode} description={description} sample={sample} />
         <section className="grid gap-2">
           <h3 className="text-[13.5px] font-semibold text-pf-text">Chờ duyệt ({pending.total})</h3>

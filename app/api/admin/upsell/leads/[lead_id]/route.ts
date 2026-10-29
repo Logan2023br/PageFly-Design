@@ -1,6 +1,6 @@
 import { adminActor, fail, json, readJson, requireAdmin } from "@/lib/upsell/api";
 import { createCustomMessage } from "@/lib/upsell/messages";
-import { approveLead, rejectLead, requestRebuild, requeueLead, setLeadMeta, setWhatsappSent, setWhatsappState } from "@/lib/upsell/review";
+import { approveLead, rejectLead, requestRebuild, requeueLead, setLeadMeta, setSubmitState, setWhatsappSent, setWhatsappState } from "@/lib/upsell/review";
 import { UpsellError } from "@/lib/upsell/types";
 
 /* ==========================================================================
@@ -12,6 +12,8 @@ import { UpsellError } from "@/lib/upsell/types";
    requeue  {}
    meta     { pic?, priority?, note?, internal_notes? }
    message  { content }   — a custom message, drafted for approval
+   submit   { state: submitted|not_submitted|none } — "Đã submit" / "Chưa
+            submit" on an upgraded lead / back to undecided
    whatsapp { state: sent|skipped|none } — "Đã gửi WhatsApp" / "Không dùng
             WhatsApp" / back to undecided  (older { sent: bool } still read)
    ========================================================================== */
@@ -52,6 +54,10 @@ export async function POST(req: Request, ctx: RouteContext<"/api/admin/upsell/le
       case "whatsapp":
         if (b.state === "sent" || b.state === "skipped" || b.state === "none") await setWhatsappState(lead_id, b.state, actor);
         else await setWhatsappSent(lead_id, b.sent === true, actor);
+        return json({ ok: true });
+      case "submit":
+        if (b.state !== "submitted" && b.state !== "not_submitted" && b.state !== "none") throw new UpsellError("state must be submitted, not_submitted or none.", 422);
+        await setSubmitState(lead_id, b.state, actor);
         return json({ ok: true });
       case "message":
         return json({ ok: true, id: await createCustomMessage(lead_id, s("content") ?? "", actor) });

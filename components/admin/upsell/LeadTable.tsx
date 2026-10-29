@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { daysLeft, fmtVN, hoursSince, money } from "@/lib/upsell/format";
 import type { LeadListRow } from "@/lib/upsell/leads";
 import { Button } from "../../ui";
-import { CrispLink, ErrorLine, Pill, PhoneLine, StatusBadge, WhatsappMark, useAct } from "./bits";
+import { CrispLink, ErrorLine, Pill, PhoneLine, StatusBadge, SubmitMark, WhatsappMark, useAct } from "./bits";
 import { Empty } from "./PendingPages";
 
 /* ==========================================================================
@@ -93,6 +93,19 @@ export function LeadTable({ rows, variant }: { rows: LeadListRow[]; variant: Tab
   } else if (variant === "upgraded") {
     cols.push(
       { head: "Nhóm", cell: (l) => (l.group === "control" ? <Pill>Đối chứng</Pill> : <Pill tone="primary">Test</Pill>) },
+      {
+        head: "Loại Upsell",
+        cell: (l) => {
+          /* Submit: the customer did all four — viewed, read, downloaded, upgraded. */
+          const full = l.views > 0 && l.message_read === true && l.downloads > 0 && l.upgraded === true;
+          return (
+            <div className="grid min-w-[130px] justify-items-start gap-1.5">
+              <Pill tone={full ? "ok" : "muted"}>{full ? "Upsell Submit" : "Upsell Organic"}</Pill>
+              <SubmitMark leadId={l.lead_id} state={l.submit_state} at={l.submit_at} by={l.submit_by} />
+            </div>
+          );
+        },
+      },
       { head: "Plan", cell: (l) => `${l.plan_at_send ?? "Free"} → ${l.upgraded_to ?? l.current_plan ?? "?"}` },
       { head: "Ngày nâng cấp", cell: (l) => fmtVN(l.upgraded_at, true) },
       { head: "MRR tăng", cell: (l) => <span className="font-semibold text-pf-success">{money(l.mrr_added)}</span> },
