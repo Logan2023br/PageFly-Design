@@ -19,7 +19,7 @@ const BROKEN = new Set(["failed"]);
 
 export function TabNav({ tab, counts }: { tab: SsuTabId; counts: Record<string, number> }) {
   return (
-    <nav aria-label="Store set upsell" className="flex flex-wrap gap-1 rounded-xl border border-pf-border bg-pf-surface/60 p-1">
+    <nav aria-label="Upsell Collection Pages" className="flex flex-wrap gap-1 rounded-xl border border-pf-border bg-pf-surface/60 p-1">
       {SSU_TABS.map((t) => {
         const n = counts[t.id];
         const active = t.id === tab;

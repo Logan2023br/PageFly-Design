@@ -19,7 +19,6 @@ export function CollectionsTabs({
   ordersError,
   leads,
   referralsToCheck,
-  upsellToCheck,
   tab: initialTab,
 }: {
   sets: CollectionSetRecord[];
@@ -29,8 +28,6 @@ export function CollectionsTabs({
   leads: CollectionLeadRecord[];
   /** referrals waiting for the team — shown on the Referral button */
   referralsToCheck: number;
-  /** Store set upsell drafts to approve and replies to read — on the Upsell button */
-  upsellToCheck: number;
   tab: Tab;
 }) {
   const [tab, setTab] = useState(initialTab);
@@ -75,16 +72,6 @@ export function CollectionsTabs({
           {button("sets", "Sets")}
           {button("orders", "Orders", pending)}
           {button("leads", `Leads · ${leads.length}`)}
-          {/* Its own screen, like Referral and Analytics: who picked a Store
-              set template in PageFly, and the Crisp message to them. */}
-          <Link
-            href="/design/admin/collections/upsell"
-            className="flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-[13px] font-semibold text-pf-muted transition-colors hover:text-pf-text"
-          >
-            <Icon name="Megaphone" size={14} className="text-pf-primary-hi" />
-            Upsell
-            {upsellToCheck > 0 && <span className="rounded-pf-pill bg-pf-warn/20 px-1.5 text-[11px] text-pf-warn">{upsellToCheck}</span>}
-          </Link>
         </div>
         {/* A screen of its own rather than a third tab: it has its own window,
             its own day and its own refresh, none of which mean anything to a

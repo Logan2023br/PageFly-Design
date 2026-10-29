@@ -1,23 +1,32 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { AdminNotice } from "@/lib/adminNotifications";
 import { Icon } from "../ui";
 
 /* ==========================================================================
-   The sound notice: while an admin page is open, every 30 seconds it asks
-   what happened — a new upgrade or a customer's reply in Build 2 page or
-   Store set upsell, a Claude Build set finished or failed — and says it out loud in Vietnamese, with a
-   chime and a card in the corner.
+   The notices: while an admin page is open, every 30 seconds it asks what
+   happened — a new upgrade or a customer's reply in Build 2 page or Store set
+   upsell, a Claude Build set finished or failed. Each new one is
+   - said out loud in Vietnamese, with a chime, when the sound is on;
+   - shown as a card in the corner for a few seconds;
+   - kept in the bell's list (the last 48 hours), counted on the bell until
+     the list is opened.
 
    A browser plays sound only after a click on the page, so the sound is
    switched on by the button in the sidebar (and remembered). Everything that
-   was already there when the page opened is marked heard, not read out; the
-   ids heard are shared by every open admin tab, so one tab speaks, not three.
+   was already there when the page first opened on this browser is marked
+   heard and seen, not read out; the ids are shared by every open admin tab,
+   so one tab speaks, not three.
+
+   <AdminNotifier /> polls and holds the sound switch; <NotificationBell />
+   reads the same list. The shell mounts one of each.
    ========================================================================== */
 
 const SOUND_KEY = "pfd-sound";
 const HEARD_KEY = "pfd-notices-heard";
+const SEEN_KEY = "pfd-notices-seen";
 const POLL_MS = 30_000;
 
 const read = (k: string) => {
@@ -34,8 +43,8 @@ const write = (k: string, v: string) => {
     /* private window: the sound still works, it just forgets */
   }
 };
-const heardIds = (): Set<string> | null => {
-  const raw = read(HEARD_KEY);
+const idSet = (key: string): Set<string> | null => {
+  const raw = read(key);
   if (raw === null) return null;
   try {
     return new Set(JSON.parse(raw) as string[]);
@@ -43,7 +52,48 @@ const heardIds = (): Set<string> | null => {
     return new Set();
   }
 };
-const saveHeard = (s: Set<string>) => write(HEARD_KEY, JSON.stringify([...s].slice(-500)));
+const saveIds = (key: string, s: Set<string>) => write(key, JSON.stringify([...s].slice(-500)));
+
+/* ---- the shared list ------------------------------------------------------ */
+
+const CHANGE = "pfd-notices-change";
+let notices: AdminNotice[] = [];
+let unseen = 0;
+const EMPTY: AdminNotice[] = [];
+
+function recount() {
+  const seen = idSet(SEEN_KEY) ?? new Set<string>();
+  unseen = notices.filter((n) => !seen.has(n.id)).length;
+}
+function publish(next: AdminNotice[]) {
+  notices = next;
+  recount();
+  window.dispatchEvent(new Event(CHANGE));
+}
+const subscribe = (cb: () => void) => {
+  /* another tab opened the list: its "seen" lands here through storage */
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === SEEN_KEY) {
+      recount();
+      cb();
+    } else if (e.key === SOUND_KEY) cb();
+  };
+  window.addEventListener(CHANGE, cb);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(CHANGE, cb);
+    window.removeEventListener("storage", onStorage);
+  };
+};
+function markAllSeen() {
+  const seen = idSet(SEEN_KEY) ?? new Set<string>();
+  for (const n of notices) seen.add(n.id);
+  saveIds(SEEN_KEY, seen);
+  recount();
+  window.dispatchEvent(new Event(CHANGE));
+}
+
+/* ---- sound ---------------------------------------------------------------- */
 
 function chime(tone: AdminNotice["tone"]) {
   try {
@@ -78,19 +128,26 @@ function speak(text: string) {
   window.speechSynthesis.speak(u);
 }
 
-/* The on/off switch lives in localStorage, shared by every admin tab. */
-const SOUND_EVENT = "pfd-sound-change";
-const subscribeSound = (cb: () => void) => {
-  window.addEventListener("storage", cb);
-  window.addEventListener(SOUND_EVENT, cb);
-  return () => {
-    window.removeEventListener("storage", cb);
-    window.removeEventListener(SOUND_EVENT, cb);
-  };
+const ICON: Record<AdminNotice["tone"], string> = { celebrate: "🎉", done: "✅", reply: "💬", error: "⚠️" };
+const BORDER: Record<AdminNotice["tone"], string> = {
+  celebrate: "border-pf-warn/50",
+  done: "border-pf-success/50",
+  reply: "border-pf-primary/50",
+  error: "border-pf-danger/50",
 };
 
+const ago = (iso: string) => {
+  const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
+  if (m < 1) return "vừa xong";
+  if (m < 60) return `${m} phút trước`;
+  const h = Math.round(m / 60);
+  return h < 24 ? `${h} giờ trước` : `${Math.round(h / 24)} ngày trước`;
+};
+
+/* ---- the poller and the sound switch -------------------------------------- */
+
 export function AdminNotifier() {
-  const on = useSyncExternalStore(subscribeSound, () => read(SOUND_KEY) === "on", () => false);
+  const on = useSyncExternalStore(subscribe, () => read(SOUND_KEY) === "on", () => false);
   const [cards, setCards] = useState<AdminNotice[]>([]);
   const onRef = useRef(on);
 
@@ -109,17 +166,21 @@ export function AdminNotifier() {
       const r = await fetch("/api/admin/notifications").catch(() => null);
       if (!live || !r?.ok) return;
       const b = (await r.json().catch(() => null)) as { notices?: AdminNotice[] } | null;
-      const notices = b?.notices ?? [];
-      const heard = heardIds();
+      const list = b?.notices ?? [];
+      const heard = idSet(HEARD_KEY);
       if (heard === null) {
         /* first time on this browser: what is there is old news */
-        saveHeard(new Set(notices.map((n) => n.id)));
+        const ids = new Set(list.map((n) => n.id));
+        saveIds(HEARD_KEY, ids);
+        if (idSet(SEEN_KEY) === null) saveIds(SEEN_KEY, ids);
+        publish(list);
         return;
       }
-      const fresh = notices.filter((n) => !heard.has(n.id));
+      publish(list);
+      const fresh = list.filter((n) => !heard.has(n.id));
       if (!fresh.length) return;
       for (const n of fresh) heard.add(n.id);
-      saveHeard(heard);
+      saveIds(HEARD_KEY, heard);
       setCards((c) => [...c, ...fresh].slice(-5));
       for (const n of fresh) setTimeout(() => setCards((c) => c.filter((x) => x.id !== n.id)), 15_000);
       if (onRef.current) {
@@ -139,7 +200,7 @@ export function AdminNotifier() {
     const next = !on;
     onRef.current = next;
     write(SOUND_KEY, next ? "on" : "off");
-    window.dispatchEvent(new Event(SOUND_EVENT));
+    window.dispatchEvent(new Event(CHANGE));
     if (next) {
       chime("done");
       speak("Đã bật thông báo âm thanh.");
@@ -163,20 +224,9 @@ export function AdminNotifier() {
       {cards.length > 0 && (
         <div role="status" aria-live="polite" className="fixed bottom-4 right-4 z-50 grid w-[min(360px,calc(100vw-32px))] gap-2">
           {cards.map((n) => (
-            <div
-              key={n.id}
-              className={`flex items-start gap-2 rounded-pf-card border bg-pf-card p-3 text-[13px] text-pf-text shadow-lg ${
-                n.tone === "error"
-                  ? "border-pf-danger/50"
-                  : n.tone === "celebrate"
-                    ? "border-pf-warn/50"
-                    : n.tone === "reply"
-                      ? "border-pf-primary/50"
-                      : "border-pf-success/50"
-              }`}
-            >
+            <div key={n.id} className={`flex items-start gap-2 rounded-pf-card border bg-pf-card p-3 text-[13px] text-pf-text shadow-lg ${BORDER[n.tone]}`}>
               <span aria-hidden className="text-[16px]">
-                {n.tone === "celebrate" ? "🎉" : n.tone === "done" ? "✅" : n.tone === "reply" ? "💬" : "⚠️"}
+                {ICON[n.tone]}
               </span>
               <div className="flex-1">
                 <p>{n.text}</p>
@@ -190,5 +240,92 @@ export function AdminNotifier() {
         </div>
       )}
     </>
+  );
+}
+
+/* ---- the bell ------------------------------------------------------------- */
+
+export function NotificationBell() {
+  const list = useSyncExternalStore(subscribe, () => notices, () => EMPTY);
+  const count = useSyncExternalStore(subscribe, () => unseen, () => 0);
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+
+  /* Opening the list is reading it; what arrives while it is open is read too. */
+  useEffect(() => {
+    if (open && count > 0) markAllSeen();
+  }, [open, count]);
+
+  const newest = [...list].reverse();
+  return (
+    <div ref={box} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-label={count > 0 ? `Thông báo, ${count} mới` : "Thông báo"}
+        className="relative grid size-9 place-items-center rounded-pf-md border border-pf-border bg-pf-card/70 text-pf-text transition-colors hover:border-pf-primary-hi/50"
+      >
+        <Icon name="Bell" size={16} />
+        {count > 0 && (
+          <span className="absolute -right-2 -top-2 min-w-[20px] rounded-pf-pill bg-pf-danger px-1.5 text-center text-[11px] font-bold leading-[20px] text-white">
+            {count > 99 ? "99+" : count}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-11 z-50 grid max-h-[70vh] w-[min(380px,calc(100vw-32px))] grid-rows-[auto_1fr] overflow-hidden rounded-pf-card border border-pf-border bg-pf-card shadow-2xl lg:left-0 lg:right-auto">
+          <div className="flex items-center justify-between border-b border-pf-border px-4 py-2.5">
+            <span className="text-[13px] font-semibold text-pf-text">Thông báo</span>
+            <span className="text-[11.5px] text-pf-faint">48 giờ qua</span>
+          </div>
+          {newest.length === 0 ? (
+            <p className="px-4 py-6 text-center text-[12.5px] text-pf-faint">Chưa có thông báo nào.</p>
+          ) : (
+            <ul className="overflow-y-auto">
+              {newest.map((n) => {
+                const body = (
+                  <>
+                    <span aria-hidden className="text-[15px]">
+                      {ICON[n.tone]}
+                    </span>
+                    <span className="grid flex-1 gap-0.5">
+                      <span className="text-[12.5px] text-pf-text">{n.text}</span>
+                      {n.detail && <span className="line-clamp-2 text-[12px] italic text-pf-muted">“{n.detail}”</span>}
+                      <span className="text-[11px] text-pf-faint">{ago(n.at)}</span>
+                    </span>
+                  </>
+                );
+                const cls = "flex items-start gap-2.5 border-b border-pf-border/60 px-4 py-2.5 last:border-b-0";
+                return (
+                  <li key={n.id}>
+                    {n.href ? (
+                      <Link href={n.href} onClick={() => setOpen(false)} className={`${cls} hover:bg-pf-card-hi`}>
+                        {body}
+                      </Link>
+                    ) : (
+                      <div className={cls}>{body}</div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

@@ -12,7 +12,7 @@ import { getSettings } from "@/lib/upsell/settings";
 
 /* /design/admin/upsell/leads/:lead_id — one lead, everything about it. */
 
-export const metadata = { title: "Lead — Upsell Build Pages" };
+export const metadata = { title: "Lead — Upsell Build 2 pages" };
 export const dynamic = "force-dynamic";
 
 function Row({ k, children }: { k: string; children: React.ReactNode }) {

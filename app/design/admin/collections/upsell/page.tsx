@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { adminGate } from "@/components/admin/adminGate";
 import { FilterBar, Pager, SelectionFeed, TabNav } from "@/components/admin/collections/storeSetUpsell/Chrome";
@@ -31,7 +30,7 @@ import { SSU_HELP, SSU_NUMERIC, connectionStates, getSsuSettings } from "@/lib/s
 
 const SAMPLE_KINDS = ["thanks", "edit_reminder", "care_read", "care_upgraded", "review_ask"] as const;
 
-export const metadata = { title: "Store set upsell — PageFly Design Admin" };
+export const metadata = { title: "Upsell Collection Pages — PageFly Design Admin" };
 export const dynamic = "force-dynamic";
 
 export default async function StoreSetUpsellPage(props: PageProps<"/design/admin/collections/upsell">) {
@@ -57,23 +56,18 @@ export default async function StoreSetUpsellPage(props: PageProps<"/design/admin
 
   const shell = (children: React.ReactNode) => (
     <AdminShell
-      current="collections"
-      title="Store set upsell"
+      current="collections-upsell"
+      title="Upsell Collection Pages"
       subtitle="Ai đã bấm Select template của Store set trong PageFly — thông tin store, Crisp, tin cảm ơn + chỉnh sửa miễn phí từ Logan, và kết quả"
     >
-      <div className="grid gap-4">
-        <Link href="/design/admin/collections" className="w-fit text-[12.5px] text-pf-muted hover:text-pf-text">
-          ← Collection pages
-        </Link>
-        {children}
-      </div>
+      <div className="grid gap-4">{children}</div>
     </AdminShell>
   );
 
   if (!hasStoreSetDatabase()) {
     return shell(
       <p className="rounded-pf-card border border-pf-warn/30 bg-pf-warn/10 p-4 text-[13px] text-pf-warn">
-        Store set upsell cần Postgres (DATABASE_URL), như Upsell Build Pages.
+        Upsell Collection Pages cần Postgres (DATABASE_URL), như Upsell Build 2 pages.
       </p>,
     );
   }

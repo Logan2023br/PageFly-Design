@@ -8,7 +8,7 @@ import type { AdminSection } from "@/lib/adminSections";
 import type { IconName } from "@/lib/icons";
 import { Icon } from "../ui";
 import { useAdminAccess } from "./AdminAccess";
-import { AdminNotifier } from "./AdminNotifier";
+import { AdminNotifier, NotificationBell } from "./AdminNotifier";
 
 /* ==========================================================================
    Admin chrome: left sidebar, content on the right.
@@ -19,7 +19,13 @@ import { AdminNotifier } from "./AdminNotifier";
 
 export type { AdminSection };
 
-const NAV: { id: AdminSection; label: string; href: string; icon: IconName }[] = [
+/* A sidebar item: `id` is what a page names as `current`; `section` is the
+   permission that shows it (the item's own id when not given). Upsell
+   Collection Pages is its own item but part of the "collections" permission:
+   its screens and API sit under Collection pages'. */
+export type AdminNavId = AdminSection | "collections-upsell";
+
+const NAV: { id: AdminNavId; section?: AdminSection; label: string; href: string; icon: IconName }[] = [
   { id: "stats", label: "Thống kê", href: "/design/admin", icon: "ChartColumn" },
   { id: "users", label: "Users", href: "/design/admin/users", icon: "Users" },
   /* Under Users, as asked. "Thống kê" above it counts what the product has
@@ -44,8 +50,15 @@ const NAV: { id: AdminSection; label: string; href: string; icon: IconName }[] =
     icon: "LayoutGrid",
   },
   {
+    id: "collections-upsell",
+    section: "collections",
+    label: "Upsell Collection Pages",
+    href: "/design/admin/collections/upsell",
+    icon: "Megaphone",
+  },
+  {
     id: "upsell",
-    label: "Upsell Build Pages",
+    label: "Upsell Build 2 pages",
     href: "/design/admin/upsell",
     icon: "Rocket",
   },
@@ -57,7 +70,7 @@ const NAV: { id: AdminSection; label: string; href: string; icon: IconName }[] =
   },
 ];
 
-/* What is waiting for review in Upsell Build Pages, on the menu item itself.
+/* What is waiting for review in Upsell Build 2 pages, on the menu item itself.
    Read in the browser rather than by every admin page's server component, so
    adding the badge did not add a query to five screens that have nothing to
    do with it. A failure just shows no badge. */
@@ -85,6 +98,29 @@ function useUpsellPending(allowed: boolean): { n: number; failed: number } {
   return n;
 }
 
+/* The same for Upsell Collection Pages: drafts to approve, replies to read. */
+function useSsuPending(allowed: boolean): number {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (!allowed) return;
+    let live = true;
+    const load = () =>
+      fetch("/api/admin/collection-pages/store-set-upsell/counts")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((b: { n?: number } | null) => {
+          if (live && b) setN(b.n ?? 0);
+        })
+        .catch(() => undefined);
+    void load();
+    const t = setInterval(load, 60_000);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, [allowed]);
+  return n;
+}
+
 export function AdminShell({
   current,
   title,
@@ -92,7 +128,7 @@ export function AdminShell({
   actions,
   children,
 }: {
-  current: AdminSection;
+  current: AdminNavId;
   title: string;
   subtitle?: string;
   actions?: ReactNode;
@@ -100,8 +136,9 @@ export function AdminShell({
 }) {
   /* Only the sections this sign-in has; the server refuses the rest anyway. */
   const access = useAdminAccess();
-  const nav = NAV.filter((item) => access.sections.includes(item.id));
+  const nav = NAV.filter((item) => access.sections.includes(item.section ?? (item.id as AdminSection)));
   const upsellPending = useUpsellPending(access.sections.includes("upsell"));
+  const ssuPending = useSsuPending(access.sections.includes("collections"));
   return (
     <MotionConfig reducedMotion="user">
       <div
@@ -130,6 +167,9 @@ export function AdminShell({
               <span className="font-display text-[15px] font-semibold tracking-[-0.02em] text-pf-text">
                 PageFly <span className="text-pf-muted">Admin</span>
               </span>
+              <div className="ml-auto">
+                <NotificationBell />
+              </div>
             </div>
 
             {/* Horizontal on small screens: a fixed left rail costs a third of a
@@ -168,6 +208,9 @@ export function AdminShell({
                         >
                           {upsellPending.n}
                         </span>
+                      )}
+                      {item.id === "collections-upsell" && ssuPending > 0 && (
+                        <span className="rounded-pf-pill bg-pf-warn/25 px-1.5 text-[11px] text-pf-warn">{ssuPending}</span>
                       )}
                     </span>
                   </Link>
