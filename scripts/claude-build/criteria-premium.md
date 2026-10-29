@@ -40,6 +40,7 @@ A set is checked in 4 tiers. Tier 1 is pass/fail, tier 2 is scored per page, tie
 # Tier 1 — technical floor (every page, pass/fail)
 
 Required — a page that fails one of these is not done:
+- **Content only — no header and no footer.** The page sits inside the merchant's own theme, which already has its header, menu and footer. So no site header or navigation bar, no logo bar, no announcement bar, no mobile menu, and no footer (no footer links, no newsletter-in-footer, no copyright line). The page starts with its first content section (the hero) and ends with its last content section. A newsletter or contact section is fine as a content section, not as a footer.
 - Exactly **one H1**, in the first section. Headings never skip a level (no H2 → H4).
 - **Every image has an alt** that describes what is actually in it.
 - **No placeholder text** ("lorem ipsum", "this is your heading text", "button text") and **no placeholder images**.
@@ -105,7 +106,6 @@ Required on every set:
 - **Home:** at least one moving strip — a `marquee` of press logos, USPs or the brand line — and `count-up` on any stats row (customers, years, reviews).
 - **Product:** gallery thumbnails with a clear active/hover state; add-to-cart button with a hover state that stands out; reviews and FAQ open and close smoothly.
 - **Sale:** a live `countdown` next to its CTA (tier 4); a discount code with `copy-code` if there is one.
-- **Header:** `sticky` that shrinks or gains a background on scroll, and a mobile `drawer` menu.
 
 Then give the set **one signature motion** of its own, matching its art direction, and say it in the `blurb` — e.g. a slow Ken Burns on the hero image (quiet luxury), split-text heading reveal (editorial), a tilt-on-hover product card (techno), a hand-drawn underline on links (artisanal), a horizontal scroll lookbook strip (fashion). Not the same signature as an existing set.
 
