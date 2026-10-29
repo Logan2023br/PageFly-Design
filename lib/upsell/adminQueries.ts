@@ -45,18 +45,23 @@ export const LEAD_ACTIVITY = {
 
 export type Paged<T> = { rows: T[]; total: number; page: number; pages: number };
 
-/** Lead tabs: which statuses, which date column, which order. */
-export const LEAD_TABS = {
+/** Lead tabs: which statuses (or a fixed condition), which date column,
+    which order. */
+export const LEAD_TABS: Record<string, { statuses: readonly string[] | null; where?: string; date: string; order: string }> = {
   pages: { statuses: ["pending_review"], date: "built_at", order: "l.built_at asc nulls last" },
   /* Theo dõi tất cả: every lead whose pages went out, upgraded ones included —
      Đã nâng cấp is the same leads narrowed, not a place they move to. */
   tracking: { statuses: ["sent", "viewed", "downloaded", "used", "upgraded"], date: "sent_at", order: "l.sent_at desc nulls last" },
-  upgraded: { statuses: null, date: "upgraded_at", order: "l.upgraded_at desc nulls last" },
+  upgraded: { statuses: null, where: "l.upgraded is true", date: "upgraded_at", order: "l.upgraded_at desc nulls last" },
+  /* Đã đọc / Có phản hồi: the same leads as Theo dõi tất cả, narrowed — as
+     on Store set upsell. */
+  read: { statuses: null, where: "l.message_read is true", date: "sent_at", order: "l.sent_at desc nulls last" },
+  replied: { statuses: null, where: "l.replied is true", date: "last_reply_at", order: "l.last_reply_at desc nulls last" },
   queue: { statuses: ["new", "building", "rebuild_requested"], date: "created_at", order: "(l.priority = 'high') desc, l.lead_score desc nulls last, l.created_at asc" },
   control: { statuses: ["control"], date: "created_at", order: "l.created_at desc" },
   closed: { statuses: ["rejected", "error", "skipped", "uninstalled"], date: "updated_at", order: "l.updated_at desc" },
-} as const;
-export type LeadTab = keyof typeof LEAD_TABS;
+};
+export type LeadTab = "pages" | "tracking" | "upgraded" | "read" | "replied" | "queue" | "control" | "closed";
 
 /* Dates are typed in Vietnam time (the team's) and compared as such. */
 const VN = "Asia/Ho_Chi_Minh";
@@ -92,9 +97,8 @@ export async function listLeadTab(tab: LeadTab, f: Filters): Promise<Paged<LeadL
   if (def.statuses) {
     w.params.push(def.statuses);
     w.sql.push(`l.status = any($${w.params.length}::text[])`);
-  } else {
-    w.sql.push("l.upgraded is true");
   }
+  if (def.where) w.sql.push(def.where);
   const where = w.sql.length ? `where ${w.sql.join(" and ")}` : "";
   const p = await db();
   const count = await p.query<{ n: number }>(`select count(*) as n from upsell_leads l ${where}`, w.params);
@@ -265,6 +269,8 @@ export async function tabCounts(): Promise<Record<string, number>> {
        (select count(*) from upsell_messages where status = 'failed') as failed,
        (select count(*) from upsell_leads where status in ('sent','viewed','downloaded','used','upgraded')) as tracking,
        (select count(*) from upsell_leads where upgraded is true) as upgraded,
+       (select count(*) from upsell_leads where message_read is true) as read,
+       (select count(*) from upsell_leads where replied is true) as replied,
        (select count(*) from upsell_leads where status in ('new','building','rebuild_requested')) as queue,
        (select count(*) from upsell_leads where status = 'control') as control,
        (select count(*) from upsell_leads where status in ('rejected','error','skipped','uninstalled')) as closed,

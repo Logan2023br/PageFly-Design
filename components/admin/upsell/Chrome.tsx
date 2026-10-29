@@ -19,6 +19,8 @@ export const TABS = [
   { id: "failed", label: "Lỗi gửi" },
   { id: "tracking", label: "Theo dõi tất cả" },
   { id: "upgraded", label: "Đã nâng cấp" },
+  { id: "read", label: "Đã đọc" },
+  { id: "replied", label: "Có phản hồi" },
   { id: "queue", label: "Hàng đợi build" },
   { id: "control", label: "Đối chứng" },
   { id: "closed", label: "Từ chối / Lỗi / Bỏ qua" },
@@ -72,7 +74,7 @@ export function TabNav({ tab, counts }: { tab: TabId; counts: Record<string, num
 }
 
 /** Tabs whose leads have been sent pages, so "đã tải / đã xem" means something. */
-const ACTIVITY_TABS = new Set<string>(["tracking", "upgraded", "closed", "stats"]);
+const ACTIVITY_TABS = new Set<string>(["tracking", "upgraded", "read", "replied", "closed", "stats"]);
 
 export function FilterBar({ tab, f, pics, categories }: { tab: TabId; f: Filters; pics: string[]; categories: string[] }) {
   return (
