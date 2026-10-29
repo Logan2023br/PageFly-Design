@@ -45,16 +45,18 @@ export function GroupNav({ groups, current }: { groups: GroupNavItem[]; current:
   );
 }
 
-export function GroupHeader({
+/** One manual/auto switch over a setting, saved as it is pressed. Used by
+    each Tin nhắn group and by Chờ duyệt page. */
+export function ModeSwitch({
   setting,
   mode,
-  description,
-  sample,
+  labels,
+  hint,
 }: {
   setting: string;
   mode: "manual" | "auto";
-  description: string;
-  sample: string;
+  labels: { manual: string; auto: string };
+  hint: { manual: string; auto: string };
 }) {
   const router = useRouter();
   const [, start] = useTransition();
@@ -69,37 +71,52 @@ export function GroupHeader({
     start(() => router.refresh());
   };
   return (
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="flex gap-1 rounded-xl border border-pf-border bg-pf-surface/60 p-1">
+        {(["manual", "auto"] as const).map((id) => (
+          <button
+            key={id}
+            type="button"
+            disabled={saving}
+            aria-pressed={mode === id}
+            onClick={() => void setMode(id)}
+            className={`rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-colors disabled:opacity-60 ${
+              mode === id ? (id === "auto" ? "bg-pf-success text-white" : "bg-pf-primary text-white") : "text-pf-muted hover:text-pf-text"
+            }`}
+          >
+            {labels[id]}
+          </button>
+        ))}
+      </div>
+      <span className="text-[12px] text-pf-faint">{hint[mode]}</span>
+      <ErrorLine error={error} />
+    </div>
+  );
+}
+
+export function GroupHeader({
+  setting,
+  mode,
+  description,
+  sample,
+}: {
+  setting: string;
+  mode: "manual" | "auto";
+  description: string;
+  sample: string;
+}) {
+  return (
     <section className="grid gap-3 rounded-pf-card border border-pf-border bg-pf-card p-4">
       <p className="text-[12.5px] text-pf-muted">{description}</p>
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-1 rounded-xl border border-pf-border bg-pf-surface/60 p-1">
-          {(
-            [
-              ["manual", "Đợi duyệt"],
-              ["auto", "Tự động gửi"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              disabled={saving}
-              aria-pressed={mode === id}
-              onClick={() => void setMode(id)}
-              className={`rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-colors disabled:opacity-60 ${
-                mode === id ? (id === "auto" ? "bg-pf-success text-white" : "bg-pf-primary text-white") : "text-pf-muted hover:text-pf-text"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <span className="text-[12px] text-pf-faint">
-          {mode === "auto"
-            ? "Tin tạo ra được duyệt luôn, BPU Ops gửi ở lần chạy sau trong giờ của khách."
-            : "Tin tạo ra nằm ở danh sách Chờ duyệt bên dưới — bấm Duyệt thì mới gửi."}
-        </span>
-        <ErrorLine error={error} />
-      </div>
+      <ModeSwitch
+        setting={setting}
+        mode={mode}
+        labels={{ manual: "Đợi duyệt", auto: "Tự động gửi" }}
+        hint={{
+          auto: "Tin tạo ra được duyệt luôn, BPU Ops gửi ở lần chạy sau trong giờ của khách.",
+          manual: "Tin tạo ra nằm ở danh sách Chờ duyệt bên dưới — bấm Duyệt thì mới gửi.",
+        }}
+      />
       <details className="rounded-pf-md border border-pf-border bg-pf-bg-deep">
         <summary className="cursor-pointer px-3 py-2 text-[12.5px] font-semibold text-pf-body">Xem mẫu tin (Crisp và WhatsApp)</summary>
         <div className="grid gap-3 p-3 pt-0 lg:grid-cols-2">

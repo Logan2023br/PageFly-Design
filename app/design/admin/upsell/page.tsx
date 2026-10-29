@@ -2,7 +2,7 @@ import { AdminShell } from "@/components/admin/AdminShell";
 import { adminGate } from "@/components/admin/adminGate";
 import { FilterBar, Pager, TABS, TabNav, type TabId } from "@/components/admin/upsell/Chrome";
 import { InstallsTable } from "@/components/admin/upsell/InstallsTable";
-import { GroupHeader, GroupNav, SentList } from "@/components/admin/upsell/MessageGroups";
+import { GroupHeader, GroupNav, ModeSwitch, SentList } from "@/components/admin/upsell/MessageGroups";
 import { autoMessageSample } from "@/lib/upsell/autoMessages";
 import { initialDraft } from "@/lib/upsell/review";
 import type { LeadRow } from "@/lib/upsell/types";
@@ -73,7 +73,22 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
   let pager: React.ReactNode = null;
   if (tab === "pages") {
     const r = await listLeadTab("pages", f);
-    body = <PendingPages leads={r.rows} />;
+    body = (
+      <div className="grid gap-4">
+        <section className="rounded-pf-card border border-pf-border bg-pf-card p-4">
+          <ModeSwitch
+            setting="page_review_mode"
+            mode={cfg.page_review_mode === "auto" ? "auto" : "manual"}
+            labels={{ manual: "Duyệt thủ công", auto: "Tự duyệt" }}
+            hint={{
+              manual: "Build xong, page nằm ở đây chờ bạn duyệt rồi mới gửi khách.",
+              auto: "Build xong là tự duyệt và tự gửi tin đầu tiên trong giờ của khách — không chờ bạn. Page đang chờ bên dưới vẫn cần duyệt tay.",
+            }}
+          />
+        </section>
+        <PendingPages leads={r.rows} />
+      </div>
+    );
     pager = <Pager tab={tab} f={f} {...r} />;
   } else if (tab === "messages") {
     const group = groupOf(f.group);

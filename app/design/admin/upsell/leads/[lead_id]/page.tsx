@@ -110,7 +110,13 @@ export default async function LeadPage(props: PageProps<"/design/admin/upsell/le
                 {l.replied ? (
                   <>
                     <Pill tone={l.sentiment === "Positive" ? "ok" : l.sentiment === "Negative" ? "bad" : "muted"}>{l.sentiment ?? "?"}</Pill>{" "}
-                    {l.feedback_summary || l.last_reply_text}
+                    <span className="text-pf-faint">{fmtVN(l.last_reply_at, true)}</span>
+                    {l.feedback_summary && <span className="mt-1 block text-pf-muted">{l.feedback_summary}</span>}
+                    {l.last_reply_text && (
+                      <blockquote className="mt-1.5 whitespace-pre-wrap rounded-pf-md border-l-2 border-pf-primary-hi bg-pf-bg-deep px-3 py-2 text-[12.5px] text-pf-body">
+                        {l.last_reply_text}
+                      </blockquote>
+                    )}
                   </>
                 ) : (
                   "—"

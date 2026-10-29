@@ -37,6 +37,12 @@ export function LeadTable({ rows, variant }: { rows: LeadListRow[]; variant: Tab
             {l.store_domain} · {l.lead_id}
           </div>
           <PhoneLine phone={l.phone} />
+          {l.replied && l.last_reply_text && (
+            <blockquote className="mt-1.5 max-w-[320px] whitespace-pre-wrap rounded-pf-md border-l-2 border-pf-primary-hi bg-pf-bg-deep px-2.5 py-1.5 text-[12px] text-pf-body">
+              <span className="line-clamp-4">{l.last_reply_text}</span>
+              <span className="mt-0.5 block text-[11px] text-pf-faint">Khách phản hồi {fmtVN(l.last_reply_at)}</span>
+            </blockquote>
+          )}
         </div>
       ),
     },
@@ -58,7 +64,8 @@ export function LeadTable({ rows, variant }: { rows: LeadListRow[]; variant: Tab
         l.replied ? (
           <div className="max-w-[260px]">
             <Pill tone={l.sentiment === "Positive" ? "ok" : l.sentiment === "Negative" ? "bad" : "muted"}>{l.sentiment ?? "Chưa phân loại"}</Pill>
-            <p className="mt-1 line-clamp-2 text-[11.5px] text-pf-muted">{l.feedback_summary || l.last_reply_text}</p>
+            <p className="mt-1 text-[11.5px] text-pf-faint">{fmtVN(l.last_reply_at)}</p>
+            {l.feedback_summary && <p className="mt-1 line-clamp-2 text-[11.5px] text-pf-muted">{l.feedback_summary}</p>}
           </div>
         ) : (
           "—"

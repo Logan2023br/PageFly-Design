@@ -720,6 +720,25 @@ async function main() {
     check(sentList.every((m) => m.status === "sent") && sentList.length > 0, "the sent list holds sent messages only", sentList.length);
   }
 
+  console.log("Chờ duyệt page: Tự duyệt");
+  {
+    await rejects(settings.saveSettings({ page_review_mode: "off" }), 422, "page review has no off");
+    await settings.saveSettings({ page_review_mode: "auto", build_message_mode: "manual" });
+    await leads.upsertLeads([{ lead_id: "L261099AUTO", store_domain: "auto.myshopify.com", store_name: "Auto Co", group: "test" }]);
+    await (await db()).query("update upsell_leads set status = 'building' where lead_id = 'L261099AUTO'");
+    const r = await designs.uploadDesign({ lead_id: "L261099AUTO", page1_type: "home", page2_type: "product" }, files("auto"));
+    check(r.auto_approved, "the upload answers that it approved itself", r);
+    const l = await leads.getLead("L261099AUTO");
+    check(l?.status === "approved" && l?.reviewed_by === "auto", "Tự duyệt: built pages are approved at once, by auto", l?.status);
+    const m = (await messages.messagesForLead("L261099AUTO")).find((x) => x.kind === "initial");
+    check(m?.status === "approved" && m?.approved_by === "auto" && m?.send_mode === "window", "…and the first message goes out in the customer's hours, even with Tin nhắn on Đợi duyệt", m);
+    await settings.saveSettings({ page_review_mode: "manual" });
+    await leads.upsertLeads([{ lead_id: "L261099MANU", store_domain: "manu.myshopify.com", store_name: "Manu Co", group: "test" }]);
+    await (await db()).query("update upsell_leads set status = 'building' where lead_id = 'L261099MANU'");
+    const r2 = await designs.uploadDesign({ lead_id: "L261099MANU", page1_type: "home", page2_type: "product" }, files("manu"));
+    check(!r2.auto_approved && (await leads.getLead("L261099MANU"))?.status === "pending_review", "Duyệt thủ công: the pages wait in Chờ duyệt page");
+  }
+
   console.log("phone → WhatsApp");
   {
     const { whatsappUrl } = await import("../lib/upsell/format");
@@ -755,6 +774,7 @@ async function main() {
       review_url: "https://apps.shopify.com/pagefly#reviews",
       initial_message_template: "Hi **{store_name}**, 👉 [See your 2 pages]({link})",
       slack_webhook_url: "https://hooks.slack.com/services/T000/B000/xyz",
+      page_review_mode: "manual",
       build_message_mode: "auto",
       view_reminder_mode: "auto",
       view_reminder_hours: "12",

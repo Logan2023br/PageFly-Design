@@ -29,7 +29,7 @@ export function initialDraft(lead: LeadRow, designId: string | null, cfg: Settin
 
 export async function approveLead(
   leadId: string,
-  opts: { content?: string | null; send_mode?: SendMode; note?: string | null },
+  opts: { content?: string | null; send_mode?: SendMode; note?: string | null; autoSend?: boolean },
   actor: Actor,
 ): Promise<{ message_id: string }> {
   const cfg = await getSettings();
@@ -44,8 +44,9 @@ export async function approveLead(
     const mode: SendMode = opts.send_mode === "now" ? "now" : "window";
     /* "Tin nhắn build page" on the Tin nhắn tab: Tự động gửi — approving the
        pages approves their message too; Đợi duyệt — the message waits there
-       for its own press. */
-    const autoSend = cfg.build_message_mode === "auto";
+       for its own press. A page approved by "Tự duyệt" sends its message
+       too: nobody is there to press anything. */
+    const autoSend = opts.autoSend ?? cfg.build_message_mode === "auto";
     const status = autoSend ? "approved" : "pending_review";
 
     /* An initial message may exist already, from an approval that was taken

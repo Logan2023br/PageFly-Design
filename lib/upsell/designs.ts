@@ -4,6 +4,8 @@ import { rejectFile } from "@/lib/collectionPagesServer";
 import { db, tx } from "./db";
 import { adminLeadUrl, designUrl, newDesignId, recordEvent } from "./common";
 import { lockLead, updateLead } from "./leads";
+import { approveLead } from "./review";
+import { getSettings } from "./settings";
 import { MAX_UPSELL_FILE_BYTES, getFile, putFile, relPath } from "./storage";
 import { PAGE_TYPES, UpsellError, type DesignRow, type LeadRow, type PageRow } from "./types";
 
@@ -41,7 +43,7 @@ export type UploadFiles = {
   page2_thumb?: Uint8Array | null;
 };
 
-export type UploadResult = { id: string; url: string; version: number; admin_url: string; thumbs_missing: number[] };
+export type UploadResult = { id: string; url: string; version: number; admin_url: string; thumbs_missing: number[]; auto_approved: boolean };
 
 /** The lead may receive pages from these statuses — a build was asked for. */
 const UPLOAD_FROM = new Set(["new", "building", "rebuild_requested"]);
@@ -143,7 +145,21 @@ export async function uploadDesign(f: UploadFields, files: UploadFiles, actor = 
     return { id: design.id, version: design.version, thumbsMissing };
   });
 
+  /* "Tự duyệt" on Chờ duyệt page: the pages are approved as they arrive and
+     the first message goes out in the customer's hours, as "auto". If that
+     fails the lead simply stays in Chờ duyệt page, as in manual mode. */
+  let autoApproved = false;
+  if ((await getSettings()).page_review_mode === "auto") {
+    try {
+      await approveLead(f.lead_id, { send_mode: "window", autoSend: true }, "auto");
+      autoApproved = true;
+    } catch (err) {
+      console.error(`[upsell] auto-approve ${f.lead_id} failed:`, err);
+    }
+  }
+
   return {
+    auto_approved: autoApproved,
     id: result.id,
     url: designUrl(result.id),
     version: result.version,
