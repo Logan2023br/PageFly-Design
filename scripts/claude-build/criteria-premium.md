@@ -1,4 +1,4 @@
-# Tiêu chí tổng — bộ premium, không giới hạn
+# Tiêu chí tổng — bộ premium, không giới hạn ngân sách
 
 > Routine đọc file này từ repo (nhánh main) mỗi lần nhận một bộ — sửa ở đây rồi push là routine dùng bản mới, không cần dán lại đâu cả.
 > Ô "Tiêu chí build" trên giao diện là ý tưởng thêm của admin, áp lên trên file này; để trống thì chỉ dùng file này. Ghi chú của từng lượt (ngành, dịp lễ…) áp thêm lên trên cùng.
@@ -8,7 +8,7 @@
 
 # What we sell
 
-Each set is a **premium, no-limits set** — the best work we can make, with no cap on effort, rounds or polish. It is a Builder-plan set, so it must pass the **Builder threshold** below, not just the free one. It should make a merchant's store look like a top-tier brand, the kind of site a leading design agency would be proud to ship. If a set would not make a merchant say "this looks expensive" in the first three seconds, it is not finished. When in doubt, cut, refine and polish instead of adding.
+Each set is a **premium set with an unlimited budget** — the best work we can make, as if money were no object: no cap on effort, rounds, tokens or polish. It is a Builder-plan set, so it must pass the **Builder threshold** below, not just the free one. It should make a merchant's store look like a top-tier brand, the kind of site a leading design agency would be proud to ship. If a set would not make a merchant say "this looks expensive" in the first three seconds, it is not finished. When in doubt, cut, refine and polish instead of adding.
 
 # Learn from the best in the market
 
