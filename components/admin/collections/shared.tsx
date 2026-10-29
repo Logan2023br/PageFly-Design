@@ -1,6 +1,8 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import type { CollectionVisibility } from "@/lib/db/types";
+import type { IconName } from "@/lib/icons";
 import { Icon } from "../../ui";
 
 /** One admin call, always answering `{ ok }` — a network failure included. */
@@ -101,3 +103,59 @@ export const FIELD =
 
 export const FIELD_LABEL =
   "text-[11.5px] font-semibold uppercase tracking-[0.08em] text-pf-faint";
+
+/* ---- a panel folded to its title ------------------------------------------ */
+
+const FOLD_EVENT = "pfd-fold-change";
+const subscribeFold = (cb: () => void) => {
+  window.addEventListener(FOLD_EVENT, cb);
+  window.addEventListener("storage", cb);
+  return () => {
+    window.removeEventListener(FOLD_EVENT, cb);
+    window.removeEventListener("storage", cb);
+  };
+};
+
+/** Whether a panel is folded, remembered per browser; the second value flips it. */
+export function useFolded(key: string): [boolean, () => void] {
+  const k = `pfd-folded:${key}`;
+  const folded = useSyncExternalStore(
+    subscribeFold,
+    () => {
+      try {
+        return localStorage.getItem(k) === "1";
+      } catch {
+        return false;
+      }
+    },
+    () => false,
+  );
+  const flip = () => {
+    try {
+      localStorage.setItem(k, folded ? "0" : "1");
+    } catch {
+      /* private window: it folds for this visit only — not at all, in fact */
+    }
+    window.dispatchEvent(new Event(FOLD_EVENT));
+  };
+  return [folded, flip];
+}
+
+/** A panel's title, with the arrow that folds the panel to this one row. */
+export function FoldTitle({ icon, title, folded, onFlip }: { icon: IconName; title: string; folded: boolean; onFlip: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onFlip}
+      aria-expanded={!folded}
+      title={folded ? "Mở rộng" : "Thu gọn"}
+      className="flex w-fit items-center gap-2 text-[14px] font-semibold text-pf-text"
+    >
+      <Icon name={icon} size={16} />
+      {title}
+      <span className={`grid size-6 place-items-center rounded-pf-sm border border-pf-border text-pf-muted transition-transform hover:text-pf-text ${folded ? "-rotate-90" : ""}`}>
+        <Icon name="ChevronDown" size={14} />
+      </span>
+    </button>
+  );
+}

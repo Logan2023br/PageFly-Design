@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BUILD_STEPS, type BuildJob, type BuildJobStatus, type BuildTrigger } from "@/lib/claudeBuildShared";
 import { Button, Icon, Panel } from "../../ui";
-import { FIELD, api } from "./shared";
+import { FIELD, FoldTitle, api, useFolded } from "./shared";
 
 /* ==========================================================================
    Claude Build — collection sets built by a Claude routine, on demand.
@@ -48,6 +48,7 @@ const when = (iso: string | null) =>
 
 export function ClaudeBuild() {
   const [data, setData] = useState<Data | null>(null);
+  const [folded, flip] = useFolded("claude-build");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(0);
@@ -100,7 +101,7 @@ export function ClaudeBuild() {
     return (
       <Panel className="grid gap-1 p-4 text-[12.5px] text-pf-muted">
         <p className="flex items-center gap-2 text-[14px] font-semibold text-pf-text">
-          <Icon name="Rocket" size={16} /> Claude Build
+          <Icon name="Rocket" size={16} /> Claude Build Premium
         </p>
         {error ?? "Đang tải…"}
       </Panel>
@@ -111,15 +112,23 @@ export function ClaudeBuild() {
   const rows = data.jobs.filter((j) => TABS.find((t) => t.id === tab)!.statuses.includes(j.status));
   const builtPages = data.jobs.filter((j) => j.status === "done").reduce((n, j) => n + j.pages, 0);
 
+  if (folded)
+    return (
+      <Panel className="flex flex-wrap items-center gap-x-3 gap-y-1 border-pf-primary-hi/30 px-4 py-3">
+        <FoldTitle icon="Rocket" title="Claude Build Premium" folded onFlip={flip} />
+        <span className="text-[12.5px] text-pf-muted">
+          Đang build {counts.running} · Chờ build {counts.queued} · Đã build {counts.done}
+          {counts.closed ? ` · Lỗi / huỷ ${counts.closed}` : ""}
+        </span>
+      </Panel>
+    );
+
   return (
     <Panel className="grid gap-4 border-pf-primary-hi/30 p-4">
       {/* header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="grid gap-0.5">
-          <p className="flex items-center gap-2 text-[14px] font-semibold text-pf-text">
-            <Icon name="Rocket" size={16} />
-            Claude Build
-          </p>
+          <FoldTitle icon="Rocket" title="Claude Build Premium" folded={false} onFlip={flip} />
           <p className="text-[12.5px] text-pf-muted">Claude routine dựng bộ collection page theo tiêu chí, rồi tự đưa .html và .pagefly vào đây.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

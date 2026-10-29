@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { ClaudeReviewState } from "@/lib/claudeReview";
 import { Button, Icon, Panel } from "../../ui";
-import { api } from "./shared";
+import { FoldTitle, api, useFolded } from "./shared";
 
 /* ==========================================================================
    Claude Review — the button that asks for an automated review run, and the
@@ -43,6 +43,7 @@ const RESULT: Record<string, { label: string; cls: string }> = {
 
 export function ClaudeReview() {
   const [state, setState] = useState<ClaudeReviewState | null>(null);
+  const [folded, flip] = useFolded("claude-review");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
@@ -116,14 +117,22 @@ export function ClaudeReview() {
               ? "Stopped"
               : "Not running";
 
+  if (folded)
+    return (
+      <Panel className="flex flex-wrap items-center gap-x-3 gap-y-1 border-pf-primary-hi/30 px-4 py-3">
+        <FoldTitle icon="Sparkles" title="Claude Review" folded onFlip={flip} />
+        <span className="text-[12.5px] text-pf-muted">
+          {headline}
+          {total > 0 ? ` · ${finished} / ${total} sets` : ""}
+        </span>
+      </Panel>
+    );
+
   return (
     <Panel className="grid gap-3 border-pf-primary-hi/30 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="grid gap-0.5">
-          <p className="flex items-center gap-2 text-[14px] font-semibold text-pf-text">
-            <Icon name="Sparkles" size={16} />
-            Claude Review
-          </p>
+          <FoldTitle icon="Sparkles" title="Claude Review" folded={false} onFlip={flip} />
           <p className="text-[12.5px] text-pf-muted">{headline}</p>
         </div>
         <div className="flex items-center gap-2">
