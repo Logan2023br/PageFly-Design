@@ -68,7 +68,7 @@ export function AddStore() {
           {done.result === "drafted" ? (
             <>
               đã soạn tin cảm ơn —{" "}
-              <Link className="text-pf-primary-hi hover:underline" href={`${BASE}?tab=pending&q=${encodeURIComponent(done.domain)}`}>
+              <Link className="text-pf-primary-hi hover:underline" href={`${BASE}?tab=messages&group=main&q=${encodeURIComponent(done.domain)}`}>
                 xem ở Chờ duyệt
               </Link>
             </>

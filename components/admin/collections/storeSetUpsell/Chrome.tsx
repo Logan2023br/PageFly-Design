@@ -14,8 +14,8 @@ export const BASE = "/design/admin/collections/upsell";
 const FIELD =
   "rounded-pf-md border border-pf-border bg-pf-bg-deep px-3 py-2 text-[13px] text-pf-text outline-none transition-colors placeholder:text-pf-faint focus:border-pf-primary-hi";
 
-const URGENT = new Set(["pending", "needs_check"]);
-const BROKEN = new Set(["failed"]);
+const URGENT = new Set(["messages"]);
+const BROKEN = new Set<string>();
 
 export function TabNav({ tab, counts }: { tab: SsuTabId; counts: Record<string, number> }) {
   return (
@@ -59,6 +59,9 @@ export function FilterBar({ tab, f, sets }: { tab: SsuTabId; f: SsuFilters; sets
   return (
     <form method="get" className="flex flex-wrap items-end gap-2">
       <input type="hidden" name="tab" value={tab} />
+      {/* Tin nhắn: stay on the same button and chip */}
+      {tab === "messages" &&
+        (["group", "read", "reply", "check"] as const).map((k) => f[k] && <input key={k} type="hidden" name={k} value={f[k]} />)}
       <input name="q" defaultValue={f.q} placeholder="Domain, tên, email, phone…" className={`${FIELD} w-[230px]`} aria-label="Tìm" />
       <select name="set" defaultValue={f.set ?? ""} className={`${FIELD} w-[170px]`} aria-label="Store set">
         <option value="">Mọi store set</option>
@@ -76,7 +79,7 @@ export function FilterBar({ tab, f, sets }: { tab: SsuTabId; f: SsuFilters; sets
         Đến
         <input type="date" name="to" defaultValue={f.to} className={`${FIELD} w-[150px]`} />
       </label>
-      {(tab === "pending" || tab === "waiting" || tab === "failed") && (
+      {tab === "messages" && f.group !== "replied" && (
         <select name="kind" defaultValue={f.kind ?? ""} className={`${FIELD} w-[210px]`} aria-label="Loại tin">
           <option value="">Mọi loại tin</option>
           {Object.entries(SSU_KIND_LABEL).map(([k, v]) => (
@@ -106,7 +109,7 @@ export function FilterBar({ tab, f, sets }: { tab: SsuTabId; f: SsuFilters; sets
       <button type="submit" className="h-[38px] rounded-pf-md bg-pf-primary px-4 text-[13px] font-semibold text-white hover:bg-pf-primary-hi">
         Lọc
       </button>
-      <Link href={`${BASE}?tab=${tab}`} className="h-[38px] px-2 py-2 text-[12.5px] text-pf-faint hover:text-pf-text">
+      <Link href={`${BASE}?tab=${tab}${tab === "messages" && f.group ? `&group=${f.group}` : ""}`} className="h-[38px] px-2 py-2 text-[12.5px] text-pf-faint hover:text-pf-text">
         Xoá lọc
       </Link>
     </form>

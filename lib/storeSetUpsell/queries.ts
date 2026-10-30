@@ -2,7 +2,7 @@ import "server-only";
 
 import { db } from "./db";
 import { getInternal } from "./settings";
-import type { SsuCustomer, SsuEvent, SsuJobState, SsuMessage, SsuSelection } from "./types";
+import type { SsuCustomer, SsuMessageKind, SsuEvent, SsuJobState, SsuMessage, SsuSelection } from "./types";
 
 /* ==========================================================================
    What the admin screen reads. Each tab is a filter on ssu_customers (or the
@@ -13,25 +13,72 @@ export const SSU_TABS = [
   { id: "all", label: "Tất cả khách", where: "true" },
   { id: "stores", label: "Store dùng page sets", where: null },
   { id: "feed", label: "Mỗi lượt click", where: null },
-  { id: "pending", label: "Chờ duyệt", where: null },
-  { id: "waiting", label: "Chờ gửi", where: null },
-  { id: "sent", label: "Đã gửi", where: "c.sent_at is not null" },
-  { id: "read", label: "Đã đọc", where: "c.read_at is not null" },
-  { id: "replied", label: "Có phản hồi", where: "c.replied" },
-  { id: "needs_check", label: "Cần kiểm tra", where: "c.needs_check" },
-  { id: "cared", label: "Đã chăm sóc", where: "exists (select 1 from ssu_messages x where x.store_domain = c.store_domain and x.status = 'sent' and x.kind in ('care_read', 'care_upgraded', 'edit_reminder'))" },
-  { id: "review_asked", label: "Đã xin review", where: "c.review_asked_at is not null" },
+  { id: "messages", label: "Tin nhắn", where: null },
   { id: "reviewed", label: "Đã review 5★", where: "c.app_review >= 5" },
   { id: "updated", label: "Đã nâng cấp plan", where: "c.upgraded_at is not null" },
   { id: "pages_updated", label: "Cập nhật page", where: "c.pages_updated_at is not null" },
   { id: "eligible", label: "Đủ điều kiện, chưa gửi", where: "c.status in ('eligible', 'new')" },
   { id: "skipped", label: "Bỏ qua", where: "c.status in ('skipped', 'reviewed')" },
-  { id: "failed", label: "Lỗi gửi", where: null },
   { id: "settings", label: "Cài đặt", where: null },
 ] as const;
 export type SsuTabId = (typeof SSU_TABS)[number]["id"];
 
-export type SsuFilters = { q?: string; set?: string; from?: string; to?: string; app?: string; status?: string; kind?: string; page: number };
+export type SsuFilters = {
+  q?: string;
+  set?: string;
+  from?: string;
+  to?: string;
+  app?: string;
+  status?: string;
+  kind?: string;
+  /** Tin nhắn: which group of messages, or "replied" */
+  group?: string;
+  /** Đã gửi: "1" the customer read it, "0" not yet */
+  read?: string;
+  /** Có phản hồi: the group of the message the reply answers */
+  reply?: string;
+  /** Có phản hồi: "1" checked, "0" not yet */
+  check?: string;
+  page: number;
+};
+
+/* ---------------------------------------------------------------- Tin nhắn
+
+   The message tabs that were one per state (Chờ duyệt, Chờ gửi, Đã gửi,
+   Đã đọc, Đã chăm sóc, Đã xin review, Lỗi gửi, Có phản hồi, Cần kiểm tra)
+   live under Tin nhắn now, as on Upsell Build 2 pages: a button per kind of
+   message, each with its drafts, its queue, its failures and what was sent —
+   and Có phản hồi, split by the message the reply answers. */
+
+export const SSU_GROUPS = {
+  main: { label: "Tin nhắn chính · cảm ơn", kinds: ["thanks", "custom"] },
+  care: { label: "Tin chăm sóc", kinds: ["care_read", "care_upgraded", "edit_reminder"] },
+  review: { label: "Tin xin review", kinds: ["review_ask"] },
+} as const satisfies Record<string, { label: string; kinds: readonly SsuMessageKind[] }>;
+export type SsuGroup = keyof typeof SSU_GROUPS;
+
+export function ssuGroupOf(v: string | undefined): SsuGroup | "replied" {
+  return v === "replied" || (v && v in SSU_GROUPS) ? (v as SsuGroup | "replied") : "main";
+}
+
+/* The tabs that moved: an old link (a bookmark, Slack) lands in the right place. */
+export const OLD_TABS: Record<string, { group: SsuGroup | "replied"; read?: string; check?: string }> = {
+  pending: { group: "main" },
+  waiting: { group: "main" },
+  failed: { group: "main" },
+  sent: { group: "main" },
+  read: { group: "main", read: "1" },
+  cared: { group: "care" },
+  review_asked: { group: "review" },
+  replied: { group: "replied" },
+  needs_check: { group: "replied", check: "0" },
+};
+
+/* The kind of the last message sent before the reply — what it answers. */
+const REPLY_TO = `(select x.kind from ssu_messages x where x.store_domain = c.store_domain and x.status = 'sent'
+                     and x.sent_at <= c.last_reply_at order by x.sent_at desc limit 1)`;
+const groupOfKind = (k: string) => `case when ${k} in ('care_read', 'care_upgraded', 'edit_reminder') then 'care' when ${k} = 'review_ask' then 'review' else 'main' end`;
+
 
 export const PAGE_SIZE = 50;
 
@@ -70,14 +117,10 @@ export async function listCustomers(tab: SsuTabId, f: SsuFilters): Promise<{ row
   const p = await db();
   const w = customerWhere(tab, f);
   const order =
-    tab === "needs_check" || tab === "replied"
-      ? "c.last_reply_at desc nulls last"
-      : tab === "updated"
-        ? "c.upgraded_at desc nulls last"
-        : tab === "pages_updated"
-          ? "c.pages_updated_at desc nulls last"
-      : tab === "sent" || tab === "read"
-        ? "c.sent_at desc nulls last"
+    tab === "updated"
+      ? "c.upgraded_at desc nulls last"
+      : tab === "pages_updated"
+        ? "c.pages_updated_at desc nulls last"
         : "c.last_selected_at desc nulls last";
   const total = Number((await p.query(`select count(*) as n from ssu_customers c where ${w.sql}`, w.args)).rows[0].n);
   const page = Math.max(1, Math.floor(f.page) || 1);
@@ -102,9 +145,15 @@ export type MessageListRow = SsuMessage & {
   last_selected_at: string | null;
   pf_plan: string | null;
   ticket_link: string | null;
+  read_at: string | null;
 };
 
-export async function listMessages(statuses: string[], f: SsuFilters): Promise<{ rows: MessageListRow[]; total: number; page: number; pages: number }> {
+export async function listMessages(
+  statuses: string[],
+  f: SsuFilters,
+  kinds?: readonly string[],
+  limit = PAGE_SIZE,
+): Promise<{ rows: MessageListRow[]; total: number; page: number; pages: number }> {
   const p = await db();
   const w = customerWhere("all", f);
   const n = w.args.length;
@@ -114,14 +163,20 @@ export async function listMessages(statuses: string[], f: SsuFilters): Promise<{
     args.push(f.kind);
     sql += ` and m.kind = $${args.length}`;
   }
+  if (kinds) {
+    args.push(kinds);
+    sql += ` and m.kind = any($${args.length})`;
+  }
+  if (f.read === "1") sql += " and c.read_at is not null";
+  if (f.read === "0") sql += " and c.read_at is null";
   const total = Number((await p.query(`select count(*) as n ${sql}`, args)).rows[0].n);
   const page = Math.max(1, Math.floor(f.page) || 1);
   const { rows } = await p.query<MessageListRow>(
-    `select m.*, c.store_name, c.email, c.phone, c.sets, c.app_review, c.crisp_conversations, c.last_selected_at, c.pf_plan, c.ticket_link
-       ${sql} order by m.created_at desc limit ${PAGE_SIZE} offset ${(page - 1) * PAGE_SIZE}`,
+    `select m.*, c.store_name, c.email, c.phone, c.sets, c.app_review, c.crisp_conversations, c.last_selected_at, c.pf_plan, c.ticket_link, c.read_at
+       ${sql} order by coalesce(m.sent_at, m.created_at) desc limit ${limit} offset ${(page - 1) * limit}`,
     args,
   );
-  return { rows, total, page, pages: Math.max(1, Math.ceil(total / PAGE_SIZE)) };
+  return { rows, total, page, pages: Math.max(1, Math.ceil(total / limit)) };
 }
 
 /** The feed, newest first, for the "per minute" tab. */
@@ -249,14 +304,76 @@ export async function ssuCounts(): Promise<Record<string, number>> {
   const m = await p.query<{ status: string; n: number }>("select status, count(*) as n from ssu_messages group by status");
   const by = Object.fromEntries(m.rows.map((r) => [r.status, Number(r.n)]));
   const today = await p.query("select count(*) as n from ssu_selections where event_time > now() - interval '24 hours'");
+  const check = await p.query("select count(*) filter (where needs_check) as n from ssu_customers");
+  const needsCheck = Number(check.rows[0].n);
   return {
     ...Object.fromEntries(Object.entries(rows[0] ?? {}).map(([k, v]) => [k, Number(v)])),
     pending: by.pending_review ?? 0,
     waiting: (by.approved ?? 0) + (by.sending ?? 0),
     failed: by.failed ?? 0,
+    needs_check: needsCheck,
+    /* Tin nhắn: what waits on an admin — drafts, and replies nobody checked */
+    messages: (by.pending_review ?? 0) + needsCheck,
     feed: Number(today.rows[0].n),
     stores: Number(rows[0]?.all ?? 0),
   };
+}
+
+/** Per group: drafts waiting, queued, failed, sent, and sent to a customer
+    who read (the read is per conversation, as Crisp tells it). */
+export async function groupCounts(): Promise<Record<SsuGroup, { pending: number; waiting: number; failed: number; sent: number; read: number }>> {
+  const p = await db();
+  const { rows } = await p.query(
+    `select ${groupOfKind("m.kind")} as g,
+            count(*) filter (where m.status = 'pending_review') as pending,
+            count(*) filter (where m.status in ('approved', 'sending')) as waiting,
+            count(*) filter (where m.status = 'failed') as failed,
+            count(*) filter (where m.status = 'sent') as sent,
+            count(*) filter (where m.status = 'sent' and c.read_at is not null) as read
+       from ssu_messages m join ssu_customers c on c.store_domain = m.store_domain group by 1`,
+  );
+  const out = Object.fromEntries(
+    (Object.keys(SSU_GROUPS) as SsuGroup[]).map((g) => [g, { pending: 0, waiting: 0, failed: 0, sent: 0, read: 0 }]),
+  ) as Record<SsuGroup, { pending: number; waiting: number; failed: number; sent: number; read: number }>;
+  for (const r of rows) out[r.g as SsuGroup] = { pending: Number(r.pending), waiting: Number(r.waiting), failed: Number(r.failed), sent: Number(r.sent), read: Number(r.read) };
+  return out;
+}
+
+/** Có phản hồi, per group of the message the reply answers: all, and not checked yet. */
+export async function replyCounts(): Promise<Record<SsuGroup, { total: number; unchecked: number }>> {
+  const p = await db();
+  const { rows } = await p.query(
+    `select ${groupOfKind("k")} as g, count(*) as total, count(*) filter (where needs_check) as unchecked
+       from (select ${REPLY_TO} as k, c.needs_check from ssu_customers c where c.replied) r group by 1`,
+  );
+  const out = Object.fromEntries((Object.keys(SSU_GROUPS) as SsuGroup[]).map((g) => [g, { total: 0, unchecked: 0 }])) as Record<
+    SsuGroup,
+    { total: number; unchecked: number }
+  >;
+  for (const r of rows) out[r.g as SsuGroup] = { total: Number(r.total), unchecked: Number(r.unchecked) };
+  return out;
+}
+
+/** The customers who replied to a message of the group, unchecked first. */
+export async function listReplies(group: SsuGroup, f: SsuFilters): Promise<{ rows: (CustomerListRow & { reply_to_kind: string | null })[]; total: number; page: number; pages: number }> {
+  const p = await db();
+  const w = customerWhere("all", f);
+  const kinds = SSU_GROUPS[group].kinds as readonly string[];
+  const args = [...w.args, kinds];
+  let where = `c.replied and ${w.sql} and ${group === "main" ? `coalesce(${REPLY_TO}, 'thanks')` : REPLY_TO} = any($${args.length})`;
+  if (f.check === "0") where += " and c.needs_check";
+  if (f.check === "1") where += " and not c.needs_check";
+  const total = Number((await p.query(`select count(*) as n from ssu_customers c where ${where}`, args)).rows[0].n);
+  const page = Math.max(1, Math.floor(f.page) || 1);
+  const { rows } = await p.query(
+    `select c.*, m.status as last_message_status, m.kind as last_message_kind, pu.pages_used, ${REPLY_TO} as reply_to_kind
+       from ssu_customers c
+       left join lateral (select status, kind from ssu_messages where store_domain = c.store_domain order by created_at desc limit 1) m on true
+       ${PAGES_USED}
+      where ${where} order by c.needs_check desc, c.last_reply_at desc nulls last limit ${PAGE_SIZE} offset ${(page - 1) * PAGE_SIZE}`,
+    args,
+  );
+  return { rows, total, page, pages: Math.max(1, Math.ceil(total / PAGE_SIZE)) };
 }
 
 export async function setOptions(): Promise<string[]> {

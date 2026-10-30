@@ -189,7 +189,7 @@ async function main() {
   const { runJob } = await import("../lib/storeSetUpsell/job");
   const { saveSsuSettings } = await import("../lib/storeSetUpsell/settings");
   const { messageAction, customerAction } = await import("../lib/storeSetUpsell/actions");
-  const { listCustomers, ssuCounts } = await import("../lib/storeSetUpsell/queries");
+  const { listCustomers, ssuCounts, listReplies, replyCounts, groupCounts, listMessages } = await import("../lib/storeSetUpsell/queries");
 
   // the free editing is 3 days now, said in one line with its end date
   const { sampleMessage } = await import("../lib/storeSetUpsell/messages");
@@ -278,9 +278,21 @@ async function main() {
   // sent as Logan, with the Crisp operator's face
   assert.deepEqual([world.sent[0].nickname, world.sent[0].user_id, world.sent[0].avatar], ["Logan", "op-logan", "https://img/logan.png"]);
   assert.match(a2.last_reply_text, /hero color/);
-  assert.equal((await listCustomers("needs_check", { page: 1 })).total, 1);
+  // Có phản hồi under Tin nhắn: a reply to the thanks, unchecked
+  assert.equal((await listReplies("main", { page: 1, check: "0" })).total, 1);
+  assert.equal((await listReplies("main", { page: 1 })).rows[0].reply_to_kind, "thanks");
+  assert.equal((await listReplies("care", { page: 1 })).total, 0);
+  assert.deepEqual((await replyCounts()).main, { total: 1, unchecked: 1 });
+  assert.equal((await ssuCounts()).needs_check, 1);
+  // the thanks sits in Tin nhắn chính, sent and read
+  const gc = await groupCounts();
+  assert.ok(gc.main.sent >= 1 && gc.main.read >= 1, "thanks counted sent and read");
+  assert.equal((await listMessages(["sent"], { page: 1, read: "1" }, ["thanks", "custom"])).rows[0].read_at !== null, true);
+  assert.equal((await listMessages(["sent"], { page: 1 }, ["review_ask"])).total, 0);
   await customerAction("alpha.myshopify.com", "mark_checked", {}, "admin:test");
   assert.equal((await status("alpha.myshopify.com")).needs_check, false);
+  assert.equal((await listReplies("main", { page: 1, check: "1" })).total, 1);
+  void listCustomers;
 
   // review ask goes into the same conversation, which is resolved again after it
   const resolvedBefore = world.resolved.filter((x) => x === a.crisp_session).length;
@@ -460,9 +472,11 @@ async function main() {
   assert.equal(st.summary.stores, 7);
 
   const counts = await ssuCounts();
-  assert.equal(counts.sent, 4);
   assert.equal(counts.reviewed, 2);
-  assert.equal(counts.cared, 2);
+  // Tin nhắn: the thanks to the 4 stores sent, and the care messages in their own group
+  const groups = await groupCounts();
+  assert.equal(groups.main.sent, 4);
+  assert.equal(groups.care.sent, 3);
 
   // a secret is never stored from the screen: the VPS .env only
   const settingsMod = await import("../lib/storeSetUpsell/settings");

@@ -5,13 +5,22 @@ import { AddStore } from "@/components/admin/collections/storeSetUpsell/AddStore
 import { CustomerCards } from "@/components/admin/collections/storeSetUpsell/CustomerCards";
 import { LiveBar } from "@/components/admin/collections/storeSetUpsell/LiveBar";
 import { MessageCards } from "@/components/admin/collections/storeSetUpsell/MessageCards";
+import { Section, SsuGroupNav, SsuReplyNav, SsuSentList } from "@/components/admin/collections/storeSetUpsell/Messages";
 import { SettingsPanel } from "@/components/admin/collections/storeSetUpsell/SettingsPanel";
 import { StoresTable } from "@/components/admin/collections/storeSetUpsell/StoresTable";
 import { hasStoreSetDatabase } from "@/lib/storeSetUpsell/db";
 import { sampleMessage } from "@/lib/storeSetUpsell/messages";
+import { redirect } from "next/navigation";
 import {
+  OLD_TABS,
+  SSU_GROUPS,
   SSU_TABS,
+  groupCounts,
   jobState,
+  listReplies,
+  replyCounts,
+  ssuGroupOf,
+  type SsuGroup,
   listCustomers,
   listMessages,
   listSelections,
@@ -21,6 +30,7 @@ import {
   type SsuFilters,
   type SsuTabId,
 } from "@/lib/storeSetUpsell/queries";
+import { SSU_KIND_LABEL } from "@/lib/storeSetUpsell/types";
 import { SSU_HELP, SSU_NUMERIC, connectionStates, getSsuSettings } from "@/lib/storeSetUpsell/settings";
 
 /* /design/admin/collections/upsell — Store set upsell: everyone who picked a
@@ -42,6 +52,15 @@ export default async function StoreSetUpsellPage(props: PageProps<"/design/admin
     const v = sp[k];
     return typeof v === "string" && v ? v : undefined;
   };
+  /* The message tabs moved under Tin nhắn: an old link still lands. */
+  const old = OLD_TABS[one("tab") ?? ""];
+  if (old) {
+    const qs = new URLSearchParams({ tab: "messages", group: old.group });
+    if (old.read) qs.set("read", old.read);
+    if (old.check) qs.set("check", old.check);
+    if (one("q")) qs.set("q", one("q")!);
+    redirect(`/design/admin/collections/upsell?${qs}`);
+  }
   const tab = (SSU_TABS.some((t) => t.id === one("tab")) ? one("tab") : "all") as SsuTabId;
   const f: SsuFilters = {
     q: one("q"),
@@ -51,6 +70,10 @@ export default async function StoreSetUpsellPage(props: PageProps<"/design/admin
     app: one("app"),
     status: one("status"),
     kind: one("kind"),
+    group: one("group"),
+    read: one("read") === "1" || one("read") === "0" ? one("read") : undefined,
+    reply: one("reply"),
+    check: one("check") === "1" || one("check") === "0" ? one("check") : undefined,
     page: Number(one("page") ?? 1),
   };
 
@@ -82,11 +105,61 @@ export default async function StoreSetUpsellPage(props: PageProps<"/design/admin
     pager = <Pager tab={tab} f={f} {...r} />;
   } else if (tab === "feed") {
     body = <SelectionFeed rows={await listSelections(f)} />;
-  } else if (tab === "pending" || tab === "waiting" || tab === "failed") {
-    const statuses = tab === "pending" ? ["pending_review"] : tab === "waiting" ? ["approved", "sending"] : ["failed"];
-    const r = await listMessages(statuses, f);
-    body = <MessageCards rows={r.rows} mode={tab} />;
-    pager = <Pager tab={tab} f={f} {...r} />;
+  } else if (tab === "messages") {
+    const group = ssuGroupOf(f.group);
+    const ids = Object.keys(SSU_GROUPS) as SsuGroup[];
+    const [gc, rc] = await Promise.all([groupCounts(), replyCounts()]);
+    const nav = (
+      <SsuGroupNav
+        groups={ids.map((id) => ({ id, label: SSU_GROUPS[id].label, pending: gc[id].pending, sent: gc[id].sent, read: gc[id].read }))}
+        current={group}
+        unchecked={counts.needs_check ?? 0}
+      />
+    );
+    if (group === "replied") {
+      const reply = (f.reply && f.reply in SSU_GROUPS ? f.reply : "main") as SsuGroup;
+      const r = await listReplies(reply, f);
+      body = (
+        <>
+          {nav}
+          <SsuReplyNav groups={ids.map((id) => ({ id, label: SSU_GROUPS[id].label }))} current={reply} check={f.check as "0" | "1" | undefined} counts={rc} />
+          <CustomerCards rows={r.rows} editDays={cfg.edit_days} />
+        </>
+      );
+      pager = <Pager tab={tab} f={{ ...f, reply }} {...r} />;
+    } else {
+      const kinds = SSU_GROUPS[group].kinds;
+      const all = { ...f, read: undefined, page: 1 };
+      const [pending, waiting, failed, sent] = await Promise.all([
+        listMessages(["pending_review"], all, kinds, 100),
+        listMessages(["approved", "sending"], all, kinds, 100),
+        listMessages(["failed"], all, kinds, 100),
+        listMessages(["sent"], { ...f, page: 1 }, kinds, 100),
+      ]);
+      body = (
+        <>
+          {nav}
+          <p className="text-[12.5px] text-pf-muted">
+            {SSU_GROUPS[group].kinds.map((k) => SSU_KIND_LABEL[k]).join(" · ")} — chế độ gửi ở Cài đặt (
+            {group === "care" ? `chăm sóc: ${cfg.care_mode}` : `tin: ${cfg.mode}`}).
+          </p>
+          <Section title={`Chờ duyệt (${pending.total})`}>
+            <MessageCards rows={pending.rows} mode="pending" />
+          </Section>
+          {waiting.total > 0 && (
+            <Section title={`Chờ gửi (${waiting.total})`}>
+              <MessageCards rows={waiting.rows} mode="waiting" />
+            </Section>
+          )}
+          {failed.total > 0 && (
+            <Section title={`Lỗi gửi (${failed.total})`}>
+              <MessageCards rows={failed.rows} mode="failed" />
+            </Section>
+          )}
+          <SsuSentList rows={sent.rows} group={group} read={f.read as "1" | "0" | undefined} counts={gc[group]} />
+        </>
+      );
+    }
   } else if (tab === "settings") {
     body = (
       <SettingsPanel
