@@ -6,7 +6,7 @@ import { useState, useTransition } from "react";
 import type { AutoMessageRow, MessageGroup } from "@/lib/upsell/adminQueries";
 import { KIND_LABEL, MESSAGE_STATUS_LABEL, fmtVN, whatsappText, whatsappUrl } from "@/lib/upsell/format";
 import { api } from "../collections/shared";
-import { CopyButton, ErrorLine, PhoneLine, Pill, WhatsappMark } from "./bits";
+import { CopyButton, CrispLink, ErrorLine, PhoneLine, Pill, WhatsappMark } from "./bits";
 
 /* ==========================================================================
    Tab — Tin nhắn. Three buttons, one per kind of message:
@@ -244,6 +244,7 @@ function SentRow({ m }: { m: AutoMessageRow }) {
         {m.message_read ? <Pill tone="primary">Khách đã đọc</Pill> : <Pill tone="muted">Chưa đọc</Pill>}
         {m.approved_by === "auto" && <Pill>Tự động</Pill>}
         <span className="ml-auto text-pf-faint">gửi {fmtVN(m.sent_at)}</span>
+        {m.ticket_link && <CrispLink href={m.ticket_link} label="Mở ticket" />}
         <WhatsappMark
           leadId={m.lead_id}
           sentAt={m.whatsapp_sent_at}

@@ -196,6 +196,7 @@ function SentRow({ m }: { m: MessageListRow }) {
         {m.read_at ? <Pill tone="primary">Khách đã đọc</Pill> : <Pill tone="muted">Chưa đọc</Pill>}
         {m.approved_by === "auto" && <Pill>Tự động</Pill>}
         <span className="ml-auto text-pf-faint">gửi {fmtVN(m.sent_at)}</span>
+        {m.ticket_link && <CrispLink href={m.ticket_link} label="Mở ticket" />}
       </div>
       {open && (
         <div className="grid gap-3 border-t border-pf-border p-3">
@@ -203,7 +204,6 @@ function SentRow({ m }: { m: MessageListRow }) {
             <Link href={`/design/admin/collections/upsell?tab=all&q=${encodeURIComponent(m.store_domain)}`} className="text-[12px] text-pf-primary-hi hover:underline">
               Mở thẻ khách
             </Link>
-            <CrispLink href={m.ticket_link} />
             <CopyButton text={m.content} label="Copy Crisp" />
             <CopyButton text={whatsappText(m.content)} label="Copy WhatsApp" />
           </div>

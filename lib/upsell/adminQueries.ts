@@ -212,6 +212,8 @@ export type AutoMessageRow = MessageRow & {
   /** Crisp's read receipt, for the conversation: BPU Ops sets it once the
       customer has read a message we sent there. */
   message_read: boolean | null;
+  /** the Crisp conversation the messages went to */
+  ticket_link: string | null;
 };
 
 /** Messages of some kinds in some statuses, the latest first — the sent
@@ -226,7 +228,7 @@ export async function listMessagesOfKinds(
   const p = await db();
   const { rows } = await p.query<AutoMessageRow>(
     `select m.*, l.store_domain, l.store_name, l.phone, l.status as lead_status,
-            l.whatsapp_sent_at, l.whatsapp_sent_by, l.whatsapp_skipped_at, l.whatsapp_skipped_by, l.message_read
+            l.whatsapp_sent_at, l.whatsapp_sent_by, l.whatsapp_skipped_at, l.whatsapp_skipped_by, l.message_read, l.ticket_link
        from upsell_messages m join upsell_leads l on l.lead_id = m.lead_id
       where m.kind = any($1::text[]) and m.status = any($2::text[])
         and ($4::boolean is null or coalesce(l.message_read, false) = $4)
