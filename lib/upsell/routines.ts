@@ -2,6 +2,7 @@ import "server-only";
 
 import { db } from "./db";
 import { getInternal, getSettings, saveSettings, setInternal } from "./settings";
+import { recordEvent } from "./common";
 import { UpsellError } from "./types";
 
 /* ==========================================================================
@@ -117,11 +118,37 @@ export const READY_SQL = (start: string, end: string) => `
        or coalesce((select extract(hour from now() at time zone z.name)::int from pg_timezone_names z where z.name = l.timezone), 12)
           between ${start} and ${end} - 1)`;
 
+/**
+ * Chờ gửi kept honest, before anything is fired:
+ *   - a message to a store that has uninstalled the app will never be sent
+ *     (the script skips it): it is dropped, with the reason, instead of
+ *     waiting there for ever;
+ *   - with Không duyệt, nothing waits for the customer's hours: a message
+ *     approved earlier to go "in their hours" goes now.
+ */
+export async function tidyQueue(): Promise<{ dropped: number; now: number }> {
+  const p = await db();
+  const dropped = await p.query<{ id: string; lead_id: string; kind: string }>(
+    `update upsell_messages m set status = 'rejected', error = 'Khách đã gỡ app — không gửi'
+       from upsell_leads l
+      where l.lead_id = m.lead_id and m.status = 'approved'
+        and (l.status = 'uninstalled' or coalesce(l.app_status, '') = 'uninstalled')
+      returning m.id, m.lead_id, m.kind`,
+  );
+  for (const m of dropped.rows)
+    await recordEvent(p, { lead_id: m.lead_id, type: "message_rejected", actor: "system", detail: { message_id: m.id, kind: m.kind, reason: "uninstalled" } });
+  let now = 0;
+  if ((await approvalMode()) === "auto")
+    now = (await p.query("update upsell_messages set send_mode = 'now' where status = 'approved' and send_mode = 'window'")).rowCount ?? 0;
+  return { dropped: dropped.rowCount ?? 0, now };
+}
+
 /** What is waiting for each routine, and a fire where something is. */
 export async function kickRoutines(reason: string): Promise<{ builder?: FireState; ops?: FireState }> {
   const out: { builder?: FireState; ops?: FireState } = {};
   try {
     const p = await db();
+    await tidyQueue();
     const cfg = await getSettings(p);
     const { rows } = await p.query<{ queued: number; building: number; ready: number }>(
       `select

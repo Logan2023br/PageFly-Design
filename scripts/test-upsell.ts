@@ -965,6 +965,17 @@ async function main() {
       check(fu?.status === "approved" && fu?.send_mode === "now", "an automatic follow-up is approved to go at once", fu);
       await settings.saveSettings({ build_message_mode: "manual" });
 
+      /* Chờ gửi: a message to a store that uninstalled is dropped; with
+         Không duyệt, one approved for the customer's hours goes now. */
+      await p.query("update upsell_messages set status = 'approved', send_mode = 'window', claims = 0, claimed_until = null where id in ('M_L261099RT03', 'M_L261099RT04')");
+      await p.query("update upsell_leads set app_status = 'uninstalled' where lead_id = 'L261099RT04'");
+      await routines.setApprovalMode("auto");
+      await new Promise((r) => setTimeout(r, 300));
+      const q = Object.fromEntries((await p.query("select id, status, send_mode, error from upsell_messages where id like 'M_L261099RT%'")).rows.map((r) => [r.id, r]));
+      check(q.M_L261099RT04.status === "rejected" && /gỡ app/.test(q.M_L261099RT04.error), "a message to an uninstalled store leaves Chờ gửi, with the reason", q.M_L261099RT04);
+      check(q.M_L261099RT03.status === "approved" && q.M_L261099RT03.send_mode === "now", "Không duyệt: an earlier in-hours message goes now", q.M_L261099RT03);
+      await routines.setApprovalMode("review");
+
       /* Chạy đầy đủ asks Ops for every step, not send-only. */
       const n0 = fired.length;
       const full = await routines.fireRoutine("ops", "Chạy đầy đủ test", true, true);
