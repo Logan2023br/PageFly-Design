@@ -146,7 +146,7 @@ export async function runAutoMessages(): Promise<AutoResult> {
         const auto = mode === "auto";
         const ins = await c.query(
           `insert into upsell_messages (id, lead_id, kind, content, status, send_mode, created_by, approved_by, approved_at)
-           values ($1, $2, $3, $4, $5, 'window', 'system', $6, case when $7 then now() end)
+           values ($1, $2, $3, $4, $5, case when $7 then 'now' else 'window' end, 'system', $6, case when $7 then now() end)
            on conflict (lead_id, kind) where kind <> 'custom' do nothing
            returning id`,
           [id, lead.lead_id, kind, content, auto ? "approved" : "pending_review", auto ? "auto" : null, auto],
@@ -154,7 +154,7 @@ export async function runAutoMessages(): Promise<AutoResult> {
         if (!ins.rows[0]) return false;
         await recordEvent(c, { lead_id: lead.lead_id, type: "message_drafted", actor: "system", detail: { message_id: id, kind, auto } });
         if (auto)
-          await recordEvent(c, { lead_id: lead.lead_id, type: "message_approved", actor: "auto", detail: { message_id: id, kind, send_mode: "window" } });
+          await recordEvent(c, { lead_id: lead.lead_id, type: "message_approved", actor: "auto", detail: { message_id: id, kind, send_mode: "now" } });
         return true;
       });
       if (made) {

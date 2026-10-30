@@ -32,7 +32,7 @@ import {
   type Filters,
 } from "@/lib/upsell/adminQueries";
 import { hasUpsellDatabase } from "@/lib/upsell/db";
-import { ROUTINES, lastFire, triggerToken, type RoutineId } from "@/lib/upsell/routines";
+import { ROUTINES, approvalMode, lastFire, triggerToken, type RoutineId } from "@/lib/upsell/routines";
 import { NUMERIC_KEYS, SETTING_HELP, getSettings, maskSettings } from "@/lib/upsell/settings";
 
 /* /design/admin/upsell — Upsell Build Pages. Read on the server per request,
@@ -91,7 +91,7 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
             labels={{ manual: "Duyệt thủ công", auto: "Tự duyệt" }}
             hint={{
               manual: "Build xong, page nằm ở đây chờ bạn duyệt rồi mới gửi khách.",
-              auto: "Build xong là tự duyệt và tự gửi tin đầu tiên trong giờ của khách — không chờ bạn. Page đang chờ bên dưới vẫn cần duyệt tay.",
+              auto: "Build xong là tự duyệt và gửi tin đầu tiên ngay — không chờ bạn. Page đang chờ bên dưới vẫn cần duyệt tay.",
             }}
           />
         </section>
@@ -179,7 +179,7 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
   } else if (tab === "settings") {
     body = (
       <>
-        <RoutinesPanel routines={await routineViews()} />
+        <RoutinesPanel routines={await routineViews()} approval={await approvalMode()} />
         <SettingsForm initial={maskSettings(cfg)} help={SETTING_HELP} numeric={NUMERIC_KEYS} />
       </>
     );

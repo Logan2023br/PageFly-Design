@@ -732,7 +732,7 @@ async function main() {
     const l = await leads.getLead("L261099AUTO");
     check(l?.status === "approved" && l?.reviewed_by === "auto", "Tự duyệt: built pages are approved at once, by auto", l?.status);
     const m = (await messages.messagesForLead("L261099AUTO")).find((x) => x.kind === "initial");
-    check(m?.status === "approved" && m?.approved_by === "auto" && m?.send_mode === "window", "…and the first message goes out in the customer's hours, even with Tin nhắn on Đợi duyệt", m);
+    check(m?.status === "approved" && m?.approved_by === "auto" && m?.send_mode === "now", "…and the first message goes out at once, even with Tin nhắn on Đợi duyệt", m);
     await settings.saveSettings({ page_review_mode: "manual" });
     await leads.upsertLeads([{ lead_id: "L261099MANU", store_domain: "manu.myshopify.com", store_name: "Manu Co", group: "test" }]);
     await (await db()).query("update upsell_leads set status = 'building' where lead_id = 'L261099MANU'");
@@ -946,6 +946,30 @@ async function main() {
       const before = fired.length;
       await routines.kickRoutines("tick");
       check(fired.length === before, "a message claimed three times without a result stops firing BPU Ops");
+
+      /* Duyệt / Không duyệt: one switch over the four modes; a kind that is off stays off. */
+      await settings.saveSettings({ page_review_mode: "manual", build_message_mode: "manual", view_reminder_mode: "off", edit_offer_mode: "manual" });
+      await routines.setApprovalMode("auto");
+      let cfg = await settings.getSettings();
+      check(cfg.page_review_mode === "auto" && cfg.build_message_mode === "auto" && cfg.edit_offer_mode === "auto" && cfg.view_reminder_mode === "off",
+        "Không duyệt turns every mode to auto, leaving an off kind off", cfg);
+      check((await routines.approvalMode()) === "auto", "…and reads back as Không duyệt");
+      await routines.setApprovalMode("review");
+      cfg = await settings.getSettings();
+      check(cfg.page_review_mode === "manual" && cfg.build_message_mode === "manual" && cfg.edit_offer_mode === "manual", "Duyệt puts them back to manual", cfg);
+      /* An auto follow-up is written to go at once. */
+      await settings.saveSettings({ build_message_mode: "auto" });
+      await p.query("update upsell_leads set crisp_session = 'session_rt' where lead_id = 'L261099RT03'");
+      const d = await messages.createDrafts([{ lead_id: "L261099RT03", kind: "followup1", content: "Hi again" }]);
+      const fu = (await p.query("select send_mode, status from upsell_messages where id = $1", [d.created[0]])).rows[0];
+      check(fu?.status === "approved" && fu?.send_mode === "now", "an automatic follow-up is approved to go at once", fu);
+      await settings.saveSettings({ build_message_mode: "manual" });
+
+      /* Chạy đầy đủ asks Ops for every step, not send-only. */
+      const n0 = fired.length;
+      const full = await routines.fireRoutine("ops", "Chạy đầy đủ test", true, true);
+      const mine = fired.slice(n0).find((f) => f.text.includes("Chạy đầy đủ test"));
+      check(full.ok && !!mine && mine.text.includes("full run") && !mine.text.includes("send-only"), "Chạy đầy đủ fires Ops for every step", mine);
     } finally {
       globalThis.fetch = realFetch;
       await p.query("update upsell_messages set status = 'rejected' where id like 'M_L261099RT%'");

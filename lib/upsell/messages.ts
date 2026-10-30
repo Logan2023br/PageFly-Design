@@ -34,7 +34,7 @@ export async function createDrafts(items: unknown[], actor: Actor = "claude"): P
   const out: DraftResult = { created: [], skipped: [] };
   const p = await db();
   /* "Tin nhắn build page" set to Tự động gửi: the script's follow-ups and
-     review asks are written approved, to go out in the customer's hours. */
+     review asks are written approved, and go out at once. */
   const autoSend = (await getSettings(p)).build_message_mode === "auto";
   for (const raw of items) {
     const m = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
@@ -59,8 +59,8 @@ export async function createDrafts(items: unknown[], actor: Actor = "claude"): P
     }
     const id = newMessageId();
     const ins = await p.query(
-      `insert into upsell_messages (id, lead_id, kind, content, status, created_by, approved_by, approved_at)
-       values ($1,$2,$3,$4,$6,$5,case when $6 = 'approved' then 'auto' end,case when $6 = 'approved' then now() end)
+      `insert into upsell_messages (id, lead_id, kind, content, status, send_mode, created_by, approved_by, approved_at)
+       values ($1,$2,$3,$4,$6,case when $6 = 'approved' then 'now' else 'window' end,$5,case when $6 = 'approved' then 'auto' end,case when $6 = 'approved' then now() end)
        on conflict (lead_id, kind) where kind <> 'custom' do nothing
        returning id`,
       [id, leadId, kind, content.slice(0, 20_000), actor, autoSend ? "approved" : "pending_review"],

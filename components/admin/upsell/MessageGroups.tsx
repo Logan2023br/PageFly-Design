@@ -129,7 +129,7 @@ export function GroupHeader({
         mode={mode}
         labels={{ manual: "Đợi duyệt", auto: "Tự động gửi" }}
         hint={{
-          auto: "Tin tạo ra được duyệt luôn, BPU Ops gửi ở lần chạy sau trong giờ của khách.",
+          auto: "Tin tạo ra được duyệt và gửi ngay, không chờ bạn.",
           manual: "Tin tạo ra nằm ở danh sách Chờ duyệt bên dưới — bấm Duyệt thì mới gửi.",
         }}
       />

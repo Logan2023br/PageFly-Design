@@ -67,7 +67,7 @@ export const SETTING_HELP: Record<SettingKey, string> = {
   install_lookback_hours: "Script quét store cài trong bao nhiêu giờ gần nhất",
   pic: "Người phụ trách mặc định, điền vào {pic}",
   review_url: "Link xin review trên Shopify App Store",
-  page_review_mode: "Duyệt page sau khi build: manual = chờ duyệt ở tab Chờ duyệt page, auto = tự duyệt và tự gửi tin đầu tiên trong giờ của khách",
+  page_review_mode: "Duyệt page sau khi build: manual = chờ duyệt ở tab Chờ duyệt page, auto = tự duyệt và gửi tin đầu tiên ngay",
   build_message_mode: "Tin nhắn build page (tin đầu tiên khi duyệt page, follow-up, xin review): manual = chờ duyệt ở tab Tin nhắn, auto = tự gửi",
   view_reminder_mode: "Tin nhắc tải khi khách đã xem mà chưa tải: manual = soạn sẵn chờ duyệt, auto = tự gửi, off = tắt",
   view_reminder_hours: "Số giờ sau lần xem đầu tiên mà khách vẫn chưa tải thì soạn tin nhắc tải",

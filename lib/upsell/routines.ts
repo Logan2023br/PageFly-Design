@@ -1,7 +1,7 @@
 import "server-only";
 
 import { db } from "./db";
-import { getInternal, getSettings, setInternal } from "./settings";
+import { getInternal, getSettings, saveSettings, setInternal } from "./settings";
 import { UpsellError } from "./types";
 
 /* ==========================================================================
@@ -65,7 +65,7 @@ export async function lastFire(r: RoutineId): Promise<FireState | null> {
 }
 
 /** Fires one routine now. `force` skips the debounce (the admin's button). */
-export async function fireRoutine(r: RoutineId, reason: string, force = false): Promise<FireState> {
+export async function fireRoutine(r: RoutineId, reason: string, force = false, full = false): Promise<FireState> {
   const prev = await lastFire(r);
   if (!force && prev?.ok && Date.now() - new Date(prev.at).getTime() < DEBOUNCE_MS[r]) return prev;
   const { token } = await triggerToken(r);
@@ -76,9 +76,12 @@ export async function fireRoutine(r: RoutineId, reason: string, force = false): 
     if (prev?.result !== s.result) await setInternal(`${r}_fire`, s);
     return s;
   }
+  /* Ops runs every step only when asked ("Chạy đầy đủ"); fired by an action, it only sends. */
   const text =
     r === "ops"
-      ? `send-only — ${reason}. Only send the approved messages now (step 5) and give a two-line summary; skip the other steps.`
+      ? full
+        ? `full run — ${reason}. Run every step.`
+        : `send-only — ${reason}. Only send the approved messages now (step 5) and give a two-line summary; skip the other steps.`
       : `${reason}. Build the queue.`;
   let s: FireState;
   try {
@@ -142,4 +145,29 @@ export async function kickRoutines(reason: string): Promise<{ builder?: FireStat
 /** After an action, without holding up the response. */
 export function kickSoon(reason: string): void {
   void kickRoutines(reason);
+}
+
+/* ---- Duyệt / Không duyệt ----------------------------------------------------
+
+   One switch over the modes that decide whether anything waits for an admin:
+   the pages after a build, the first message, and the messages PageFly
+   Design writes itself. Không duyệt runs straight through — built, approved,
+   sent at once. A message kind switched off stays off. */
+
+const APPROVAL_KEYS = ["page_review_mode", "build_message_mode", "view_reminder_mode", "edit_offer_mode"] as const;
+
+export async function approvalMode(): Promise<"review" | "auto"> {
+  const cfg = await getSettings();
+  return cfg.page_review_mode === "auto" && cfg.build_message_mode === "auto" ? "auto" : "review";
+}
+
+export async function setApprovalMode(mode: "review" | "auto"): Promise<void> {
+  const cfg = await getSettings();
+  const patch: Record<string, string> = {};
+  for (const k of APPROVAL_KEYS) {
+    if (k !== "page_review_mode" && cfg[k] === "off") continue;
+    patch[k] = mode === "auto" ? "auto" : "manual";
+  }
+  await saveSettings(patch);
+  if (mode === "auto") kickSoon("chuyển sang Không duyệt");
 }

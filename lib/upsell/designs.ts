@@ -147,12 +147,12 @@ export async function uploadDesign(f: UploadFields, files: UploadFiles, actor = 
   });
 
   /* "Tự duyệt" on Chờ duyệt page: the pages are approved as they arrive and
-     the first message goes out in the customer's hours, as "auto". If that
-     fails the lead simply stays in Chờ duyệt page, as in manual mode. */
+     the first message goes out at once, as "auto" — nobody chose to wait.
+     If that fails the lead simply stays in Chờ duyệt page, as in manual mode. */
   let autoApproved = false;
   if ((await getSettings()).page_review_mode === "auto") {
     try {
-      await approveLead(f.lead_id, { send_mode: "window", autoSend: true }, "auto");
+      await approveLead(f.lead_id, { send_mode: "now", autoSend: true }, "auto");
       autoApproved = true;
     } catch (err) {
       console.error(`[upsell] auto-approve ${f.lead_id} failed:`, err);
