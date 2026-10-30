@@ -1,5 +1,6 @@
 import "server-only";
 
+import { kickSoon } from "./routines";
 import { createHash } from "node:crypto";
 import type { PoolClient } from "pg";
 import { db, tx, type Db } from "./db";
@@ -272,6 +273,7 @@ export async function upsertLeads(items: unknown[], actor: Actor = "claude"): Pr
       out.created.push(leadId);
     });
   }
+  if (out.created.length) kickSoon("lead mới");
   return out;
 }
 
@@ -435,10 +437,15 @@ export async function setBuildStatus(
 ): Promise<LeadRow> {
   const from = BUILDER_MAY_SET[status];
   if (!from) throw new UpsellError("status must be building, error or skipped.", 422);
-  return tx(async (c) => {
+  const row = await tx(async (c) => {
     const cur = await lockLead(c, leadId);
     if (!from.includes(cur.status))
       throw new UpsellError(`Lead ${leadId} is ${cur.status}; it cannot move to ${status}.`, 409);
+    /* Two Builder sessions at once (a fired one and an older one): the
+       second to claim a lead that is being built moves on to another. */
+    if (status === "building" && cur.status === "building" && cur.build_started_at &&
+        Date.now() - new Date(cur.build_started_at).getTime() < 2 * 3600_000)
+      throw new UpsellError(`Lead ${leadId} is already being built.`, 409);
     const set: Record<string, unknown> = { status };
     if (status === "building") {
       set.build_started_at = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
@@ -450,6 +457,9 @@ export async function setBuildStatus(
     await recordStatus(c, leadId, cur.status, status, actor, error ? { error: error.slice(0, 300) } : {});
     return { ...cur, ...set } as LeadRow;
   });
+  /* A lead skipped or failed: the Builder's next one may be waiting. */
+  if (status !== "building") kickSoon("build xong một lead");
+  return row;
 }
 
 /* ---- ids ----------------------------------------------------------------- */

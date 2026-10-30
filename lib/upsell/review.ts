@@ -1,5 +1,6 @@
 import "server-only";
 
+import { kickSoon } from "./routines";
 import { db, tx } from "./db";
 import { DEFAULT_INITIAL_TEMPLATE, designUrl, fillTemplate, newMessageId, recordEvent, recordStatus, sampleTemplate, type Actor } from "./common";
 import { leadIdFor, lockLead, updateLead } from "./leads";
@@ -33,7 +34,7 @@ export async function approveLead(
   actor: Actor,
 ): Promise<{ message_id: string }> {
   const cfg = await getSettings();
-  return tx(async (c) => {
+  const out = await tx(async (c) => {
     const lead = await lockLead(c, leadId);
     if (lead.status !== "pending_review")
       throw new UpsellError(`Lead ${leadId} is ${lead.status}; only a lead waiting for review can be approved.`, 409);
@@ -86,6 +87,8 @@ export async function approveLead(
     });
     return { message_id: messageId };
   });
+  kickSoon("duyệt page");
+  return out;
 }
 
 export async function requestRebuild(
@@ -110,6 +113,7 @@ export async function requestRebuild(
     });
     await recordStatus(c, leadId, lead.status, "rebuild_requested", actor, { note: note.slice(0, 500), page_types: types });
   });
+  kickSoon("yêu cầu build lại");
 }
 
 export async function rejectLead(leadId: string, reason: string, actor: Actor): Promise<void> {
@@ -150,12 +154,13 @@ export async function requeueLead(leadId: string, actor: Actor): Promise<void> {
     });
     await recordStatus(c, leadId, lead.status, to, actor, { reason: "requeued" });
   });
+  kickSoon("đưa lại vào hàng đợi build");
 }
 
 /** "Thêm thành lead" on an install the script skipped. */
 export async function installToLead(domain: string, actor: Actor): Promise<string> {
   const cfg = await getSettings();
-  return tx(async (c) => {
+  const leadId = await tx(async (c) => {
     const { rows } = await c.query<InstallRow>("select * from upsell_installs where store_domain = $1 for update", [domain]);
     const st = rows[0];
     if (!st) throw new UpsellError(`No install for ${domain}.`, 404);
@@ -175,6 +180,8 @@ export async function installToLead(domain: string, actor: Actor): Promise<strin
     await recordEvent(c, { lead_id: leadId, type: "lead_created", actor, detail: { manual: true, skip_reason: st.skip_reason } });
     return leadId;
   });
+  kickSoon("admin thêm lead");
+  return leadId;
 }
 
 export async function setLeadMeta(

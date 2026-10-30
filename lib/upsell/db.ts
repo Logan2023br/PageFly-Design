@@ -202,6 +202,8 @@ create index if not exists upsell_messages_status on upsell_messages (status, cr
    did. A retry (approve again) keeps the count, so "Lỗi nhiều lần" survives it. */
 alter table upsell_messages add column if not exists attempts int not null default 0;
 alter table upsell_messages add column if not exists failed_at timestamptz;
+alter table upsell_messages add column if not exists claimed_until timestamptz;
+alter table upsell_messages add column if not exists claims int not null default 0;
 /* An admin's own mark that the customer was also contacted on WhatsApp —
    sent from a phone, outside this system, so only a person can say so. */
 alter table upsell_leads add column if not exists whatsapp_sent_at timestamptz;

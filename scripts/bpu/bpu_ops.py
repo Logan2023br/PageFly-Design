@@ -130,14 +130,6 @@ def vn(s):
     return (d + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M") if d else ""
 
 
-def local_hour(tz):
-    try:
-        from zoneinfo import ZoneInfo
-        return datetime.now(ZoneInfo(tz or "UTC")).hour
-    except Exception:
-        return 12
-
-
 def settings():
     s, j = pfd("GET", "/api/upsell/settings")
     cfg = (j or {}).get("settings", {}) if s == 200 else {}
@@ -418,51 +410,61 @@ def cmd_apply_sentiment(args):
 
 
 def cmd_send(args):
+    """Send what can go out now. The server picks it (Gửi ngay, or inside the
+    customer's hours) and holds each message for this run (claim=1), so this
+    run and another one at the same time never send the same message twice.
+    Asks again until nothing is left: a message approved while this run is
+    sending goes out in the same run."""
     cfg = settings()
-    s, j = pfd("GET", "/api/upsell/messages?status=approved")
-    if s != 200:
-        sys.exit("Cannot read approved messages")
     sent, failed, waiting = [], [], 0
 
     def fail(m, error):  # report it, and keep the reason for this run's output
         pfd("POST", f"/api/upsell/messages/{m['id']}/result", {"status": "failed", "error": error})
         failed.append({"id": m["id"], "lead_id": m.get("lead_id"), "error": error})
 
-    for m in j.get("messages", [])[:30]:
-        L = m.get("lead") or {}
-        h = local_hour(L.get("timezone"))
-        if m.get("send_mode") != "now" and not (cfg["send_hour_start"] <= h < cfg["send_hour_end"]):
-            waiting += 1
-            continue
-        if not L.get("email"):
-            fail(m, "No email"); continue
-        sid = L.get("crisp_session")
-        result = {"status": "sent", "sent_at": iso()}
-        if not sid:  # first message: new conversation
-            cs, cj = crisp("POST", "/conversation", {})
-            sid = (cj.get("data") or {}).get("session_id") if isinstance(cj, dict) else None
-            if not sid:
-                fail(m, f"Crisp create {cs}"); continue
-            name = L.get("store_name") or "Merchant"
-            crisp("PATCH", f"/conversation/{sid}/meta", {"email": L["email"], "nickname": name,
-                                                         "subject": f"We designed 2 pages for {name}"})
-            st = ac2(f"/{L.get('store_domain')}")
-            result.update({"crisp_session": sid, "ticket_link": f"https://app.crisp.chat/website/{CRISP_WID}/inbox/{sid}/",
-                           "plan_at_send": st.get("pageflyPlan") or "Free", "price_at_send": float(st.get("pageflyPrice") or 0),
-                           "pages_at_send": int(st.get("totalPages") or 0)})
-        ms, mj = crisp("POST", f"/conversation/{sid}/message", {"type": "text", "from": "operator", "origin": "chat",
-                                                               "content": m["content"], "user": CRISP_SENDER})
-        if ms >= 300 or (isinstance(mj, dict) and mj.get("error")):
-            fail(m, f"Crisp message {ms}"); continue
-        if m.get("kind") == "initial":
-            crisp("POST", f"/conversation/{sid}/message", {"type": "note", "from": "operator", "origin": "chat",
-                  "content": f"BPU auto-build program (2 free pages). Lead {m['lead_id']}. Preview: {L.get('design_url')}. "
-                             f"If the customer replies, please mention {cfg['pic']}.", "user": {"type": "website", "nickname": "PageFly Team"}})
-        crisp("PATCH", f"/conversation/{sid}/state", {"state": "resolved"})
-        pfd("POST", f"/api/upsell/messages/{m['id']}/result", result)
-        sent.append(f"{m['lead_id']}:{m.get('kind')}")
-        time.sleep(1)
+    for _ in range(5):
+        s, j = pfd("GET", "/api/upsell/messages?status=approved&claim=1")
+        if s != 200:
+            sys.exit("Cannot read approved messages")
+        waiting = j.get("waiting") or 0
+        batch = j.get("messages", [])
+        if not batch:
+            break
+        for m in batch:
+            send_one(m, cfg, sent, fail)
     print(json.dumps({"sent": sent, "failed": failed, "waiting_for_business_hours": waiting}))
+
+
+def send_one(m, cfg, sent, fail):
+    L = m.get("lead") or {}
+    if not L.get("email"):
+        fail(m, "No email"); return
+    sid = L.get("crisp_session")
+    result = {"status": "sent", "sent_at": iso()}
+    if not sid:  # first message: new conversation
+        cs, cj = crisp("POST", "/conversation", {})
+        sid = (cj.get("data") or {}).get("session_id") if isinstance(cj, dict) else None
+        if not sid:
+            fail(m, f"Crisp create {cs}"); return
+        name = L.get("store_name") or "Merchant"
+        crisp("PATCH", f"/conversation/{sid}/meta", {"email": L["email"], "nickname": name,
+                                                     "subject": f"We designed 2 pages for {name}"})
+        st = ac2(f"/{L.get('store_domain')}")
+        result.update({"crisp_session": sid, "ticket_link": f"https://app.crisp.chat/website/{CRISP_WID}/inbox/{sid}/",
+                       "plan_at_send": st.get("pageflyPlan") or "Free", "price_at_send": float(st.get("pageflyPrice") or 0),
+                       "pages_at_send": int(st.get("totalPages") or 0)})
+    ms, mj = crisp("POST", f"/conversation/{sid}/message", {"type": "text", "from": "operator", "origin": "chat",
+                                                           "content": m["content"], "user": CRISP_SENDER})
+    if ms >= 300 or (isinstance(mj, dict) and mj.get("error")):
+        fail(m, f"Crisp message {ms}"); return
+    if m.get("kind") == "initial":
+        crisp("POST", f"/conversation/{sid}/message", {"type": "note", "from": "operator", "origin": "chat",
+              "content": f"BPU auto-build program (2 free pages). Lead {m['lead_id']}. Preview: {L.get('design_url')}. "
+                         f"If the customer replies, please mention {cfg['pic']}.", "user": {"type": "website", "nickname": "PageFly Team"}})
+    crisp("PATCH", f"/conversation/{sid}/state", {"state": "resolved"})
+    pfd("POST", f"/api/upsell/messages/{m['id']}/result", result)
+    sent.append(f"{m['lead_id']}:{m.get('kind')}")
+    time.sleep(1)
 
 
 # ---------------------------------------------------------------- Google Sheet mirror

@@ -46,6 +46,8 @@ class FakePFD:
         self.export = []          # what leads/export answers (tests set it)
         self.messages = []        # drafts created via POST /messages
         self.approved = []        # what messages?status=approved answers
+        self.claimed = set()      # ids a claim=1 call handed out (the server holds them)
+        self.hour = lambda tz: 12 # the customer's local hour, as the server works it out
         self.results = {}         # id -> result body
         self.synced = []          # every lead posted to leads/sync
         self.events = []
@@ -77,7 +79,17 @@ class FakePFD:
             return 200, {"ok": True, "updated": len(body["leads"]), "unknown": [], "status_ignored": []}
         if p == "/api/upsell/messages":
             if method == "GET":
-                return (200, {"messages": self.approved}) if q.get("status") == "approved" else (400, {})
+                if q.get("status") != "approved":
+                    return 400, {}
+                if q.get("claim") != "1":
+                    return 200, {"messages": self.approved}
+                # claim=1: what can go out now, each handed out once
+                st = self.settings
+                free = [m for m in self.approved if m["id"] not in self.claimed and m["id"] not in self.results]
+                ready = [m for m in free if m["send_mode"] == "now"
+                         or st["send_hour_start"] <= self.hour(m["lead"]["timezone"]) < st["send_hour_end"]]
+                self.claimed.update(m["id"] for m in ready)
+                return 200, {"messages": ready, "waiting": len(free) - len(ready)}
             created, skipped = [], []
             for m in body["messages"]:
                 dupe = m["kind"] != "custom" and any(x["lead_id"] == m["lead_id"] and x["kind"] == m["kind"] for x in self.messages)

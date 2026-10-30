@@ -1,5 +1,6 @@
 import "server-only";
 
+import { kickSoon } from "./routines";
 import { rejectFile } from "@/lib/collectionPagesServer";
 import { db, tx } from "./db";
 import { adminLeadUrl, designUrl, newDesignId, recordEvent } from "./common";
@@ -158,6 +159,8 @@ export async function uploadDesign(f: UploadFields, files: UploadFiles, actor = 
     }
   }
 
+  /* The next lead in the queue, and the first message if it was approved. */
+  kickSoon("build xong");
   return {
     auto_approved: autoApproved,
     id: result.id,

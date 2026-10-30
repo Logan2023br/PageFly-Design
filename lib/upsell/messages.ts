@@ -4,6 +4,7 @@ import { db, tx } from "./db";
 import { designUrl, newMessageId, recordEvent, recordStatus, ttlDays, isoOrNull, type Actor } from "./common";
 import { lockLead, updateLead } from "./leads";
 import { notifySlack } from "./notify";
+import { READY_SQL, kickSoon } from "./routines";
 import { getSettings } from "./settings";
 import { MESSAGE_KINDS, UpsellError, type LeadRow, type MessageKind, type MessageRow, type SendMode } from "./types";
 
@@ -72,6 +73,7 @@ export async function createDrafts(items: unknown[], actor: Actor = "claude"): P
     out.created.push(id);
   }
   if (out.created.length) void notifySlack("message").catch(() => undefined);
+  if (out.created.length && autoSend) kickSoon("tin tự động gửi");
   return out;
 }
 
@@ -90,22 +92,52 @@ export type OutgoingMessage = Pick<MessageRow, "id" | "lead_id" | "kind" | "cont
 
 /** `GET /messages?status=approved`. Approved, not sent, for a lead still
     installed. A follow-up or review ask goes only into an existing
-    conversation — without one there is nothing to follow up on. */
-export async function approvedForSending(): Promise<OutgoingMessage[]> {
+    conversation — without one there is nothing to follow up on.
+
+    `claim`: only what can go out now (Gửi ngay, or inside the customer's
+    hours), and each one returned is held for this caller for 15 minutes, so
+    two runs at once — the hourly one and a send-only one — never send the
+    same message twice. `waiting` counts the rest, for the run's summary. */
+export async function approvedForSending(opts: { claim?: boolean } = {}): Promise<{ messages: OutgoingMessage[]; waiting?: number }> {
   const p = await db();
+  let where = `m.status = 'approved'
+        and l.status <> 'uninstalled'
+        and coalesce(l.app_status, '') <> 'uninstalled'
+        and (m.kind not in ('followup1', 'followup2', 'review', 'view_reminder', 'edit_offer') or l.crisp_session is not null)`;
+  let waiting: number | undefined;
+  const args: unknown[] = [];
+  if (opts.claim) {
+    const cfg = await getSettings(p);
+    args.push(cfg.send_hour_start, cfg.send_hour_end);
+    const ready = READY_SQL("$1", "$2");
+    const claimed = await p.query<{ id: string }>(
+      `update upsell_messages set claimed_until = now() + interval '15 minutes', claims = claims + 1
+        where id in (select m.id from upsell_messages m join upsell_leads l on l.lead_id = m.lead_id
+                      where ${ready} for update of m skip locked)
+        returning id`,
+      args,
+    );
+    const w = await p.query<{ n: number }>(
+      `select count(*)::int as n from upsell_messages m join upsell_leads l on l.lead_id = m.lead_id
+        where ${where} and not (m.id = any($1))`,
+      [claimed.rows.map((r) => r.id)],
+    );
+    waiting = w.rows[0].n;
+    args.length = 0;
+    args.push(claimed.rows.map((r) => r.id));
+    where = "m.id = any($1)";
+  }
   const { rows } = await p.query(
     `select m.id, m.lead_id, m.kind, m.content, m.send_mode, m.approved_at,
             l.store_domain, l.store_name, l.email, l.timezone, l.crisp_session, d.id as design_id
        from upsell_messages m
        join upsell_leads l on l.lead_id = m.lead_id
        left join upsell_designs d on d.lead_id = l.lead_id
-      where m.status = 'approved'
-        and l.status <> 'uninstalled'
-        and coalesce(l.app_status, '') <> 'uninstalled'
-        and (m.kind not in ('followup1', 'followup2', 'review', 'view_reminder', 'edit_offer') or l.crisp_session is not null)
+      where ${where}
       order by (m.send_mode = 'now') desc, m.approved_at asc`,
+    args,
   );
-  return rows.map((r) => ({
+  const messages = rows.map((r) => ({
     id: r.id,
     lead_id: r.lead_id,
     kind: r.kind,
@@ -121,6 +153,7 @@ export async function approvedForSending(): Promise<OutgoingMessage[]> {
       design_url: r.design_id ? designUrl(r.design_id) : null,
     },
   }));
+  return { messages, waiting };
 }
 
 /* ---- the script reports back -------------------------------------------- */
@@ -232,6 +265,7 @@ export async function approveMessage(
       detail: { message_id: id, kind: m.kind, send_mode: opts.send_mode ?? "window", edited: content !== m.content },
     });
   });
+  kickSoon("admin duyệt tin");
 }
 
 export async function rejectMessage(id: string, actor: Actor): Promise<void> {
@@ -253,6 +287,7 @@ export async function sendNow(id: string, actor: Actor): Promise<void> {
     await c.query("update upsell_messages set send_mode = 'now' where id = $1", [id]);
     await recordEvent(c, { lead_id: m.lead_id, type: "message_approved", actor, detail: { message_id: id, kind: m.kind, send_mode: "now" } });
   });
+  kickSoon("admin bấm Gửi ngay");
 }
 
 /** "Huỷ duyệt". A follow-up goes back to the drafts. The first message takes

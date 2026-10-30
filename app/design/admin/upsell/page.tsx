@@ -11,6 +11,7 @@ import { LeadTable } from "@/components/admin/upsell/LeadTable";
 import { MessageQueue } from "@/components/admin/upsell/MessageQueue";
 import { PendingPages } from "@/components/admin/upsell/PendingPages";
 import { ReplyCards, ReplyNav } from "@/components/admin/upsell/Replies";
+import { RoutinesPanel, type RoutineView } from "@/components/admin/upsell/RoutinesPanel";
 import { SettingsForm } from "@/components/admin/upsell/SettingsForm";
 import { StatsPanel } from "@/components/admin/upsell/StatsPanel";
 import {
@@ -31,6 +32,7 @@ import {
   type Filters,
 } from "@/lib/upsell/adminQueries";
 import { hasUpsellDatabase } from "@/lib/upsell/db";
+import { ROUTINES, lastFire, triggerToken, type RoutineId } from "@/lib/upsell/routines";
 import { NUMERIC_KEYS, SETTING_HELP, getSettings, maskSettings } from "@/lib/upsell/settings";
 
 /* /design/admin/upsell — Upsell Build Pages. Read on the server per request,
@@ -175,10 +177,23 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
   } else if (tab === "criteria") {
     body = <LeadCriteria threshold={cfg.score_threshold} minProducts={cfg.min_products} controlPercent={cfg.control_percent} />;
   } else if (tab === "settings") {
-    body = <SettingsForm initial={maskSettings(cfg)} help={SETTING_HELP} numeric={NUMERIC_KEYS} />;
+    body = (
+      <>
+        <RoutinesPanel routines={await routineViews()} />
+        <SettingsForm initial={maskSettings(cfg)} help={SETTING_HELP} numeric={NUMERIC_KEYS} />
+      </>
+    );
   } else {
     const r = await listLeadTab(tab, f);
     body = <LeadTable rows={r.rows} variant={tab} />;
+    /* Hàng đợi build: whether the Builder is called at once, and its last call. */
+    if (tab === "queue")
+      body = (
+        <>
+          <RoutinesPanel routines={(await routineViews()).filter((x) => x.id === "builder")} />
+          {body}
+        </>
+      );
     pager = <Pager tab={tab} f={f} {...r} />;
   }
 
@@ -196,5 +211,17 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
         {pager}
       </div>
     </AdminShell>
+  );
+}
+
+/** Each routine: where its token comes from (never the token) and its last call. */
+async function routineViews(): Promise<RoutineView[]> {
+  return Promise.all(
+    (Object.keys(ROUTINES) as RoutineId[]).map(async (id) => ({
+      id,
+      label: ROUTINES[id].label,
+      from: (await triggerToken(id)).from,
+      last: await lastFire(id),
+    })),
   );
 }

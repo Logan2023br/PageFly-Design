@@ -213,16 +213,16 @@ async function main() {
     const a = await leads.getLead("L261012AAAA");
     check(a?.status === "approved" && a?.reviewed_by === "admin:tester", "lead approved, reviewer recorded");
     await rejects(review.approveLead("L261012AAAA", {}, "admin:t"), 409, "cannot approve twice");
-    const out = await messages.approvedForSending();
+    const out = (await messages.approvedForSending()).messages;
     check(out.length === 1 && out[0].lead.email === null && out[0].lead.design_url?.endsWith(designId) === true, "approved message is served to the script", out);
 
     /* Take it back and approve again with edited text: the same row is reused. */
     await messages.unapproveMessage(initialId, "admin:t");
     check((await leads.getLead("L261012AAAA"))?.status === "pending_review", "unapproving the initial message returns the lead to review");
-    check((await messages.approvedForSending()).length === 0, "nothing to send after unapprove");
+    check((await messages.approvedForSending()).messages.length === 0, "nothing to send after unapprove");
     const r2 = await review.approveLead("L261012AAAA", { content: "Hi **Alpha**, edited", send_mode: "now" }, "admin:t");
     check(r2.message_id === initialId, "re-approval reuses the initial message");
-    const again = await messages.approvedForSending();
+    const again = (await messages.approvedForSending()).messages;
     check(again[0]?.content === "Hi **Alpha**, edited" && again[0]?.send_mode === "now", "edited content and send mode kept", again[0]);
   }
 
@@ -247,7 +247,7 @@ async function main() {
     check(!r2.changed && r2.message.status === "sent", "second report changes nothing");
     const sentEvents = await p.query("select 1 from upsell_events where type = 'message_sent'");
     check(sentEvents.rowCount === 1, "one message_sent event");
-    check((await messages.approvedForSending()).length === 0, "a sent message is no longer served");
+    check((await messages.approvedForSending()).messages.length === 0, "a sent message is no longer served");
   }
 
   console.log("customer events");
@@ -296,10 +296,10 @@ async function main() {
     check(r.created.length === 3 && r.skipped.length === 3, "followup once, customs twice; dupe, initial and unknown skipped", r);
     const again = await messages.createDrafts([{ lead_id: "L261012AAAA", kind: "followup1", content: "third run" }]);
     check(again.created.length === 0, "a later run does not draft the same kind again");
-    check((await messages.approvedForSending()).length === 0, "drafts are never served before approval");
+    check((await messages.approvedForSending()).messages.length === 0, "drafts are never served before approval");
     const fu = r.created[0];
     await messages.approveMessage(fu, { content: "Hi again, edited" }, "admin:t");
-    const out = await messages.approvedForSending();
+    const out = (await messages.approvedForSending()).messages;
     check(out.length === 1 && out[0].kind === "followup1" && out[0].content === "Hi again, edited", "approved follow-up is served", out);
     await messages.reportResult(fu, { status: "sent", sent_at: "2026-10-14T03:00:00Z" });
     check((await leads.getLead("L261012AAAA"))?.followup1_at === "2026-10-14T03:00:00Z", "followup1_at recorded");
@@ -308,7 +308,7 @@ async function main() {
     await leads.upsertLeads([{ lead_id: "L261012EEEE", store_domain: "echo.myshopify.com", group: "test" }]);
     const d = await messages.createDrafts([{ lead_id: "L261012EEEE", kind: "review", content: "please review" }]);
     await messages.approveMessage(d.created[0], {}, "admin:t");
-    check(!(await messages.approvedForSending()).some((m) => m.lead_id === "L261012EEEE"), "review ask without a conversation is not served");
+    check(!(await messages.approvedForSending()).messages.some((m) => m.lead_id === "L261012EEEE"), "review ask without a conversation is not served");
   }
 
   console.log("send failures");
@@ -679,7 +679,7 @@ async function main() {
     const r3 = await auto.runAutoMessages();
     const w = (await msgOf("L261099AUTW", "view_reminder"))[0];
     check(r3.view_reminder.includes("L261099AUTW") && w?.status === "approved" && w.approved_by === "auto", "auto: written approved", w);
-    check((await messages.approvedForSending()).some((m) => m.lead_id === "L261099AUTW" && m.kind === "view_reminder"), "…and served to BPU Ops to send");
+    check((await messages.approvedForSending()).messages.some((m) => m.lead_id === "L261099AUTW" && m.kind === "view_reminder"), "…and served to BPU Ops to send");
 
     await settings.saveSettings({ view_reminder_mode: "off", edit_offer_mode: "off" });
     const dX = await mk("L261099AUTX", 1);
@@ -702,12 +702,12 @@ async function main() {
     const m1 = (await messages.messagesForLead("L261099BLDM")).find((m) => m.id === message_id)!;
     check(m1.status === "pending_review" && m1.approved_by === null, "approving the pages leaves the first message waiting for its own approval", m1.status);
     check((await leads.getLead("L261099BLDM"))!.status === "approved", "…while the pages are approved");
-    check(!(await messages.approvedForSending()).some((m) => m.id === message_id), "nothing is served to the script yet");
+    check(!(await messages.approvedForSending()).messages.some((m) => m.id === message_id), "nothing is served to the script yet");
     const pend = await adminQueries.listMessages("pending_review", {}, adminQueries.MESSAGE_GROUPS.build.kinds);
     check(pend.rows.some((m) => m.id === message_id), "it is listed under Tin nhắn build page");
     check((await adminQueries.pendingByGroup()).build >= 1, "and counted on its button");
     await messages.approveMessage(message_id, { send_mode: "now" }, "admin:t");
-    check((await messages.approvedForSending()).some((m) => m.id === message_id), "Duyệt sends it");
+    check((await messages.approvedForSending()).messages.some((m) => m.id === message_id), "Duyệt sends it");
 
     /* Tự động gửi: the script's follow-ups are written approved. */
     await settings.saveSettings({ build_message_mode: "auto" });
@@ -861,6 +861,96 @@ async function main() {
     await settings.saveSettings({ max_builds_per_run: 2, slack_webhook_url: "" });
     const q2 = (await (await queueRoute.GET(keyed("/api/upsell/queue"))).json()) as { leads: unknown[] };
     check(q2.leads.length === 2, "…and 2 once it is 2 again", q2.leads.length);
+  }
+
+  console.log("routines fired by API, sends claimed");
+  {
+    const routines = await import("../lib/upsell/routines");
+    const p = await db();
+    /* A clean slate: nothing approved, nothing queued, no earlier fires. */
+    await p.query("update upsell_messages set status = 'rejected' where status = 'approved'");
+    await p.query("update upsell_leads set status = 'skipped' where status in ('new', 'rebuild_requested', 'building')");
+    await p.query("delete from upsell_settings where key in ('_builder_fire', '_ops_fire', '_builder_trigger_token', '_ops_trigger_token')");
+    const fired: { url: string; auth: string | null; text: string }[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const u = String(input instanceof Request ? input.url : input);
+      if (!u.startsWith("https://api.anthropic.com/")) return realFetch(input, init);
+      const h = new Headers(init?.headers);
+      fired.push({ url: u, auth: h.get("authorization"), text: JSON.parse(String(init?.body)).text });
+      return new Response(JSON.stringify({ claude_code_session_url: "https://claude.ai/code/session_x" }), { status: 200 });
+    }) as typeof fetch;
+    try {
+      await leads.upsertLeads([{ lead_id: "L261099RT01", store_domain: "rt1.myshopify.com", group: "test", status: "new", lead_score: 9 }]);
+      await routines.kickRoutines("test");
+      check(fired.length === 0, "without a token nothing is fired", fired);
+      check((await routines.lastFire("builder"))?.result.startsWith("Chưa có token") === true, "…and the panel says why");
+
+      await rejects(routines.saveTriggerToken("builder", "not a token!"), 422, "a malformed token is refused");
+      await routines.saveTriggerToken("builder", "sk-ant-oat01-builderTOKEN0123456789");
+      await routines.saveTriggerToken("ops", "sk-ant-oat01-opsTOKEN0123456789abc");
+      const settingsRoute = await import("../app/api/upsell/settings/route");
+      const res = await settingsRoute.GET(new Request("https://x/api/upsell/settings", { headers: { "x-api-key": "test-key-0123456789abcdef" } }));
+      const api = await res.json();
+      check(!JSON.stringify(api).includes("TOKEN"), "the settings API never serves a trigger token");
+
+      await routines.kickRoutines("lead mới");
+      check(fired.length === 1 && fired[0].url.endsWith("/routines/trig_016KjCNBQWEpQ29iiW2Juhw7/fire"), "a queued lead fires BPU Builder", fired);
+      check(fired[0].auth === "Bearer sk-ant-oat01-builderTOKEN0123456789", "with its own token");
+      await routines.kickRoutines("again");
+      check(fired.length === 1, "a second kick within minutes fires nothing more");
+
+      /* A Builder session is working: no second one, and no second claim of its lead. */
+      await p.query("delete from upsell_settings where key = '_builder_fire'");
+      await leads.setBuildStatus("L261099RT01", "building", null);
+      await rejects(leads.setBuildStatus("L261099RT01", "building", null), 409, "a lead being built cannot be claimed again");
+      await leads.upsertLeads([{ lead_id: "L261099RT02", store_domain: "rt2.myshopify.com", group: "test", status: "new", lead_score: 9 }]);
+      await routines.kickRoutines("lead mới");
+      check(fired.length === 1, "no Builder fire while one is building");
+      await leads.setBuildStatus("L261099RT01", "skipped", "test");
+      await new Promise((r) => setTimeout(r, 300));
+      check(fired.length === 2 && fired[1].url.includes("trig_016Kj"), "finishing a lead fires the Builder for the next one", fired.length);
+
+      /* An approved message that can go out now fires BPU Ops, send-only. */
+      const tzNow = (tz: string) => Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hourCycle: "h23", timeZone: tz }).format(new Date()));
+      const zones = ["Asia/Ho_Chi_Minh", "America/Los_Angeles", "Europe/London", "Pacific/Auckland", "America/New_York", "Asia/Tokyo"];
+      const night = zones.find((z) => tzNow(z) < 9 || tzNow(z) >= 19)!;
+      const day = zones.find((z) => tzNow(z) >= 9 && tzNow(z) < 19)!;
+      for (const [id, tz] of [["L261099RT03", day], ["L261099RT04", night]]) {
+        await p.query(
+          `insert into upsell_leads (lead_id, store_domain, email, timezone, "group", status) values ($1, $2, 'x@y.z', $3, 'test', 'approved')`,
+          [id, `${id.toLowerCase()}.myshopify.com`, tz],
+        );
+        await p.query(
+          `insert into upsell_messages (id, lead_id, kind, content, status, send_mode, created_by, approved_by, approved_at)
+           values ($1, $2, 'initial', 'Hi', 'approved', 'window', 'admin:t', 'admin:t', now())`,
+          [`M_${id}`, id],
+        );
+      }
+      await routines.kickRoutines("admin duyệt tin");
+      const ops = fired.filter((f) => f.url.includes("trig_01RNGjgS2Xdg9zJJZHCeLXMJ"));
+      check(ops.length === 1 && ops[0].text.includes("send-only") && ops[0].auth === "Bearer sk-ant-oat01-opsTOKEN0123456789abc", "a message ready now fires BPU Ops send-only", ops);
+
+      /* The claim: what can go out now, once. */
+      const c1 = await messages.approvedForSending({ claim: true });
+      check(c1.messages.map((m) => m.id).join() === "M_L261099RT03" && c1.waiting === 1, `in-hours message claimed (${day}), the night one waits (${night})`, c1);
+      const c2 = await messages.approvedForSending({ claim: true });
+      check(c2.messages.length === 0, "a claimed message is not handed to a second run");
+      await p.query("update upsell_messages set send_mode = 'now' where id = 'M_L261099RT04'");
+      const c3 = await messages.approvedForSending({ claim: true });
+      check(c3.messages.map((m) => m.id).join() === "M_L261099RT04", "Gửi ngay goes out whatever the hour");
+      await p.query("update upsell_messages set claimed_until = now() - interval '1 minute' where id = 'M_L261099RT03'");
+      check((await messages.approvedForSending({ claim: true })).messages.length === 1, "a claim left by a dead run expires");
+      await p.query("update upsell_messages set claimed_until = null, claims = 3 where id = 'M_L261099RT03'");
+      await p.query("delete from upsell_settings where key = '_ops_fire'");
+      const before = fired.length;
+      await routines.kickRoutines("tick");
+      check(fired.length === before, "a message claimed three times without a result stops firing BPU Ops");
+    } finally {
+      globalThis.fetch = realFetch;
+      await p.query("update upsell_messages set status = 'rejected' where id like 'M_L261099RT%'");
+      await p.query("delete from upsell_settings where key in ('_builder_trigger_token', '_ops_trigger_token')");
+    }
   }
 
   await closeUpsellPool();

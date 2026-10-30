@@ -214,7 +214,7 @@ def outgoing(mid, kind="initial", mode="window", tz="Asia/Ho_Chi_Minh", email="o
 
 def test_send_respects_hours_and_reports(bpu, monkeypatch, capsys):
     w, pfd = bpu.FAKE_WORLD, bpu.FAKE_PFD
-    monkeypatch.setattr(bpu, "local_hour", lambda tz: 3 if tz == "Night/Zone" else 12)
+    pfd.hour = lambda tz: 3 if tz == "Night/Zone" else 12
     w.stores["ziru-cl.myshopify.com"] = good_store("ziru-cl.myshopify.com", pageflyPlan="Free", pageflyPrice=0, totalPages=2)
     pfd.approved = [
         outgoing("m_night", tz="Night/Zone"),                         # waits
@@ -229,6 +229,7 @@ def test_send_respects_hours_and_reports(bpu, monkeypatch, capsys):
     assert out["failed"] == [{"id": "m_noemail", "lead_id": "L_m_noemail", "error": "No email"}]
 
     assert "m_night" not in pfd.results
+    assert ("GET", "/api/upsell/messages?status=approved&claim=1") in pfd.calls, "the run claims what it sends"
     assert pfd.results["m_noemail"] == {"status": "failed", "error": "No email"}
     r = pfd.results["m_now"]
     assert r["status"] == "sent" and r["crisp_session"] == "session_new_1"
@@ -247,7 +248,6 @@ def test_send_respects_hours_and_reports(bpu, monkeypatch, capsys):
 
 
 def test_send_reports_crisp_failure(bpu, monkeypatch, capsys):
-    monkeypatch.setattr(bpu, "local_hour", lambda tz: 12)
     pfd, w = bpu.FAKE_PFD, bpu.FAKE_WORLD
     pfd.approved = [outgoing("m1")]
     real = type(w).__call__

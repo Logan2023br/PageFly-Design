@@ -5,6 +5,7 @@ import { recordStatus } from "./common";
 import { updateLead } from "./leads";
 import { flushSlack } from "./notify";
 import { runAutoMessages, type AutoResult } from "./autoMessages";
+import { kickRoutines } from "./routines";
 import { removeDesignFiles } from "./storage";
 import type { LeadRow } from "./types";
 
@@ -75,6 +76,8 @@ export async function tick(): Promise<TickResult> {
     return undefined;
   });
   out.slack = await flushSlack().catch(() => false);
+  /* 5. The routines: a queue left over, or a message whose customer's hours just began. */
+  await kickRoutines("kiểm tra định kỳ");
   return out;
 }
 

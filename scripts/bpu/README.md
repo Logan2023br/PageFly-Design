@@ -1,6 +1,10 @@
 # BPU Ops — `bpu_ops.py`
 
-Script mà Claude scheduled task **BPU Ops** chạy mỗi giờ. Chỉ làm phần việc
+Script mà Claude scheduled task **BPU Ops** chạy mỗi giờ (tìm store mới cài, theo dõi).
+Ngoài lịch đó, PageFly Design gọi routine qua **API trigger** ngay khi có việc:
+BPU Builder khi có lead mới / build lại, BPU Ops (chỉ `send`) khi tin được duyệt
+hoặc tới giờ hành chính của khách — xem `lib/upsell/routines.ts` và
+**Cài đặt → Routine API** trên màn hình admin. Chỉ làm phần việc
 có thể lặp lại chính xác (gọi API, chấm điểm, soạn tin theo mẫu); phần cần phán
 đoán (intent từ Mixpanel, phân loại phản hồi) là việc của Claude.
 
@@ -21,7 +25,7 @@ Chỉ cần thư viện chuẩn của Python (3.9+). Riêng `sheet` cần `googl
 | `sync [--intents intents.json]` | Lấy store mới cài từ AC2 (trong `install_lookback_hours`), đọc `products.json`, chấm điểm, đẩy vào PageFly Design. Store để password vẫn thành lead (Builder dựng page mẫu theo ngành); store mở mà chưa có sản phẩm được chấm lại ở mốc ~24h và ~72h. `intents.json`: `{"shop.myshopify.com": "create/ai"}` hoặc `{"shop.myshopify.com": {"intent": "create/ai", "product_type": "Necklace"}}`. `product_type` lấy từ event Mixpanel `onboarding_v1_product_selected` (theo `shopify_domain`, bỏ `unknown`), dùng làm ngành hàng cho store để password | `GET /api/upsell/settings`, `GET /api/upsell/installs?since_hours=80`, `POST /api/upsell/installs`, `POST /api/upsell/leads` |
 | `track` | Với mỗi lead đang theo dõi: plan/số page từ AC2, đã đọc + phản hồi từ Crisp, nâng cấp, gỡ app; soạn follow-up 1 (48h chưa mở link), follow-up 2 (96h chưa tải), xin review (rating ≥ 4). Ghi `replies_to_classify.json` cho Claude phân loại. | `GET /api/upsell/leads/export?active=1&tracking_days=N`, `POST /api/upsell/leads/sync`, `POST /api/upsell/messages` |
 | `apply-sentiment classified.json` | Nhận kết quả Claude phân loại: `[{"lead_id","sentiment","summary_vi","wants_changes"}]`. Ghi vào lead; phản hồi `Positive` thì soạn tin xin review. | `GET /api/upsell/leads/export?active=1&tracking_days=60`, `POST /api/upsell/leads/sync`, `POST /api/upsell/messages` |
-| `send` | Gửi qua Crisp các tin admin đã duyệt, trong giờ hành chính của khách (`send_hour_start`–`send_hour_end`, theo timezone của store) — trừ tin "Duyệt & gửi ngay". Tin đầu tiên mở hội thoại Crisp mới. Báo kết quả từng tin. | `GET /api/upsell/messages?status=approved`, `POST /api/upsell/messages/:id/result` |
+| `send` | Gửi qua Crisp các tin admin đã duyệt, trong giờ hành chính của khách (`send_hour_start`–`send_hour_end`, theo timezone của store) — trừ tin "Duyệt & gửi ngay". Server chọn tin gửi được ngay và giữ chỗ mỗi tin 15 phút cho lần chạy này (`claim=1`), nên hai lần chạy cùng lúc không gửi trùng. Hỏi lại tới khi hết tin. Tin đầu tiên mở hội thoại Crisp mới. Báo kết quả từng tin. | `GET /api/upsell/messages?status=approved&claim=1`, `POST /api/upsell/messages/:id/result` |
 | `sheet` | Ghi đè 3 tab Leads / Installs / Events của Google Sheet bằng dữ liệu PageFly Design. Bỏ qua nếu không có `GOOGLE_SA_JSON`. | `GET /api/upsell/leads/export?all=1`, `GET /api/upsell/installs?since_hours=2160`, `GET /api/upsell/events/export?limit=3000` |
 
 Mỗi lệnh in một dòng JSON tóm tắt ra stdout; lỗi gọi API in ra stderr.
