@@ -3,7 +3,7 @@ import { adminGate } from "@/components/admin/adminGate";
 import { FilterBar, Pager, SelectionFeed, TabNav } from "@/components/admin/collections/storeSetUpsell/Chrome";
 import { AddStore } from "@/components/admin/collections/storeSetUpsell/AddStore";
 import { CustomerCards } from "@/components/admin/collections/storeSetUpsell/CustomerCards";
-import { LiveBar } from "@/components/admin/collections/storeSetUpsell/LiveBar";
+import { LiveBar, ModeSwitch } from "@/components/admin/collections/storeSetUpsell/LiveBar";
 import { MessageCards } from "@/components/admin/collections/storeSetUpsell/MessageCards";
 import { Section, SsuGroupNav, SsuReplyNav, SsuSentList } from "@/components/admin/collections/storeSetUpsell/Messages";
 import { SettingsPanel } from "@/components/admin/collections/storeSetUpsell/SettingsPanel";
@@ -139,10 +139,20 @@ export default async function StoreSetUpsellPage(props: PageProps<"/design/admin
       body = (
         <>
           {nav}
-          <p className="text-[12.5px] text-pf-muted">
-            {SSU_GROUPS[group].kinds.map((k) => SSU_KIND_LABEL[k]).join(" · ")} — chế độ gửi ở Cài đặt (
-            {group === "care" ? `chăm sóc: ${cfg.care_mode}` : `tin: ${cfg.mode}`}).
-          </p>
+          <section className="grid gap-3 rounded-pf-card border border-pf-border bg-pf-card p-4">
+            <p className="text-[12.5px] text-pf-muted">{SSU_GROUPS[group].kinds.map((k) => SSU_KIND_LABEL[k]).join(" · ")}</p>
+            {group === "review" ? (
+              <p className="text-[12px] text-pf-faint">Tin xin review không tự soạn: chọn "Xin review app" rồi bấm Soạn tin trên thẻ khách — tin vào Chờ duyệt.</p>
+            ) : (
+              /* key: a fresh switch when the group changes */
+              <ModeSwitch
+                key={group}
+                setting={group === "care" ? "care_mode" : "mode"}
+                mode={group === "care" ? cfg.care_mode : cfg.mode}
+                label={SSU_GROUPS[group].label}
+              />
+            )}
+          </section>
           <Section title={`Chờ duyệt (${pending.total})`}>
             <MessageCards rows={pending.rows} mode="pending" />
           </Section>
@@ -180,7 +190,7 @@ export default async function StoreSetUpsellPage(props: PageProps<"/design/admin
 
   return shell(
     <>
-      <LiveBar job={state.job} cursor={state.cursor} mode={cfg.mode} careMode={cfg.care_mode} paused={!!cfg.send_paused} />
+      <LiveBar job={state.job} cursor={state.cursor} paused={!!cfg.send_paused} />
       <TabNav tab={tab} counts={counts} />
       {tab === "all" && <AddStore />}
       {tab !== "settings" && <FilterBar tab={tab} f={f} sets={sets} />}

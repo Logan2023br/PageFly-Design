@@ -8,7 +8,8 @@ import { Button, Icon } from "../../../ui";
 import { api } from "../shared";
 
 /* ==========================================================================
-   The top line: what the minute job last did, the mode, and "Cập nhật ngay".
+   The top line: what the minute job last did, Tạm dừng gửi and "Cập nhật
+   ngay". The send modes moved to their groups under Tin nhắn (ModeSwitch).
    The screen re-reads itself every minute, in step with the job, so a new
    select shows up without a reload — unless somebody is typing in it.
    ========================================================================== */
@@ -16,21 +17,17 @@ import { api } from "../shared";
 export function LiveBar({
   job,
   cursor,
-  mode,
-  careMode,
   paused,
 }: {
   job: SsuJobState | null;
   cursor: string | null;
-  mode: string;
-  careMode: string;
   paused: boolean;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [current, setCurrent] = useState<Record<string, string>>({ mode, care_mode: careMode, send_paused: paused ? "1" : "0" });
+  const [current, setCurrent] = useState<Record<string, string>>({ send_paused: paused ? "1" : "0" });
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -58,43 +55,10 @@ export function LiveBar({
     startTransition(() => router.refresh());
   };
 
-  const MODES = [
-    { id: "manual", label: "Cần duyệt", hint: "Tin soạn sẵn, chờ bạn bấm duyệt mới gửi" },
-    { id: "auto", label: "Không cần duyệt", hint: "Khách đủ điều kiện (chưa review 5★) được gửi luôn" },
-    { id: "off", label: "Tắt", hint: "Chỉ theo dõi, không soạn tin" },
-  ];
-
   return (
     <div className="grid gap-3 rounded-pf-card border border-pf-border bg-pf-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="grid gap-2">
-          {[
-            { key: "mode", label: "Tin cảm ơn" },
-            { key: "care_mode", label: "Tin chăm sóc" },
-          ].map(({ key, label }) => (
-            <div key={key} className="flex flex-wrap items-center gap-2">
-              <span className="w-[100px] text-[12px] font-semibold uppercase tracking-[0.08em] text-pf-faint">{label}</span>
-              <div role="radiogroup" aria-label={label} className="flex gap-1 rounded-xl border border-pf-border bg-pf-surface/60 p-1">
-                {MODES.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={current[key] === m.id}
-                    title={m.hint}
-                    onClick={() => current[key] !== m.id && setMode(key, m.id)}
-                    className={`rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
-                      current[key] === m.id ? (m.id === "auto" ? "bg-pf-warn text-black" : "bg-pf-primary text-white") : "text-pf-muted hover:text-pf-text"
-                    }`}
-                  >
-                    {m.label}
-                  </button>
-                ))}
-              </div>
-              <span className="text-[12px] text-pf-muted">{MODES.find((m) => m.id === current[key])?.hint}</span>
-            </div>
-          ))}
-        </div>
+        <span className="text-[12px] text-pf-muted">Chế độ gửi tin cảm ơn và tin chăm sóc: ở từng nhóm trong tab Tin nhắn.</span>
         <div className="flex flex-wrap items-center gap-2">
           <Button
             size="sm"
@@ -129,6 +93,50 @@ export function LiveBar({
         </ul>
       )}
       {error && <p className="text-[12.5px] font-medium text-pf-danger">{error}</p>}
+    </div>
+  );
+}
+
+const MODES = [
+  { id: "manual", label: "Cần duyệt", hint: "Tin soạn sẵn, chờ bạn bấm duyệt mới gửi" },
+  { id: "auto", label: "Không cần duyệt", hint: "Khách đủ điều kiện (chưa review 5★) được gửi luôn" },
+  { id: "off", label: "Tắt", hint: "Chỉ theo dõi, không soạn tin" },
+];
+
+/** Cần duyệt / Không cần duyệt / Tắt for one kind of message, saved as pressed. */
+export function ModeSwitch({ setting, mode, label }: { setting: "mode" | "care_mode"; mode: string; label: string }) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+  const [current, setCurrent] = useState(mode);
+  const [error, setError] = useState<string | null>(null);
+  const set = async (m: string) => {
+    setError(null);
+    const r = await api("/api/admin/collection-pages/store-set-upsell/settings", { method: "PUT", body: JSON.stringify({ [setting]: m }) });
+    if (!r.ok) return setError(r.error);
+    setCurrent(m);
+    startTransition(() => router.refresh());
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <div role="radiogroup" aria-label={label} className="flex gap-1 rounded-xl border border-pf-border bg-pf-surface/60 p-1">
+        {MODES.map((m) => (
+          <button
+            key={m.id}
+            type="button"
+            role="radio"
+            aria-checked={current === m.id}
+            title={m.hint}
+            onClick={() => current !== m.id && set(m.id)}
+            className={`rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
+              current === m.id ? (m.id === "auto" ? "bg-pf-warn text-black" : "bg-pf-primary text-white") : "text-pf-muted hover:text-pf-text"
+            }`}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+      <span className="text-[12px] text-pf-muted">{MODES.find((m) => m.id === current)?.hint}</span>
+      {error && <span className="text-[12.5px] font-medium text-pf-danger">{error}</span>}
     </div>
   );
 }
