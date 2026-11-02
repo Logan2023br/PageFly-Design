@@ -2,7 +2,7 @@
 # ./cr <script.py> [args...] — run a Claude Review script with a Python that has the review packages.
 #
 # The first call finds a working interpreter (packages + Playwright that launches the preinstalled
-# Chromium), installs what is missing (pinned Playwright 1.56 = the Chromium in /opt/pw-browsers),
+# Chromium), installs what is missing (pinned Playwright 1.57 = the Chromium in /opt/pw-browsers),
 # and remembers it in $CR_WORK/.python. Every later call reuses it. Never runs `playwright install`.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,7 +25,7 @@ if [ ! -s "$PYF" ] || ! "$(cat "$PYF")" -c "import numpy, PIL, playwright" >/dev
     command -v "$p" >/dev/null 2>&1 || continue
     p="$(command -v "$p")"
     works "$p" && { found="$p"; break; }
-    "$p" -m pip install --break-system-packages -q pillow numpy "playwright==1.56.*" >/dev/null 2>&1 || true
+    "$p" -m pip install --break-system-packages -q pillow numpy "playwright==1.57.*" >/dev/null 2>&1 || true
     works "$p" && { found="$p"; break; }
   done
   if [ -z "$found" ]; then
