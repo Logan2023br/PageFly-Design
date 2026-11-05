@@ -175,7 +175,7 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
   } else if (tab === "stats") {
     body = <StatsPanel s={await upsellStats(f)} />;
   } else if (tab === "criteria") {
-    body = <LeadCriteria threshold={cfg.score_threshold} minProducts={cfg.min_products} controlPercent={cfg.control_percent} />;
+    body = <LeadCriteria controlPercent={cfg.control_percent} />;
   } else if (tab === "settings") {
     body = (
       <>

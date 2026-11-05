@@ -51,30 +51,35 @@ def test_sync_posts_installs_and_leads(bpu, capsys):
     test_d = domain_in_group(False, "ziru")
     ctrl_d = domain_in_group(True, "cacao")
     pw_d = domain_in_group(False, "locked")
-    weak_d, old_d = "my-store-123.myshopify.com", "old.myshopify.com"
+    weak_d = domain_in_group(False, "my-store-")
+    dev_d, testdom_d, old_d = "agency-demo.myshopify.com", "test-ziru.myshopify.com", "old.myshopify.com"
     w.stores = {
         test_d: good_store(test_d),
         ctrl_d: good_store(ctrl_d, name="Cacao House"),
         weak_d: good_store(weak_d, name="My Store", email="x@gmail.com", phone="", shopifyPlan="Basic"),
         pw_d: good_store(pw_d, name="Locked"),
+        dev_d: good_store(dev_d, shopifyPlan="partner_test"),
+        testdom_d: good_store(testdom_d),
         old_d: good_store(old_d, createdAt=ago(10)),  # outside install_lookback_hours
     }
-    w.products = {test_d: products(12), ctrl_d: products(3), weak_d: products(1), pw_d: 401}
+    w.products = {test_d: products(12), ctrl_d: products(3), weak_d: products(1), pw_d: 401, dev_d: products(12), testdom_d: products(12)}
 
     bpu.cmd_sync(["--intents", "missing.json"])
     pfd = bpu.FAKE_PFD
 
     assert ("GET", "/api/upsell/installs?since_hours=80") in pfd.calls
-    assert set(pfd.installs) == {test_d, ctrl_d, weak_d, pw_d}, "old install is outside the lookback"
+    assert set(pfd.installs) == {test_d, ctrl_d, weak_d, pw_d, dev_d, testdom_d}, "old install is outside the lookback"
     for row in pfd.installs.values():
         assert set(row) == INSTALL_FIELDS
     assert pfd.installs[pw_d]["storefront"] == "Password" and pfd.installs[pw_d]["lead"] is True
     assert "page mẫu" in pfd.installs[pw_d]["score_reasons"]
-    assert pfd.installs[weak_d]["lead"] is False and pfd.installs[weak_d]["skip_reason"].startswith("Score <")
+    assert pfd.installs[weak_d]["lead"] is True and pfd.installs[weak_d]["lead_score"] < 6, "a low score no longer keeps a store out"
+    for d in (dev_d, testdom_d):
+        assert pfd.installs[d]["lead"] is False and pfd.installs[d]["skip_reason"] == "Store dev", d
     assert pfd.installs[test_d]["category_hint"] == "Chocolate" and pfd.installs[test_d]["email_type"] == "Business"
 
     by_domain = {l["store_domain"]: l for l in pfd.leads.values()}
-    assert set(by_domain) == {test_d, ctrl_d, pw_d}, "a password-protected store is a lead too: it gets example pages"
+    assert set(by_domain) == {test_d, ctrl_d, pw_d, weak_d}, "a password-protected store is a lead too: it gets example pages"
     for l in by_domain.values():
         assert set(l) == LEAD_FIELDS
         assert l["lead_id"].startswith("L") and len(l["lead_id"]) == 11
@@ -83,7 +88,7 @@ def test_sync_posts_installs_and_leads(bpu, capsys):
     assert by_domain[test_d]["plan_at_send"] == "Free" and by_domain[test_d]["price_at_send"] == 0.0
 
     out = json.loads(capsys.readouterr().out)
-    assert out["checked"] == 4 and out["new_leads"] == 2 and out["control"] == 1
+    assert out["checked"] == 6 and out["new_leads"] == 3 and out["control"] == 1
 
 
 def test_sync_password_store_takes_category_from_intents(bpu, tmp_path):
@@ -297,7 +302,7 @@ def test_settings_from_server_override_defaults(bpu):
 def test_password_store_is_not_scored_below_an_open_one(bpu):
     """A store still behind its password is a merchant building it: +2 makes up for the
     open-storefront and public-products points it cannot have yet."""
-    cfg = {"score_threshold": 6, "min_products": 1}
+    cfg = {}
     st = {"shopifyPlan": "Basic", "email": "hello@lumijewels.com", "name": "Lumi Jewels",
           "shopDomain": "lumi.myshopify.com", "status": "installed"}
     sc, why, cat, etype, skip = bpu.score_store(st, "create/ai", [], "Password", cfg, "Necklace")
@@ -305,6 +310,18 @@ def test_password_store_is_not_scored_below_an_open_one(bpu):
     assert sc == 7 and skip == "", (sc, why)
     assert any("đang dựng" in w and "+2" in w for w in why)
     assert cat == "Necklace"
-    # Without the bonus the same store would sit at 5, under the threshold.
     sc_open, _, _, _, skip_open = bpu.score_store(st, "create/ai", [{"product_type": "Rings"}] * 3, "Open", cfg)
     assert sc_open == 7 and skip_open == "", "open with 3 products: +1 products +1 open — the same 7"
+
+
+def test_only_dev_stores_and_uninstalls_are_left_out(bpu):
+    """Any score is a lead now: a trial store with a Gmail, the default name and an
+    open storefront with no products still gets (sample) pages."""
+    st = {"shopifyPlan": "trial", "email": "a@gmail.com", "name": "My Store", "shopDomain": "fresh.myshopify.com",
+          "status": "installed"}
+    sc, _, cat, _, skip = bpu.score_store(st, "", [], "Open", {}, "Candles")
+    assert sc < 0 and skip == "" and cat == "Candles"
+    for plan in ("development", "partner_test", "staff", "staff_business", "affiliate", "plus_partner_sandbox"):
+        assert bpu.score_store({**st, "shopifyPlan": plan}, "", [], "Open", {})[4] == "Store dev", plan
+    assert bpu.score_store({**st, "shopDomain": "stg-fresh.myshopify.com"}, "", [], "Open", {})[4] == "Store dev"
+    assert bpu.score_store({**st, "status": "uninstalled"}, "", [], "Open", {})[4] == "App uninstalled"

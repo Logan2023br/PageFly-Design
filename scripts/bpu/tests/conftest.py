@@ -36,7 +36,7 @@ class FakePFD:
 
     def __init__(self, key=GOOD_KEY):
         self.key = key
-        self.settings = {"score_threshold": 6, "control_percent": 20, "min_products": 1, "max_builds_per_run": 2,
+        self.settings = {"control_percent": 20, "max_builds_per_run": 2,
                          "followup1_hours": 48, "followup2_hours": 96, "send_hour_start": 9, "send_hour_end": 19,
                          "tracking_days": 30, "install_lookback_hours": 3, "pic": "Logan",
                          "review_url": "https://apps.shopify.com/pagefly#modal-show=ReviewListingModal",

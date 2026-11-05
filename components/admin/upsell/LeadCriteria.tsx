@@ -3,8 +3,8 @@
 
    ⚠ A COPY, IN WORDS, OF `score_store()` IN scripts/bpu/bpu_ops.py. The script
    is what actually scores; this screen only explains it. Change a rule there
-   and change it here in the same commit. The three thresholds are read from
-   Settings, so they are always the live values.
+   and change it here in the same commit. The control share is read from
+   Settings, so it is always the live value.
    ========================================================================== */
 
 type Rule = { group: string; when: string; points: string; tone: "plus" | "minus" };
@@ -26,14 +26,6 @@ const RULES: Rule[] = [
   { group: "Storefront", when: "Đang để password (store mới đang dựng, chưa xem được sản phẩm)", points: "+2", tone: "plus" },
 ];
 
-const EXAMPLES: { store: string; math: string; total: number; password?: boolean }[] = [
-  { store: "Gói Shopify, email riêng, có phone, tên riêng, 12 sản phẩm, đang mở", math: "3 + 2 + 1 + 1 + 2 + 1", total: 10 },
-  { store: "Basic, Gmail, không phone, tên riêng, 3 sản phẩm, đang mở", math: "1 + 0 + 0 + 1 + 1 + 1", total: 4 },
-  { store: "Password, gói Shopify, email riêng, tên riêng, onboarding create", math: "3 + 2 + 1 + 1 + 2", total: 9, password: true },
-  { store: "Password, Basic, email riêng, tên riêng, onboarding create", math: "1 + 2 + 1 + 1 + 2", total: 7, password: true },
-  { store: "Password, Basic, Gmail, tên riêng, onboarding create", math: "1 + 1 + 1 + 2", total: 5, password: true },
-];
-
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="grid gap-3 rounded-pf-card border border-pf-border bg-pf-card p-4">
@@ -46,15 +38,32 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 const TH = "px-3 py-2 font-semibold";
 const TD = "px-3 py-2 align-top";
 
-export function LeadCriteria({ threshold, minProducts, controlPercent }: { threshold: number; minProducts: number; controlPercent: number }) {
+export function LeadCriteria({ controlPercent }: { controlPercent: number }) {
   return (
     <div className="grid gap-4 text-[13px] text-pf-body">
       <p className="text-pf-muted">
-        Mỗi giờ BPU Ops quét store vừa cài PageFly, chấm điểm từng store theo bảng dưới rồi quyết định store nào thành lead. Các
-        ngưỡng lấy từ tab <strong className="text-pf-text">Cài đặt</strong>, đổi ở đó là áp dụng từ lần quét sau.
+        Mỗi lần BPU Ops chạy đầy đủ, nó quét store vừa cài PageFly. <strong className="text-pf-text">Mọi store vẫn còn cài app đều thành lead, trừ store dev.</strong>{" "}
+        Điểm không còn quyết định store có thành lead hay không — chỉ cho biết store trông tiềm năng tới đâu.
       </p>
 
-      <Section title="1. Điểm cộng / trừ">
+      <Section title="1. Điều kiện thành lead (xét theo thứ tự)">
+        <ol className="grid list-decimal gap-2 pl-5">
+          <li>
+            <strong className="text-pf-text">App phải đang cài.</strong> Store đã gỡ PageFly thì loại.
+          </li>
+          <li>
+            <strong className="text-pf-text">Không phải store dev.</strong> Loại với lý do &ldquo;Store dev&rdquo; khi gói Shopify là development,
+            partner, staff, affiliate hoặc sandbox, hoặc domain dạng store test (test-, stg-, -test, bys-user-store, zd-store).
+          </li>
+          <li>
+            Còn lại đều thành lead, điểm bao nhiêu cũng được. <strong className="text-pf-text">{controlPercent}%</strong> lead vào nhóm{" "}
+            <strong className="text-pf-text">Đối chứng</strong> (<code>control_percent</code>): không build, chỉ để so tỉ lệ nâng cấp. Số còn
+            lại vào <strong className="text-pf-text">Hàng đợi build</strong>.
+          </li>
+        </ol>
+      </Section>
+
+      <Section title="2. Điểm cộng / trừ (để tham khảo)">
         <div className="overflow-x-auto rounded-pf-card border border-pf-border">
           <table className="w-full text-left text-[12.5px]">
             <thead className="bg-pf-card-hi text-[11px] uppercase tracking-[0.06em] text-pf-faint">
@@ -77,79 +86,23 @@ export function LeadCriteria({ threshold, minProducts, controlPercent }: { thres
         </div>
         <p className="text-[12px] text-pf-muted">
           Tối đa <strong className="text-pf-text">12 điểm</strong> với store đang mở, <strong className="text-pf-text">11 điểm</strong> với
-          store để password (+2 &ldquo;đang dựng&rdquo; thay cho điểm sản phẩm và điểm storefront mở mà nó chưa thể có).
+          store để password. Điểm âm vẫn thành lead.
         </p>
       </Section>
 
-      <Section title="2. Điều kiện thành lead (xét theo thứ tự)">
-        <ol className="grid list-decimal gap-2 pl-5">
-          <li>
-            <strong className="text-pf-text">App phải đang cài.</strong> Store đã gỡ PageFly thì loại.
-          </li>
-          <li>
-            <strong className="text-pf-text">Store đang mở phải có từ {minProducts} sản phẩm công khai</strong> (
-            <code>min_products</code>). Thiếu thì loại với lý do &ldquo;No public products&rdquo;, rồi được kiểm lại ở mốc 24 giờ và 72 giờ sau
-            khi cài. Store để password không bị loại ở bước này.
-          </li>
-          <li>
-            <strong className="text-pf-text">Điểm phải từ {threshold} trở lên</strong> (<code>score_threshold</code>). Thấp hơn thì loại.
-          </li>
-          <li>
-            Đạt cả ba thì thành lead. <strong className="text-pf-text">{controlPercent}%</strong> lead vào nhóm{" "}
-            <strong className="text-pf-text">Đối chứng</strong> (<code>control_percent</code>): không build, chỉ để so tỉ lệ nâng cấp. Số còn
-            lại vào <strong className="text-pf-text">Hàng đợi build</strong>.
-          </li>
-        </ol>
-      </Section>
-
-      <Section title="3. Store để password">
+      <Section title="3. Store để password hoặc chưa có sản phẩm công khai">
         <ul className="grid list-disc gap-2 pl-5">
-          <li>Vẫn được chấm điểm và vẫn có thể thành lead, nhưng Builder không đọc được sản phẩm của store.</li>
+          <li>Vẫn thành lead, nhưng Builder không đọc được sản phẩm của store.</li>
           <li>
             Builder dựng <strong className="text-pf-text">page mẫu theo ngành</strong>: tên store, ngôn ngữ theo quốc gia, ảnh miễn phí bản
             quyền, sản phẩm ví dụ, không ghi giá. Ngành lấy từ loại sản phẩm chủ store chọn lúc onboarding (Mixpanel), nếu không có thì đoán
             từ tên store. Không đoán được ngành thì lead bị bỏ qua.
           </li>
           <li>
-            Page mẫu có ghi chú &ldquo;Page mẫu: store đang để password…&rdquo; trong ghi chú build. Tin nhắn gửi khách nói page &ldquo;ready for your
-            own products and photos&rdquo; thay vì &ldquo;built with your own products&rdquo;.
-          </li>
-          <li>
-            Store để password là merchant mới đang dựng store, nên được <strong className="text-pf-text">+2 &ldquo;đang dựng&rdquo;</strong> bù
-            cho điểm sản phẩm và điểm storefront mở. Store Basic dùng Gmail vẫn cần thêm phone hoặc onboarding rebuild/import để đạt{" "}
-            {threshold} điểm.
+            Page mẫu có ghi chú &ldquo;Page mẫu: …&rdquo; trong ghi chú build. Tin nhắn gửi khách nói page &ldquo;ready for your own products
+            and photos&rdquo; thay vì &ldquo;built with your own products&rdquo;.
           </li>
         </ul>
-      </Section>
-
-      <Section title={`4. Ví dụ (ngưỡng hiện tại: ${threshold} điểm)`}>
-        <div className="overflow-x-auto rounded-pf-card border border-pf-border">
-          <table className="w-full text-left text-[12.5px]">
-            <thead className="bg-pf-card-hi text-[11px] uppercase tracking-[0.06em] text-pf-faint">
-              <tr>
-                <th className={TH}>Store</th>
-                <th className={TH}>Cách tính</th>
-                <th className={`${TH} text-right`}>Tổng</th>
-                <th className={TH}>Kết quả</th>
-              </tr>
-            </thead>
-            <tbody>
-              {EXAMPLES.map((e) => {
-                const ok = e.total >= threshold;
-                return (
-                  <tr key={e.store} className="border-t border-pf-border">
-                    <td className={TD}>{e.store}</td>
-                    <td className={`${TD} whitespace-nowrap text-pf-muted`}>{e.math}</td>
-                    <td className={`${TD} text-right font-semibold text-pf-text`}>{e.total}</td>
-                    <td className={`${TD} whitespace-nowrap font-semibold ${ok ? "text-pf-success" : "text-pf-danger"}`}>
-                      {ok ? (e.password ? "Lead, page mẫu" : "Lead") : `Loại (dưới ${threshold})`}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
       </Section>
     </div>
   );

@@ -133,12 +133,12 @@ def vn(s):
 def settings():
     s, j = pfd("GET", "/api/upsell/settings")
     cfg = (j or {}).get("settings", {}) if s == 200 else {}
-    d = {"score_threshold": 6, "control_percent": 20, "min_products": 1, "followup1_hours": 24, "followup2_hours": 48,
+    d = {"control_percent": 20, "followup1_hours": 24, "followup2_hours": 48,
          "send_hour_start": 9, "send_hour_end": 19, "tracking_days": 30, "install_lookback_hours": 3, "pic": "Logan",
          "review_url": "https://apps.shopify.com/pagefly#modal-show=ReviewListingModal"}
     for k, v in cfg.items():
         d[k] = v
-    for k in ["score_threshold", "control_percent", "min_products", "followup1_hours", "followup2_hours",
+    for k in ["control_percent", "followup1_hours", "followup2_hours",
               "send_hour_start", "send_hour_end", "tracking_days", "install_lookback_hours"]:
         d[k] = float(d[k])
     return d
@@ -153,6 +153,8 @@ def chunks(lst, n=200):
 FREE_MAIL = re.compile(r"@(gmail|googlemail|yahoo|ymail|hotmail|outlook|live|msn|icloud|me|aol|proton(mail)?|gmx|yandex|mail\.ru|qq|163|126|zoho|privaterelay\.appleid)\.", re.I)
 DEFAULT_NAME = re.compile(r"^(my store( \d+)?|minha loja|mi tienda|ma boutique|mein shop|il mio negozio|moja prodavnica( \d+)?|mijn winkel|我的商店|bys-user-store.*)$", re.I)
 TEST_DOMAIN = re.compile(r"^(bys-user-store|zd-store|stg-|test-)|-test(\.|$)", re.I)
+# A development store: a partner's, Shopify staff's or an affiliate's, never a merchant's.
+DEV_PLAN = re.compile(r"development|partner|staff|affiliate|sandbox", re.I)
 
 
 def fetch_products(domain):
@@ -213,13 +215,16 @@ def score_store(st, intent, products, storefront, cfg, product_type=""):
         sc += 2; why.append("Store đang dựng (để password) +2: dựng page mẫu")
         if not cat:
             cat = product_type
+    # An open store with no public products gets sample pages too, like a password one.
+    if not products and not cat:
+        cat = product_type
+    # Every store that still has the app is a lead unless it is a dev store; the
+    # score no longer decides, it only shows how promising the store looks.
     skip = ""
     if st.get("status") and st.get("status") != "installed":
         skip = f"App {st.get('status')}"
-    elif storefront != "Password" and len(products) < cfg["min_products"]:
-        skip = "No public products"
-    elif sc < cfg["score_threshold"]:
-        skip = f"Score < {int(cfg['score_threshold'])}"
+    elif DEV_PLAN.search(plan) or TEST_DOMAIN.search(st.get("shopDomain", "")):
+        skip = "Store dev"
     return sc, why, cat, etype, skip
 
 

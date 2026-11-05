@@ -806,9 +806,7 @@ async function main() {
 
     /* Each key, one at a time, as the form sends it: the value as typed (a string). */
     const next: Record<string, string> = {
-      score_threshold: "7",
       control_percent: "25",
-      min_products: "3",
       max_builds_per_run: "1",
       followup1_hours: "36",
       followup2_hours: "120",

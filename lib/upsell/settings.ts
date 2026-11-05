@@ -12,9 +12,7 @@ import { UpsellError } from "./types";
    ========================================================================== */
 
 export const SETTING_DEFAULTS = {
-  score_threshold: 6,
   control_percent: 20,
-  min_products: 1,
   max_builds_per_run: 2,
   followup1_hours: 24,
   followup2_hours: 48,
@@ -55,9 +53,7 @@ export const NUMERIC_KEYS = SETTING_KEYS.filter((k) => typeof SETTING_DEFAULTS[k
 
 /** What each key does, for the settings screen. */
 export const SETTING_HELP: Record<SettingKey, string> = {
-  score_threshold: "Điểm tối thiểu để một store mới cài thành lead",
   control_percent: "Phần trăm lead vào nhóm đối chứng (không build)",
-  min_products: "Số sản phẩm công khai tối thiểu",
   max_builds_per_run: "Số lead Builder nhận mỗi lần chạy",
   followup1_hours: "Giờ sau khi gửi mà chưa mở link thì soạn follow-up 1",
   followup2_hours: "Giờ sau khi gửi mà chưa tải thì soạn follow-up 2",

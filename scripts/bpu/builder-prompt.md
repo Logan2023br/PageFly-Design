@@ -31,7 +31,7 @@ For each lead, **first** call `POST /api/upsell/leads/{lead_id}/status` with `{"
 
 a. **Catalog data** from `https://{store_domain}`: `/products.json?limit=250`, `/collections.json?limit=50`, `/meta.json`. Note language, currency, product range, price range, bestsellers (available, with images, listed first), brand tone.
    - **Password-protected storefront** (`/products.json` answers 401/403, redirects to `/password`, or returns HTML): retry once, it may have opened. If it is still locked, build **sample pages** (see "Password-protected stores" below) instead of skipping.
-   - If the storefront is open but has no public products, call the status API with `{"status":"skipped","error":"No public products at build time"}` and move on.
+   - If the storefront is open but has no public products, build **sample pages** exactly as for a password-protected store (below), with the build note "Page mẫu: store chưa có sản phẩm công khai, ảnh và sản phẩm là ví dụ."
 
 b. **Pick the hero product** for the Product page: the product that best represents the store (available, several good images, a real description, ideally the top-listed or most featured on the homepage). Fetch `/products/{handle}.json` for full images, variants and description.
 
@@ -86,7 +86,7 @@ product hero (gallery with the product's real images, title, price in store curr
 ## Step 4: Design rules (apply all)
 
 Content
-- Use only real store data: real product names, prices in the store currency, real Shopify CDN images, real links (`/products/{handle}`, `/collections/{handle}`). Write all copy in the store's language. (Password-protected stores are the one exception: see "Password-protected stores" in step 2.)
+- Use only real store data: real product names, prices in the store currency, real Shopify CDN images, real links (`/products/{handle}`, `/collections/{handle}`). Write all copy in the store's language. (Sample pages — a password-protected store or one with no public products — are the one exception: see "Password-protected stores" in step 2.)
 - Never invent reviews, ratings, testimonials, customer counts, awards, certifications, guarantees, shipping times or discounts. Where a store would normally show these, add a clearly editable placeholder ("Add your customer reviews here") or omit the section. Shipping/return text stays generic and editable.
 - Copy is short and scannable: headline ≤ 8 words, subheadline ≤ 20 words, body paragraphs ≤ 3 lines. Benefits over features. One clear primary CTA per section.
 
@@ -153,7 +153,7 @@ curl -sS -X POST "$PFD_BASE/api/upsell/designs" -H "X-API-Key: $PFD_API_KEY" \
   -F category="{short category}" -F language="{iso code}" \
   -F page1_type="home" -F page1_title="{title}" -F page2_type="product" -F page2_title="{hero product name}" \
   -F build_note="{in Vietnamese, 4-8 sentences: style brief and direction, signature sections, how it beats their current pages, hero product choice, final review scores, fidelity check result; for a rebuild, what you changed}" \
-  -F sample="{1 for password-protected sample pages, else 0}" \
+  -F sample="{1 for sample pages (password-protected or no public products), else 0}" \
   -F page1_html=@page1.html -F page1_pagefly=@page1.pagefly -F page1_thumb=@page1.png \
   -F page2_html=@page2.html -F page2_pagefly=@page2.pagefly -F page2_thumb=@page2.png
 ```
