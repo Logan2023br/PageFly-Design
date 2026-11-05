@@ -543,6 +543,14 @@ async function main() {
       }
       sawDownload ||= all.some((l) => l.downloads > 0);
     }
+    /* Thống kê nhanh counts what each filter lists on Theo dõi tất cả. */
+    const bar = await adminQueries.activityCounts();
+    const tracked = (await adminQueries.listLeadTab("tracking", {})).total;
+    check(bar.sent === tracked, "Thống kê nhanh: lead đã gửi = Theo dõi tất cả", { bar, tracked });
+    for (const act of Object.keys(want)) {
+      const n = (await adminQueries.listLeadTab("tracking", { act })).total;
+      check(bar.counts[act as keyof typeof bar.counts] === n, `Thống kê nhanh · ${act} = ${n}`, bar.counts);
+    }
     check(sawDownload, "the fixture has a lead that downloaded, so 'Đã tải' is really exercised");
     check((await adminQueries.listLeadTab("upgraded", { act: "'; drop table upsell_leads; --" })).total >= 0, "an unknown act filters nothing and runs no SQL from the URL");
   }

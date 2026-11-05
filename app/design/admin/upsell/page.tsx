@@ -1,6 +1,7 @@
 import { AdminShell } from "@/components/admin/AdminShell";
 import { adminGate } from "@/components/admin/adminGate";
 import { FilterBar, Pager, TABS, TabNav, type TabId } from "@/components/admin/upsell/Chrome";
+import { ActivityBar } from "@/components/admin/upsell/ActivityBar";
 import { InstallsTable } from "@/components/admin/upsell/InstallsTable";
 import { GroupHeader, GroupNav, ModeSwitch, SentList } from "@/components/admin/upsell/MessageGroups";
 import { autoMessageSample } from "@/lib/upsell/autoMessages";
@@ -15,7 +16,9 @@ import { RoutinesPanel, type RoutineView } from "@/components/admin/upsell/Routi
 import { SettingsForm } from "@/components/admin/upsell/SettingsForm";
 import { StatsPanel } from "@/components/admin/upsell/StatsPanel";
 import {
+  LEAD_ACTIVITY,
   MESSAGE_GROUPS,
+  activityCounts,
   filterOptions,
   fullFunnelCount,
   groupOf,
@@ -75,7 +78,7 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
     );
   }
 
-  const [counts, options, cfg] = await Promise.all([tabCounts(), filterOptions(), getSettings()]);
+  const [counts, options, cfg, activity] = await Promise.all([tabCounts(), filterOptions(), getSettings(), activityCounts()]);
   const window = { start: cfg.send_hour_start, end: cfg.send_hour_end };
 
   let body: React.ReactNode;
@@ -205,6 +208,12 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
     >
       <div className="grid gap-4">
         <TabNav tab={tab} counts={counts} />
+        {tab !== "settings" && tab !== "criteria" && (
+          <ActivityBar
+            sent={activity.sent}
+            items={(Object.keys(LEAD_ACTIVITY) as (keyof typeof LEAD_ACTIVITY)[]).map((k) => ({ key: k, label: LEAD_ACTIVITY[k].label, n: activity.counts[k] }))}
+          />
+        )}
         {tab !== "settings" && tab !== "criteria" && <FilterBar tab={tab} f={f} pics={options.pics} categories={options.categories} />}
         {pager}
         {body}

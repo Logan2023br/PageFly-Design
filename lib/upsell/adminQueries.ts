@@ -377,6 +377,20 @@ export async function tabCounts(): Promise<Record<string, number>> {
   return rows[0];
 }
 
+/** The bar above the tabs: for every lead whose pages went out, how many did
+    each thing in LEAD_ACTIVITY — the same SQL the "Mọi hoạt động" filter uses,
+    so a number and the list it opens always agree. */
+export async function activityCounts(): Promise<{ sent: number; counts: Record<keyof typeof LEAD_ACTIVITY, number> }> {
+  const keys = Object.keys(LEAD_ACTIVITY) as (keyof typeof LEAD_ACTIVITY)[];
+  const { rows } = await (await db()).query<Record<string, number>>(
+    `select count(*)::int as sent, ${keys.map((k) => `count(*) filter (where ${LEAD_ACTIVITY[k].sql})::int as ${k}`).join(", ")}
+       from upsell_leads l where l.status = any($1::text[])`,
+    [LEAD_TABS.tracking.statuses],
+  );
+  const r = rows[0];
+  return { sent: r.sent, counts: Object.fromEntries(keys.map((k) => [k, r[k]])) as Record<keyof typeof LEAD_ACTIVITY, number> };
+}
+
 /* ---- one lead ------------------------------------------------------------- */
 
 export type LeadDetail = {

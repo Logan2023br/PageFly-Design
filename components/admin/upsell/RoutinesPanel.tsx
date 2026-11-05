@@ -22,7 +22,7 @@ export type RoutineView = {
 
 const WHAT: Record<RoutineView["id"], string> = {
   builder: "Gọi khi có lead mới, khi bạn bấm Build lại / đưa lại vào hàng đợi, và khi build xong một lead mà hàng đợi còn lead.",
-  ops: "Gửi tin: tự gọi khi bạn bấm Duyệt / Gửi ngay, khi page được tự duyệt, và khi tới giờ hành chính của khách có tin đang chờ. Không có lịch chạy: bấm Chạy đầy đủ để tìm store mới cài, theo dõi khách và soạn follow-up.",
+  ops: "Gửi tin: tự gọi khi bạn bấm Duyệt / Gửi ngay, khi page được tự duyệt, và khi tới giờ hành chính của khách có tin đang chờ. Ngoài ra chạy đầy đủ mỗi giờ (phút 05) theo lịch trên claude.ai: tìm store mới cài, theo dõi khách, soạn follow-up. Bấm Chạy đầy đủ để chạy ngay.",
 };
 
 export function RoutinesPanel({ routines, approval }: { routines: RoutineView[]; approval?: "review" | "auto" }) {
@@ -32,7 +32,7 @@ export function RoutinesPanel({ routines, approval }: { routines: RoutineView[];
       <div>
         <h3 className="text-[14px] font-semibold text-pf-text">Routine API — chạy ngay, không chờ tới giờ</h3>
         <p className="text-[12px] text-pf-muted">
-          Không routine nào chạy theo lịch — PageFly Design gọi chúng qua API trigger khi có việc. Mỗi routine cần token: trên claude.ai mở routine → Triggers → thêm API
+          PageFly Design gọi routine qua API trigger ngay khi có việc; chỉ BPU Ops có thêm lịch mỗi giờ để quét store mới cài. Mỗi routine cần token: trên claude.ai mở routine → Triggers → thêm API
           trigger → tạo token, rồi dán vào đây. Hệ thống kiểm tra lại mỗi 5 phút nên một lần gọi bị lỡ cũng chỉ trễ vài phút.
         </p>
       </div>
