@@ -20,6 +20,7 @@ export const ADMIN_SECTIONS = [
   { id: "training", label: "Training Design", href: "/design/admin/training" },
   { id: "collections", label: "Collection pages", href: "/design/admin/collections" },
   { id: "ssu", label: "Upsell Collection Pages", href: "/design/admin/collections/upsell" },
+  { id: "ucp2", label: "Upsell Collection Pages 2", href: "/design/admin/collections/upsell2" },
   { id: "upsell", label: "Upsell Build 2 pages", href: "/design/admin/upsell" },
   { id: "accounts", label: "Tài khoản", href: "/design/admin/accounts" },
 ] as const;

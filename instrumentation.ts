@@ -7,6 +7,9 @@
 
    And the Store set upsell's minute job (Mixpanel → Crisp), also Postgres
    only — see lib/storeSetUpsell/job.ts.
+
+   And Upsell Collection Pages 2's tracking (Crisp, AC2), every two minutes —
+   see lib/ucp2/core.ts.
    ========================================================================== */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
@@ -14,4 +17,6 @@ export async function register() {
   startUpsellTimer();
   const { startStoreSetTimer } = await import("./lib/storeSetUpsell/job");
   startStoreSetTimer();
+  const { startUcp2Timer } = await import("./lib/ucp2/core");
+  startUcp2Timer();
 }

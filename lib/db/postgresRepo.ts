@@ -531,6 +531,16 @@ begin
      where sections ? 'collections' and not sections ? 'ssu';
   end if;
 end $$;
+/* 2026-11-05: Upsell Collection Pages 2 is a section of its own ("ucp2"),
+   given to every account that has Upsell Collection Pages. */
+do $$
+begin
+  if not exists (select 1 from schema_once where key = 'ucp2_section_20261105') then
+    insert into schema_once (key) values ('ucp2_section_20261105');
+    update admin_accounts set sections = sections || '["ucp2"]'::jsonb, updated_at = now()
+     where sections ? 'ssu' and not sections ? 'ucp2';
+  end if;
+end $$;
 
 create table if not exists referral_members (
   id            text primary key,

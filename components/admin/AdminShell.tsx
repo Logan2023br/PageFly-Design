@@ -50,6 +50,12 @@ const NAV: { id: AdminSection; label: string; href: string; icon: IconName }[] =
     icon: "Megaphone",
   },
   {
+    id: "ucp2",
+    label: "Upsell Collection Pages 2",
+    href: "/design/admin/collections/upsell2",
+    icon: "ChartColumn",
+  },
+  {
     id: "upsell",
     label: "Upsell Build 2 pages",
     href: "/design/admin/upsell",
