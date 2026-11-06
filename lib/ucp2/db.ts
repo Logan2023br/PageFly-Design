@@ -61,6 +61,10 @@ create table if not exists ucp2_rows (
   tracked_at        timestamptz,
   changed_at        timestamptz not null default now()
 );
+-- AC2's price at the first look, and when: an upgrade without AC2's charge
+-- time is believed only from a first look made the day the message went
+alter table ucp2_rows add column if not exists first_price numeric;
+alter table ucp2_rows add column if not exists first_ac2_at timestamptz;
 create index if not exists ucp2_rows_sent on ucp2_rows (sent_at desc);
 create index if not exists ucp2_rows_domain on ucp2_rows (store_domain);
 create index if not exists ucp2_rows_code on ucp2_rows (lower(code));
@@ -81,6 +85,18 @@ create table if not exists ucp2_state (
   value      jsonb not null,
   updated_at timestamptz not null default now()
 );
+/* Once, on 2026-11-06: the first pass counted as upgraded every store paid
+   now that the sheet called Free — most had paid long before the message.
+   Forgotten, and looked at again under the stricter rule. */
+do $$
+begin
+  if not exists (select 1 from ucp2_state where key = '_once_upgrades_20261106') then
+    insert into ucp2_state (key, value) values ('_once_upgrades_20261106', 'true'::jsonb);
+    update ucp2_rows set upgraded_at = null, upgraded_to = null, upgraded_price = null, ac2_checked_at = null, changed_at = now()
+     where upgraded_at is not null;
+    delete from ucp2_events where type = 'upgraded';
+  end if;
+end $$;
 `;
 
 let ensured: Promise<void> | null = null;

@@ -39,6 +39,7 @@ process.env.UPSELL_API_KEY = "test-key-0123456789abcdef";
 const S1 = "session_11111111-1111-4111-8111-111111111111";
 const S2 = "session_22222222-2222-4222-8222-222222222222";
 const S3 = "session_33333333-3333-4333-8333-333333333333";
+const S4 = "session_44444444-4444-4444-8444-444444444444";
 
 const world = {
   messages: {} as Record<string, Record<string, unknown>[]>,
@@ -96,13 +97,14 @@ async function main() {
     { "Time": vn(sent), "Code Store": "PDAAA111", "Store Domain": "alpha.myshopify.com", "Email": "a@alpha.com", "Tên store": "Alpha", "Plan": "Free", "Ticket": `https://app.crisp.chat/website/w/inbox/${S1}/`, "Type User": "Resolved - Collection Pages" },
     { "Time": vn(sent), "Code Store": "beta-1", "Store Domain": "Beta-1.myshopify.com", "Email": "b@beta.com", "Tên store": "Beta", "Plan": "Free", "Ticket": `https://app.crisp.chat/website/w/inbox/${S2}`, "Type User": "New install - Collection Pages" },
     { "Time": vn(new Date()), "Code Store": "gamma", "Store Domain": "gamma.myshopify.com", "Email": "c@gamma.com", "Tên store": "Gamma", "Plan": "Free", "Ticket": `https://app.crisp.chat/website/w/inbox/${S3}`, "Type User": "New install - Collection Pages" },
+    { "Time": vn(sent), "Code Store": "delta", "Store Domain": "delta.myshopify.com", "Email": "d@delta.com", "Tên store": "Delta", "Plan": "Free", "Ticket": `https://app.crisp.chat/website/w/inbox/${S4}`, "Type User": "Resolved - Collection Pages" },
     { "Time": vn(sent), "Store Domain": "noticket.myshopify.com", "Ticket": "" },
   ];
   const post = (body: unknown, key = "test-key-0123456789abcdef") =>
     route.POST(new Request("https://x/api/ucp2/rows", { method: "POST", headers: { "x-api-key": key, "content-type": "application/json" }, body: JSON.stringify(body) }));
   assert.equal((await post(rows, "wrong-key-0123456789")).status, 401, "a wrong key is refused");
   let r = await (await post(rows)).json();
-  assert.deepEqual([r.received, r.added, r.updated, r.skipped.length], [4, 3, 0, 1], JSON.stringify(r));
+  assert.deepEqual([r.received, r.added, r.updated, r.skipped.length], [5, 4, 0, 1], JSON.stringify(r));
   assert.match(r.skipped[0].reason, /session/);
   r = await (await post({ rows })).json();
   assert.deepEqual([r.added, r.updated], [0, 0], "posting the same tab again changes nothing");
@@ -145,6 +147,10 @@ async function main() {
   world.stores["alpha.myshopify.com"] = { shopDomain: "alpha.myshopify.com", pageflyPlan: "Pro", pageflyPrice: 39, status: "installed" };
   world.activities["alpha.myshopify.com"] = [{ type: "SUBSCRIPTION_CHARGE_ACTIVATED", occurredAt: new Date(t0 + 7_200_000).toISOString() }];
   world.stores["beta-1.myshopify.com"] = { shopDomain: "beta-1.myshopify.com", pageflyPlan: "Free", pageflyPrice: 0, status: "uninstalled", uninstalledAt: new Date(t0 + 86_400_000).toISOString() };
+  world.messages[S4] = [];
+  // paying for a long time, though the sheet says Free: no charge after the message
+  world.stores["delta.myshopify.com"] = { shopDomain: "delta.myshopify.com", pageflyPlan: "Silver", pageflyPrice: 19, status: "installed" };
+  world.activities["delta.myshopify.com"] = [{ type: "SUBSCRIPTION_CHARGE_ACTIVATED", occurredAt: new Date(t0 - 300 * 86_400_000).toISOString() }];
   world.stores["gamma.myshopify.com"] = { shopDomain: "gamma.myshopify.com", pageflyPlan: "Free", pageflyPrice: 0, status: "installed" };
   await p.query("insert into collection_leads (id, domain, email, created_at) values ('l1', 'Alpha.myshopify.com', 'a@alpha.com', $1), ('l0', 'beta-1.myshopify.com', 'b@beta.com', $2)", [
     new Date(t0 + 5_000_000).toISOString(),
@@ -152,7 +158,7 @@ async function main() {
   ]);
 
   const job = await core.runTrack();
-  assert.equal(job.tracked, 3, JSON.stringify(job));
+  assert.equal(job.tracked, 4, JSON.stringify(job));
   assert.deepEqual(job.errors, []);
   const get = async (s: string) => (await p.query("select * from ucp2_rows where session_id = $1", [s])).rows[0];
   const a = await get(S1);
@@ -167,8 +173,18 @@ async function main() {
   assert.ok(b.delivered_at && !b.read_at, "delivered, not read");
   assert.ok(!b.downloaded_at, "a download before the invite is not counted");
   assert.ok(b.uninstalled_at, "uninstalled after the invite");
+  const dl = await get(S4);
+  assert.ok(!dl.upgraded_at, "paid since long before the message: not an upgrade");
+  assert.equal(Number(dl.first_price), 19);
   const g = await get(S3);
   assert.ok(!g.reviewed_at && g.reviewed_before, "5★ at the first look, the day it went: from before");
+  assert.equal(Number(g.first_price), 0, "AC2's price at the first look is kept");
+  world.stores["gamma.myshopify.com"] = { ...world.stores["gamma.myshopify.com"], pageflyPlan: "Builder", pageflyPrice: 24 };
+  await core.trackOne((await get(S3)) as never, { force: true });
+  assert.ok((await get(S3)).upgraded_at, "on Free at AC2's first look the day it went, paid now: an upgrade");
+  await p.query("update ucp2_rows set upgraded_at = null, upgraded_to = null, upgraded_price = null where session_id = $1", [S3]);
+  await p.query("delete from ucp2_events where session_id = $1 and type = 'upgraded'", [S3]);
+  world.stores["gamma.myshopify.com"] = { ...world.stores["gamma.myshopify.com"], pageflyPlan: "Free", pageflyPrice: 0 };
 
   // a second run does not log the same things again
   await p.query("update ucp2_rows set tracked_at = null, crisp_checked_at = null");
@@ -180,24 +196,24 @@ async function main() {
   const st = await q.ucp2Stats({});
   assert.deepEqual(
     [st.all.sent, st.all.read, st.all.clicked, st.all.downloaded, st.all.replied, st.all.upgraded, st.all.reviewed, st.all.uninstalled, st.all.clicks],
-    [3, 1, 2, 1, 1, 1, 1, 1, 5],
+    [4, 1, 2, 1, 1, 1, 1, 1, 5],
     JSON.stringify(st.all),
   );
   assert.equal(st.all.mrr, 39);
-  assert.equal(st.byType.reduce((n, t) => n + t.sent, 0), 3);
+  assert.equal(st.byType.reduce((n, t) => n + t.sent, 0), 4);
   assert.equal(st.byType.find((t) => t.type === "New install - Collection Pages")?.sent, 2);
   for (const did of Object.keys(q.UCP2_DID)) {
     const l = await q.ucp2List({ did });
-    const want = did === "not_read" ? 3 - st.all.read : st.all[did as keyof typeof st.all];
+    const want = did === "not_read" ? 4 - st.all.read : st.all[did as keyof typeof st.all];
     assert.equal(l.total, want, `list · ${did}`);
   }
   assert.equal((await q.ucp2List({ q: "pdaaa" })).total, 1, "search by code");
-  assert.equal((await q.ucp2List({ type: "Resolved - Collection Pages" })).total, 1);
+  assert.equal((await q.ucp2List({ type: "Resolved - Collection Pages" })).total, 2);
 
   // ---- back to the sheet: every row, or those changed since
   const pull = (since?: string) => route.GET(new Request(`https://x/api/ucp2/rows${since ? `?since=${encodeURIComponent(since)}` : ""}`, { headers: { "x-api-key": "test-key-0123456789abcdef" } }));
   const all = await (await pull()).json();
-  assert.equal(all.rows.length, 3);
+  assert.equal(all.rows.length, 4);
   assert.deepEqual(all.columns, [...core.SHEET_COLUMNS]);
   const ra = all.rows.find((x: { session_id: string }) => x.session_id === S1);
   assert.equal(ra.Ticket, `https://app.crisp.chat/website/w/inbox/${S1}/`, "keyed by the Ticket as the sheet has it");

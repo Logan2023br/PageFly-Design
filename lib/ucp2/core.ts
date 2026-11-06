@@ -73,6 +73,8 @@ export type Ucp2Row = {
   app_review: number | null;
   reviewed_before: boolean;
   uninstalled_at: string | null;
+  first_price: string | null;
+  first_ac2_at: string | null;
   crisp_checked_at: string | null;
   review_checked_at: string | null;
   ac2_checked_at: string | null;
@@ -310,13 +312,18 @@ export async function trackOne(row: Ucp2Row, opts: { force?: boolean; actor?: st
       const price = Number(st.pageflyPrice ?? 0) || 0;
       const plan = str(st.pageflyPlan) ?? "Free";
       Object.assign(patch, { pf_plan: plan, pf_price: price, app_status: str(st.status), ac2_checked_at: new Date().toISOString() });
-      /* On Free when the message went (the sheet's Plan), paid now: an
-         upgrade — at AC2's charge time when it has one after the message. */
-      const wasFree = !row.plan || /^free/i.test(row.plan);
-      if (!row.upgraded_at && price > 0 && wasFree) {
+      if (row.first_price === null) Object.assign(patch, { first_price: price, first_ac2_at: new Date().toISOString() });
+      /* An upgrade is a paid plan AC2 activated after the message. Without
+         that time, only a store AC2 itself saw on Free the day the message
+         went — the sheet's Plan says Free for stores paying for years. */
+      if (!row.upgraded_at && price > 0) {
         const at = await ac2UpgradeTime(row.store_domain, row.sent_at).catch(() => null);
-        Object.assign(patch, { upgraded_at: at ?? new Date().toISOString(), upgraded_to: plan, upgraded_price: price });
-        events.push(["upgraded", { to: plan, price, at }]);
+        const firstFree =
+          row.first_price !== null && Number(row.first_price) === 0 && row.first_ac2_at !== null && new Date(row.first_ac2_at).getTime() - sent < 24 * 60 * 60_000;
+        if (at || firstFree) {
+          Object.assign(patch, { upgraded_at: at ?? new Date().toISOString(), upgraded_to: plan, upgraded_price: price });
+          events.push(["upgraded", { to: plan, price, at }]);
+        }
       }
       if (!row.uninstalled_at && str(st.status) === "uninstalled") {
         const at = str(st.uninstalledAt);
