@@ -1,4 +1,5 @@
 import { AdminShell } from "@/components/admin/AdminShell";
+import { ReportsLink } from "@/components/admin/reports/ReportsLink";
 import { adminGate } from "@/components/admin/adminGate";
 import { FilterBar, Pager, TABS, TabNav, type TabId } from "@/components/admin/upsell/Chrome";
 import { ActivityBar } from "@/components/admin/upsell/ActivityBar";
@@ -215,6 +216,7 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
     <AdminShell
       current="upsell"
       title="Upsell Build 2 pages"
+      actions={<ReportsLink upsell="bpu" />}
       subtitle="BPU: page Claude dựng cho store mới cài — duyệt page, duyệt tin, theo dõi kết quả. Không tin nào tới khách khi chưa được duyệt."
     >
       <div className="grid gap-4">

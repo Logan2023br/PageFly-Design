@@ -10,6 +10,9 @@
 
    And Upsell Collection Pages 2's tracking (Crisp, AC2), every two minutes —
    see lib/ucp2/core.ts.
+
+   And the weekly reports of the three upsells, made at 01:00 on Monday —
+   see lib/reports/store.ts.
    ========================================================================== */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
@@ -19,4 +22,6 @@ export async function register() {
   startStoreSetTimer();
   const { startUcp2Timer } = await import("./lib/ucp2/core");
   startUcp2Timer();
+  const { startReportTimer } = await import("./lib/reports/store");
+  startReportTimer();
 }

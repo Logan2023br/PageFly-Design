@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ReportsLink } from "@/components/admin/reports/ReportsLink";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { adminGate } from "@/components/admin/adminGate";
 import { FIELD } from "@/components/admin/collections/shared";
@@ -71,7 +72,12 @@ export default async function Ucp2Page(props: PageProps<"/design/admin/collectio
       current="ucp2"
       title="Upsell Collection Pages 2"
       subtitle="Tin mời Collection Pages ghi ở sheet User Testing — khách đã đọc, click link, tải template, phản hồi, nâng cấp, review tới đâu."
-      actions={<RunNow />}
+      actions={
+        <div className="flex flex-wrap items-start gap-2">
+          <ReportsLink upsell="ucp2" />
+          <RunNow />
+        </div>
+      }
     >
       <div className="grid gap-4">
         <p className="text-[12px] text-pf-muted">

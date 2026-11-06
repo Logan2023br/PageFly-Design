@@ -1,4 +1,5 @@
 import { AdminShell } from "@/components/admin/AdminShell";
+import { ReportsLink } from "@/components/admin/reports/ReportsLink";
 import { adminGate } from "@/components/admin/adminGate";
 import { FilterBar, Pager, SelectionFeed, TabNav } from "@/components/admin/collections/storeSetUpsell/Chrome";
 import { AddStore } from "@/components/admin/collections/storeSetUpsell/AddStore";
@@ -81,6 +82,7 @@ export default async function StoreSetUpsellPage(props: PageProps<"/design/admin
     <AdminShell
       current="ssu"
       title="Upsell Collection Pages"
+      actions={<ReportsLink upsell="ssu" />}
       subtitle="Ai đã bấm Select template của Store set trong PageFly — thông tin store, Crisp, tin cảm ơn + chỉnh sửa miễn phí từ Logan, và kết quả"
     >
       <div className="grid gap-4">{children}</div>
