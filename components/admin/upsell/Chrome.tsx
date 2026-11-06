@@ -80,6 +80,7 @@ export function FilterBar({ tab, f, pics, categories }: { tab: TabId; f: Filters
     <form method="get" className="flex flex-wrap items-end gap-2">
       <input type="hidden" name="tab" value={tab} />
       {f.group && <input type="hidden" name="group" value={f.group} />}
+      {f.up && <input type="hidden" name="up" value={f.up} />}
       <input name="q" defaultValue={f.q} placeholder="Domain, tên, email…" className={`${FIELD} w-[220px]`} aria-label="Tìm" />
       <label className="grid gap-0.5 text-[11px] text-pf-faint">
         Từ

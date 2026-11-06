@@ -9,6 +9,7 @@ import { initialDraft } from "@/lib/upsell/review";
 import type { LeadRow } from "@/lib/upsell/types";
 import { LeadCriteria } from "@/components/admin/upsell/LeadCriteria";
 import { LeadTable } from "@/components/admin/upsell/LeadTable";
+import { UpgradeKinds } from "@/components/admin/upsell/UpgradeKinds";
 import { MessageQueue } from "@/components/admin/upsell/MessageQueue";
 import { PendingPages } from "@/components/admin/upsell/PendingPages";
 import { ReplyCards, ReplyNav } from "@/components/admin/upsell/Replies";
@@ -31,6 +32,7 @@ import {
   listLeadTab,
   listMessages,
   tabCounts,
+  upgradeKindCounts,
   upsellStats,
   type Filters,
 } from "@/lib/upsell/adminQueries";
@@ -62,6 +64,7 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
     cat: one("cat"),
     min_score: one("min_score"),
     act: one("act"),
+    up: one("up"),
     group: one("group"),
     read: one("read"),
     check: one("check"),
@@ -189,6 +192,14 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
   } else {
     const r = await listLeadTab(tab, f);
     body = <LeadTable rows={r.rows} variant={tab} />;
+    /* Đã nâng cấp: thường / organic / claim, each a filter. */
+    if (tab === "upgraded")
+      body = (
+        <>
+          <UpgradeKinds counts={await upgradeKindCounts()} current={f.up} f={f} />
+          {body}
+        </>
+      );
     /* Hàng đợi build: whether the Builder is called at once, and its last call. */
     if (tab === "queue")
       body = (

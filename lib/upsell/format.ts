@@ -138,3 +138,22 @@ export function whatsappText(markdown: string): string {
     .replace(/\[([^\]]*)\]\(([^)\s]*)\)/g, (_, text: string, url: string) => (text.trim() ? `${text.trim()}: ${url}` : url))
     .replace(/\*\*([^*\n]+?)\*\*/g, "*$1*");
 }
+
+/* Đã nâng cấp, by what the customer did before upgrading. The SQL twin of
+   upgradeKindOf is UPGRADE_KINDS in adminQueries. */
+export type UpgradeKind = "normal" | "organic" | "claim";
+export const UPGRADE_KIND_LABEL: Record<UpgradeKind, { label: string; hint: string }> = {
+  normal: { label: "Nâng cấp thường", hint: "Không đọc, không xem, không tải" },
+  organic: { label: "Nâng cấp organic", hint: "Có đọc (hoặc đọc + xem), chưa tải" },
+  claim: { label: "Nâng cấp claim", hint: "Có đọc, có xem, có tải" },
+};
+
+/** read + viewed + downloaded → claim; none of them → normal; anything between → organic. */
+export function upgradeKindOf(l: { message_read: boolean | null; views: number; downloads: number }): UpgradeKind {
+  const read = l.message_read === true;
+  const viewed = Number(l.views) > 0;
+  const downloaded = Number(l.downloads) > 0;
+  if (read && viewed && downloaded) return "claim";
+  if (!read && !viewed && !downloaded) return "normal";
+  return "organic";
+}

@@ -75,6 +75,7 @@ async function main() {
   const settings = await import("../lib/upsell/settings");
   const notify = await import("../lib/upsell/notify");
   const adminQueries = await import("../lib/upsell/adminQueries");
+  const format = await import("../lib/upsell/format");
   const { REPEATED_FAILURE } = await import("../lib/upsell/types");
 
   {
@@ -768,6 +769,31 @@ async function main() {
     check(l?.submit_state === null && l?.submit_at === null, "pressing it again takes the mark back");
     await review.setSubmitState("L261099FULL", "not_submitted", "admin:t");
     check((await leads.getLead("L261099FULL"))?.submit_state === "not_submitted", "Chưa submit is kept");
+  }
+
+  console.log("Đã nâng cấp: thường / organic / claim");
+  {
+    const p0 = await db();
+    const before = await adminQueries.upgradeKindCounts();
+    await leads.upsertLeads(
+      ["NORM", "ORG1", "ORG2"].map((k) => ({ lead_id: `L261099${k}`, store_domain: `${k.toLowerCase()}.myshopify.com`, group: "test" as const })),
+    );
+    await p0.query(
+      "update upsell_leads set status = 'upgraded', sent_at = now(), upgraded = true, upgraded_at = now(), mrr_added = 24 where lead_id in ('L261099NORM', 'L261099ORG1', 'L261099ORG2')",
+    );
+    await p0.query("update upsell_leads set message_read = true where lead_id in ('L261099ORG1', 'L261099ORG2')");
+    await p0.query("insert into upsell_designs (id, lead_id) values ('DORG2001', 'L261099ORG2')");
+    await p0.query("insert into upsell_events (lead_id, design_id, type, actor) values ('L261099ORG2', 'DORG2001', 'view', 'customer')");
+    const after = await adminQueries.upgradeKindCounts();
+    check(after.normal.n === before.normal.n + 1 && after.normal.mrr === before.normal.mrr + 24, "did nothing, upgraded: thường, with its MRR", after);
+    check(after.organic.n === before.organic.n + 2, "read, or read and viewed: organic", after);
+    check(after.claim.n === before.claim.n, "…not claim", after);
+    const claim = await adminQueries.listLeadTab("upgraded", { up: "claim" });
+    check(claim.rows.some((l) => l.lead_id === "L261099FULL") && !claim.rows.some((l) => l.lead_id.startsWith("L261099ORG")), "read + viewed + downloaded: claim, and the filter keeps only those");
+    const org = await adminQueries.listLeadTab("upgraded", { up: "organic" });
+    const kinds = org.rows.filter((l) => l.lead_id.startsWith("L261099ORG")).map((l) => format.upgradeKindOf(l));
+    check(kinds.length === 2 && kinds.every((k) => k === "organic"), "the row's own kind agrees with the SQL", kinds);
+    check(format.upgradeKindOf((await adminQueries.listLeadTab("upgraded", { up: "normal" })).rows.find((l) => l.lead_id === "L261099NORM")!) === "normal", "…for thường too");
   }
 
   console.log("Có phản hồi: by the message replied to, Đã kiểm tra");

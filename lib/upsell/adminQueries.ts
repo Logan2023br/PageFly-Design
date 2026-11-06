@@ -2,6 +2,7 @@ import "server-only";
 
 import { db } from "./db";
 import { getDesignForLead, type DesignView } from "./designs";
+import { UPGRADE_KIND_LABEL, type UpgradeKind } from "./format";
 import { LEAD_SELECT, shapeLead, type LeadListRow } from "./leads";
 import type { AutoKind, EventRow, InstallRow, LeadStatus, MessageRow } from "./types";
 
@@ -21,6 +22,8 @@ export type Filters = {
   min_score?: string;
   /** what the customer did — a key of LEAD_ACTIVITY */
   act?: string;
+  /** Đã nâng cấp: which kind of upgrade — a key of UPGRADE_KINDS */
+  up?: string;
   /** which messages on the Tin nhắn tab — a key of MESSAGE_GROUPS */
   group?: string;
   /** the sent list on the Tin nhắn tab: "1" read by the customer, "0" not yet */
@@ -46,6 +49,31 @@ export const LEAD_ACTIVITY = {
   no_whatsapp: { label: "Chưa gửi WhatsApp", sql: "l.whatsapp_sent_at is null and l.whatsapp_skipped_at is null" },
   whatsapp_skipped: { label: "Không dùng WhatsApp", sql: "l.whatsapp_skipped_at is not null" },
 } as const;
+
+/* Đã nâng cấp, split by what the customer did before upgrading:
+     normal   read nothing, viewed nothing, downloaded nothing
+     claim    read the message, viewed the pages and downloaded them
+     organic  everything in between (read, or read and viewed, …) */
+const DID_NOTHING = `l.message_read is not true and not ${customerDid("view")} and not ${customerDid("download")}`;
+const DID_ALL = `l.message_read is true and ${customerDid("view")} and ${customerDid("download")}`;
+export const UPGRADE_KINDS: Record<UpgradeKind, { label: string; hint: string; sql: string }> = {
+  normal: { ...UPGRADE_KIND_LABEL.normal, sql: DID_NOTHING },
+  organic: { ...UPGRADE_KIND_LABEL.organic, sql: `not (${DID_NOTHING}) and not (${DID_ALL})` },
+  claim: { ...UPGRADE_KIND_LABEL.claim, sql: DID_ALL },
+};
+
+/** Per kind of upgrade: how many leads, and the MRR they added. */
+export async function upgradeKindCounts(): Promise<Record<UpgradeKind, { n: number; mrr: number }>> {
+  const keys = Object.keys(UPGRADE_KINDS) as UpgradeKind[];
+  const { rows } = await (await db()).query(
+    `select ${keys
+      .map((k) => `count(*) filter (where ${UPGRADE_KINDS[k].sql})::int as ${k}_n, coalesce(sum(l.mrr_added) filter (where ${UPGRADE_KINDS[k].sql}), 0)::float as ${k}_mrr`)
+      .join(", ")}
+       from upsell_leads l where l.upgraded is true`,
+  );
+  const r = rows[0];
+  return Object.fromEntries(keys.map((k) => [k, { n: r[`${k}_n`], mrr: r[`${k}_mrr`] }])) as Record<UpgradeKind, { n: number; mrr: number }>;
+}
 
 /** Viewed + read + downloaded + upgraded: the lead counted as "Upsell Submit". */
 export const FULL_FUNNEL = `${customerDid("view")} and ${customerDid("download")} and l.message_read is true and l.upgraded is true`;
@@ -97,6 +125,7 @@ function leadWhere(f: Filters, col: string, alias = "l"): { sql: string[]; param
   if (f.min_score && Number.isFinite(Number(f.min_score))) add((n) => `${alias}.lead_score >= $${n}`, Number(f.min_score));
   /* Leads only (alias l): installs have no design to have been viewed. */
   if (alias === "l" && f.act && Object.hasOwn(LEAD_ACTIVITY, f.act)) sql.push(`(${LEAD_ACTIVITY[f.act as keyof typeof LEAD_ACTIVITY].sql})`);
+  if (alias === "l" && f.up && Object.hasOwn(UPGRADE_KINDS, f.up)) sql.push(`(${UPGRADE_KINDS[f.up as UpgradeKind].sql})`);
   return { sql, params };
 }
 

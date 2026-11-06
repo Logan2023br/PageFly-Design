@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { daysLeft, fmtVN, hoursSince, money } from "@/lib/upsell/format";
+import { UPGRADE_KIND_LABEL, daysLeft, fmtVN, hoursSince, money, upgradeKindOf } from "@/lib/upsell/format";
 import type { LeadListRow } from "@/lib/upsell/leads";
 import { Button } from "../../ui";
 import { CrispLink, ErrorLine, Pill, PhoneLine, StatusBadge, SubmitMark, WhatsappMark, useAct } from "./bits";
@@ -96,11 +96,11 @@ export function LeadTable({ rows, variant }: { rows: LeadListRow[]; variant: Tab
       {
         head: "Loại Upsell",
         cell: (l) => {
-          /* Submit: the customer did all four — viewed, read, downloaded, upgraded. */
-          const full = l.views > 0 && l.message_read === true && l.downloads > 0 && l.upgraded === true;
+          /* Thường: did nothing before upgrading; claim: read, viewed and downloaded; organic: between. */
+          const kind = upgradeKindOf(l);
           return (
             <div className="grid min-w-[130px] justify-items-start gap-1.5">
-              <Pill tone={full ? "ok" : "muted"}>{full ? "Upsell Submit" : "Upsell Organic"}</Pill>
+              <Pill tone={kind === "claim" ? "ok" : kind === "organic" ? "primary" : "muted"}>{UPGRADE_KIND_LABEL[kind].label}</Pill>
               <SubmitMark leadId={l.lead_id} state={l.submit_state} at={l.submit_at} by={l.submit_by} />
             </div>
           );
