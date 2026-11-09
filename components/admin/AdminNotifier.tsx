@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { AdminNotice } from "@/lib/adminNotifications";
 import { Icon } from "../ui";
+import { speechParts } from "@/lib/speechParts";
 
 /* ==========================================================================
    The notices: while an admin page is open, every 30 seconds it asks what
@@ -118,14 +119,30 @@ function chime(tone: AdminNotice["tone"]) {
   }
 }
 
+const EN_VOICES = ["Samantha", "Google US English", "Alex", "Microsoft Aria Online (Natural) - English (United States)", "Microsoft Zira - English (United States)", "Karen", "Daniel"];
+
+/**
+ * Read out in two voices: the Vietnamese in a Vietnamese one, the English
+ * words ("Upsell Responsive", "upgrade", a store's name) in an English one,
+ * one after the other — see lib/speechParts.
+ */
 function speak(text: string) {
   if (!("speechSynthesis" in window)) return;
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = "vi-VN";
-  const vi = window.speechSynthesis.getVoices().find((v) => v.lang.toLowerCase().startsWith("vi"));
-  if (vi) u.voice = vi;
-  u.rate = 1;
-  window.speechSynthesis.speak(u);
+  const voices = window.speechSynthesis.getVoices();
+  const vi = voices.find((v) => v.lang.toLowerCase().startsWith("vi"));
+  /* a plain voice first: macOS lists novelty ones ("Bad News", "Bells") among en-US */
+  const en =
+    EN_VOICES.map((name) => voices.find((v) => v.name === name)).find(Boolean) ??
+    voices.find((v) => /^en[-_]us/i.test(v.lang) && v.localService) ??
+    voices.find((v) => v.lang.toLowerCase().startsWith("en"));
+  for (const part of speechParts(text)) {
+    const u = new SpeechSynthesisUtterance(part.text);
+    u.lang = part.lang === "vi" ? "vi-VN" : "en-US";
+    const voice = part.lang === "vi" ? vi : en;
+    if (voice) u.voice = voice;
+    u.rate = 1;
+    window.speechSynthesis.speak(u);
+  }
 }
 
 const ICON: Record<AdminNotice["tone"], string> = { celebrate: "🎉", done: "✅", reply: "💬", error: "⚠️" };
