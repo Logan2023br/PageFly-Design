@@ -222,9 +222,10 @@ export function rowsToStores(rows: string[][]): SheetRow[] {
 
 /** Signs the assertion Google expects and trades it for an access token. Done
     by hand because a full Google SDK is a large dependency for one RSA sign. */
-async function serviceAccountToken(): Promise<string> {
-  const raw = process.env.SHEET_SERVICE_ACCOUNT_JSON!;
-  const key = JSON.parse(raw) as { client_email: string; private_key: string };
+/** `raw`: the service account's JSON — as is, or base64 of it. */
+async function serviceAccountToken(raw = process.env.SHEET_SERVICE_ACCOUNT_JSON!): Promise<string> {
+  const text = raw.trim().startsWith("{") ? raw : Buffer.from(raw, "base64").toString("utf8");
+  const key = JSON.parse(text) as { client_email: string; private_key: string };
 
   const now = Math.floor(Date.now() / 1000);
   const b64 = (obj: unknown) =>
@@ -272,13 +273,14 @@ async function fetchViaServiceAccount(): Promise<string[][]> {
 }
 
 /**
- * Any range of any sheet the service account can read (shared with its email
+ * Any range of any sheet a service account can read (shared with its email
  * as Viewer) — rows as Sheets gives them, trailing empty cells left off.
- * Throws when SHEET_SERVICE_ACCOUNT_JSON is not set.
+ * `serviceAccount` is its JSON (or base64 of it): a caller passes its own,
+ * so it never becomes the allowlist's source (sheetSource reads
+ * SHEET_SERVICE_ACCOUNT_JSON alone).
  */
-export async function readSheetValues(sheetId: string, range: string): Promise<string[][]> {
-  if (!process.env.SHEET_SERVICE_ACCOUNT_JSON) throw new Error("SHEET_SERVICE_ACCOUNT_JSON chưa đặt");
-  const token = await serviceAccountToken();
+export async function readSheetValues(sheetId: string, range: string, serviceAccount: string): Promise<string[][]> {
+  const token = await serviceAccountToken(serviceAccount);
   const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}`, {
     headers: { authorization: `Bearer ${token}` },
     cache: "no-store",

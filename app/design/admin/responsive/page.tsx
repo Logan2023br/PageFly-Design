@@ -5,7 +5,7 @@ import { FIELD } from "@/components/admin/fieldClass";
 import { CrispLink, Pill } from "@/components/admin/upsell/bits";
 import { DoneButton, ModeSwitch, QueueActions, RunControls, SendAnyway, SettingsForm, TrackButton } from "@/components/admin/ursp/Controls";
 import { vnTime } from "@/lib/ucp2/core";
-import { RECAP_SHEET_URL, composeMessage, deadlineText, offerUntil, withDeadline, type ActiveResult, type JobState, type RecapResult } from "@/lib/ursp/core";
+import { RECAP_SHEET_URL, composeMessage, recapServiceAccount, deadlineText, offerUntil, withDeadline, type ActiveResult, type JobState, type RecapResult } from "@/lib/ursp/core";
 import { getState, hasUrspDatabase } from "@/lib/ursp/db";
 import {
   URSP_TABS,
@@ -217,7 +217,7 @@ function StatusBar({
   active: ActiveResult | null;
   job: JobState | null;
 }) {
-  const sheetDirect = !!process.env.SHEET_SERVICE_ACCOUNT_JSON;
+  const sheetDirect = !!recapServiceAccount();
   return (
     <section className="grid gap-2 rounded-pf-card border border-pf-border bg-pf-card p-4 text-[12.5px] text-pf-body">
       <div className="flex flex-wrap items-center gap-2">
@@ -604,7 +604,7 @@ function RecentRecap({ rows }: { rows: Awaited<ReturnType<typeof recentRecapRows
           và review 5★ (app_review trên Crisp) — so với lúc bấm Đã xử lý xong.
         </p>
         <p>
-          Server đọc file Recap bằng service account (SHEET_SERVICE_ACCOUNT_JSON, share file cho email của nó quyền Viewer). Không có thì n8n gửi row mới vào{" "}
+          Server đọc file Recap bằng service account (URSP_SHEET_SA_JSON trong .env của VPS, share file cho email của nó quyền Viewer). Không có thì n8n gửi row mới vào{" "}
           <code>POST /api/ursp/recap</code> kèm header <code>X-API-Key</code> (key của upsell API).
         </p>
       </div>

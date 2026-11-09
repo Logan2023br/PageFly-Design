@@ -33,7 +33,7 @@ import { SEGMENTS, SKIP_REASONS, type Segment, type SkipCode, type UrspTarget } 
               calls responsive), whose resolution is not one of the skipped
               ones → the offer, in that same ticket. Read every 5 minutes, from where the last read
               ended — rows written before Bắt đầu are never read. Straight
-              from Google (SHEET_SERVICE_ACCOUNT_JSON, sheet shared with it)
+              from Google (URSP_SHEET_SA_JSON, sheet shared with it)
               or posted in by n8n (POST /api/ursp/recap).
      active   once an hour, AC2's store list: stores active today (Vietnam
               time) → the offer, in their latest Crisp conversation if they
@@ -59,6 +59,12 @@ import { SEGMENTS, SKIP_REASONS, type Segment, type SkipCode, type UrspTarget } 
 const RECAP_SHEET_ID = process.env.URSP_RECAP_SHEET_ID ?? "164dn2Er7xjcwOtudVts7fahT8iiIoV6bNX8HHyx5pEg";
 const RECAP_TAB = process.env.URSP_RECAP_TAB ?? "Recap v11";
 export const RECAP_SHEET_URL = `https://docs.google.com/spreadsheets/d/${RECAP_SHEET_ID}/edit`;
+/**
+ * The service account that reads the Recap sheet — its own variable, not
+ * SHEET_SERVICE_ACCOUNT_JSON, which would also switch the allowlist to it.
+ * GOOGLE_SA_JSON is BPU Ops' name for the same kind of key.
+ */
+export const recapServiceAccount = (): string | null => process.env.URSP_SHEET_SA_JSON?.trim() || process.env.GOOGLE_SA_JSON?.trim() || null;
 const RECAP_EVERY_MS = 5 * 60_000;
 const ACTIVE_EVERY_MS = 60 * 60_000;
 const CRISP_EVERY_MS = 15 * 60_000;
@@ -534,15 +540,16 @@ export async function importRecap(input: unknown, actor = "n8n"): Promise<RecapR
  * after Bắt đầu only finds where the sheet ends: what is above it is old.
  */
 async function readRecapSheet(): Promise<RecapResult | null> {
-  if (!process.env.SHEET_SERVICE_ACCOUNT_JSON) return null;
+  const sa = recapServiceAccount();
+  if (!sa) return null;
   const cursor = await getState<{ row: number; header: string[] }>("recap_cursor");
   if (!cursor) {
-    const [col, head] = await Promise.all([readSheetValues(RECAP_SHEET_ID, `${RECAP_TAB}!A:A`), readSheetValues(RECAP_SHEET_ID, `${RECAP_TAB}!1:1`)]);
+    const [col, head] = await Promise.all([readSheetValues(RECAP_SHEET_ID, `${RECAP_TAB}!A:A`, sa), readSheetValues(RECAP_SHEET_ID, `${RECAP_TAB}!1:1`, sa)]);
     const row = col.length;
     await setState("recap_cursor", { row, header: head[0] ?? [] });
     return { at: new Date().toISOString(), source: "sheet", read: 0, added: 0, responsive: 0, targets: 0, cursor: row, note: `Bắt đầu từ sau dòng ${row}` };
   }
-  const values = await readSheetValues(RECAP_SHEET_ID, `${RECAP_TAB}!A${cursor.row + 1}:BH${cursor.row + RECAP_BATCH}`);
+  const values = await readSheetValues(RECAP_SHEET_ID, `${RECAP_TAB}!A${cursor.row + 1}:BH${cursor.row + RECAP_BATCH}`, sa);
   /* the last row with anything in it: a row half written is read next time */
   let last = values.length;
   while (last > 0 && !(values[last - 1] ?? []).some((c) => String(c ?? "").trim())) last--;

@@ -42,6 +42,8 @@ Object.assign(process.env, {
   ANTHROPIC_API_KEY: "sk-test",
 });
 delete process.env.SHEET_SERVICE_ACCOUNT_JSON;
+delete process.env.URSP_SHEET_SA_JSON;
+delete process.env.GOOGLE_SA_JSON;
 
 let failed = 0;
 function check(ok: unknown, what: string, detail?: unknown) {
