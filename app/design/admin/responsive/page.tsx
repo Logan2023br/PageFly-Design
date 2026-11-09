@@ -152,7 +152,7 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
     <AdminShell
       current="ursp"
       title="Upsell Responsive"
-      subtitle="Mùa BFMC: Logan mời khách review responsive mọi page + chỉnh sửa miễn phí. Phân khúc Recap (ticket responsive) và Active (store hoạt động hôm nay chưa liên hệ support)."
+      subtitle="Mùa BFMC: Logan mời khách review responsive mọi page + chỉnh sửa miễn phí. Phân khúc Recap (ticket responsive) và Active (store hoạt động hôm nay)."
       actions={<RunControls on={run.on} />}
     >
       <div className="grid gap-4">
