@@ -101,14 +101,18 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
             <strong className="text-pf-text">A/B test:</strong>
             <Pill tone="primary">Bản A</Pill>
             <span className="text-pf-body">
-              {arms.A.sent} gửi · {rate(arms.A)} phản hồi
+              Đã gửi bản A: <b className="text-pf-text">{arms.A.sent}</b> · {rate(arms.A)} phản hồi
             </span>
             <Pill tone="ok">Bản B</Pill>
-            <span className="text-pf-body">{arms.B.sent ? `${arms.B.sent} gửi · ${rate(arms.B)} phản hồi` : `${arms.B.held} store đang giữ, chưa gửi`}</span>
+            <span className="text-pf-body">
+              Đã gửi bản B: <b className="text-pf-text">{arms.B.sent}</b>
+              {arms.B.sent ? ` · ${rate(arms.B)} phản hồi` : ""}
+              {arms.B.held ? ` · ${arms.B.held} store đang giữ, chưa gửi` : ""}
+            </span>
             <span className="ml-auto text-pf-primary-hi">Xem so sánh →</span>
           </Link>
         )}
-        <AfterDone s={[stats.recap, stats.active]} />
+        <AfterDone s={[stats.recap, stats.active]} sentA={arms.A.sent} sentB={arms.B.sent} />
         <div className="grid gap-4 xl:grid-cols-2">
           {(["recap", "active"] as const).map((seg) => (
             <SegmentPanel key={seg} seg={seg} s={stats[seg]} href={qs} />
@@ -417,13 +421,13 @@ const firstOfMonth = () => `${new Date(Date.now() + 7 * 3_600_000).toISOString()
 /* ---------------------------------------------------------------- overview */
 
 /** The goal: of the stores the team handled, how many upgraded, reviewed, and how they felt. */
-function AfterDone({ s }: { s: SegmentStats[] }) {
+function AfterDone({ s, sentA, sentB }: { s: SegmentStats[]; sentA: number; sentB: number }) {
   const sum = (k: keyof SegmentStats) => s.reduce((a, x) => a + (x[k] as number), 0);
   const sent = sum("sent");
   const done = sum("done");
   const moods = sum("happy") + sum("neutral") + sum("unhappy");
   const tiles = [
-    { label: "Đã gửi", n: sent, note: `${pct(sum("read"), sent)} đã xem · ${sum("followup_sent")} đã nhắc lại` },
+    { label: "Đã gửi", n: sent, note: `bản A ${sentA} · bản B ${sentB} · ${pct(sum("read"), sent)} đã xem · ${sum("followup_sent")} đã nhắc lại` },
     { label: "Phản hồi", n: sum("replied"), note: `${pct(sum("replied"), sent)} đã gửi` },
     { label: "Đồng ý", n: sum("agree"), note: `${pct(sum("agree"), sum("replied"))} người phản hồi` },
     { label: "Đã xử lý xong", n: done, note: `${sum("done_open")} phản hồi chưa xử lý` },
