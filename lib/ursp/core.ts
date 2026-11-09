@@ -102,72 +102,73 @@ const errText = (err: unknown) => (err instanceof Error ? err.message : String(e
 
 /* ---------------------------------------------------------------- message */
 
-/* Crisp renders *bold* in chat and in the email it sends. Built to be
+/* Crisp renders **bold** in chat and in the email it sends (a single *
+   is italic). Built to be
    answered: who we are, why now (BFCM shoppers are on their phones), what
    they get (ALL pages, FREE, nothing to do), that it lasts 3 days, and one
-   easy reply. The customer's name, Logan's and the time are bold.
+   easy reply. The customer's name and Logan's are bold CAPITALS, the time bold.
 
    {deadline} is the offer's last day — offer_days after the message goes —
    so it stays in the text until it is sent, and is written in then. */
 const OFFER = `For a limited time, our experts will:
-✅ *Review the responsive layout of ALL your PageFly pages* — mobile, tablet and desktop
-✅ *Fix every issue we find, 100% FREE* — no work needed on your side
+✅ **Review the responsive layout of ALL your PageFly pages** — mobile, tablet and desktop
+✅ **Fix every issue we find, 100% FREE** — no work needed on your side
 
-Most of your *BLACK FRIDAY* shoppers will browse and buy *on their phones*, so a page that breaks on mobile can quietly cost you sales.
+Most of your **BLACK FRIDAY** shoppers will browse and buy **on their phones**, so a page that breaks on mobile can quietly cost you sales.
 
-⏰ This free offer is valid for *{offer_days} DAYS only* — until *{deadline}*.
+⏰ This free offer is valid for **{offer_days} DAYS only** — until **{deadline}**.
 
-👉 *Just reply "YES" to this message* and we will get started right away.
-
-Best regards,
-*{pic}* – PageFly Technical Team`;
-
-const DEFAULT_FOLLOWUP = `Hi *{store_name}* team,
-
-Just a quick follow-up from *{pic}* 😊
-
-Your *FREE responsive review & fix* offer expires on *{deadline}* — after that, this free service is no longer available.
-
-✅ We check *ALL your PageFly pages* on mobile, tablet and desktop
-✅ We fix every issue we find, *100% FREE* — you don't need to do anything
-
-Your *BLACK FRIDAY* shoppers are on their way. Want us to make sure your store is ready for them?
-
-👉 *Just reply "YES"* and our team will start right away.
+👉 **Just reply "YES" to this message** and we will get started right away.
 
 Best regards,
-*{pic}* – PageFly Technical Team`;
+**{pic}** – PageFly Technical Team`;
 
-/* The reminder for an offer sent before it lasted 3 days: it promised the end of November. */
-const FOLLOWUP_NOVEMBER = `Hi *{store_name}* team,
+const DEFAULT_FOLLOWUP = `Hi **{store_name}** team,
 
-Just a quick follow-up from *{pic}* 😊
+Just a quick follow-up from **{pic}** 😊
 
-Our *FREE responsive review & fix service* is only available *in NOVEMBER* — the last day is *{end_date}*.
+Your **FREE responsive review & fix** offer expires on **{deadline}** — after that, this free service is no longer available.
 
-✅ We check *ALL your PageFly pages* on mobile, tablet and desktop
-✅ We fix every issue we find, *100% FREE* — you don't need to do anything
+✅ We check **ALL your PageFly pages** on mobile, tablet and desktop
+✅ We fix every issue we find, **100% FREE** — you don't need to do anything
 
-Your *BLACK FRIDAY* shoppers are on their way. Want us to make sure your store is ready for them?
+Your **BLACK FRIDAY** shoppers are on their way. Want us to make sure your store is ready for them?
 
-👉 *Just reply "YES"* and our team will start right away.
+👉 **Just reply "YES"** and our team will start right away.
 
 Best regards,
-*{pic}* – PageFly Technical Team`;
+**{pic}** – PageFly Technical Team`;
+
+/** The reminder for an offer sent before it lasted 3 days: it promised the end of November. */
+const FOLLOWUP_NOVEMBER = `Hi **{store_name}** team,
+
+Just a quick follow-up from **{pic}** 😊
+
+Our **FREE responsive review & fix service** is only available **in NOVEMBER** — the last day is **{end_date}**.
+
+✅ We check **ALL your PageFly pages** on mobile, tablet and desktop
+✅ We fix every issue we find, **100% FREE** — you don't need to do anything
+
+Your **BLACK FRIDAY** shoppers are on their way. Want us to make sure your store is ready for them?
+
+👉 **Just reply "YES"** and our team will start right away.
+
+Best regards,
+**{pic}** – PageFly Technical Team`;
 
 const DEFAULT_TEMPLATES: Record<Segment, string> = {
-  recap: `Hi *{store_name}* team,
+  recap: `Hi **{store_name}** team,
 
-This is *{pic}* from the *PageFly Technical Team* 👋
+This is **{pic}** from the **PageFly Technical Team** 👋
 
-Thank you for reaching out to us recently! Before the *BLACK FRIDAY – CYBER MONDAY* rush, we would love to make sure *EVERY page* of your store looks perfect on every screen.
+Thank you for reaching out to us recently! Before the **BLACK FRIDAY – CYBER MONDAY** rush, we would love to make sure **EVERY page** of your store looks perfect on every screen.
 
 ${OFFER}`,
-  active: `Hi *{store_name}* team,
+  active: `Hi **{store_name}** team,
 
-This is *{pic}* from the *PageFly Technical Team* 👋
+This is **{pic}** from the **PageFly Technical Team** 👋
 
-*BLACK FRIDAY – CYBER MONDAY* is the busiest week of the year — let's make sure *EVERY page* of your store looks perfect on every screen before your visitors arrive.
+**BLACK FRIDAY – CYBER MONDAY** is the busiest week of the year — let's make sure **EVERY page** of your store looks perfect on every screen before your visitors arrive.
 
 ${OFFER}`,
 };
@@ -200,11 +201,11 @@ export function composeMessage(
       : segment === "followup_november"
         ? FOLLOWUP_NOVEMBER
         : (segment === "recap" ? cfg.recap_template : cfg.active_template).trim() || DEFAULT_TEMPLATES[segment];
-  /* a * in the name would end the bold early */
-  const name = (t.store_name?.trim() || t.store_domain.replace(/\.myshopify\.com$/, "")).replaceAll("*", "");
+  /* in capitals; a * in the name would end the bold early */
+  const name = (t.store_name?.trim() || t.store_domain.replace(/\.myshopify\.com$/, "")).replaceAll("*", "").toUpperCase();
   return tpl
     .replaceAll("{store_name}", name)
-    .replaceAll("{pic}", cfg.sender_name)
+    .replaceAll("{pic}", cfg.sender_name.toUpperCase())
     .replaceAll("{offer_days}", String(cfg.offer_days))
     .replaceAll("{end_date}", endDateText(cfg.campaign_end));
 }

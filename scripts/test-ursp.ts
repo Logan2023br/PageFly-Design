@@ -252,9 +252,10 @@ async function main() {
   const texts = convs[sid(1)].msgs.filter((m) => m.from === "operator" && m.type === "text");
   const offer = String(texts[0]?.content ?? "");
   const day3 = core.deadlineText(new Date(Date.now() + 3 * 86_400_000));
-  check(texts.length === 1 && offer.includes("*3 DAYS only*") && offer.includes(`*${day3}*`), "the offer lasts 3 days, its last day written in, bold", offer.match(/valid.*$/m)?.[0]);
-  check(offer.startsWith("Hi *good* team") && offer.includes("This is *Logan*") && offer.includes("*Logan* – PageFly"), "the customer's name and Logan's are bold");
+  check(texts.length === 1 && offer.includes("**3 DAYS only**") && offer.includes(`**${day3}**`), "the offer lasts 3 days, its last day written in, bold", offer.match(/valid.*$/m)?.[0]);
+  check(offer.startsWith("Hi **GOOD** team") && offer.includes("This is **LOGAN**") && offer.includes("**LOGAN** – PageFly"), "the customer's name and Logan's are bold capitals");
   check(!offer.includes("{deadline}") && !offer.includes("{offer_days}"), "no placeholder left");
+  check(!/(^|[^*])\*[^*\s][^*\n]*[^*\s]\*(?!\*)/.test(offer.replace(/\*\*[^*\n]+\*\*/g, "")), "no single-* (italic on Crisp) left");
   const goodRow = await target("recap", "good.myshopify.com");
   check(goodRow?.offer_until && Math.abs(new Date(goodRow.offer_until).getTime() - Date.now() - 3 * 86_400_000) < 120_000, "offer_until is kept: 3 days from sending");
   check(convs[sid(1)].msgs.some((m) => m.type === "note" && String(m.content).includes("mention Logan")), "a private note says to mention Logan on a reply");
@@ -351,8 +352,8 @@ async function main() {
   check(sp.followup_status === "sent" && sp.followup_sent_at, "read 25 hours ago, no reply: the reminder goes", sp.followup_status);
   const rem = convs[spellSid].msgs.filter((m) => m.from === "operator" && m.type === "text");
   const reminder = String(rem[1]?.content ?? "");
-  check(rem.length === 2 && reminder.includes(`expires on *${core.deadlineText(sp.offer_until!)}*`) && /100% FREE/.test(reminder), "in the same conversation: free, and the day the offer ends", reminder.match(/expires.*$/m)?.[0]);
-  check(reminder.startsWith("Hi *spell* team") && reminder.includes("from *Logan*"), "names bold in the reminder too");
+  check(rem.length === 2 && reminder.includes(`expires on **${core.deadlineText(sp.offer_until!)}**`) && /100% FREE/.test(reminder), "in the same conversation: free, and the day the offer ends", reminder.match(/expires.*$/m)?.[0]);
+  check(reminder.startsWith("Hi **SPELL** team") && reminder.includes("from **LOGAN**"), "names bold capitals in the reminder too");
   await core.runJob(true);
   check(convs[spellSid].msgs.filter((m) => m.from === "operator" && m.type === "text").length === 2, "one reminder only");
   check((await target("recap", "good.myshopify.com"))?.followup_status === null, "a store that replied gets no reminder");
