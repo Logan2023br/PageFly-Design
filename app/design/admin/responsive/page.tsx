@@ -228,6 +228,12 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
               >
                 {t.label}
                 {n !== undefined && <span className="rounded-pf-pill bg-pf-card-hi px-1.5 text-[11px] text-pf-muted">{n}</span>}
+                {(t.id === "sent" || t.id === "replied") && (
+                  <span className="text-[11px] font-normal text-pf-faint">
+                    <span className="text-pf-primary-hi">A {t.id === "sent" ? counts.sent_a : counts.replied_a}</span> ·{" "}
+                    <span className="text-pf-success">B {t.id === "sent" ? counts.sent_b : counts.replied_b}</span>
+                  </span>
+                )}
                 {t.id === "replied" && counts.replied_open > 0 && (
                   <span className="rounded-pf-pill bg-pf-warn/15 px-1.5 text-[11px] text-pf-warn" title="Đã phản hồi, chưa xử lý xong">
                     {counts.replied_open} chưa xử lý

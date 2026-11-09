@@ -238,6 +238,10 @@ export async function tabCounts(): Promise<Record<string, number>> {
     .join(", ");
   const { rows } = await p.query<Record<string, number>>(
     `select ${sel}, count(*) filter (where t.status = 'pending' or t.followup_status = 'pending')::int as pending,
+            count(*) filter (where ${TAB_SQL.sent} and t.variant = 'A')::int as sent_a,
+            count(*) filter (where ${TAB_SQL.sent} and t.variant = 'B')::int as sent_b,
+            count(*) filter (where ${TAB_SQL.replied} and t.variant = 'A')::int as replied_a,
+            count(*) filter (where ${TAB_SQL.replied} and t.variant = 'B')::int as replied_b,
             count(*) filter (where t.status = 'sent' and t.replied_at is not null and t.done_at is null)::int as replied_open
        from ursp_targets t`,
   );
