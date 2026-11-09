@@ -26,6 +26,7 @@ export type AdminNotice = {
 
 const bpuHref = (leadId: string) => `/design/admin/upsell/leads/${encodeURIComponent(leadId)}`;
 const ssuHref = (domain: string) => `/design/admin/collections/upsell?tab=all&q=${encodeURIComponent(domain)}`;
+const urspHref = (tab: string, domain: string) => `/design/admin/responsive?tab=${tab}&q=${encodeURIComponent(domain)}`;
 
 const WINDOW_HOURS = 48;
 
@@ -123,6 +124,62 @@ export async function recentNotices(sections: AdminSection[]): Promise<AdminNoti
                 ? `Claude Build đã build xong bộ ${j.setName ?? "mới"}, ${j.pages} page.`
                 : `Claude Build báo lỗi${j.setName ? ` ở bộ ${j.setName}` : ""}.`,
           });
+      })(),
+    );
+  }
+  if (sections.includes("ursp") && hasUpsellDatabase()) {
+    reads.push(
+      (async () => {
+        const { rows } = await (await upsellDb()).query(
+          `select store_domain, store_name, segment, variant, last_reply_at, last_reply_text, reply_intent, classified_at, upgraded_at, upgraded_to, reviewed_at, app_review
+             from ursp_targets
+            where last_reply_at > now() - make_interval(hours => $1)
+               or upgraded_at > now() - make_interval(hours => $1)
+               or reviewed_at > now() - make_interval(hours => $1)`,
+          [WINDOW_HOURS],
+        );
+        const since = Date.now() - WINDOW_HOURS * 3_600_000;
+        const recent = (t: Date | string | null) => !!t && new Date(t).getTime() > since;
+        for (const r of rows) {
+          const who = `${store(r.store_name, r.store_domain)}${r.variant ? ` (bản ${r.variant})` : ""}`;
+          if (recent(r.last_reply_at)) {
+            const at = new Date(r.last_reply_at).toISOString();
+            const said = r.last_reply_text?.replace(/\s+/g, " ").trim();
+            out.push({
+              id: `ursp-reply:${r.store_domain}:${at}`,
+              at,
+              tone: "reply",
+              text: `Upsell Responsive: khách ${who} vừa phản hồi tin nhắn.`,
+              detail: said ? (said.length > 160 ? `${said.slice(0, 160)}…` : said) : undefined,
+              href: urspHref("replied", r.store_domain),
+            });
+          }
+          /* Haiku read it as a yes: the moment to act */
+          if (r.reply_intent === "agree" && recent(r.classified_at))
+            out.push({
+              id: `ursp-agree:${r.store_domain}`,
+              at: new Date(r.classified_at).toISOString(),
+              tone: "celebrate",
+              text: `Upsell Responsive: khách ${who} đồng ý review responsive — xử lý ngay!`,
+              href: urspHref("replied", r.store_domain),
+            });
+          if (recent(r.upgraded_at))
+            out.push({
+              id: `ursp-up:${r.store_domain}`,
+              at: new Date(r.upgraded_at).toISOString(),
+              tone: "celebrate",
+              text: `Xin chúc mừng! Upsell Responsive có user upgrade mới: ${who}${r.upgraded_to ? `, lên gói ${r.upgraded_to}` : ""}.`,
+              href: urspHref("sent", r.store_domain),
+            });
+          if (recent(r.reviewed_at))
+            out.push({
+              id: `ursp-review:${r.store_domain}`,
+              at: new Date(r.reviewed_at).toISOString(),
+              tone: "celebrate",
+              text: `Upsell Responsive: khách ${who} vừa review ${r.app_review ?? 5}★.`,
+              href: urspHref("sent", r.store_domain),
+            });
+        }
       })(),
     );
   }

@@ -317,6 +317,18 @@ async function main() {
   check(t4.upgraded_at && Number(t4.upgraded_price) === 24, "the upgrade after it is seen");
   check(t4.reviewed_at && t4.app_review === 5, "the 5★ review after it is seen");
 
+  console.log("notifications");
+  {
+    const { recentNotices } = await import("../lib/adminNotifications");
+    const ns = await recentNotices(["ursp"]);
+    const mine = ns.filter((n) => n.id.includes("good.myshopify.com"));
+    check(mine.some((n) => n.tone === "reply" && /Upsell Responsive: khách GOOD|Upsell Responsive: khách good/.test(n.text)), "a reply is announced", mine.map((n) => n.text));
+    check(mine.some((n) => n.id.startsWith("ursp-agree:") && n.tone === "celebrate"), "an agreement is celebrated");
+    check(mine.some((n) => n.id.startsWith("ursp-up:")) && mine.some((n) => n.id.startsWith("ursp-review:")), "upgrade and review are announced");
+    check(mine.every((n) => n.href?.startsWith("/design/admin/responsive?tab=")), "each opens the store on the screen");
+    check((await recentNotices(["ssu"])).every((n) => !n.id.startsWith("ursp")), "only for accounts with Upsell Responsive");
+  }
+
   console.log("stats");
   const s = await queries.segmentStats({});
   check(s.recap.rows === 9 && s.recap.responsive === 8, "Recap: rows read and responsive", s.recap);
