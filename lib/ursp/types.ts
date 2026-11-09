@@ -5,7 +5,7 @@
 
 export const SEGMENTS = {
   recap: { label: "Recap", hint: "Ticket support có category responsive (file Recap)" },
-  active: { label: "Active", hint: "Store hoạt động hôm nay (AC2), chưa liên hệ support trên Crisp" },
+  active: { label: "Active", hint: "Store hoạt động hôm nay (AC2)" },
 } as const;
 export type Segment = keyof typeof SEGMENTS;
 export const isSegment = (s: unknown): s is Segment => s === "recap" || s === "active";
@@ -29,7 +29,8 @@ export const SKIP_REASONS = {
   shopify_unpaid: "Shopify không trả phí (dev / partner / trial…)",
   too_many_pages: "Quá số page publish cho phép",
   no_email: "Không có email",
-  contacted: "Đã liên hệ support trên Crisp",
+  /* no longer applied: such stores are looked at again */
+  contacted: "Đã liên hệ support trên Crisp (luật cũ, đang xét lại)",
   other_segment: "Đã nhắn ở phân khúc khác",
   ended: "Chương trình đã kết thúc",
   admin: "Admin bỏ qua",
@@ -84,6 +85,11 @@ export type UrspTarget = {
   mood_note: string | null;
   classified_at: string | null;
   mentioned_at: string | null;
+  followup_status: string | null;
+  followup_message: string | null;
+  followup_approved_by: string | null;
+  followup_sent_at: string | null;
+  followup_error: string | null;
   done_at: string | null;
   done_by: string | null;
   first_price: string | null;

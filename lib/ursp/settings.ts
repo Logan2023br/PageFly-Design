@@ -34,8 +34,11 @@ export const URSP_DEFAULTS = {
   active_ac2_query: "limit=300",
   /** the store fields that say when it was last active, first found wins */
   active_fields: "lastActiveAt, lastActivityAt, lastActive, lastLoginAt, lastSeenAt, lastOpenedAt, lastOpenAppAt, updatedAt",
-  /** a store with a Crisp conversation this recent has contacted support; 0: ever */
-  active_no_contact_days: 30,
+  /** 1: a store that read the offer and has not replied gets one reminder */
+  followup_enabled: 1,
+  /** hours after it was read with no reply before the reminder */
+  followup_after_hours: 24,
+  followup_template: "",
   /** at most this many new Active stores looked at per hourly scan */
   active_per_scan: 40,
   /** a conversation with a message this recent: support may be mid-chat, the message waits */
@@ -56,7 +59,7 @@ export const URSP_HELP: Record<UrspKey, string> = {
   sender_name: "Tên người gửi trên Crisp, cũng là người được mention khi khách reply ({pic})",
   campaign_end: "Ngày cuối gửi tin (YYYY-MM-DD, giờ Việt Nam) — {end_date} trong tin",
   recap_template: `Tin cho phân khúc Recap (gửi vào chính ticket support đó). Biến: ${VARS}. Để trống dùng mẫu mặc định.`,
-  active_template: `Tin cho phân khúc Active (mở hội thoại mới, đi qua email). Biến: ${VARS}. Để trống dùng mẫu mặc định.`,
+  active_template: `Tin cho phân khúc Active (vào hội thoại Crisp gần nhất của khách, chưa có thì mở hội thoại mới đi qua email). Biến: ${VARS}. Để trống dùng mẫu mặc định.`,
   active_subject: "Tiêu đề hội thoại / email cho phân khúc Active",
   max_published_pages: "Store có nhiều page publish hơn số này thì không gửi",
   recap_skip_resolutions: "Resolution trong file Recap thì bỏ qua (cách nhau dấu phẩy, không phân biệt hoa thường / dấu)",
@@ -64,7 +67,9 @@ export const URSP_HELP: Record<UrspKey, string> = {
   active_enabled: "1 = chạy phân khúc Active, 0 = tắt",
   active_ac2_query: "Tham số đọc danh sách store của AC2 (dạng limit=300&…)",
   active_fields: "Các trường thời gian của store AC2 cho biết lần hoạt động gần nhất — trường đầu tiên có giá trị được dùng",
-  active_no_contact_days: "Store có hội thoại Crisp trong bấy nhiêu ngày gần nhất = đã liên hệ support, không gửi. 0 = chưa từng liên hệ",
+  followup_enabled: "1 = khách đã xem tin mà chưa trả lời thì gửi 1 tin nhắc lại (dịch vụ miễn phí, chỉ trong tháng 11), 0 = tắt",
+  followup_after_hours: "Đã xem bấy nhiêu giờ mà chưa trả lời thì nhắc lại",
+  followup_template: `Tin nhắc lại, gửi vào cùng hội thoại. Biến: ${VARS}. Để trống dùng mẫu mặc định.`,
   active_per_scan: "Mỗi lần quét (1 tiếng) xét tối đa bấy nhiêu store Active mới",
   quiet_minutes: "Hội thoại có tin nhắn trong bấy nhiêu phút gần nhất (support đang chat) thì tin đợi, thử lại sau",
   tracking_days: "Theo dõi store đã gửi (đọc, phản hồi, nâng cấp, review) trong bấy nhiêu ngày",

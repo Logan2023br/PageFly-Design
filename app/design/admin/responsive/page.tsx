@@ -123,7 +123,7 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
         </section>
         <QueueSection
           title="Chờ duyệt"
-          note="Tin soạn sẵn, chờ bạn đọc / sửa rồi bấm Duyệt & gửi (chế độ Chờ duyệt)."
+          note="Tin mời và tin nhắc lại soạn sẵn, chờ bạn đọc / sửa rồi bấm Duyệt & gửi (chế độ Chờ duyệt)."
           list={pending}
           empty={cfg.mode === "auto" ? "Đang Tự động gửi — tin mới không vào đây." : "Không có tin nào chờ duyệt."}
         />
@@ -142,7 +142,7 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
     body = (
       <>
         {pager}
-        {tab === "skipped" ? <SkippedTable rows={list.rows} /> : <SentTable rows={list.rows} />}
+        {tab === "skipped" ? <SkippedTable rows={list.rows} /> : <SentTable rows={list.rows} followupHours={cfg.followup_after_hours} />}
         {list.total > 0 && pager}
       </>
     );
@@ -346,7 +346,7 @@ function AfterDone({ s }: { s: SegmentStats[] }) {
   const done = sum("done");
   const moods = sum("happy") + sum("neutral") + sum("unhappy");
   const tiles = [
-    { label: "Đã gửi", n: sent, note: `${pct(sum("read"), sent)} đã đọc` },
+    { label: "Đã gửi", n: sent, note: `${pct(sum("read"), sent)} đã xem · ${sum("followup_sent")} đã nhắc lại` },
     { label: "Phản hồi", n: sum("replied"), note: `${pct(sum("replied"), sent)} đã gửi` },
     { label: "Đồng ý", n: sum("agree"), note: `${pct(sum("agree"), sum("replied"))} người phản hồi` },
     { label: "Đã xử lý xong", n: done, note: `${sum("done_open")} phản hồi chưa xử lý` },
@@ -380,8 +380,10 @@ function Bar({ n, of, tone = "bg-pf-primary" }: { n: number; of: number; tone?: 
 
 function SegmentPanel({ seg, s, href }: { seg: Segment; s: SegmentStats; href: (p: Record<string, string | undefined>) => string }) {
   const funnel: { label: string; n: number; tab?: string; extra?: Record<string, string> }[] = [
-    { label: "Đã đọc", n: s.read },
+    { label: "Đã xem", n: s.read },
+    { label: "Đã nhắc lại (xem mà chưa reply)", n: s.followup_sent },
     { label: "Phản hồi", n: s.replied, tab: "replied" },
+    { label: "Phản hồi sau nhắc lại", n: s.replied_after_followup, tab: "replied" },
     { label: "Đồng ý", n: s.agree, tab: "replied", extra: { intent: "agree" } },
     { label: "Từ chối", n: s.decline, tab: "replied", extra: { intent: "decline" } },
     { label: "Đã xử lý xong", n: s.done, tab: "done" },
@@ -403,10 +405,15 @@ function SegmentPanel({ seg, s, href }: { seg: Segment; s: SegmentStats; href: (
         {[
           seg === "recap"
             ? { label: "Khách responsive", n: s.found, note: `${s.rows} row Recap mới · ${s.responsive} responsive` }
-            : { label: "Store được xét", n: s.found, note: "hoạt động hôm nay, chưa có trong danh sách" },
+            : { label: "Store được xét", n: s.found, note: "hoạt động hôm nay (AC2)" },
           { label: "Bị loại", n: s.skipped, note: pct(s.skipped, s.found), href: href({ tab: "skipped", seg }) },
           { label: "Đã gửi", n: s.sent, note: pct(s.sent, s.found), href: href({ tab: "sent", seg }) },
-          { label: "Chờ gửi", n: s.queued + s.failed, note: s.failed ? `${s.failed} lỗi gửi` : "chờ duyệt / chờ giờ", href: href({ tab: "queue", seg }) },
+          {
+            label: "Chờ gửi",
+            n: s.queued + s.failed + s.followup_queued,
+            note: `${s.followup_queued ? `${s.followup_queued} tin nhắc lại · ` : ""}${s.failed ? `${s.failed} lỗi gửi` : "chờ duyệt / chờ giờ"}`,
+            href: href({ tab: "queue", seg }),
+          },
         ].map((t) => {
           const inner = (
             <>
@@ -586,12 +593,12 @@ function RecentRecap({ rows }: { rows: Awaited<ReturnType<typeof recentRecapRows
           ticket đó, kèm note nội bộ, rồi resolved.
         </p>
         <p>
-          <strong className="text-pf-text">Active:</strong> mỗi giờ đọc danh sách store của AC2, lấy store hoạt động trong hôm nay (giờ VN), bỏ store có hội thoại
-          Crisp trong số ngày active_no_contact_days (Cài đặt). Khách có hội thoại cũ hơn thì gửi vào hội thoại gần nhất, chưa có thì mở hội thoại mới (đi qua email).
+          <strong className="text-pf-text">Active:</strong> mỗi giờ đọc danh sách store của AC2, lấy store hoạt động trong hôm nay (giờ VN). Khách đã có hội thoại
+          Crisp thì gửi vào hội thoại gần nhất, chưa có thì mở hội thoại mới (đi qua email).
         </p>
         <p>
           <strong className="text-pf-text">Cả hai:</strong> Shopify trả phí (không dev / partner / trial), không quá max_published_pages page publish, chưa gỡ app, mỗi
-          store chỉ nhận 1 tin. Khách reply: note mention Logan trên ticket, Haiku đọc ý (đồng ý / từ chối / hỏi thêm) và mức hài lòng. Sau đó theo dõi nâng cấp (AC2)
+          store chỉ nhận 1 tin mời. Khách đã xem mà sau followup_after_hours giờ (mặc định 24) chưa trả lời: 1 tin nhắc lại — miễn phí, chỉ trong tháng 11. Khách reply: note mention Logan trên ticket, Haiku đọc ý (đồng ý / từ chối / hỏi thêm) và mức hài lòng. Sau đó theo dõi nâng cấp (AC2)
           và review 5★ (app_review trên Crisp) — so với lúc bấm Đã xử lý xong.
         </p>
         <p>
@@ -669,17 +676,48 @@ function SourceCell({ t }: { t: UrspTarget }) {
   );
 }
 
-function Msg({ text }: { text: string | null }) {
+function Msg({ text, label = "Xem tin đã gửi" }: { text: string | null; label?: string }) {
   if (!text) return <span className="text-pf-faint">—</span>;
   return (
     <details className="text-[11.5px]">
-      <summary className="cursor-pointer text-pf-muted hover:text-pf-text">Xem tin đã gửi</summary>
+      <summary className="cursor-pointer text-pf-muted hover:text-pf-text">{label}</summary>
       <pre className="mt-1 max-w-[340px] whitespace-pre-wrap rounded-pf-md border border-pf-border bg-pf-bg-deep p-2 font-sans text-pf-body">{text}</pre>
     </details>
   );
 }
 
-function SentTable({ rows }: { rows: UrspTarget[] }) {
+/** Whether the customer has seen the offer — and where the reminder stands. */
+function Seen({ t, hours }: { t: UrspTarget; hours: number }) {
+  const due = t.read_at ? new Date(new Date(t.read_at).getTime() + hours * 3_600_000).toISOString() : null;
+  const reminder =
+    t.followup_status === "sent" && t.followup_sent_at ? (
+      <span className="whitespace-nowrap text-pf-warn">Đã nhắc lại {short(t.followup_sent_at)}</span>
+    ) : t.followup_status === "pending" ? (
+      <span className="text-pf-primary-hi">Tin nhắc lại chờ duyệt</span>
+    ) : t.followup_status === "approved" || t.followup_status === "sending" ? (
+      <span className="text-pf-muted">Tin nhắc lại chờ gửi</span>
+    ) : t.followup_status === "failed" ? (
+      <span className="text-pf-danger">Nhắc lại lỗi gửi</span>
+    ) : t.followup_status === "skipped" ? (
+      <span className="text-pf-faint">Không nhắc lại</span>
+    ) : t.read_at && !t.replied_at && !t.done_at && due ? (
+      <span className="text-pf-faint">Chưa reply → nhắc lại lúc {short(due)}</span>
+    ) : null;
+  return (
+    <div className="grid gap-1 text-[11.5px]">
+      {t.read_at ? (
+        <span className="whitespace-nowrap font-semibold text-pf-success">👁 Đã xem {short(t.read_at)}</span>
+      ) : t.delivered_at ? (
+        <span className="text-pf-muted">Đã tới, chưa xem</span>
+      ) : (
+        <span className="text-pf-faint">Chưa xem</span>
+      )}
+      {reminder}
+    </div>
+  );
+}
+
+function SentTable({ rows, followupHours }: { rows: UrspTarget[]; followupHours: number }) {
   const TH = "px-3 py-2 font-semibold";
   const TD = "px-3 py-2 align-top";
   return (
@@ -690,6 +728,7 @@ function SentTable({ rows }: { rows: UrspTarget[] }) {
             <th className={TH}>Store</th>
             <th className={TH}>Phân khúc · nguồn</th>
             <th className={TH}>Tin nhắn</th>
+            <th className={TH}>Đã xem</th>
             <th className={TH}>Khách phản hồi</th>
             <th className={TH}>Kết quả</th>
             <th className={TH}>Xử lý</th>
@@ -707,12 +746,13 @@ function SentTable({ rows }: { rows: UrspTarget[] }) {
               <td className={TD}>
                 <div className="grid gap-1">
                   <span className="whitespace-nowrap text-pf-text">Gửi {short(t.sent_at)}</span>
-                  <span className="text-[11.5px]">
-                    {t.read_at ? <span className="text-pf-success">Đã đọc {short(t.read_at)}</span> : t.delivered_at ? <span className="text-pf-muted">Đã tới</span> : <span className="text-pf-faint">Chưa đọc</span>}
-                  </span>
                   <Msg text={t.message} />
+                  {t.followup_sent_at && <Msg text={t.followup_message} label="Xem tin nhắc lại" />}
                   <CrispLink href={t.ticket_link} label="Mở ticket" />
                 </div>
+              </td>
+              <td className={TD}>
+                <Seen t={t} hours={followupHours} />
               </td>
               <td className={`${TD} max-w-[300px]`}>
                 {t.replied_at ? (
@@ -765,7 +805,7 @@ function SentTable({ rows }: { rows: UrspTarget[] }) {
           ))}
           {!rows.length && (
             <tr>
-              <td colSpan={6} className="px-3 py-8 text-center text-pf-faint">
+              <td colSpan={7} className="px-3 py-8 text-center text-pf-faint">
                 Chưa có store nào ở đây.
               </td>
             </tr>
@@ -795,26 +835,42 @@ function QueueSection({ title, note, list, empty }: { title: string; note: strin
   );
 }
 
+/** One card per message waiting — a sent row is here for its reminder. */
 function Queue({ rows }: { rows: UrspTarget[] }) {
   return (
     <div className="grid gap-3">
       {rows.map((t) => (
-        <article key={t.id} className="grid gap-3 rounded-pf-card border border-pf-border bg-pf-card p-4 lg:grid-cols-[320px_1fr]">
-          <div className="grid content-start gap-2">
-            <StoreCell t={t} />
-            <SourceCell t={t} />
-            <div className="flex flex-wrap items-center gap-1.5 text-[11.5px]">
-              <Pill tone={t.status === "failed" ? "bad" : t.status === "pending" ? "primary" : "muted"}>{STATUS_LABEL[t.status] ?? t.status}</Pill>
-              {t.wait_until && <span className="text-pf-muted">đợi ticket yên tới {short(t.wait_until)}</span>}
-              {t.segment === "active" && !t.session_id && <span className="text-pf-muted">sẽ mở hội thoại mới</span>}
-            </div>
-            {t.error && <p className="text-[12px] text-pf-danger">{t.error}</p>}
-            <CrispLink href={t.ticket_link} label="Mở ticket" />
-          </div>
-          <QueueActions id={t.id} status={t.status} message={t.message ?? ""} />
-        </article>
+        <QueueCard key={t.id} t={t} />
       ))}
     </div>
+  );
+}
+
+function QueueCard({ t }: { t: UrspTarget }) {
+  const followup = t.status === "sent";
+  const status = followup ? (t.followup_status ?? "") : t.status;
+  const error = followup ? t.followup_error : t.error;
+  return (
+    <article className="grid gap-3 rounded-pf-card border border-pf-border bg-pf-card p-4 lg:grid-cols-[320px_1fr]">
+      <div className="grid content-start gap-2">
+        <StoreCell t={t} />
+        <SourceCell t={t} />
+        <div className="flex flex-wrap items-center gap-1.5 text-[11.5px]">
+          {followup && <Pill tone="warn">Tin nhắc lại</Pill>}
+          <Pill tone={status === "failed" ? "bad" : status === "pending" ? "primary" : "muted"}>{STATUS_LABEL[status] ?? status}</Pill>
+          {t.wait_until && <span className="text-pf-muted">đợi ticket yên tới {short(t.wait_until)}</span>}
+          {!followup && t.segment === "active" && <span className="text-pf-muted">{t.session_id ? "gửi vào hội thoại gần nhất của khách" : "sẽ mở hội thoại mới"}</span>}
+        </div>
+        {followup && (
+          <p className="text-[11.5px] text-pf-muted">
+            Tin mời gửi {short(t.sent_at)} · khách xem {short(t.read_at)} · chưa trả lời
+          </p>
+        )}
+        {error && <p className="text-[12px] text-pf-danger">{error}</p>}
+        <CrispLink href={t.ticket_link} label="Mở ticket" />
+      </div>
+      <QueueActions id={t.id} status={status} message={(followup ? t.followup_message : t.message) ?? ""} followup={followup} />
+    </article>
   );
 }
 

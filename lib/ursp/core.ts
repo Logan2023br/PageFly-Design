@@ -36,14 +36,16 @@ import { SEGMENTS, SKIP_REASONS, type Segment, type SkipCode, type UrspTarget } 
               from Google (SHEET_SERVICE_ACCOUNT_JSON, sheet shared with it)
               or posted in by n8n (POST /api/ursp/recap).
      active   once an hour, AC2's store list: stores active today (Vietnam
-              time) with no Crisp conversation lately → the offer, in their
-              last conversation if they have an older one, else a new one
-              (which reaches them by email).
+              time) → the offer, in their latest Crisp conversation if they
+              have one, else a new one (which reaches them by email).
 
    Both: a paying Shopify plan, no more than max_published_pages published,
    installed, and one message per store whatever the segment. Every store
    looked at is kept — sent, or skipped with the reason — so the screen can
    say how many were found, how many left out and why.
+
+   Read and no reply a day later (followup_after_hours): one reminder in the
+   same conversation — the service is free, and only in November.
 
    After it goes: read / reply from Crisp (a reply puts a note on the ticket
    mentioning Logan, and Haiku reads what they want and how they feel), and a
@@ -107,6 +109,22 @@ Most of your *BLACK FRIDAY* shoppers will browse and buy *on their phones*, so a
 Best regards,
 {pic} – PageFly Technical Team`;
 
+const DEFAULT_FOLLOWUP = `Hi {store_name} team,
+
+Just a quick follow-up from {pic} 😊
+
+Our *FREE responsive review & fix service* is only available *in NOVEMBER* — the last day is *{end_date}*.
+
+✅ We check *ALL your PageFly pages* on mobile, tablet and desktop
+✅ We fix every issue we find, *100% FREE* — you don't need to do anything
+
+Your *BLACK FRIDAY* shoppers are on their way. Want us to make sure your store is ready for them?
+
+👉 *Just reply "YES"* and our team will start right away.
+
+Best regards,
+{pic} – PageFly Technical Team`;
+
 const DEFAULT_TEMPLATES: Record<Segment, string> = {
   recap: `Hi {store_name} team,
 
@@ -132,8 +150,11 @@ export function endDateText(ymd: string): string {
   return m ? `${MONTHS[Number(m[1]) - 1]} ${Number(m[2])}` : ymd;
 }
 
-export function composeMessage(segment: Segment, t: { store_name: string | null; store_domain: string }, cfg: UrspSettings): string {
-  const tpl = (segment === "recap" ? cfg.recap_template : cfg.active_template).trim() || DEFAULT_TEMPLATES[segment];
+export function composeMessage(segment: Segment | "followup", t: { store_name: string | null; store_domain: string }, cfg: UrspSettings): string {
+  const tpl =
+    segment === "followup"
+      ? cfg.followup_template.trim() || DEFAULT_FOLLOWUP
+      : (segment === "recap" ? cfg.recap_template : cfg.active_template).trim() || DEFAULT_TEMPLATES[segment];
   const name = t.store_name?.trim() || t.store_domain.replace(/\.myshopify\.com$/, "");
   return tpl
     .replaceAll("{store_name}", name)
@@ -242,17 +263,10 @@ async function addTarget(n: NewTarget, cfg: UrspSettings, actor: string): Promis
   if (!skip && n.segment === "active") {
     if (!facts.email) skip = { code: "no_email", reason: SKIP_REASONS.no_email };
     else {
-      const days = cfg.active_no_contact_days;
+      /* talked to support before: the message goes in their latest
+         conversation; never: a new one is opened when it is sent */
       const r = await reviewCheck(facts.email);
-      const since = days > 0 ? Date.now() - days * 86_400_000 : -Infinity;
-      const recent = r.conversations.find((c) => !c.updated_at || new Date(c.updated_at).getTime() >= since);
-      if (recent)
-        skip = {
-          code: "contacted",
-          reason: `${SKIP_REASONS.contacted}${days > 0 ? ` trong ${days} ngày` : ""}${recent.updated_at ? ` (${recent.updated_at.slice(0, 10)})` : ""}`,
-        };
-      /* an older conversation is where the message goes; none: a new one is opened when it is sent */
-      else if (r.conversations[0]) {
+      if (r.conversations[0]) {
         session_id = r.conversations[0].session_id;
         ticket_link = r.conversations[0].link;
       }
@@ -633,6 +647,110 @@ async function sendDue(cfg: UrspSettings): Promise<{ sent: number; errors: strin
   return out;
 }
 
+/* ---------------------------------------------------------------- follow-up */
+
+/**
+ * Read, no reply, not handled, followup_after_hours after it was seen: one
+ * reminder each — waiting on Chờ duyệt (manual) or going out (auto).
+ */
+async function queueFollowups(cfg: UrspSettings): Promise<number> {
+  if (!cfg.followup_enabled || campaignOver(cfg)) return 0;
+  const p = await db();
+  const { rows } = await p.query<UrspTarget>(
+    `select * from ursp_targets
+      where status = 'sent' and followup_status is null and read_at is not null and replied_at is null
+        and done_at is null and uninstalled_at is null and session_id is not null
+        and read_at <= now() - make_interval(hours => $1)
+      order by read_at limit 50`,
+    [cfg.followup_after_hours],
+  );
+  for (const t of rows)
+    await tx(async (c) => {
+      const st = cfg.mode === "auto" ? "approved" : "pending";
+      await c.query(
+        "update ursp_targets set followup_status = $2, followup_message = $3, followup_approved_by = $4, updated_at = now() where id = $1 and followup_status is null",
+        [t.id, st, composeMessage("followup", t, cfg), st === "approved" ? "auto" : null],
+      );
+      await logEvent(c, t.id, "followup_queued", "system", { status: st });
+    });
+  return rows.length;
+}
+
+async function sendFollowups(cfg: UrspSettings): Promise<{ sent: number; errors: string[] }> {
+  const p = await db();
+  const out = { sent: 0, errors: [] as string[] };
+  if (campaignOver(cfg)) return out;
+  const { rows } = await p.query<UrspTarget>(
+    `update ursp_targets set followup_status = 'sending', updated_at = now()
+      where id in (select id from ursp_targets where followup_status = 'approved' and (wait_until is null or wait_until <= now())
+                    order by updated_at limit 10 for update skip locked)
+      returning *`,
+  );
+  const sender = rows.length ? await crispSender(cfg.sender_name, "") : null;
+  const skip = (id: string) => p.query("update ursp_targets set followup_status = 'skipped', updated_at = now() where id = $1", [id]);
+  for (const t of rows) {
+    try {
+      /* answered or handled meanwhile: no reminder */
+      if (t.replied_at || t.done_at) {
+        await skip(t.id);
+        continue;
+      }
+      const msgs = await conversationMessages(t.session_id!);
+      if (msgs.some((m) => m.from === "user" && Number(m.timestamp) >= new Date(t.sent_at!).getTime())) {
+        await skip(t.id);
+        continue;
+      }
+      const lastAt = Math.max(0, ...msgs.map((m) => Number(m.timestamp) || 0));
+      if (cfg.quiet_minutes > 0 && Date.now() - lastAt < cfg.quiet_minutes * 60_000) {
+        await p.query("update ursp_targets set followup_status = 'approved', wait_until = $2, updated_at = now() where id = $1", [
+          t.id,
+          new Date(lastAt + cfg.quiet_minutes * 60_000).toISOString(),
+        ]);
+        continue;
+      }
+      const text = t.followup_message?.trim() || composeMessage("followup", t, cfg);
+      await sendInConversation(t.session_id!, text, sender!);
+      await sendNote(t.session_id!, `[Upsell Responsive] ${cfg.sender_name} nhắc lại: khách đã xem tin mời nhưng chưa trả lời. Khách reply → mention ${cfg.sender_name}.`).catch(
+        () => undefined,
+      );
+      await resolveConversation(t.session_id!).catch(() => undefined);
+      await tx(async (c) => {
+        await c.query(
+          `update ursp_targets set followup_status = 'sent', followup_sent_at = now(), followup_message = $2, followup_error = null,
+                  wait_until = null, updated_at = now() where id = $1`,
+          [t.id, text],
+        );
+        await logEvent(c, t.id, "followup_sent", t.followup_approved_by ?? "system", {});
+      });
+      out.sent++;
+    } catch (err) {
+      if (err instanceof ConfigMissing) {
+        await p.query("update ursp_targets set followup_status = 'approved', updated_at = now() where id = $1", [t.id]);
+        out.errors.push(errText(err));
+        break;
+      }
+      await p.query("update ursp_targets set followup_status = 'failed', followup_error = $2, updated_at = now() where id = $1", [t.id, errText(err).slice(0, 500)]);
+      out.errors.push(errText(err));
+    }
+  }
+  await p.query("update ursp_targets set followup_status = 'approved' where followup_status = 'sending' and updated_at < now() - interval '15 minutes'");
+  return out;
+}
+
+/**
+ * Stores once left out for having talked to support: that rule is gone,
+ * so they are looked at again — a few each run.
+ */
+async function reconsiderContacted(cfg: UrspSettings): Promise<void> {
+  const { rows } = await (await db()).query<UrspTarget>(
+    "select * from ursp_targets where status = 'skipped' and skip_code = 'contacted' order by created_at limit 20",
+  );
+  for (const t of rows)
+    await addTarget({ segment: t.segment, store_domain: t.store_domain, source: t.source ?? {}, facts: {} }, cfg, "system").catch((err) => {
+      if (err instanceof ConfigMissing) throw err;
+    });
+}
+
 /* ---------------------------------------------------------------- track */
 
 const textOf = (v: unknown) => (typeof v === "string" ? v : v && typeof v === "object" ? JSON.stringify(v) : String(v ?? ""));
@@ -671,7 +789,7 @@ export async function trackOne(t: UrspTarget, cfg: UrspSettings, opts: { force?:
             .slice(0, 1500);
           Object.assign(patch, { last_reply_at: new Date(lastSec * 1000).toISOString(), last_reply_text: text });
           events.push(["replied", { text: text.slice(0, 300) }]);
-          const read = await readReply(t.message ?? "", text);
+          const read = await readReply([t.message, t.followup_message].filter(Boolean).join("\n\n---\n\n"), text);
           Object.assign(patch, { reply_intent: read.intent, mood: read.mood, mood_note: read.note || null, classified_at: new Date().toISOString() });
           events.push(["classified", { intent: read.intent, mood: read.mood, by: read.by }]);
           /* the first reply: Logan is called in, once */
@@ -770,6 +888,7 @@ async function trackBatch(cfg: UrspSettings): Promise<{ tracked: number; remaini
 export type JobState = {
   at: string;
   sent: number;
+  followups?: number;
   tracked: number;
   remaining: number;
   errors: string[];
@@ -787,7 +906,7 @@ async function job(force: boolean): Promise<JobState | null> {
   const run = await runState();
   if (!run.on) return null;
   const cfg = await getUrspSettings();
-  const out: JobState = { at: new Date().toISOString(), sent: 0, tracked: 0, remaining: 0, errors: [] };
+  const out: JobState = { at: new Date().toISOString(), sent: 0, followups: 0, tracked: 0, remaining: 0, errors: [] };
 
   if (cfg.recap_enabled) {
     const last = await getState<RecapResult>("recap_read");
@@ -818,11 +937,24 @@ async function job(force: boolean): Promise<JobState | null> {
     }
   }
   try {
+    await reconsiderContacted(cfg);
+  } catch (err) {
+    out.errors.push(`Xét lại: ${errText(err)}`);
+  }
+  try {
     const s = await sendDue(cfg);
     out.sent = s.sent;
     out.errors.push(...s.errors.map((e) => `Gửi: ${e}`));
   } catch (err) {
     out.errors.push(`Gửi: ${errText(err)}`);
+  }
+  try {
+    await queueFollowups(cfg);
+    const f = await sendFollowups(cfg);
+    out.followups = f.sent;
+    out.errors.push(...f.errors.map((e) => `Nhắc lại: ${e}`));
+  } catch (err) {
+    out.errors.push(`Nhắc lại: ${errText(err)}`);
   }
   try {
     const t = await trackBatch(cfg);
@@ -856,7 +988,26 @@ export function startUrspTimer(): void {
 
 /* ---------------------------------------------------------------- admin */
 
-export type TargetAction = "approve" | "skip" | "edit" | "done" | "undone" | "retry" | "send_anyway" | "track";
+export type TargetAction =
+  | "approve"
+  | "skip"
+  | "edit"
+  | "done"
+  | "undone"
+  | "retry"
+  | "send_anyway"
+  | "track"
+  | "approve_followup"
+  | "skip_followup"
+  | "edit_followup"
+  | "retry_followup";
+
+const FOLLOWUP_FROM: Record<string, string[]> = {
+  approve_followup: ["pending"],
+  edit_followup: ["pending", "approved", "failed"],
+  skip_followup: ["pending", "approved", "failed"],
+  retry_followup: ["failed"],
+};
 
 /** What an admin does to one row. Each is allowed only from the states it makes sense in. */
 export async function targetAction(id: string, action: TargetAction, by: string, text?: string): Promise<void> {
@@ -903,6 +1054,20 @@ export async function targetAction(id: string, action: TargetAction, by: string,
         { was: t.skip_code },
       );
     }
+    case "approve_followup":
+    case "edit_followup":
+    case "skip_followup":
+    case "retry_followup":
+      if (!FOLLOWUP_FROM[action].includes(t.followup_status ?? ""))
+        throw new UpsellError(`Tin nhắc lại đang ở trạng thái "${t.followup_status ?? "chưa có"}" — không làm được việc này.`, 409);
+      if (action === "approve_followup")
+        return set("followup_status = 'approved', followup_approved_by = $2, followup_message = coalesce($3, followup_message)", [by, msg ?? null], "followup_approved");
+      if (action === "edit_followup") {
+        if (!msg) throw new UpsellError("Thiếu nội dung tin.", 422);
+        return set("followup_message = $2", [msg], "followup_edited");
+      }
+      if (action === "retry_followup") return set("followup_status = 'approved', followup_error = null, wait_until = null", [], "followup_retry");
+      return set("followup_status = 'skipped'", [], "followup_skipped");
     case "done":
       only("sent");
       if (t.done_at) return;

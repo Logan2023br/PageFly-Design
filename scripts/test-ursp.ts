@@ -259,7 +259,9 @@ async function main() {
   check(scan?.field === "lastActiveAt" && scan.active_today === 4, "active today found by lastActiveAt", scan);
   check(scan?.looked === 3, "a store already messaged is not looked at again", scan);
   check(!(await target("active", "yesterday.myshopify.com")), "a store active yesterday is not taken");
-  check((await target("active", "talking.myshopify.com"))?.skip_code === "contacted", "a store that talked to support 2 days ago is left out");
+  check((await target("active", "talking.myshopify.com"))?.session_id === "session_bbbbbbbb-0000-0000-0000-000000000002", "talked to support 2 days ago: still sent, in that conversation");
+  /* that conversation's last message is 2 days old: no wait for it to go quiet */
+  convs["session_bbbbbbbb-0000-0000-0000-000000000002"].msgs.push({ type: "text", from: "user", content: "old question", timestamp: now - 2 * 86_400_000 });
   await core.runJob(true);
   const fresh = await target("active", "fresh.myshopify.com");
   check(fresh?.status === "sent" && created === 1 && convs[fresh.session_id!]?.email === "fresh@x.test", "no conversation before: a new one is opened", { s: fresh?.status, created });
@@ -300,9 +302,40 @@ async function main() {
   check(s.recap.found === 8 && s.recap.skipped === 5, "Recap: stores found and left out", { f: s.recap.found, s: s.recap.skipped });
   check(s.recap.reasons.length === 5 && s.recap.reasons.every((r) => r.n === 1), "Recap: one per reason", s.recap.reasons);
   check(s.recap.agree === 1 && s.recap.done === 1 && s.recap.upgraded_after_done === 1 && s.recap.reviewed_after_done === 1 && s.recap.happy === 1, "Recap: agreed, handled, upgraded and reviewed after", s.recap);
-  check(s.active.found === 3 && s.active.sent === 2 && s.active.reasons[0]?.code === "contacted", "Active: found, sent, why left out", s.active);
+  check(s.active.found === 3 && s.active.sent === 3 && s.active.skipped === 0, "Active: found and sent, none left out", s.active);
   const tc = await queries.tabCounts();
-  check(tc.sent === 4 && tc.done === 1, "tab counts", tc);
+  check(tc.sent === 5 && tc.done === 1, "tab counts", tc);
+
+  console.log("left out under the old rule");
+  store("oldrule.myshopify.com");
+  await p.query(
+    `insert into ursp_targets (segment, store_domain, status, skip_code, skip_reason, source) values ('active', 'oldrule.myshopify.com', 'skipped', 'contacted', 'old', '{}')`,
+  );
+  await core.runJob(true);
+  await core.runJob(true);
+  check((await target("active", "oldrule.myshopify.com"))?.status === "sent", "a store once left out for talking to support is looked at again and sent");
+
+  console.log("reminder");
+  const spellSid = (await target("recap", "spell.myshopify.com"))!.session_id!;
+  convs[spellSid].msgs.forEach((m) => {
+    if (m.from === "operator") m.read = "chat";
+  });
+  await p.query("update ursp_targets set tracked_at = null, crisp_checked_at = null where store_domain = 'spell.myshopify.com'");
+  await core.runJob(true);
+  check((await target("recap", "spell.myshopify.com"))?.read_at && !(await target("recap", "spell.myshopify.com"))?.followup_status, "read a moment ago: no reminder yet");
+  /* a day on: the offer went out 26 hours ago, the conversation has been quiet since */
+  convs[spellSid].msgs.forEach((m) => (m.timestamp = Date.now() - 26 * 3_600_000));
+  await p.query("update ursp_targets set read_at = now() - interval '25 hours' where store_domain = 'spell.myshopify.com'");
+  await core.runJob(true);
+  const sp = (await target("recap", "spell.myshopify.com"))!;
+  check(sp.followup_status === "sent" && sp.followup_sent_at, "read 25 hours ago, no reply: the reminder goes", sp.followup_status);
+  const rem = convs[spellSid].msgs.filter((m) => m.from === "operator" && m.type === "text");
+  check(rem.length === 2 && /NOVEMBER/.test(String(rem[1].content)) && /100% FREE/.test(String(rem[1].content)), "in the same conversation: only in November, free");
+  await core.runJob(true);
+  check(convs[spellSid].msgs.filter((m) => m.from === "operator" && m.type === "text").length === 2, "one reminder only");
+  check((await target("recap", "good.myshopify.com"))?.followup_status === null, "a store that replied gets no reminder");
+  const s2 = await queries.segmentStats({});
+  check(s2.recap.followup_sent === 1, "the reminder is counted", s2.recap.followup_sent);
 
   console.log("admin");
   const big = (await target("recap", "big.myshopify.com"))!;
@@ -316,6 +349,13 @@ async function main() {
   }
   check(refused, "Đã xử lý xong only on a sent row");
   await settings.saveUrspSettings({ mode: "manual" });
+  await p.query("update ursp_targets set read_at = now() - interval '25 hours', tracked_at = now() where store_domain = 'fresh.myshopify.com'");
+  await core.runJob(true);
+  const fr = (await target("active", "fresh.myshopify.com"))!;
+  check(fr.followup_status === "pending", "manual mode: the reminder waits on Chờ duyệt", fr.followup_status);
+  check((await queries.listTargets("queue", { status: "pending" })).rows.some((r) => r.id === fr.id), "and is listed under Chờ duyệt");
+  await core.targetAction(fr.id, "skip_followup", "tu");
+  check((await target("active", "fresh.myshopify.com"))?.followup_status === "skipped", "Không nhắc lại skips only the reminder");
   await core.importRecap([row({ store_domain: "manual.myshopify.com", session_id: sid(11) })]);
   store("manual.myshopify.com");
   await p.query("delete from ursp_targets where store_domain = 'manual.myshopify.com'");

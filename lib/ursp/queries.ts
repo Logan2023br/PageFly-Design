@@ -23,7 +23,7 @@ export const URSP_TABS = [
 export type UrspTab = (typeof URSP_TABS)[number]["id"];
 
 const TAB_SQL: Record<Exclude<UrspTab, "overview" | "settings">, string> = {
-  queue: "t.status in ('pending', 'approved', 'sending', 'failed')",
+  queue: "(t.status in ('pending', 'approved', 'sending', 'failed') or t.followup_status in ('pending', 'approved', 'sending', 'failed'))",
   sent: "t.status = 'sent'",
   replied: "t.status = 'sent' and t.replied_at is not null",
   done: "t.status = 'sent' and t.done_at is not null",
@@ -44,7 +44,12 @@ export type UrspFilters = {
   page?: number;
 };
 
-const QUEUE_PART = { pending: "t.status = 'pending'", waiting: "t.status in ('approved', 'sending')", failed: "t.status = 'failed'" } as const;
+/* a row is in the queue for its first message, or (sent) for its reminder */
+const QUEUE_PART = {
+  pending: "(t.status = 'pending' or t.followup_status = 'pending')",
+  waiting: "(t.status in ('approved', 'sending') or t.followup_status in ('approved', 'sending'))",
+  failed: "(t.status = 'failed' or t.followup_status = 'failed')",
+} as const;
 
 const VN = "Asia/Ho_Chi_Minh";
 
@@ -84,6 +89,9 @@ export type SegmentStats = {
   agree: number;
   decline: number;
   question: number;
+  followup_queued: number;
+  followup_sent: number;
+  replied_after_followup: number;
   done: number;
   done_open: number;
   upgraded: number;
@@ -109,6 +117,9 @@ const STATS_SQL = `count(*)::int as found,
   count(*) filter (where t.reply_intent = 'agree')::int as agree,
   count(*) filter (where t.reply_intent = 'decline')::int as decline,
   count(*) filter (where t.reply_intent = 'question')::int as question,
+  count(*) filter (where t.followup_status in ('pending', 'approved', 'sending'))::int as followup_queued,
+  count(*) filter (where t.followup_sent_at is not null)::int as followup_sent,
+  count(*) filter (where t.followup_sent_at is not null and t.replied_at >= t.followup_sent_at)::int as replied_after_followup,
   count(*) filter (where t.done_at is not null)::int as done,
   count(*) filter (where t.status = 'sent' and t.replied_at is not null and t.done_at is null)::int as done_open,
   count(*) filter (where t.upgraded_at is not null)::int as upgraded,
@@ -153,6 +164,9 @@ export async function segmentStats(f: UrspFilters): Promise<Record<Segment, Segm
     agree: 0,
     decline: 0,
     question: 0,
+    followup_queued: 0,
+    followup_sent: 0,
+    replied_after_followup: 0,
     done: 0,
     done_open: 0,
     upgraded: 0,
@@ -197,7 +211,7 @@ export async function tabCounts(): Promise<Record<string, number>> {
     .map(([k, sql]) => `count(*) filter (where ${sql})::int as ${k}`)
     .join(", ");
   const { rows } = await p.query<Record<string, number>>(
-    `select ${sel}, count(*) filter (where t.status = 'pending')::int as pending,
+    `select ${sel}, count(*) filter (where t.status = 'pending' or t.followup_status = 'pending')::int as pending,
             count(*) filter (where t.status = 'sent' and t.replied_at is not null and t.done_at is null)::int as replied_open
        from ursp_targets t`,
   );

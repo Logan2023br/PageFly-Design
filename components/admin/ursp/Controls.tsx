@@ -113,8 +113,13 @@ export function TrackButton({ id }: { id: string }) {
   );
 }
 
-/** A message waiting: read it, change it, send it or leave the store out. */
-export function QueueActions({ id, status, message }: { id: string; status: string; message: string }) {
+/**
+ * A message waiting: read it, change it, send it or leave the store out.
+ * `followup`: the reminder of a sent row — the same buttons act on it, and
+ * skipping it skips only the reminder.
+ */
+export function QueueActions({ id, status, message, followup = false }: { id: string; status: string; message: string; followup?: boolean }) {
+  const a = (x: string) => (followup ? `${x}_followup` : x);
   const [run, busy, error] = useAct();
   const [text, setText] = useState(message);
   const changed = text.trim() !== message.trim();
@@ -123,22 +128,22 @@ export function QueueActions({ id, status, message }: { id: string; status: stri
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={9} className={`${FIELD} font-mono text-[12px] leading-relaxed`} aria-label="Nội dung tin" />
       <div className="flex flex-wrap items-center gap-2">
         {status === "pending" && (
-          <Button size="sm" icon="Send" disabled={busy} onClick={() => void run(row(id), { action: "approve", text })}>
+          <Button size="sm" icon="Send" disabled={busy} onClick={() => void run(row(id), { action: a("approve"), text })}>
             Duyệt & gửi
           </Button>
         )}
         {status === "failed" && (
-          <Button size="sm" icon="RefreshCw" disabled={busy} onClick={() => void run(row(id), { action: "retry" })}>
+          <Button size="sm" icon="RefreshCw" disabled={busy} onClick={() => void run(row(id), { action: a("retry") })}>
             Gửi lại
           </Button>
         )}
         {changed && status !== "pending" && (
-          <Button size="sm" variant="ghost" disabled={busy} onClick={() => void run(row(id), { action: "edit", text })}>
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => void run(row(id), { action: a("edit"), text })}>
             Lưu nội dung
           </Button>
         )}
-        <Button size="sm" variant="quiet" disabled={busy} onClick={() => void run(row(id), { action: "skip" })}>
-          Bỏ qua store này
+        <Button size="sm" variant="quiet" disabled={busy} onClick={() => void run(row(id), { action: a("skip") })}>
+          {followup ? "Không nhắc lại" : "Bỏ qua store này"}
         </Button>
       </div>
       <ErrorLine error={error} />

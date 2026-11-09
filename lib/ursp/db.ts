@@ -111,6 +111,12 @@ create table if not exists ursp_targets (
   updated_at        timestamptz not null default now(),
   unique (segment, store_domain)
 );
+-- the reminder after a read with no reply
+alter table ursp_targets add column if not exists followup_status text;
+alter table ursp_targets add column if not exists followup_message text;
+alter table ursp_targets add column if not exists followup_approved_by text;
+alter table ursp_targets add column if not exists followup_sent_at timestamptz;
+alter table ursp_targets add column if not exists followup_error text;
 create index if not exists ursp_targets_status on ursp_targets (status, created_at desc);
 create index if not exists ursp_targets_domain on ursp_targets (store_domain);
 create index if not exists ursp_targets_sent on ursp_targets (sent_at desc);
