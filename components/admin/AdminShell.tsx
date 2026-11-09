@@ -62,6 +62,12 @@ const NAV: { id: AdminSection; label: string; href: string; icon: IconName }[] =
     icon: "Rocket",
   },
   {
+    id: "ursp",
+    label: "Upsell Responsive",
+    href: "/design/admin/responsive",
+    icon: "Smartphone",
+  },
+  {
     id: "accounts",
     label: "Tài khoản",
     href: "/design/admin/accounts",

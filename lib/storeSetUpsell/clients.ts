@@ -168,6 +168,17 @@ export async function ac2UpgradeTime(domain: string, since: string | null): Prom
   return times.length ? new Date(times[0]).toISOString() : null;
 }
 
+/**
+ * A page of AC2's store list (the path BPU Ops' sync reads), with `query` as
+ * given ("limit=300&…"). null when AC2 is not configured or does not answer.
+ */
+export async function ac2Stores(query: string): Promise<(Ac2Store & Record<string, unknown>)[] | null> {
+  const q = Object.fromEntries(new URLSearchParams(query.trim().replace(/^\?/, "")));
+  delete q.path;
+  const r = await ac2Get<{ items?: (Ac2Store & Record<string, unknown>)[] }>("", q).catch(() => null);
+  return r && r.status === 200 && Array.isArray(r.body?.items) ? r.body.items : null;
+}
+
 /** The store, or null when AC2 is not configured, does not answer, or does not know it. */
 export async function ac2Store(domain: string): Promise<Ac2Store | null> {
   const r = await ac2Get<Ac2Store>(`/${encodeURIComponent(domain)}`);
@@ -375,14 +386,18 @@ export async function sendInNewConversation(o: {
   return { session_id: sid, ticket_link: ticketLink(created.wid, sid) };
 }
 
-/** A private note in a conversation: the customer never sees it. */
-export async function sendNote(sid: string, content: string): Promise<void> {
+/**
+ * A private note in a conversation: the customer never sees it. `mentions`
+ * (Crisp operator user_ids) notifies those operators, as an @ in the inbox does.
+ */
+export async function sendNote(sid: string, content: string, mentions: string[] = []): Promise<void> {
   await crisp("POST", `/conversation/${sid}/message`, {
     type: "note",
     from: "operator",
     origin: "chat",
     content,
     user: { type: "website", nickname: "PageFly Team" },
+    ...(mentions.length ? { mentions } : {}),
   });
 }
 

@@ -5,6 +5,10 @@
 
 import {
   Bell,
+  Pause,
+  Play,
+  Send,
+  Save,
   BellOff,
   ArrowDown,
   ArrowUp,
@@ -107,6 +111,10 @@ import {
 
 export const ICONS = {
   Bell,
+  Pause,
+  Play,
+  Send,
+  Save,
   BellOff,
   ArrowDown,
   ArrowUp,

@@ -271,6 +271,23 @@ async function fetchViaServiceAccount(): Promise<string[][]> {
   return body.values ?? [];
 }
 
+/**
+ * Any range of any sheet the service account can read (shared with its email
+ * as Viewer) — rows as Sheets gives them, trailing empty cells left off.
+ * Throws when SHEET_SERVICE_ACCOUNT_JSON is not set.
+ */
+export async function readSheetValues(sheetId: string, range: string): Promise<string[][]> {
+  if (!process.env.SHEET_SERVICE_ACCOUNT_JSON) throw new Error("SHEET_SERVICE_ACCOUNT_JSON chưa đặt");
+  const token = await serviceAccountToken();
+  const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}`, {
+    headers: { authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Sheets API returned ${res.status}${res.status === 403 ? " (chưa share sheet cho service account)" : ""}`);
+  const body = (await res.json()) as { values?: string[][] };
+  return body.values ?? [];
+}
+
 async function fetchViaCsv(url: string): Promise<string[][]> {
   const res = await fetch(url, { cache: "no-store", redirect: "follow" });
   if (!res.ok) throw new Error(`CSV source returned ${res.status}`);

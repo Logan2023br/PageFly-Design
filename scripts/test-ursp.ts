@@ -1,0 +1,343 @@
+/* ==========================================================================
+   Upsell Responsive — Recap rows in (only new ones, Haiku on the category,
+   the resolution rule), Active stores from AC2, the store rules, sending into
+   the right conversation, the reply (note mentioning Logan, Haiku's read),
+   Đã xử lý xong, upgrade / review after it, the stats, and Tạm dừng.
+   Crisp, AC2 and Anthropic are faked; nothing leaves the machine.
+
+       URSP_TEST_DATABASE_URL=postgres://postgres@localhost:5432/ursp_test \
+         npx tsx scripts/test-ursp.ts
+
+   THE DATABASE'S ursp_* TABLES ARE DROPPED FIRST.
+   ========================================================================== */
+
+import { createRequire } from "node:module";
+import Module from "node:module";
+
+const require_ = createRequire(import.meta.url);
+const resolve_ = (Module as unknown as { _resolveFilename: (r: string, ...a: unknown[]) => string })._resolveFilename;
+(Module as unknown as { _resolveFilename: unknown })._resolveFilename = function (this: unknown, request: string, ...args: unknown[]) {
+  if (request === "server-only") return require_.resolve("./server-only.cjs");
+  return resolve_.call(this, request, ...args);
+} as never;
+
+const url = process.env.URSP_TEST_DATABASE_URL;
+if (!url) {
+  console.log("URSP_TEST_DATABASE_URL is not set — skipping (this test needs a throwaway Postgres).");
+  process.exit(0);
+}
+for (const k of Object.keys(process.env)) if (/^postgres(ql)?:\/\//.test(process.env[k] ?? "")) delete process.env[k];
+Object.assign(process.env, {
+  DATABASE_URL: url,
+  URSP_DISABLE_TIMER: "1",
+  UCP2_DISABLE_TIMER: "1",
+  SSU_DISABLE_TIMER: "1",
+  UPSELL_DISABLE_TIMER: "1",
+  REPORTS_DISABLE_TIMER: "1",
+  CRISP_IDENTIFIER: "id-test",
+  CRISP_KEY: "key-test",
+  CRISP_WEBSITE_ID: "web-1",
+  N8N_AC2_URL: "https://n8n.test/ac2",
+  N8N_AC2_KEY: "ac2-key",
+  ANTHROPIC_API_KEY: "sk-test",
+});
+delete process.env.SHEET_SERVICE_ACCOUNT_JSON;
+
+let failed = 0;
+function check(ok: unknown, what: string, detail?: unknown) {
+  if (ok) console.log(`  ✓ ${what}`);
+  else {
+    failed++;
+    console.log(`  ✗ ${what}${detail === undefined ? "" : ` — ${JSON.stringify(detail)}`}`);
+  }
+}
+
+/* ---------------------------------------------------------------- fakes */
+
+const now = Date.now();
+const iso = (ms: number) => new Date(ms).toISOString();
+const vnStamp = (ms: number) => {
+  const d = new Date(ms + 7 * 3_600_000);
+  return d.toISOString().slice(0, 16).replace("T", " ");
+};
+
+type Store = Record<string, unknown>;
+const ac2: Record<string, Store> = {};
+const activities: Record<string, { type: string; occurredAt: string }[]> = {};
+const store = (d: string, o: Store = {}) =>
+  (ac2[d] = { shopDomain: d, name: d.split(".")[0], email: `${d.split(".")[0]}@x.test`, shopifyPlan: "Basic", pageflyPlan: "Free", pageflyPrice: 0, numPublished: 3, status: "installed", ...o });
+
+type Msg = { type: string; from: "user" | "operator"; content: unknown; timestamp: number; read?: string; delivered?: string; mentions?: string[]; user?: unknown };
+const convs: Record<string, { email?: string; updated_at: number; msgs: Msg[]; state?: string; segments: string[] }> = {};
+let created = 0;
+const conv = (sid: string, email: string | undefined, updatedAt: number, msgs: Msg[] = []) => (convs[sid] = { email, updated_at: updatedAt, msgs, segments: [] });
+const reviews: Record<string, number> = {};
+let haikuCalls = 0;
+
+const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+
+globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+  const u = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+  const method = (init?.method ?? "GET").toUpperCase();
+  const body = init?.body ? JSON.parse(String(init.body)) : null;
+
+  if (u.hostname === "api.anthropic.com") {
+    haikuCalls++;
+    const prompt: string = body.messages[0].content;
+    if (prompt.includes("tag each ticket with a category")) {
+      const cats = [...prompt.matchAll(/^- (".*")$/gm)].map((m) => JSON.parse(m[1]) as string);
+      return reply({ content: [{ type: "text", text: JSON.stringify(Object.fromEntries(cats.map((c) => [c, /respons|repons|mobile/i.test(c)]))) }] });
+    }
+    return reply({ content: [{ type: "text", text: '{"intent":"agree","mood":"happy","note":"Khách đồng ý, nhờ check trang chủ"}' }] });
+  }
+
+  if (u.hostname === "n8n.test") {
+    const path = u.searchParams.get("path") ?? "";
+    if (path === "") return reply({ items: Object.values(ac2) });
+    const [, d, sub] = path.split("/");
+    const dom = decodeURIComponent(d);
+    if (sub === "activities") return reply({ items: activities[dom] ?? [] });
+    return ac2[dom] ? reply(ac2[dom]) : reply({}, 404);
+  }
+
+  if (u.hostname === "api.crisp.chat") {
+    const p = u.pathname.replace(/^\/v1\/website\/[^/]+/, "");
+    let m: RegExpMatchArray | null;
+    if (p === "/operators/list") return reply({ data: [{ details: { user_id: "u-logan", first_name: "Logan" } }] });
+    if ((m = p.match(/^\/conversations\/(\d+)$/))) {
+      const q = (u.searchParams.get("search_query") ?? "").toLowerCase();
+      const list = Object.entries(convs)
+        .filter(([, c]) => c.email === q)
+        .map(([sid, c]) => ({ session_id: sid, updated_at: c.updated_at, meta: { email: c.email, data: {} } }));
+      return reply({ data: m[1] === "1" ? list : [] });
+    }
+    if ((m = p.match(/^\/people\/data\/(.+)$/))) return reply({ data: { data: { app_review: reviews[decodeURIComponent(m[1])] ?? null } } });
+    if (p === "/conversation" && method === "POST") {
+      const sid = `session_00000000-0000-0000-0000-${String(++created).padStart(12, "0")}`;
+      conv(sid, undefined, now);
+      return reply({ data: { session_id: sid } });
+    }
+    if ((m = p.match(/^\/conversation\/([^/]+)\/(meta|state|message|messages)$/))) {
+      const c = convs[m[1]];
+      if (!c) return reply({ error: true, reason: "not found" }, 404);
+      if (m[2] === "meta" && method === "PATCH") {
+        if (body.email) c.email = body.email;
+        if (body.segments) c.segments = body.segments;
+        return reply({ data: {} });
+      }
+      if (m[2] === "meta") return reply({ data: { segments: c.segments, data: {} } });
+      if (m[2] === "state") {
+        c.state = body.state;
+        return reply({ data: {} });
+      }
+      if (m[2] === "message") {
+        c.msgs.push({ type: body.type, from: body.from, content: body.content, timestamp: Date.now(), mentions: body.mentions, user: body.user });
+        return reply({ data: {} });
+      }
+      return reply({ data: c.msgs });
+    }
+    return reply({ error: true, reason: `unfaked ${method} ${p}` }, 404);
+  }
+  throw new Error(`unfaked fetch ${u.href}`);
+}) as typeof fetch;
+
+/* ---------------------------------------------------------------- run */
+
+async function main() {
+  const { Pool } = await import("pg");
+  const raw = new Pool({ connectionString: url });
+  const { rows: tables } = await raw.query<{ t: string }>("select tablename as t from pg_tables where schemaname = 'public' and tablename like 'ursp\\_%'");
+  if (tables.length) await raw.query(`drop table if exists ${tables.map((r) => r.t).join(", ")} cascade`);
+  await raw.end();
+
+  const core = await import("../lib/ursp/core");
+  const settings = await import("../lib/ursp/settings");
+  const queries = await import("../lib/ursp/queries");
+  const p = await (await import("../lib/ursp/db")).db();
+  const target = async (seg: string, d: string) =>
+    (await p.query("select * from ursp_targets where segment = $1 and store_domain = $2", [seg, d])).rows[0] as import("../lib/ursp/types").UrspTarget | undefined;
+
+  console.log("rules");
+  check(core.shopifyUnpaid("partner_test") && core.shopifyUnpaid("Development") && core.shopifyUnpaid("") && core.shopifyUnpaid("trial"), "dev / partner / trial / empty Shopify plans are unpaid");
+  check(!core.shopifyUnpaid("Basic") && !core.shopifyUnpaid("Grow") && !core.shopifyUnpaid("shopify_plus"), "Basic / Grow / Plus are paid");
+  const cfg0 = await settings.getUrspSettings();
+  check(core.resolutionSkipped("Đợi TS check ", cfg0) && core.resolutionSkipped("het ca chua giai quyet", cfg0), "resolution rule ignores spaces, case and accents");
+  check(!core.resolutionSkipped("Chờ khách phản hồi", cfg0), "other resolutions pass");
+  check(core.endDateText("2026-11-30") === "November 30", "end date reads November 30");
+
+  console.log("paused");
+  const row = (o: Record<string, string>) => ({
+    recap_at_vn: vnStamp(now),
+    store_domain: "",
+    category_issue: "Mobile/Responsive",
+    resolution: "Đã resolved",
+    session_id: "",
+    ticket_url: "",
+    num_pages_publish: "3",
+    shopify_plan: "Basic",
+    name_pic: "Eli",
+    issue_summary: "Mobile layout broken",
+    ...o,
+  });
+  const before = await core.importRecap([row({ store_domain: "early.myshopify.com", session_id: "session_aaaaaaaa-0000-0000-0000-000000000001" })]);
+  check(before.added === 0 && /tạm dừng/i.test(before.note ?? ""), "nothing is taken while paused", before);
+  check((await core.runJob(true)) === null, "the job does nothing while paused");
+
+  await settings.setRunning(true, "admin:test");
+  const run = await settings.runState();
+
+  console.log("recap");
+  const sid = (n: number) => `session_aaaaaaaa-0000-0000-0000-${String(n).padStart(12, "0")}`;
+  for (const [d, o] of [
+    ["good.myshopify.com", {}],
+    ["spell.myshopify.com", {}],
+    ["waits.myshopify.com", {}],
+    ["big.myshopify.com", { numPublished: 25 }],
+    ["dev.myshopify.com", { shopifyPlan: "partner_test" }],
+    ["gone.myshopify.com", { status: "uninstalled" }],
+    ["busy.myshopify.com", {}],
+  ] as const)
+    store(d, o);
+  conv(sid(1), "good@x.test", now - 3 * 3_600_000, [{ type: "text", from: "user", content: "help", timestamp: now - 3 * 3_600_000 }]);
+  conv(sid(2), "spell@x.test", now - 3 * 3_600_000);
+  conv(sid(7), "busy@x.test", now - 60_000, [{ type: "text", from: "operator", content: "checking", timestamp: now - 60_000 }]);
+  const res = await core.importRecap([
+    row({ recap_at_vn: vnStamp(new Date(run.started_at!).getTime() - 3_600_000), store_domain: "old.myshopify.com", session_id: sid(9) }),
+    row({ store_domain: "good.myshopify.com", session_id: sid(1) }),
+    row({ store_domain: "spell.myshopify.com", session_id: sid(2), category_issue: "Reponsive mobile" }),
+    row({ store_domain: "waits.myshopify.com", session_id: sid(3), resolution: "Đợi TS check " }),
+    row({ store_domain: "big.myshopify.com", session_id: sid(4) }),
+    row({ store_domain: "dev.myshopify.com", session_id: sid(5) }),
+    row({ store_domain: "gone.myshopify.com", session_id: sid(6) }),
+    row({ store_domain: "busy.myshopify.com", session_id: sid(7) }),
+    row({ store_domain: "other.myshopify.com", session_id: sid(8), category_issue: "Publish" }),
+    row({ store_domain: "", session_id: sid(10) }),
+  ]);
+  check(res.added === 9, "the row from before Bắt đầu is not taken", res);
+  check(res.responsive === 8, "Haiku: Mobile/Responsive and 'Reponsive mobile' are responsive, Publish is not", res);
+  const cats = (await p.query("select category, responsive, by from ursp_categories order by 1")).rows;
+  check(cats.length === 3 && cats.every((c) => c.by === "haiku"), "each spelling asked once and kept", cats);
+  check((await target("recap", "good.myshopify.com"))?.status === "approved", "a qualifying store is queued (auto)");
+  check((await target("recap", "spell.myshopify.com"))?.status === "approved", "an odd spelling still qualifies");
+  const skipCode = async (d: string) => (await target("recap", d))?.skip_code;
+  check((await skipCode("waits.myshopify.com")) === "resolution", "Đợi TS check is left out");
+  check((await skipCode("big.myshopify.com")) === "too_many_pages", "25 published pages is left out");
+  check((await skipCode("dev.myshopify.com")) === "shopify_unpaid", "a partner store is left out");
+  check((await skipCode("gone.myshopify.com")) === "uninstalled", "an uninstalled store is left out");
+  check((await skipCode(`(không domain) ${sid(10)}`)) === "no_domain", "a row without a domain is kept as left out");
+  check(!(await target("recap", "other.myshopify.com")), "a non-responsive row is no target");
+
+  const again = await core.importRecap([row({ store_domain: "good.myshopify.com", session_id: sid(1) })]);
+  check(again.added === 0, "the same row posted again is taken once");
+
+  console.log("send");
+  const job = await core.runJob(true);
+  check(job && job.sent >= 2, "the job sends", job);
+  const good = await target("recap", "good.myshopify.com");
+  check(good?.status === "sent" && good.session_id === sid(1), "Recap is sent in its own ticket", good?.status);
+  const texts = convs[sid(1)].msgs.filter((m) => m.from === "operator" && m.type === "text");
+  check(texts.length === 1 && String(texts[0].content).includes("Logan") && String(texts[0].content).includes("November 30"), "the offer, from Logan, until November 30");
+  check(convs[sid(1)].msgs.some((m) => m.type === "note" && String(m.content).includes("mention Logan")), "a private note says to mention Logan on a reply");
+  check(convs[sid(1)].state === "resolved", "the ticket is resolved after");
+  check(convs[sid(1)].segments.includes("upsell-responsive"), "the Crisp segment is added");
+  check(created === 0, "no new conversation for Recap");
+  const busy = await target("recap", "busy.myshopify.com");
+  check(busy?.status === "approved" && busy.wait_until, "a ticket with a message a minute ago waits", busy?.status);
+
+  console.log("active");
+  const today = iso(now - 60_000);
+  store("fresh.myshopify.com", { lastActiveAt: today });
+  store("returning.myshopify.com", { lastActiveAt: today });
+  store("talking.myshopify.com", { lastActiveAt: today });
+  store("yesterday.myshopify.com", { lastActiveAt: iso(now - 2 * 86_400_000) });
+  ac2["good.myshopify.com"].lastActiveAt = today;
+  conv("session_bbbbbbbb-0000-0000-0000-000000000001", "returning@x.test", now - 60 * 86_400_000);
+  conv("session_bbbbbbbb-0000-0000-0000-000000000002", "talking@x.test", now - 2 * 86_400_000);
+  await p.query("delete from ursp_state where key = 'active'");
+  await core.runJob(true);
+  const scan = await (await import("../lib/ursp/db")).getState<import("../lib/ursp/core").ActiveResult>("active");
+  check(scan?.field === "lastActiveAt" && scan.active_today === 4, "active today found by lastActiveAt", scan);
+  check(scan?.looked === 3, "a store already messaged is not looked at again", scan);
+  check(!(await target("active", "yesterday.myshopify.com")), "a store active yesterday is not taken");
+  check((await target("active", "talking.myshopify.com"))?.skip_code === "contacted", "a store that talked to support 2 days ago is left out");
+  await core.runJob(true);
+  const fresh = await target("active", "fresh.myshopify.com");
+  check(fresh?.status === "sent" && created === 1 && convs[fresh.session_id!]?.email === "fresh@x.test", "no conversation before: a new one is opened", { s: fresh?.status, created });
+  const ret = await target("active", "returning.myshopify.com");
+  check(ret?.status === "sent" && ret.session_id === "session_bbbbbbbb-0000-0000-0000-000000000001", "an older conversation: the message goes there", ret?.session_id);
+
+  console.log("reply, handled, outcome");
+  await p.query("update ursp_targets set tracked_at = null, crisp_checked_at = null where segment = 'recap' and store_domain = 'good.myshopify.com'");
+  convs[sid(1)].msgs.forEach((m) => {
+    if (m.from === "operator") m.read = "chat";
+  });
+  convs[sid(1)].msgs.push({ type: "text", from: "user", content: "Yes please, check my home page", timestamp: Date.now() + 1000 });
+  const t1 = (await target("recap", "good.myshopify.com"))!;
+  await core.trackOne(t1, await settings.getUrspSettings());
+  const t2 = (await target("recap", "good.myshopify.com"))!;
+  check(t2.read_at && t2.replied_at && t2.replies === 1, "read and the reply are seen");
+  check(t2.reply_intent === "agree" && t2.mood === "happy", "Haiku reads the reply: agrees, happy", { i: t2.reply_intent, m: t2.mood });
+  const mention = convs[sid(1)].msgs.find((m) => m.type === "note" && m.mentions?.includes("u-logan"));
+  check(mention && String(mention.content).includes("@Logan"), "a note mentions Logan (his Crisp user id)");
+  check(t2.first_review === 0, "the review baseline is taken at the first look");
+
+  await core.targetAction(t2.id, "done", "tu");
+  const t3 = (await target("recap", "good.myshopify.com"))!;
+  check(t3.done_at && t3.done_by === "tu", "Đã xử lý xong keeps who and when");
+
+  ac2["good.myshopify.com"].pageflyPlan = "Builder";
+  ac2["good.myshopify.com"].pageflyPrice = 24;
+  activities["good.myshopify.com"] = [{ type: "SUBSCRIPTION_CHARGE_ACTIVATED", occurredAt: iso(Date.now() + 5000) }];
+  reviews["good@x.test"] = 5;
+  await core.trackOne(t3, await settings.getUrspSettings(), { force: true });
+  const t4 = (await target("recap", "good.myshopify.com"))!;
+  check(t4.upgraded_at && Number(t4.upgraded_price) === 24, "the upgrade after it is seen");
+  check(t4.reviewed_at && t4.app_review === 5, "the 5★ review after it is seen");
+
+  console.log("stats");
+  const s = await queries.segmentStats({});
+  check(s.recap.rows === 9 && s.recap.responsive === 8, "Recap: rows read and responsive", s.recap);
+  check(s.recap.found === 8 && s.recap.skipped === 5, "Recap: stores found and left out", { f: s.recap.found, s: s.recap.skipped });
+  check(s.recap.reasons.length === 5 && s.recap.reasons.every((r) => r.n === 1), "Recap: one per reason", s.recap.reasons);
+  check(s.recap.agree === 1 && s.recap.done === 1 && s.recap.upgraded_after_done === 1 && s.recap.reviewed_after_done === 1 && s.recap.happy === 1, "Recap: agreed, handled, upgraded and reviewed after", s.recap);
+  check(s.active.found === 3 && s.active.sent === 2 && s.active.reasons[0]?.code === "contacted", "Active: found, sent, why left out", s.active);
+  const tc = await queries.tabCounts();
+  check(tc.sent === 4 && tc.done === 1, "tab counts", tc);
+
+  console.log("admin");
+  const big = (await target("recap", "big.myshopify.com"))!;
+  await core.targetAction(big.id, "send_anyway", "tu");
+  check((await target("recap", "big.myshopify.com"))?.status === "approved", "Vẫn gửi puts a left-out store in the queue");
+  let refused = false;
+  try {
+    await core.targetAction(big.id, "done", "tu");
+  } catch {
+    refused = true;
+  }
+  check(refused, "Đã xử lý xong only on a sent row");
+  await settings.saveUrspSettings({ mode: "manual" });
+  await core.importRecap([row({ store_domain: "manual.myshopify.com", session_id: sid(11) })]);
+  store("manual.myshopify.com");
+  await p.query("delete from ursp_targets where store_domain = 'manual.myshopify.com'");
+  await p.query("delete from ursp_recap_rows where store_domain = 'manual.myshopify.com'");
+  await core.importRecap([row({ store_domain: "manual.myshopify.com", session_id: sid(11) })]);
+  check((await target("recap", "manual.myshopify.com"))?.status === "pending", "manual mode: waits on Chờ duyệt");
+
+  console.log("pause");
+  await settings.setRunning(false, "admin:test");
+  const sentBefore = convs[sid(2)].msgs.length;
+  check((await core.runJob(true)) === null, "Tạm dừng: the job does nothing");
+  check(convs[sid(2)].msgs.length === sentBefore, "nothing is sent while paused");
+  await settings.setRunning(true, "admin:test");
+  check((await (await import("../lib/ursp/db")).getState("recap_cursor")) === null, "Bắt đầu again starts the sheet from its end");
+
+  check(haikuCalls > 0, "Haiku was asked");
+  console.log(failed ? `\n${failed} FAILED` : "\nall passed");
+  await p.end();
+  process.exit(failed ? 1 : 0);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
