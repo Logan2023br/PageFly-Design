@@ -1172,6 +1172,43 @@ export type JobState = {
 };
 
 let running: Promise<JobState | null> | null = null;
+let sending: Promise<SendState | null> | null = null;
+
+export type SendState = { at: string; sent: number; followups: number; errors: string[] };
+
+/**
+ * The sending alone — offers and reminders — on its own lock, so it never
+ * waits behind tracking (which, after a big batch, can take minutes).
+ * The timer starts it every tick beside the job; the job and Cập nhật ngay
+ * call it too, and a call while one runs joins that one.
+ */
+export function runSend(): Promise<SendState | null> {
+  if (!sending) sending = sendNow().finally(() => (sending = null));
+  return sending;
+}
+
+async function sendNow(): Promise<SendState | null> {
+  if (!(await runState()).on) return null;
+  const cfg = await getUrspSettings();
+  const out: SendState = { at: new Date().toISOString(), sent: 0, followups: 0, errors: [] };
+  try {
+    const s = await sendDue(cfg);
+    out.sent = s.sent;
+    out.errors.push(...s.errors.map((e) => `Gửi: ${e}`));
+  } catch (err) {
+    out.errors.push(`Gửi: ${errText(err)}`);
+  }
+  try {
+    await queueFollowups(cfg);
+    const f = await sendFollowups(cfg);
+    out.followups = f.sent;
+    out.errors.push(...f.errors.map((e) => `Nhắc lại: ${e}`));
+  } catch (err) {
+    out.errors.push(`Nhắc lại: ${errText(err)}`);
+  }
+  await setState("send", out).catch(() => undefined);
+  return out;
+}
 
 /** One run: Recap (every 5 min), Active (hourly), send, track. Nothing while paused; `force` reads both sources now. */
 export function runJob(force = false): Promise<JobState | null> {
@@ -1218,20 +1255,10 @@ async function job(force: boolean): Promise<JobState | null> {
   } catch (err) {
     out.errors.push(`Xét lại: ${errText(err)}`);
   }
-  try {
-    const s = await sendDue(cfg);
-    out.sent = s.sent;
-    out.errors.push(...s.errors.map((e) => `Gửi: ${e}`));
-  } catch (err) {
-    out.errors.push(`Gửi: ${errText(err)}`);
-  }
-  try {
-    await queueFollowups(cfg);
-    const f = await sendFollowups(cfg);
-    out.followups = f.sent;
-    out.errors.push(...f.errors.map((e) => `Nhắc lại: ${e}`));
-  } catch (err) {
-    out.errors.push(`Nhắc lại: ${errText(err)}`);
+  const s = await runSend();
+  if (s) {
+    Object.assign(out, { sent: s.sent, followups: s.followups });
+    out.errors.push(...s.errors);
   }
   try {
     const t = await trackBatch(cfg);
@@ -1252,13 +1279,16 @@ let started = false;
 export function startUrspTimer(): void {
   if (started || !hasUrspDatabase() || process.env.URSP_DISABLE_TIMER === "1") return;
   started = true;
-  const tick = () =>
+  const tick = () => {
     runJob().then(
       (r) => {
         if (r?.errors.length) console.error("[ursp]", JSON.stringify(r));
       },
       (err) => console.error("[ursp] run failed", err),
     );
+    /* beside the job, not after it: a long tracking batch never holds the sending up */
+    runSend().catch((err) => console.error("[ursp] send failed", err));
+  };
   setTimeout(tick, 75_000).unref?.();
   setInterval(tick, TICK_MS).unref?.();
 }

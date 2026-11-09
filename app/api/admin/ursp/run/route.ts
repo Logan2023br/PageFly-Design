@@ -1,6 +1,6 @@
 import { fail, json, readJson } from "@/lib/upsell/api";
 import { readAdminName, readAdminSection } from "@/lib/session";
-import { releaseHeldB, runJob, startRecapBackfill } from "@/lib/ursp/core";
+import { releaseHeldB, runJob, runSend, startRecapBackfill } from "@/lib/ursp/core";
 import { runState, setRunning } from "@/lib/ursp/settings";
 
 /* POST /api/admin/ursp/run — {action: "start"} Bắt đầu, {action: "pause"}
@@ -25,7 +25,9 @@ export async function POST(req: Request) {
     if (action === "backfill") return json({ ok: true, backfill: await startRecapBackfill(String(from ?? ""), by, split === true) });
     if (action === "run") {
       if (!(await runState()).on) return json({ ok: false, error: "Đang tạm dừng — bấm Bắt đầu trước." }, 409);
-      return json({ ok: true, job: await runJob(true) });
+      /* the send on its own too: a job already busy tracking would not send */
+      const [job, send] = await Promise.all([runJob(true), runSend()]);
+      return json({ ok: true, job, send });
     }
     return json({ ok: false, error: "action: start, pause hoặc run." }, 400);
   } catch (err) {
