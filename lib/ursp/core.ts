@@ -810,9 +810,12 @@ async function scanActive(cfg: UrspSettings): Promise<ActiveResult> {
 
 /* ---------------------------------------------------------------- send */
 
-const noteText = (t: Pick<UrspTarget, "segment">, cfg: UrspSettings) =>
-  `[Upsell Responsive · ${SEGMENTS[t.segment].label}] ${cfg.sender_name} đã gửi lời mời review responsive + chỉnh sửa miễn phí mọi page (BFMC, tới ${cfg.campaign_end}). ` +
-  `Khách reply → mention ${cfg.sender_name} để xử lý.`;
+/* The private notes on the ticket are in English: the support team reads them. */
+const tag = (t: Pick<UrspTarget, "segment" | "variant">) => `[Upsell Responsive · ${SEGMENTS[t.segment].label}${t.variant ? ` · version ${t.variant}` : ""}]`;
+
+const noteText = (t: Pick<UrspTarget, "segment" | "variant">, cfg: UrspSettings, until: Date | null) =>
+  `${tag(t)} ${cfg.sender_name} sent the free BFCM offer: a responsive review of all PageFly pages + free fixes` +
+  `${until ? `, valid until ${deadlineText(until)}` : ""}. If the customer replies, mention ${cfg.sender_name} to handle it.`;
 
 async function sendOne(t: UrspTarget, cfg: UrspSettings, actor: string): Promise<void> {
   const p = await db();
@@ -852,7 +855,7 @@ async function sendOne(t: UrspTarget, cfg: UrspSettings, actor: string): Promise
         return;
       }
       await sendInConversation(sid, text, sender);
-      await sendNote(sid, noteText(t, cfg)).catch(() => undefined);
+      await sendNote(sid, noteText(t, cfg, draft.includes("{deadline}") ? until : null)).catch(() => undefined);
       await resolveConversation(sid).catch(() => undefined);
     } else if (t.segment === "recap") {
       throw new Error("Không có session Crisp");
@@ -864,7 +867,7 @@ async function sendOne(t: UrspTarget, cfg: UrspSettings, actor: string): Promise
         subject: cfg.active_subject,
         content: text,
         sender,
-        note: noteText(t, cfg),
+        note: noteText(t, cfg, draft.includes("{deadline}") ? until : null),
       });
       sid = r.session_id;
       link = r.ticket_link;
@@ -987,9 +990,10 @@ async function sendFollowups(cfg: UrspSettings): Promise<{ sent: number; errors:
       }
       const text = t.followup_message?.trim() || followupText(t, cfg);
       await sendInConversation(t.session_id!, text, sender!);
-      await sendNote(t.session_id!, `[Upsell Responsive] ${cfg.sender_name} nhắc lại: khách đã xem tin mời nhưng chưa trả lời. Khách reply → mention ${cfg.sender_name}.`).catch(
-        () => undefined,
-      );
+      await sendNote(
+        t.session_id!,
+        `${tag(t)} ${cfg.sender_name} sent a reminder: the customer saw the offer but has not replied${t.offer_until ? ` (offer ends ${deadlineText(t.offer_until)})` : ""}. If they reply, mention ${cfg.sender_name}.`,
+      ).catch(() => undefined);
       await resolveConversation(t.session_id!).catch(() => undefined);
       await tx(async (c) => {
         await c.query(
@@ -1074,7 +1078,7 @@ export async function trackOne(t: UrspTarget, cfg: UrspSettings, opts: { force?:
             const who = await crispSender(cfg.sender_name, "");
             await sendNote(
               t.session_id,
-              `[Upsell Responsive] Khách đã reply lời mời review responsive: "${text.slice(0, 300)}" — @${cfg.sender_name} xử lý giúp.`,
+              `${tag(t)} The customer replied to the responsive review offer: "${text.slice(0, 300)}" — @${cfg.sender_name} please take it from here.`,
               who.user_id ? [who.user_id] : [],
             );
             patch.mentioned_at = new Date().toISOString();
