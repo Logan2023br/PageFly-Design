@@ -363,6 +363,33 @@ async function main() {
   await core.importRecap([row({ store_domain: "manual.myshopify.com", session_id: sid(11) })]);
   check((await target("recap", "manual.myshopify.com"))?.status === "pending", "manual mode: waits on Chờ duyệt");
 
+  console.log("never twice");
+  /* same store queued in both segments (n8n's post racing the job): one message */
+  store("twice.myshopify.com");
+  await p.query(
+    `insert into ursp_targets (segment, store_domain, email, status, message, session_id, source)
+     values ('recap', 'twice.myshopify.com', 'twice@x.test', 'approved', 'Hi twice, the offer for you here', $1, '{}'),
+            ('active', 'twice.myshopify.com', 'twice@x.test', 'approved', 'Hi twice, the offer for you here', null, '{}')`,
+    [sid(20)],
+  );
+  conv(sid(20), "twice@x.test", now - 3 * 86_400_000);
+  await core.runJob(true);
+  const both = (await p.query("select segment, status, skip_code from ursp_targets where store_domain = 'twice.myshopify.com' order by segment")).rows;
+  check(both.filter((r) => r.status === "sent").length === 1 && both.some((r) => r.skip_code === "already_sent"), "queued twice: sent once, the other left out", both);
+  /* another store, same email */
+  store("twin.myshopify.com", { email: "twice@x.test", lastActiveAt: iso(Date.now()) });
+  await p.query("delete from ursp_state where key = 'active'");
+  await core.runJob(true);
+  check((await target("active", "twin.myshopify.com"))?.skip_code === "already_sent", "same email on another store: left out");
+  const twin = (await target("active", "twin.myshopify.com"))!;
+  let refusedTwin = false;
+  try {
+    await core.targetAction(twin.id, "send_anyway", "tu");
+  } catch {
+    refusedTwin = true;
+  }
+  check(refusedTwin, "Vẫn gửi refuses a store / email already sent");
+
   console.log("pause");
   await settings.setRunning(false, "admin:test");
   const sentBefore = convs[sid(2)].msgs.length;

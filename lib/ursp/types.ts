@@ -32,6 +32,7 @@ export const SKIP_REASONS = {
   /* no longer applied: such stores are looked at again */
   contacted: "Đã liên hệ support trên Crisp (luật cũ, đang xét lại)",
   other_segment: "Đã nhắn ở phân khúc khác",
+  already_sent: "Đã gửi tin này cho store / email này rồi",
   ended: "Chương trình đã kết thúc",
   admin: "Admin bỏ qua",
 } as const;

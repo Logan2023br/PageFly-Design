@@ -233,6 +233,25 @@ type NewTarget = {
 const RECONSIDER: SkipCode[] = ["resolution", "no_ac2", "uninstalled", "shopify_unpaid", "too_many_pages", "no_email", "contacted", "no_ticket"];
 
 /**
+ * The offer already went — or is going — to this store or this email,
+ * under any row but `id`: never twice, whatever the segment or the route
+ * (the job, n8n's post, Vẫn gửi). The last check before a send, too.
+ */
+async function alreadySent(id: string | null, domain: string, email: string | null): Promise<UrspTarget | null> {
+  const { rows } = await (await db()).query<UrspTarget>(
+    `select * from ursp_targets
+      where ($1::bigint is null or id <> $1::bigint) and status in ('sent', 'sending')
+        and (store_domain = $2 or ($3::text is not null and lower(email) = lower($3::text)))
+      order by sent_at nulls last limit 1`,
+    [id, domain, email],
+  );
+  return rows[0] ?? null;
+}
+
+const sentReason = (d: UrspTarget, domain: string) =>
+  `${SKIP_REASONS.already_sent} — ${d.store_domain === domain ? "" : `cùng email với ${d.store_domain}, `}${SEGMENTS[d.segment].label}${d.sent_at ? ` ${new Date(d.sent_at).toISOString().slice(0, 10)}` : ""}`;
+
+/**
  * Looks a store up and keeps it: skipped with the reason, or with the
  * message — pending (manual) or approved (auto). Returns the id, or null
  * when the store already has a target there is no reason to touch.
@@ -257,6 +276,10 @@ async function addTarget(n: NewTarget, cfg: UrspSettings, actor: string): Promis
     facts = factsOf(st, n.facts);
     firstAc2 = !!st;
     skip = storeRule(facts, !!st, cfg);
+  }
+  if (!skip) {
+    const dup = await alreadySent(same?.id ?? null, n.store_domain, facts.email);
+    if (dup) skip = { code: "already_sent", reason: sentReason(dup, n.store_domain) };
   }
   let session_id = n.session_id ?? null;
   let ticket_link = n.ticket_link ?? null;
@@ -564,6 +587,17 @@ async function sendOne(t: UrspTarget, cfg: UrspSettings, actor: string): Promise
   const p = await db();
   if (campaignOver(cfg)) {
     await p.query("update ursp_targets set status = 'skipped', skip_code = 'ended', skip_reason = $2, updated_at = now() where id = $1", [t.id, SKIP_REASONS.ended]);
+    return;
+  }
+  const dup = await alreadySent(t.id, t.store_domain, t.email);
+  if (dup) {
+    await tx(async (c) => {
+      await c.query("update ursp_targets set status = 'skipped', skip_code = 'already_sent', skip_reason = $2, updated_at = now() where id = $1", [
+        t.id,
+        sentReason(dup, t.store_domain),
+      ]);
+      await logEvent(c, t.id, "skipped", actor, { code: "already_sent", other: dup.id });
+    });
     return;
   }
   const text = t.message?.trim() || composeMessage(t.segment, t, cfg);
@@ -1046,6 +1080,8 @@ export async function targetAction(id: string, action: TargetAction, by: string,
       only("skipped");
       if (t.segment === "recap" && !t.session_id) throw new UpsellError("Row Recap này không có ticket Crisp để gửi vào.", 409);
       if (t.segment === "active" && !t.email) throw new UpsellError("Store này không có email để mở hội thoại.", 409);
+      const dup = await alreadySent(t.id, t.store_domain, t.email);
+      if (dup) throw new UpsellError(`Không gửi: ${sentReason(dup, t.store_domain)}.`, 409);
       const message = msg ?? composeMessage(t.segment, t, cfg);
       return set(
         `status = '${cfg.mode === "auto" ? "approved" : "pending"}', skip_code = null, skip_reason = null, message = $2, approved_by = $3`,
