@@ -813,9 +813,12 @@ async function scanActive(cfg: UrspSettings): Promise<ActiveResult> {
 /* The private notes on the ticket are in English: the support team reads them. */
 const tag = (t: Pick<UrspTarget, "segment" | "variant">) => `[Upsell Responsive · ${SEGMENTS[t.segment].label}${t.variant ? ` · version ${t.variant}` : ""}]`;
 
+/** Fixing their pages needs their store: whoever is on the ticket asks for it. */
+const ACCESS = "If the customer agrees, FL please request collaborator access to the store.";
+
 const noteText = (t: Pick<UrspTarget, "segment" | "variant">, cfg: UrspSettings, until: Date | null) =>
   `${tag(t)} ${cfg.sender_name} sent the free BFCM offer: a responsive review of all PageFly pages + free fixes` +
-  `${until ? `, valid until ${deadlineText(until)}` : ""}. If the customer replies, mention ${cfg.sender_name} to handle it.`;
+  `${until ? `, valid until ${deadlineText(until)}` : ""}. If the customer replies, mention ${cfg.sender_name} to handle it. ${ACCESS}`;
 
 async function sendOne(t: UrspTarget, cfg: UrspSettings, actor: string): Promise<void> {
   const p = await db();
@@ -992,7 +995,7 @@ async function sendFollowups(cfg: UrspSettings): Promise<{ sent: number; errors:
       await sendInConversation(t.session_id!, text, sender!);
       await sendNote(
         t.session_id!,
-        `${tag(t)} ${cfg.sender_name} sent a reminder: the customer saw the offer but has not replied${t.offer_until ? ` (offer ends ${deadlineText(t.offer_until)})` : ""}. If they reply, mention ${cfg.sender_name}.`,
+        `${tag(t)} ${cfg.sender_name} sent a reminder: the customer saw the offer but has not replied${t.offer_until ? ` (offer ends ${deadlineText(t.offer_until)})` : ""}. If they reply, mention ${cfg.sender_name}. ${ACCESS}`,
       ).catch(() => undefined);
       await resolveConversation(t.session_id!).catch(() => undefined);
       await tx(async (c) => {
@@ -1078,7 +1081,7 @@ export async function trackOne(t: UrspTarget, cfg: UrspSettings, opts: { force?:
             const who = await crispSender(cfg.sender_name, "");
             await sendNote(
               t.session_id,
-              `${tag(t)} The customer replied to the responsive review offer: "${text.slice(0, 300)}" — @${cfg.sender_name} please take it from here.`,
+              `${tag(t)} The customer replied to the responsive review offer: "${text.slice(0, 300)}" — @${cfg.sender_name} please take it from here. ${ACCESS}`,
               who.user_id ? [who.user_id] : [],
             );
             patch.mentioned_at = new Date().toISOString();
