@@ -18,6 +18,7 @@ export const URSP_TABS = [
   { id: "replied", label: "Khách phản hồi" },
   { id: "done", label: "Đã xử lý" },
   { id: "skipped", label: "Bị loại" },
+  { id: "ab", label: "A/B test" },
   { id: "settings", label: "Cài đặt" },
 ] as const;
 export type UrspTab = (typeof URSP_TABS)[number]["id"];
@@ -28,6 +29,8 @@ const TAB_SQL: Record<Exclude<UrspTab, "overview" | "settings">, string> = {
   replied: "t.status = 'sent' and t.replied_at is not null",
   done: "t.status = 'sent' and t.done_at is not null",
   skipped: "t.status = 'skipped'",
+  /* the A/B tab lists the stores held for B */
+  ab: "t.status = 'held'",
 };
 
 export type UrspFilters = {
@@ -41,6 +44,8 @@ export type UrspFilters = {
   open?: string;
   /** whether they saw it, and where the reminder stands — a key of SEEN */
   seen?: string;
+  /** the A/B test's half: A or B */
+  variant?: string;
   /** the queue's parts: pending (Chờ duyệt), waiting (Chờ gửi), failed */
   status?: "pending" | "waiting" | "failed";
   page?: number;
@@ -84,6 +89,7 @@ function where(tab: keyof typeof TAB_SQL | null, f: UrspFilters): { sql: string;
   if (f.intent?.trim()) add((n) => `t.reply_intent = $${n}`, f.intent.trim());
   if (f.mood?.trim()) add((n) => `t.mood = $${n}`, f.mood.trim());
   if (f.open === "1") parts.push("t.done_at is null");
+  if (f.variant === "A" || f.variant === "B") add((n) => `t.variant = $${n}`, f.variant);
   if (f.seen && Object.hasOwn(SEEN, f.seen)) parts.push(`(${SEEN[f.seen as keyof typeof SEEN].sql})`);
   if (f.status && Object.hasOwn(QUEUE_PART, f.status)) parts.push(QUEUE_PART[f.status]);
   return { sql: parts.length ? `where ${parts.join(" and ")}` : "", params };
@@ -273,4 +279,103 @@ export async function recentRecapRows(limit = 15): Promise<
 export async function targetEvents(id: string): Promise<{ type: string; actor: string; detail: Record<string, unknown> | null; at: string }[]> {
   const { rows } = await (await db()).query("select type, actor, detail, at from ursp_events where target_id = $1 order by at desc limit 30", [id]);
   return rows;
+}
+
+/* ---------------------------------------------------------------- A/B test */
+
+export type AbArm = {
+  variant: "A" | "B";
+  sent: number;
+  held: number;
+  queued: number;
+  read: number;
+  replied: number;
+  agree: number;
+  decline: number;
+  followup_sent: number;
+  replied_after_followup: number;
+  done: number;
+  upgraded: number;
+  reviewed: number;
+  happy: number;
+  neutral: number;
+  unhappy: number;
+  /** hours from the message to the first reply, on average */
+  reply_hours: number | null;
+};
+
+/** Each half of the test: the stores given A or B, and what they did. */
+export async function abStats(): Promise<Record<"A" | "B", AbArm>> {
+  const { rows } = await (await db()).query<AbArm>(
+    `select t.variant,
+            count(*) filter (where t.status = 'sent')::int as sent,
+            count(*) filter (where t.status = 'held')::int as held,
+            count(*) filter (where t.status in ('pending', 'approved', 'sending'))::int as queued,
+            count(*) filter (where t.status = 'sent' and t.read_at is not null)::int as read,
+            count(*) filter (where t.status = 'sent' and t.replied_at is not null)::int as replied,
+            count(*) filter (where t.reply_intent = 'agree')::int as agree,
+            count(*) filter (where t.reply_intent = 'decline')::int as decline,
+            count(*) filter (where t.followup_sent_at is not null)::int as followup_sent,
+            count(*) filter (where t.followup_sent_at is not null and t.replied_at >= t.followup_sent_at)::int as replied_after_followup,
+            count(*) filter (where t.done_at is not null)::int as done,
+            count(*) filter (where t.upgraded_at is not null)::int as upgraded,
+            count(*) filter (where t.reviewed_at is not null)::int as reviewed,
+            count(*) filter (where t.mood = 'happy')::int as happy,
+            count(*) filter (where t.mood = 'neutral')::int as neutral,
+            count(*) filter (where t.mood = 'unhappy')::int as unhappy,
+            round((avg(extract(epoch from (t.replied_at - t.sent_at)) / 3600) filter (where t.replied_at is not null))::numeric, 1)::float as reply_hours
+       from ursp_targets t where t.variant in ('A', 'B') group by 1`,
+  );
+  const empty = (variant: "A" | "B"): AbArm => ({
+    variant,
+    sent: 0,
+    held: 0,
+    queued: 0,
+    read: 0,
+    replied: 0,
+    agree: 0,
+    decline: 0,
+    followup_sent: 0,
+    replied_after_followup: 0,
+    done: 0,
+    upgraded: 0,
+    reviewed: 0,
+    happy: 0,
+    neutral: 0,
+    unhappy: 0,
+    reply_hours: null,
+  });
+  const out = { A: empty("A"), B: empty("B") };
+  for (const r of rows) out[r.variant] = { ...empty(r.variant), ...r };
+  return out;
+}
+
+export type AbVerdict = {
+  /** B's rate minus A's, in points */
+  diff: number | null;
+  /** two-sided p of a two-proportion z-test; null without enough to test */
+  p: number | null;
+  /** stores per arm for an 80%-power test at this difference — "how many more to know" */
+  needed: number | null;
+};
+
+/** Standard normal CDF (Abramowitz–Stegun 7.1.26). */
+function phi(z: number): number {
+  const t = 1 / (1 + 0.3275911 * Math.abs(z) / Math.SQRT2);
+  const erf = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-(z * z) / 2);
+  return z >= 0 ? (1 + erf) / 2 : (1 - erf) / 2;
+}
+
+/** Is B's rate different from A's, or is it noise? `x` successes out of `n` sent, per arm. */
+export function abVerdict(xa: number, na: number, xb: number, nb: number): AbVerdict {
+  if (!na || !nb) return { diff: null, p: null, needed: null };
+  const pa = xa / na;
+  const pb = xb / nb;
+  const diff = Math.round((pb - pa) * 1000) / 10;
+  const pool = (xa + xb) / (na + nb);
+  const se = Math.sqrt(pool * (1 - pool) * (1 / na + 1 / nb));
+  const p = se > 0 ? 2 * (1 - phi(Math.abs(pb - pa) / se)) : null;
+  const d = Math.abs(pb - pa);
+  const needed = d > 0 ? Math.ceil(((1.96 + 0.84) ** 2 * (pa * (1 - pa) + pb * (1 - pb))) / d ** 2) : null;
+  return { diff, p: p === null ? null : Math.round(p * 1000) / 1000, needed };
 }

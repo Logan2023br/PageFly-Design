@@ -23,6 +23,12 @@ export const URSP_DEFAULTS = {
   offer_days: 3,
   recap_template: "",
   active_template: "",
+  /** the A/B test's B message — empty: the built-in B */
+  recap_template_b: "",
+  active_template_b: "",
+  followup_template_b: "",
+  /** 1: every new store that qualifies gets A or B at random (50/50) */
+  ab_split: 0,
   active_subject: "Free responsive check for your store pages",
   /** a store with more published pages than this gets no message */
   max_published_pages: 20,
@@ -66,6 +72,10 @@ export const URSP_HELP: Record<UrspKey, string> = {
   recap_template: `Tin cho phân khúc Recap (gửi vào chính ticket support đó). Biến: ${VARS}. Để trống dùng mẫu mặc định.`,
   active_template: `Tin cho phân khúc Active (vào hội thoại Crisp gần nhất của khách, chưa có thì mở hội thoại mới đi qua email). Biến: ${VARS}. Để trống dùng mẫu mặc định.`,
   active_subject: "Tiêu đề hội thoại / email cho phân khúc Active",
+  recap_template_b: `A/B test — bản B cho phân khúc Recap. Biến: ${VARS}. Để trống dùng mẫu B mặc định.`,
+  active_template_b: `A/B test — bản B cho phân khúc Active. Biến: ${VARS}. Để trống dùng mẫu B mặc định.`,
+  followup_template_b: `A/B test — tin nhắc lại của bản B. Biến: ${VARS}. Để trống dùng mẫu B mặc định.`,
+  ab_split: "1 = store mới đủ điều kiện được chia ngẫu nhiên 50/50 bản A / bản B · 0 = tất cả nhận bản A",
   max_published_pages: "Store có nhiều page publish hơn số này thì không gửi",
   recap_skip_resolutions: "Resolution trong file Recap thì bỏ qua (cách nhau dấu phẩy, không phân biệt hoa thường / dấu)",
   recap_only_responsive: "0 = gửi cho mọi row Recap mới (trừ resolution bị bỏ qua) · 1 = chỉ row có category_issue là responsive (Haiku kiểm tra)",

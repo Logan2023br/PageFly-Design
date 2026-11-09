@@ -3,18 +3,21 @@ import { AdminShell } from "@/components/admin/AdminShell";
 import { adminGate } from "@/components/admin/adminGate";
 import { FIELD } from "@/components/admin/fieldClass";
 import { CrispLink, Pill } from "@/components/admin/upsell/bits";
-import { DoneButton, ModeSwitch, RecapBackfill, QueueActions, RunControls, SendAnyway, SettingsForm, TrackButton } from "@/components/admin/ursp/Controls";
+import { DoneButton, ModeSwitch, RecapBackfill, ReleaseB, QueueActions, RunControls, SendAnyway, SettingsForm, TrackButton } from "@/components/admin/ursp/Controls";
 import { vnTime } from "@/lib/ucp2/core";
 import { RECAP_SHEET_URL, composeMessage, recapServiceAccount, deadlineText, offerUntil, withDeadline, type ActiveResult, type BackfillState, type JobState, type RecapResult } from "@/lib/ursp/core";
 import { getState, hasUrspDatabase } from "@/lib/ursp/db";
 import {
   SEEN,
   URSP_TABS,
+  abStats,
+  abVerdict,
   byDay,
   listTargets,
   recentRecapRows,
   segmentStats,
   tabCounts,
+  type AbArm,
   type SegmentStats,
   type UrspFilters,
   type UrspTab,
@@ -63,12 +66,13 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
     intent: one("intent"),
     mood: one("mood"),
     seen: one("seen"),
+    variant: one("variant"),
     open: one("open"),
     page: Number(one("page")) || 1,
   };
   const qs = (patch: Record<string, string | undefined>) => {
     const s = new URLSearchParams();
-    for (const [k, v] of Object.entries({ tab, q: f.q, seg: f.seg, from: f.from, to: f.to, reason: f.reason, intent: f.intent, mood: f.mood, seen: f.seen, open: f.open, ...patch }))
+    for (const [k, v] of Object.entries({ tab, q: f.q, seg: f.seg, from: f.from, to: f.to, reason: f.reason, intent: f.intent, mood: f.mood, seen: f.seen, variant: f.variant, open: f.open, ...patch }))
       if (v && !(k === "tab" && v === "overview")) s.set(k, v);
     const t = s.toString();
     return t ? `${HREF}?${t}` : HREF;
@@ -86,9 +90,22 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
 
   let body: React.ReactNode;
   if (tab === "overview") {
-    const [stats, days, recent] = await Promise.all([segmentStats(f), byDay(), recentRecapRows()]);
+    const [stats, days, recent, arms] = await Promise.all([segmentStats(f), byDay(), recentRecapRows(), abStats()]);
+    const rate = (a: AbArm) => (a.sent ? `${((a.replied / a.sent) * 100).toFixed(1)}%` : "—");
     body = (
       <>
+        {arms.A.sent + arms.B.sent + arms.B.held > 0 && (
+          <Link href={`${HREF}?tab=ab`} className="flex flex-wrap items-center gap-2 rounded-pf-card border border-pf-border bg-pf-card px-4 py-2.5 text-[13px] transition-colors hover:border-pf-primary">
+            <strong className="text-pf-text">A/B test:</strong>
+            <Pill tone="primary">Bản A</Pill>
+            <span className="text-pf-body">
+              {arms.A.sent} gửi · {rate(arms.A)} phản hồi
+            </span>
+            <Pill tone="ok">Bản B</Pill>
+            <span className="text-pf-body">{arms.B.sent ? `${arms.B.sent} gửi · ${rate(arms.B)} phản hồi` : `${arms.B.held} store đang giữ, chưa gửi`}</span>
+            <span className="ml-auto text-pf-primary-hi">Xem so sánh →</span>
+          </Link>
+        )}
         <AfterDone s={[stats.recap, stats.active]} />
         <div className="grid gap-4 xl:grid-cols-2">
           {(["recap", "active"] as const).map((seg) => (
@@ -109,6 +126,24 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
           recap_template: withDeadline(composeMessage("recap", { store_name: "Sun Coast Elements", store_domain: "x.myshopify.com" }, { ...cfg, recap_template: "" }), offerUntil(cfg)),
           active_template: withDeadline(composeMessage("active", { store_name: "Sun Coast Elements", store_domain: "x.myshopify.com" }, { ...cfg, active_template: "" }), offerUntil(cfg)),
           followup_template: withDeadline(composeMessage("followup", { store_name: "Sun Coast Elements", store_domain: "x.myshopify.com" }, { ...cfg, followup_template: "" }), offerUntil(cfg)),
+        }}
+      />
+    );
+  } else if (tab === "ab") {
+    const sample = { store_name: "Sun Coast Elements", store_domain: "x.myshopify.com" };
+    const [arms, held] = await Promise.all([abStats(), listTargets("ab", { ...f, page: f.page })]);
+    body = (
+      <AbView
+        arms={arms}
+        held={held}
+        heldHref={(p) => qs({ page: String(p) })}
+        auto={cfg.mode === "auto"}
+        split={cfg.ab_split === 1}
+        messages={{
+          A: withDeadline(composeMessage("recap", sample, cfg, "A"), offerUntil(cfg)),
+          B: withDeadline(composeMessage("recap", sample, cfg, "B"), offerUntil(cfg)),
+          fA: withDeadline(composeMessage("followup", sample, cfg, "A"), offerUntil(cfg)),
+          fB: withDeadline(composeMessage("followup", sample, cfg, "B"), offerUntil(cfg)),
         }}
       />
     );
@@ -174,7 +209,9 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
                       ? counts.done
                       : t.id === "skipped"
                         ? counts.skipped
-                        : undefined;
+                        : t.id === "ab"
+                          ? counts.ab
+                          : undefined;
             const on = tab === t.id;
             return (
               <Link
@@ -196,7 +233,7 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
             );
           })}
         </nav>
-        {tab !== "settings" && <Filters tab={tab} f={f} />}
+        {tab !== "settings" && tab !== "ab" && <Filters tab={tab} f={f} />}
         {body}
       </div>
     </AdminShell>
@@ -325,6 +362,11 @@ function Filters({ tab, f }: { tab: UrspTab; f: UrspFilters }) {
       )}
       {(tab === "replied" || tab === "done" || tab === "sent") && (
         <>
+          <select name="variant" defaultValue={f.variant ?? ""} className={`${FIELD} w-[150px]!`} aria-label="Bản tin">
+            <option value="">Mọi bản tin</option>
+            <option value="A">Bản A</option>
+            <option value="B">Bản B</option>
+          </select>
           <select name="seen" defaultValue={f.seen ?? ""} className={`${FIELD} w-[210px]!`} aria-label="Trạng thái xem">
             <option value="">Mọi trạng thái xem</option>
             {Object.entries(SEEN).map(([k, v]) => (
@@ -642,6 +684,251 @@ function RecentRecap({ rows }: { rows: Awaited<ReturnType<typeof recentRecapRows
   );
 }
 
+/* ---------------------------------------------------------------- A/B test */
+
+/** **bold** as Crisp shows it — for reading the two messages side by side. */
+function Bolded({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(/(\*\*[^*\n]+\*\*)/g).map((part, i) =>
+        part.startsWith("**") && part.endsWith("**") ? (
+          <strong key={i} className="text-pf-text">
+            {part.slice(2, -2)}
+          </strong>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </>
+  );
+}
+
+const rateOf = (n: number, of: number) => (of ? (n / of) * 100 : null);
+
+function AbView({
+  arms,
+  held,
+  heldHref,
+  auto,
+  split,
+  messages,
+}: {
+  arms: Record<"A" | "B", AbArm>;
+  held: Awaited<ReturnType<typeof listTargets>>;
+  heldHref: (p: number) => string;
+  auto: boolean;
+  split: boolean;
+  messages: { A: string; B: string; fA: string; fB: string };
+}) {
+  const { A, B } = arms;
+  const bWaiting = B.sent === 0;
+  /* each metric: its count per arm, and what it is a share of */
+  const rows: { label: string; key: keyof AbArm; of: (a: AbArm) => number; test?: boolean }[] = [
+    { label: "Đã gửi", key: "sent", of: () => 0 },
+    { label: "Đã xem", key: "read", of: (a) => a.sent, test: true },
+    { label: "Phản hồi", key: "replied", of: (a) => a.sent, test: true },
+    { label: "Đồng ý", key: "agree", of: (a) => a.sent, test: true },
+    { label: "Từ chối", key: "decline", of: (a) => a.sent },
+    { label: "Đã nhắc lại", key: "followup_sent", of: (a) => a.sent },
+    { label: "Phản hồi sau nhắc lại", key: "replied_after_followup", of: (a) => a.followup_sent },
+    { label: "Đã xử lý xong", key: "done", of: (a) => a.sent },
+    { label: "Nâng cấp", key: "upgraded", of: (a) => a.sent, test: true },
+    { label: "Review 5★", key: "reviewed", of: (a) => a.sent },
+    { label: "Hài lòng", key: "happy", of: (a) => a.happy + a.neutral + a.unhappy },
+  ];
+  const main = abVerdict(A.replied, A.sent, B.replied, B.sent);
+  const verdict = bWaiting
+    ? "Bản B chưa gửi — chưa so sánh được."
+    : main.diff === null
+      ? "Chưa có dữ liệu."
+      : main.p !== null && main.p < 0.05
+        ? `${main.diff > 0 ? "Bản B" : "Bản A"} hơn rõ về phản hồi (${main.diff > 0 ? "+" : ""}${main.diff} điểm %, p = ${main.p}) — đủ tin cậy.`
+        : `Chênh lệch phản hồi ${main.diff > 0 ? "+" : ""}${main.diff} điểm % (B so với A) — chưa đủ chắc chắn${main.p !== null ? ` (p = ${main.p})` : ""}${main.needed ? `, cần khoảng ${main.needed} store mỗi bản để kết luận` : ""}.`;
+
+  return (
+    <div className="grid gap-4">
+      <section className="grid gap-3 rounded-pf-card border border-pf-border bg-pf-card p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="grid gap-1">
+            <h3 className="text-[14px] font-semibold text-pf-text">A/B test mẫu tin</h3>
+            <p className="text-[12.5px] text-pf-muted">
+              Bản A: mẫu hiện tại · Bản B: mẫu mới (mở bằng câu hỏi, ngắn, 1 việc cần làm). Store Recap từ 1/11 được chia ngẫu nhiên nửa A / nửa B theo từng ngày.
+            </p>
+            <p className="text-[12.5px] text-pf-muted">
+              Store mới: {split ? "đang chia 50/50 A / B (ab_split = 1)" : "nhận bản A (bật chia 50/50: ab_split = 1 ở Cài đặt)"}.
+            </p>
+          </div>
+          <ReleaseB held={B.held} auto={auto} />
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[
+            { label: "Bản A — đã gửi", n: A.sent, note: A.queued ? `${A.queued} đang chờ gửi` : "" },
+            { label: "Bản B — đã gửi", n: B.sent, note: B.held ? `${B.held} đang giữ, chưa gửi` : B.queued ? `${B.queued} đang chờ gửi` : "" },
+            { label: "Phản hồi A", n: A.replied, note: A.sent ? `${(rateOf(A.replied, A.sent) ?? 0).toFixed(1)}%` : "—" },
+            { label: "Phản hồi B", n: B.replied, note: B.sent ? `${(rateOf(B.replied, B.sent) ?? 0).toFixed(1)}%` : "chưa gửi" },
+          ].map((t) => (
+            <div key={t.label} className="grid gap-0.5 rounded-pf-md border border-pf-border bg-pf-bg-deep px-3 py-2">
+              <span className="text-[11.5px] text-pf-faint">{t.label}</span>
+              <span className="text-[22px] font-semibold leading-tight text-pf-text">{t.n}</span>
+              <span className="text-[11px] text-pf-muted">{t.note}</span>
+            </div>
+          ))}
+        </div>
+        <p className={`rounded-pf-md border px-3 py-2 text-[13px] ${main.p !== null && main.p < 0.05 ? "border-pf-success/40 bg-pf-success/10 text-pf-success" : "border-pf-border bg-pf-bg-deep text-pf-body"}`}>
+          <strong>Kết luận:</strong> {verdict}
+        </p>
+      </section>
+
+      <section className="grid gap-2 rounded-pf-card border border-pf-border bg-pf-card p-4">
+        <h3 className="text-[13px] font-semibold text-pf-text">So sánh từng chỉ số</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-[12.5px]">
+            <thead className="text-[11px] uppercase tracking-[0.06em] text-pf-faint">
+              <tr>
+                <th className="py-1.5 pr-3 font-semibold">Chỉ số</th>
+                <th className="py-1.5 pr-3 text-right font-semibold">Bản A</th>
+                <th className="py-1.5 pr-3 text-right font-semibold">Bản B</th>
+                <th className="py-1.5 pr-3 text-right font-semibold">B so với A</th>
+                <th className="py-1.5 pr-3 font-semibold">Độ tin cậy</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const a = A[r.key] as number;
+                const b = B[r.key] as number;
+                const ra = rateOf(a, r.of(A));
+                const rb = rateOf(b, r.of(B));
+                const d = ra !== null && rb !== null && !bWaiting ? Math.round((rb - ra) * 10) / 10 : null;
+                const v = r.test && !bWaiting ? abVerdict(a, A.sent, b, B.sent) : null;
+                const worse = r.key === "decline";
+                return (
+                  <tr key={r.key} className="border-t border-pf-border">
+                    <td className="py-1.5 pr-3 text-pf-text">{r.label}</td>
+                    <td className="py-1.5 pr-3 text-right">
+                      <span className="text-pf-text">{a}</span> {ra !== null && <span className="text-[11px] text-pf-faint">{ra.toFixed(1)}%</span>}
+                    </td>
+                    <td className="py-1.5 pr-3 text-right">
+                      {bWaiting && r.key !== "sent" ? (
+                        <span className="text-pf-faint">—</span>
+                      ) : (
+                        <>
+                          <span className="text-pf-text">{b}</span> {rb !== null && <span className="text-[11px] text-pf-faint">{rb.toFixed(1)}%</span>}
+                        </>
+                      )}
+                    </td>
+                    <td className="py-1.5 pr-3 text-right">
+                      {d === null || d === 0 ? (
+                        <span className="text-pf-faint">{d === 0 ? "=" : "—"}</span>
+                      ) : (
+                        <span className={(d > 0) !== worse ? "font-semibold text-pf-success" : "font-semibold text-pf-danger"}>
+                          {d > 0 ? "▲ +" : "▼ "}
+                          {d} điểm
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-1.5 pr-3 text-[11.5px]">
+                      {v && v.p !== null ? (
+                        v.p < 0.05 ? (
+                          <span className="text-pf-success">Chắc chắn (p = {v.p})</span>
+                        ) : (
+                          <span className="text-pf-muted">
+                            Chưa chắc (p = {v.p}){v.needed ? ` · cần ~${v.needed}/bản` : ""}
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-pf-faint">—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              <tr className="border-t border-pf-border">
+                <td className="py-1.5 pr-3 text-pf-text">Thời gian tới khi reply (TB)</td>
+                <td className="py-1.5 pr-3 text-right text-pf-text">{A.reply_hours !== null ? `${A.reply_hours} giờ` : "—"}</td>
+                <td className="py-1.5 pr-3 text-right text-pf-text">{B.reply_hours !== null ? `${B.reply_hours} giờ` : "—"}</td>
+                <td colSpan={2} />
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="text-[11.5px] text-pf-faint">
+          Tỷ lệ tính trên số tin đã gửi của từng bản. &quot;Chắc chắn&quot;: kiểm định 2 tỷ lệ, p &lt; 0.05 — chênh lệch nhiều khả năng do mẫu tin, không phải ngẫu nhiên.
+          Store gửi trước khi có A/B không tính.
+        </p>
+      </section>
+
+      <section className="grid gap-3 lg:grid-cols-2">
+        {(["A", "B"] as const).map((v) => (
+          <div key={v} className="grid content-start gap-2 rounded-pf-card border border-pf-border bg-pf-card p-4">
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 whitespace-nowrap">
+                <Pill tone={v === "B" ? "ok" : "primary"}>Bản {v}</Pill>
+              </span>
+              <span className="text-[12px] text-pf-muted">{v === "A" ? "Mẫu hiện tại" : "Mẫu mới — sửa ở Cài đặt (recap_template_b, active_template_b, followup_template_b)"}</span>
+            </div>
+            <div className="whitespace-pre-wrap rounded-pf-md border border-pf-border bg-pf-bg-deep p-3 text-[12.5px] leading-relaxed text-pf-body">
+              <Bolded text={v === "A" ? messages.A : messages.B} />
+            </div>
+            <details className="text-[12px]">
+              <summary className="cursor-pointer text-pf-muted hover:text-pf-text">Tin nhắc lại (xem mà 24 giờ chưa reply)</summary>
+              <div className="mt-2 whitespace-pre-wrap rounded-pf-md border border-pf-border bg-pf-bg-deep p-3 text-[12.5px] leading-relaxed text-pf-body">
+                <Bolded text={v === "A" ? messages.fA : messages.fB} />
+              </div>
+            </details>
+          </div>
+        ))}
+      </section>
+
+      <section className="grid gap-2">
+        <h3 className="text-[13px] font-semibold text-pf-text">Store đang giữ cho bản B ({held.total}) — chưa gửi gì</h3>
+        <Pager list={held} href={heldHref} />
+        <SkippedTableLike rows={held.rows} />
+      </section>
+    </div>
+  );
+}
+
+/** The held stores: who they are and why they came — no action, the button above sends them all. */
+function SkippedTableLike({ rows }: { rows: UrspTarget[] }) {
+  const TH = "px-3 py-2 font-semibold";
+  const TD = "px-3 py-2 align-top";
+  return (
+    <div className="overflow-x-auto rounded-pf-card border border-pf-border">
+      <table className="w-full text-left text-[12.5px]">
+        <thead className="bg-pf-card-hi text-[11px] uppercase tracking-[0.06em] text-pf-faint">
+          <tr>
+            <th className={TH}>Store</th>
+            <th className={TH}>Phân khúc · nguồn</th>
+            <th className={TH}>Ticket</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((t) => (
+            <tr key={t.id} className="border-t border-pf-border">
+              <td className={TD}>
+                <StoreCell t={t} />
+              </td>
+              <td className={`${TD} max-w-[320px]`}>
+                <SourceCell t={t} />
+              </td>
+              <td className={TD}>
+                <CrispLink href={t.ticket_link} label="Mở ticket" />
+              </td>
+            </tr>
+          ))}
+          {!rows.length && (
+            <tr>
+              <td colSpan={3} className="px-3 py-8 text-center text-pf-faint">
+                Không có store nào đang giữ.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 /* ---------------------------------------------------------------- lists */
 
 function Pager({ list, href }: { list: { total: number; page: number; pages: number }; href: (p: number) => string }) {
@@ -688,7 +975,10 @@ function SourceCell({ t }: { t: UrspTarget }) {
   const s = t.source ?? {};
   return (
     <div className="grid justify-items-start gap-1">
-      <Pill tone={SEG_TONE[t.segment]}>{SEGMENTS[t.segment].label}</Pill>
+      <span className="flex flex-wrap gap-1">
+        <Pill tone={SEG_TONE[t.segment]}>{SEGMENTS[t.segment].label}</Pill>
+        {t.variant && <Pill tone={t.variant === "B" ? "ok" : "primary"}>Bản {t.variant}</Pill>}
+      </span>
       {t.segment === "recap" ? (
         <div className="text-[11.5px] text-pf-muted">
           <div>

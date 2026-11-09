@@ -173,6 +173,39 @@ This is **{pic}** from the **PageFly Technical Team** 👋
 ${OFFER}`,
 };
 
+/* Variant B of the A/B test — another angle: short, opens with a question,
+   personal, one ask. Same facts (free, every page, no work, 3 days). */
+const B_BODY = `I'm **{pic}** from PageFly. Before **BLACK FRIDAY**, my team is checking stores for free: we go through **every PageFly page** on mobile and **fix anything that's off — at no cost, no work on your side**.
+
+This free check is open until **{deadline}**.
+
+Want me to book one for **{store_name}**? Just reply **"YES"** 🙂
+
+**{pic}** – PageFly Technical Team`;
+
+const DEFAULT_TEMPLATES_B: Record<Segment, string> = {
+  recap: `Hi **{store_name}** 👋
+
+Thanks for reaching out to us recently! Quick question — have you checked how your store looks **on a phone** lately?
+
+${B_BODY}`,
+  active: `Hi **{store_name}** 👋
+
+Quick question — have you checked how your store looks **on a phone** lately?
+
+${B_BODY}`,
+};
+
+const DEFAULT_FOLLOWUP_B = `Hi **{store_name}** 👋
+
+**{pic}** here again — just making sure you saw this 🙂
+
+Your **free mobile check & fix** for **{store_name}** ends on **{deadline}**. After that, it is no longer free.
+
+We do all the work — you just reply **"YES"**.
+
+**{pic}** – PageFly Technical Team`;
+
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 /** "2026-11-30" → "November 30" */
@@ -190,17 +223,22 @@ export const deadlineText = (at: Date | string) => endDateText(new Date(new Date
 /** {deadline} written in — when the message goes, or for a reminder of one that went. */
 export const withDeadline = (text: string, until: Date | string) => text.replaceAll("{deadline}", deadlineText(until));
 
+/** `variant` B: the A/B test's other message (its own templates on the Cài đặt tab). */
 export function composeMessage(
   segment: Segment | "followup" | "followup_november",
   t: { store_name: string | null; store_domain: string },
   cfg: UrspSettings,
+  variant: string | null = null,
 ): string {
+  const b = variant === "B";
   const tpl =
     segment === "followup"
-      ? cfg.followup_template.trim() || DEFAULT_FOLLOWUP
+      ? (b ? cfg.followup_template_b : cfg.followup_template).trim() || (b ? DEFAULT_FOLLOWUP_B : DEFAULT_FOLLOWUP)
       : segment === "followup_november"
         ? FOLLOWUP_NOVEMBER
-        : (segment === "recap" ? cfg.recap_template : cfg.active_template).trim() || DEFAULT_TEMPLATES[segment];
+        : b
+          ? (segment === "recap" ? cfg.recap_template_b : cfg.active_template_b).trim() || DEFAULT_TEMPLATES_B[segment]
+          : (segment === "recap" ? cfg.recap_template : cfg.active_template).trim() || DEFAULT_TEMPLATES[segment];
   /* in capitals; a * in the name would end the bold early */
   const name = (t.store_name?.trim() || t.store_domain.replace(/\.myshopify\.com$/, "")).replaceAll("*", "").toUpperCase();
   return tpl
@@ -347,7 +385,9 @@ async function addTarget(n: NewTarget, cfg: UrspSettings, actor: string): Promis
   }
 
   const status = skip ? "skipped" : n.hold ? "held" : cfg.mode === "auto" ? "approved" : "pending";
-  const message = skip ? null : composeMessage(n.segment, { store_name: facts.store_name, store_domain: n.store_domain }, cfg);
+  /* ab_split on: each store that goes out now gets A or B at random; a held one is given its half later */
+  const variant = skip || n.hold || !cfg.ab_split ? null : Math.random() < 0.5 ? "A" : "B";
+  const message = skip ? null : composeMessage(n.segment, { store_name: facts.store_name, store_domain: n.store_domain }, cfg, variant);
   return tx(async (c) => {
     const vals = [
       n.segment,
@@ -369,17 +409,18 @@ async function addTarget(n: NewTarget, cfg: UrspSettings, actor: string): Promis
       message,
       status === "approved" ? "auto" : null,
       firstAc2 ? facts.pf_price : null,
+      variant,
     ];
     const { rows } = await c.query<{ id: string }>(
       `insert into ursp_targets (segment, store_domain, recap_key, email, store_name, country, shopify_plan, pf_plan, pf_price, pages_published,
-                                 session_id, ticket_link, source, status, skip_code, skip_reason, message, approved_by, first_price, first_ac2_at)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19, case when $19::numeric is null then null else now() end)
+                                 session_id, ticket_link, source, status, skip_code, skip_reason, message, approved_by, first_price, first_ac2_at, variant)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19, case when $19::numeric is null then null else now() end, $20)
        on conflict (segment, store_domain) do update set
          recap_key = excluded.recap_key, email = excluded.email, store_name = excluded.store_name, country = excluded.country,
          shopify_plan = excluded.shopify_plan, pf_plan = excluded.pf_plan, pf_price = excluded.pf_price, pages_published = excluded.pages_published,
          session_id = excluded.session_id, ticket_link = excluded.ticket_link, source = excluded.source, status = excluded.status,
          skip_code = excluded.skip_code, skip_reason = excluded.skip_reason, message = excluded.message, approved_by = excluded.approved_by,
-         first_price = excluded.first_price, first_ac2_at = excluded.first_ac2_at, updated_at = now()
+         first_price = excluded.first_price, first_ac2_at = excluded.first_ac2_at, variant = excluded.variant, updated_at = now()
        where ursp_targets.status = 'skipped'
        returning id`,
       vals,
@@ -609,6 +650,33 @@ export async function startRecapBackfill(from: string, by: string, split = false
   return state;
 }
 
+/**
+ * "Gửi bản B": every store held for B gets the B message — queued as any
+ * other (auto: goes out at the usual pace; manual: waits on Chờ duyệt).
+ * Nothing calls this but the button.
+ */
+export async function releaseHeldB(by: string): Promise<number> {
+  const cfg = await getUrspSettings();
+  if (campaignOver(cfg)) throw new UpsellError("Chương trình đã kết thúc — không gửi nữa.", 409);
+  const p = await db();
+  const { rows } = await p.query<UrspTarget>("select * from ursp_targets where status = 'held' and variant = 'B'");
+  let n = 0;
+  for (const t of rows) {
+    /* sent to meanwhile by another route: never twice */
+    const dup = await alreadySent(t.id, t.store_domain, t.email);
+    const st = dup ? "skipped" : cfg.mode === "auto" ? "approved" : "pending";
+    await tx(async (c) => {
+      await c.query(
+        `update ursp_targets set status = $2, message = $3, approved_by = $4, skip_code = $5, skip_reason = $6, updated_at = now() where id = $1 and status = 'held'`,
+        [t.id, st, dup ? null : composeMessage(t.segment, t, cfg, "B"), st === "approved" ? by : null, dup ? "already_sent" : null, dup ? sentReason(dup, t.store_domain) : null],
+      );
+      await logEvent(c, t.id, dup ? "skipped" : "released_b", by, {});
+    });
+    if (!dup) n++;
+  }
+  return n;
+}
+
 /** Each day's held stores, shuffled: the first half (rounded up) released as A, the rest kept as B. */
 async function splitHalves(held: { id: string; day: string }[]): Promise<{ sent_half: number; held_half: number }> {
   const cfg = await getUrspSettings();
@@ -748,7 +816,7 @@ async function sendOne(t: UrspTarget, cfg: UrspSettings, actor: string): Promise
     });
     return;
   }
-  const draft = t.message?.trim() || composeMessage(t.segment, t, cfg);
+  const draft = t.message?.trim() || composeMessage(t.segment, t, cfg, t.variant);
   const until = offerUntil(cfg);
   const text = withDeadline(draft, until);
   const sender = await crispSender(cfg.sender_name, "");
@@ -839,7 +907,7 @@ async function sendDue(cfg: UrspSettings): Promise<{ sent: number; errors: strin
  */
 /** The reminder: the 3-day offer's last day, or — for one sent before offers lasted 3 days — November. */
 const followupText = (t: UrspTarget, cfg: UrspSettings) =>
-  t.offer_until ? withDeadline(composeMessage("followup", t, cfg), t.offer_until) : composeMessage("followup_november", t, cfg);
+  t.offer_until ? withDeadline(composeMessage("followup", t, cfg, t.variant), t.offer_until) : composeMessage("followup_november", t, cfg);
 
 async function queueFollowups(cfg: UrspSettings): Promise<number> {
   if (!cfg.followup_enabled || campaignOver(cfg)) return 0;
@@ -1242,7 +1310,7 @@ export async function targetAction(id: string, action: TargetAction, by: string,
       if (t.segment === "active" && !t.email) throw new UpsellError("Store này không có email để mở hội thoại.", 409);
       const dup = await alreadySent(t.id, t.store_domain, t.email);
       if (dup) throw new UpsellError(`Không gửi: ${sentReason(dup, t.store_domain)}.`, 409);
-      const message = msg ?? composeMessage(t.segment, t, cfg);
+      const message = msg ?? composeMessage(t.segment, t, cfg, t.variant);
       return set(
         `status = '${cfg.mode === "auto" ? "approved" : "pending"}', skip_code = null, skip_reason = null, message = $2, approved_by = $3`,
         [message, cfg.mode === "auto" ? by : null],

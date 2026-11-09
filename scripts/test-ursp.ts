@@ -497,6 +497,39 @@ async function main() {
     delete process.env.URSP_SHEET_SA_JSON;
   }
 
+  console.log("A/B test");
+  {
+    const big = queries.abVerdict(10, 100, 25, 100);
+    check(big.diff === 15 && big.p !== null && big.p < 0.05, "10% vs 25% of 100 each: B better, sure", big);
+    const small = queries.abVerdict(10, 100, 12, 100);
+    check(small.p !== null && small.p > 0.05 && (small.needed ?? 0) > 100, "10% vs 12%: not sure yet, more needed", small);
+    check(queries.abVerdict(0, 0, 1, 10).diff === null, "no A sent: no verdict");
+    const cfgNow = await settings.getUrspSettings();
+    const bMsg = core.composeMessage("recap", { store_name: "Rep Global", store_domain: "x.myshopify.com" }, cfgNow, "B");
+    const aMsg = core.composeMessage("recap", { store_name: "Rep Global", store_domain: "x.myshopify.com" }, cfgNow, "A");
+    check(bMsg !== aMsg && bMsg.includes("Quick question") && bMsg.includes("**REP GLOBAL**") && bMsg.includes("{deadline}"), "B is its own message, names bold capitals");
+    const before = await queries.abStats();
+    check(before.B.held === 3 && before.B.sent === 0 && before.A.sent === 4, "held B counted, nothing sent to it", before.B);
+    /* a run sends nothing to B */
+    await core.runJob(true);
+    check((await queries.abStats()).B.sent === 0, "the job leaves the held B alone");
+    const released = await core.releaseHeldB("admin:tu");
+    check(released === 3, "Gửi bản B queues the 3 held", released);
+    await core.runJob(true);
+    const after = await queries.abStats();
+    check(after.B.sent === 3 && after.B.held === 0, "B sent", after.B);
+    const bRow = (await p.query("select message from ursp_targets where variant = 'B' and status = 'sent' limit 1")).rows[0];
+    check(/Quick question/.test(bRow?.message ?? "") && !/\{deadline\}/.test(bRow?.message ?? ""), "the B message went, its deadline written in");
+    check((await queries.listTargets("sent", { variant: "B" })).total === 3, "Bản B filter");
+    /* ab_split: new stores get A or B */
+    await settings.saveUrspSettings({ ab_split: 1 });
+    for (let i = 0; i < 6; i++) store(`ab${i}.myshopify.com`);
+    await core.importRecap(Array.from({ length: 6 }, (_, i) => row({ store_domain: `ab${i}.myshopify.com`, session_id: sid(70 + i) })));
+    const vs = (await p.query("select variant from ursp_targets where store_domain like 'ab_.myshopify.com'")).rows.map((r) => r.variant);
+    check(vs.length === 6 && vs.every((v) => v === "A" || v === "B"), "ab_split: each new store gets A or B", vs);
+    await settings.saveUrspSettings({ ab_split: 0 });
+  }
+
   console.log("never twice");
   /* same store queued in both segments (n8n's post racing the job): one message */
   store("twice.myshopify.com");

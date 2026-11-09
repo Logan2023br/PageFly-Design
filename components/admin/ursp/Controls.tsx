@@ -100,6 +100,38 @@ export function RecapBackfill({ defaultFrom }: { defaultFrom: string }) {
   );
 }
 
+/**
+ * "Gửi bản B": two presses — the first says what will happen, the second
+ * does it. Nothing else sends the held half.
+ */
+export function ReleaseB({ held, auto }: { held: number; auto: boolean }) {
+  const [run, busy, error] = useAct();
+  const [sure, setSure] = useState(false);
+  if (!held) return null;
+  return (
+    <div className="grid gap-1.5">
+      {sure ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-pf-md border border-pf-warn/40 bg-pf-warn/10 px-3 py-2 text-[13px]">
+          <span className="text-pf-text">
+            Gửi tin bản B cho <b>{held}</b> store? {auto ? "Tin đi dần ~10 tin / 2 phút." : "Tin vào Chờ duyệt để bạn duyệt từng tin."}
+          </span>
+          <Button size="sm" icon="Send" disabled={busy} onClick={() => void run(RUN, { action: "release_b" }).then(() => setSure(false))}>
+            {busy ? "Đang xếp hàng…" : "Xác nhận gửi bản B"}
+          </Button>
+          <Button size="sm" variant="quiet" disabled={busy} onClick={() => setSure(false)}>
+            Huỷ
+          </Button>
+        </div>
+      ) : (
+        <Button size="sm" variant="ghost" icon="Send" onClick={() => setSure(true)}>
+          Gửi bản B cho {held} store
+        </Button>
+      )}
+      <ErrorLine error={error} />
+    </div>
+  );
+}
+
 /** "Đã xử lý xong" on a sent row — pressed again (Hoàn tác) it is open again. */
 export function DoneButton({ id, done, by, at }: { id: string; done: boolean; by: string | null; at: string | null }) {
   const [run, busy, error] = useAct();
