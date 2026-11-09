@@ -75,13 +75,16 @@ let created = 0;
 const conv = (sid: string, email: string | undefined, updatedAt: number, msgs: Msg[] = []) => (convs[sid] = { email, updated_at: updatedAt, msgs, segments: [] });
 const reviews: Record<string, number> = {};
 let haikuCalls = 0;
+const sheetRanges: string[] = [];
+let sheetValues: string[][] = [];
 
 const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
 globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
   const u = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
   const method = (init?.method ?? "GET").toUpperCase();
-  const body = init?.body ? JSON.parse(String(init.body)) : null;
+  /* Google's token request is a form, the rest JSON */
+  const body = init?.body && String(init.body).trim().startsWith("{") ? JSON.parse(String(init.body)) : null;
 
   if (u.hostname === "api.anthropic.com") {
     haikuCalls++;
@@ -91,6 +94,13 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
       return reply({ content: [{ type: "text", text: JSON.stringify(Object.fromEntries(cats.map((c) => [c, /respons|repons|mobile/i.test(c)]))) }] });
     }
     return reply({ content: [{ type: "text", text: '{"intent":"agree","mood":"happy","note":"Khách đồng ý, nhờ check trang chủ"}' }] });
+  }
+
+  if (u.hostname === "oauth2.googleapis.com") return reply({ access_token: "tok" });
+  if (u.hostname === "sheets.googleapis.com") {
+    const range = decodeURIComponent(u.pathname.split("/values/")[1] ?? "");
+    sheetRanges.push(range);
+    return reply({ values: sheetValues });
   }
 
   if (u.hostname === "n8n.test") {
@@ -413,6 +423,43 @@ async function main() {
   check(unseenRows.length > 0 && unseenRows.every((r) => !r.read_at), "Chưa xem keeps only rows not read", unseenRows.length);
   check((await queries.listTargets("sent", { seen: "followup_sent" })).rows.every((r) => r.followup_sent_at), "Đã nhắc lại keeps only reminded rows");
   check((await queries.listTargets("sent", { seen: "nonsense" })).total === (await queries.listTargets("sent", {})).total, "an unknown key filters nothing");
+
+  console.log("backfill from a date");
+  {
+    const { generateKeyPairSync } = await import("node:crypto");
+    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const sa = JSON.stringify({ client_email: "t@x.iam.gserviceaccount.com", private_key: privateKey.export({ type: "pkcs8", format: "pem" }) });
+    process.env.URSP_SHEET_SA_JSON = Buffer.from(sa).toString("base64");
+    const head = ["recap_at_vn", "triggered_by", "store_domain", "pagefly_plan", "pagefly_price", "shopify_plan", "tenure", "app_review", "category_ticket", "category_issue", "issue_summary", "root_cause", "resolution", "escalated", "type_user", "review_verdict", "review_note", "upsell_signal", "churn_risk", "mood_label_end_to_end", "next_action", "session_id", "ticket_url"];
+    const line = (at: string, d: string, res: string, s: string) => {
+      const r = Array(head.length).fill("");
+      r[0] = at; r[2] = d; r[5] = "Basic"; r[9] = "Editor"; r[12] = res; r[21] = s;
+      return r;
+    };
+    store("octold.myshopify.com");
+    store("nov1.myshopify.com");
+    store("nov2.myshopify.com");
+    sheetValues = [
+      head,
+      line("2026-10-30 10:00", "octold.myshopify.com", "Đã resolved", sid(40)),
+      line("2026-11-02 10:00", "nov1.myshopify.com", "Chờ khách phản hồi", sid(41)),
+      line("2026-11-03 10:00", "nov2.myshopify.com", "Chờ khách phản hồi", sid(42)),
+      line("2026-11-05 10:00", "nov2.myshopify.com", "Đợi TS check", sid(43)),
+    ];
+    await core.startRecapBackfill("2026-11-01", "admin:tu");
+    for (let i = 0; i < 50; i++) {
+      const st = await (await import("../lib/ursp/db")).getState<import("../lib/ursp/core").BackfillState>("recap_backfill");
+      if (st && !st.running) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    const bf = await (await import("../lib/ursp/db")).getState<import("../lib/ursp/core").BackfillState>("recap_backfill");
+    check(bf && !bf.running && !bf.error && bf.rows === 3 && bf.stores === 2, "rows from Nov 1 read, October left out", bf);
+    check(sheetRanges.some((r) => r === "'Recap v11'!A1:BH"), "read from the Recap v11 tab, quoted", sheetRanges);
+    check(!(await target("recap", "octold.myshopify.com")), "an October row is not taken");
+    check((await target("recap", "nov1.myshopify.com"))?.status === "approved", "a November row is taken");
+    check((await target("recap", "nov2.myshopify.com"))?.skip_code === "resolution", "a store's latest row decides (Đợi TS check)");
+    delete process.env.URSP_SHEET_SA_JSON;
+  }
 
   console.log("never twice");
   /* same store queued in both segments (n8n's post racing the job): one message */

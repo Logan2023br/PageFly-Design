@@ -74,6 +74,27 @@ export function ModeSwitch({ mode }: { mode: string }) {
   );
 }
 
+/**
+ * "Chạy Recap từ ngày": the rows already in the sheet since that day (the
+ * latest per store), taken as new — for the weeks before Bắt đầu.
+ */
+export function RecapBackfill({ defaultFrom }: { defaultFrom: string }) {
+  const [run, busy, error] = useAct();
+  const [from, setFrom] = useState(defaultFrom);
+  return (
+    <div className="grid gap-1">
+      <div className="flex flex-wrap items-center gap-2 text-[13px]">
+        <span className="text-pf-muted">Lấy cả row Recap cũ từ ngày</span>
+        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={`${FIELD} w-[150px]! py-1!`} aria-label="Từ ngày" />
+        <Button size="sm" variant="ghost" icon="RefreshCw" disabled={busy || !from} onClick={() => void run(RUN, { action: "backfill", from })}>
+          {busy ? "Đang bắt đầu…" : "Chạy Recap từ ngày này"}
+        </Button>
+      </div>
+      <ErrorLine error={error} />
+    </div>
+  );
+}
+
 /** "Đã xử lý xong" on a sent row — pressed again (Hoàn tác) it is open again. */
 export function DoneButton({ id, done, by, at }: { id: string; done: boolean; by: string | null; at: string | null }) {
   const [run, busy, error] = useAct();

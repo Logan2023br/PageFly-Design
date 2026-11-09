@@ -3,9 +3,9 @@ import { AdminShell } from "@/components/admin/AdminShell";
 import { adminGate } from "@/components/admin/adminGate";
 import { FIELD } from "@/components/admin/fieldClass";
 import { CrispLink, Pill } from "@/components/admin/upsell/bits";
-import { DoneButton, ModeSwitch, QueueActions, RunControls, SendAnyway, SettingsForm, TrackButton } from "@/components/admin/ursp/Controls";
+import { DoneButton, ModeSwitch, RecapBackfill, QueueActions, RunControls, SendAnyway, SettingsForm, TrackButton } from "@/components/admin/ursp/Controls";
 import { vnTime } from "@/lib/ucp2/core";
-import { RECAP_SHEET_URL, composeMessage, recapServiceAccount, deadlineText, offerUntil, withDeadline, type ActiveResult, type JobState, type RecapResult } from "@/lib/ursp/core";
+import { RECAP_SHEET_URL, composeMessage, recapServiceAccount, deadlineText, offerUntil, withDeadline, type ActiveResult, type BackfillState, type JobState, type RecapResult } from "@/lib/ursp/core";
 import { getState, hasUrspDatabase } from "@/lib/ursp/db";
 import {
   SEEN,
@@ -74,13 +74,14 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
     return t ? `${HREF}?${t}` : HREF;
   };
 
-  const [run, cfg, counts, recap, active, job] = await Promise.all([
+  const [run, cfg, counts, recap, active, job, backfill] = await Promise.all([
     runState(),
     getUrspSettings(),
     tabCounts(),
     getState<RecapResult>("recap"),
     getState<ActiveResult>("active"),
     getState<JobState>("job"),
+    getState<BackfillState>("recap_backfill"),
   ]);
 
   let body: React.ReactNode;
@@ -159,7 +160,7 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
       actions={<RunControls on={run.on} />}
     >
       <div className="grid gap-4">
-        <StatusBar run={run} cfg={cfg} over={campaignOver(cfg)} recap={recap} active={active} job={job} />
+        <StatusBar run={run} cfg={cfg} over={campaignOver(cfg)} recap={recap} active={active} job={job} backfill={backfill} />
         <nav className="flex flex-wrap gap-1 border-b border-pf-border">
           {URSP_TABS.map((t) => {
             const n =
@@ -211,6 +212,7 @@ function StatusBar({
   recap,
   active,
   job,
+  backfill,
 }: {
   run: Awaited<ReturnType<typeof runState>>;
   cfg: Awaited<ReturnType<typeof getUrspSettings>>;
@@ -218,6 +220,7 @@ function StatusBar({
   recap: RecapResult | null;
   active: ActiveResult | null;
   job: JobState | null;
+  backfill: BackfillState | null;
 }) {
   const sheetDirect = !!recapServiceAccount();
   return (
@@ -251,6 +254,20 @@ function StatusBar({
             Mở file Recap
           </a>
         </p>
+        {sheetDirect && (
+          <div className="grid gap-1 pl-4">
+            <RecapBackfill defaultFrom={firstOfMonth()} />
+            {backfill && (
+              <p className={backfill.error ? "text-pf-warn" : ""}>
+                {backfill.running
+                  ? `Đang lấy row Recap từ ${backfill.from}${backfill.rows ? `: ${backfill.rows} row, ${backfill.stores} store…` : "…"}`
+                  : backfill.error
+                    ? `Lấy row Recap từ ${backfill.from} lỗi: ${backfill.error}`
+                    : `Đã lấy row Recap từ ${backfill.from} (${short(backfill.at)}, ${backfill.by.replace(/^admin:/, "")}): ${backfill.rows} row, ${backfill.stores} store → ${backfill.result?.added ?? 0} row mới, ${backfill.result?.targets ?? 0} store vào danh sách`}
+              </p>
+            )}
+          </div>
+        )}
         <p>
           <strong className="text-pf-text">Active</strong>
           {!cfg.active_enabled ? " — đang tắt" : ""}: quét AC2 mỗi giờ ·{" "}
@@ -348,6 +365,9 @@ function Filters({ tab, f }: { tab: UrspTab; f: UrspFilters }) {
     </form>
   );
 }
+
+/** The 1st of this month, Vietnam time — the backfill's default. */
+const firstOfMonth = () => `${new Date(Date.now() + 7 * 3_600_000).toISOString().slice(0, 7)}-01`;
 
 /* ---------------------------------------------------------------- overview */
 

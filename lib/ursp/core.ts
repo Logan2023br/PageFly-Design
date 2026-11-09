@@ -537,6 +537,49 @@ export async function importRecap(input: unknown, actor = "n8n"): Promise<RecapR
   return out;
 }
 
+export type BackfillState = { at: string; from: string; by: string; running: boolean; rows: number; stores: number; result?: RecapResult; error?: string };
+
+/**
+ * Rows already in the sheet from `from` (Vietnam date) on — the ones before
+ * Bắt đầu that "only new rows" leaves out — taken as if they had just come.
+ * The latest row per store only, so today's resolution decides. Runs in
+ * the background; the screen reads `recap_backfill` for how it went.
+ */
+export async function startRecapBackfill(from: string, by: string): Promise<BackfillState> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) throw new UpsellError("Ngày phải dạng YYYY-MM-DD.", 422);
+  const sa = recapServiceAccount();
+  if (!sa) throw new UpsellError("Server chưa đọc được file Recap (URSP_SHEET_SA_JSON chưa đặt).", 409);
+  const cur = await getState<BackfillState>("recap_backfill");
+  if (cur?.running && Date.now() - new Date(cur.at).getTime() < 30 * 60_000) throw new UpsellError("Đang chạy một lượt — đợi xong.", 409);
+  const state: BackfillState = { at: new Date().toISOString(), from, by, running: true, rows: 0, stores: 0 };
+  await setState("recap_backfill", state);
+  void (async () => {
+    try {
+      const values = await readSheetValues(RECAP_SHEET_ID, `${TAB}!A1:BH`, sa);
+      const header = values[0] ?? [];
+      const since = Date.parse(`${from}T00:00:00+07:00`);
+      const rows = values
+        .slice(1)
+        .map((cells, i) => recapRow(Object.fromEntries(header.map((h, j) => [h, cells[j] ?? ""])), i + 2))
+        .filter((r) => r.recap_at && new Date(r.recap_at).getTime() >= since);
+      /* the latest row of each store; rows without a store are kept, to be counted */
+      const latest = new Map<string, RecapIn>();
+      const loose: RecapIn[] = [];
+      for (const r of rows) {
+        if (!r.store_domain) loose.push(r);
+        else if (!latest.has(r.store_domain) || r.recap_at! >= latest.get(r.store_domain)!.recap_at!) latest.set(r.store_domain, r);
+      }
+      const take = [...latest.values(), ...loose].sort((a, b) => a.recap_at!.localeCompare(b.recap_at!));
+      await setState("recap_backfill", { ...state, rows: rows.length, stores: latest.size });
+      const result = await ingestRecap(take, "sheet", by);
+      await setState("recap_backfill", { ...state, running: false, rows: rows.length, stores: latest.size, result });
+    } catch (err) {
+      await setState("recap_backfill", { ...state, running: false, error: errText(err) });
+    }
+  })();
+  return state;
+}
+
 /**
  * The sheet itself, from the row after the last one read. The first read
  * after Bắt đầu only finds where the sheet ends: what is above it is old.
