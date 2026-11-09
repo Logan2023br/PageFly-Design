@@ -186,7 +186,9 @@ async function main() {
   await settings.setRunning(true, "admin:test");
   const run = await settings.runState();
 
-  console.log("recap");
+  console.log("recap (only responsive)");
+  check(cfg0.recap_only_responsive === 0, "by default every Recap row is taken");
+  await settings.saveUrspSettings({ recap_only_responsive: 1 });
   const sid = (n: number) => `session_aaaaaaaa-0000-0000-0000-${String(n).padStart(12, "0")}`;
   for (const [d, o] of [
     ["good.myshopify.com", {}],
@@ -382,6 +384,25 @@ async function main() {
   await p.query("delete from ursp_recap_rows where store_domain = 'manual.myshopify.com'");
   await core.importRecap([row({ store_domain: "manual.myshopify.com", session_id: sid(11) })]);
   check((await target("recap", "manual.myshopify.com"))?.status === "pending", "manual mode: waits on Chờ duyệt");
+
+  console.log("recap (every row, the default)");
+  await settings.saveUrspSettings({ recap_only_responsive: 0, mode: "auto" });
+  const haikuBefore = haikuCalls;
+  store("publish.myshopify.com");
+  store("bigpub.myshopify.com", { numPublished: 40 });
+  conv(sid(30), "publish@x.test", now - 3 * 86_400_000);
+  const every = await core.importRecap([
+    row({ store_domain: "publish.myshopify.com", session_id: sid(30), category_issue: "Publish" }),
+    row({ store_domain: "bigpub.myshopify.com", session_id: sid(31), category_issue: "Editor" }),
+    row({ store_domain: "tsc.myshopify.com", session_id: sid(32), category_issue: "Theme", resolution: "Hết ca chưa giải quyết" }),
+  ]);
+  check(every.responsive === 3 && haikuCalls === haikuBefore, "every new row is taken, Haiku not asked", every);
+  check((await target("recap", "publish.myshopify.com"))?.status === "approved", "a Publish ticket gets the offer");
+  check((await target("recap", "bigpub.myshopify.com"))?.skip_code === "too_many_pages", "the store rules still apply (40 pages)");
+  check((await target("recap", "tsc.myshopify.com"))?.skip_code === "resolution", "Hết ca chưa giải quyết is still left out");
+  await core.runJob(true);
+  const pub = convs[sid(30)].msgs.find((m) => m.from === "operator" && m.type === "text");
+  check(String(pub?.content).includes("Thank you for reaching out to us recently") && !/how your pages look on mobile/.test(String(pub?.content)), "the Recap offer no longer assumes a mobile ticket");
 
   console.log("never twice");
   /* same store queued in both segments (n8n's post racing the job): one message */

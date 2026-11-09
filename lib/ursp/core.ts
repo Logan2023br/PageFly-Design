@@ -28,10 +28,10 @@ import { SEGMENTS, SKIP_REASONS, type Segment, type SkipCode, type UrspTarget } 
 /* ==========================================================================
    Upsell Responsive: who gets Logan's offer, the offer, and what came of it.
 
-     recap    new rows of the support Recap sheet ("Recap v11"): a ticket
-              whose category_issue Haiku calls responsive, and whose
-              resolution is not one of the skipped ones → the offer, in that
-              same ticket. Read every 5 minutes, from where the last read
+     recap    new rows of the support Recap sheet ("Recap v11"), whatever
+              the ticket was about (recap_only_responsive: only those Haiku
+              calls responsive), whose resolution is not one of the skipped
+              ones → the offer, in that same ticket. Read every 5 minutes, from where the last read
               ended — rows written before Bắt đầu are never read. Straight
               from Google (SHEET_SERVICE_ACCOUNT_JSON, sheet shared with it)
               or posted in by n8n (POST /api/ursp/recap).
@@ -152,7 +152,7 @@ const DEFAULT_TEMPLATES: Record<Segment, string> = {
 
 This is *{pic}* from the *PageFly Technical Team* 👋
 
-You recently reached out to us about how your pages look on mobile. Before the *BLACK FRIDAY – CYBER MONDAY* rush, we would love to make sure *EVERY page* of your store looks perfect on every screen.
+Thank you for reaching out to us recently! Before the *BLACK FRIDAY – CYBER MONDAY* rush, we would love to make sure *EVERY page* of your store looks perfect on every screen.
 
 ${OFFER}`,
   active: `Hi *{store_name}* team,
@@ -432,7 +432,7 @@ export type RecapResult = { at: string; source: "sheet" | "n8n"; read: number; a
 
 /**
  * New Recap rows in: kept, their categories put to Haiku (once per spelling),
- * and each responsive one looked at as a target.
+ * and each one looked at as a target.
  */
 export async function ingestRecap(rows: RecapIn[], source: RecapResult["source"], actor: string): Promise<RecapResult> {
   const out: RecapResult = { at: new Date().toISOString(), source, read: rows.length, added: 0, responsive: 0, targets: 0 };
@@ -452,23 +452,25 @@ export async function ingestRecap(rows: RecapIn[], source: RecapResult["source"]
   out.added = fresh.length;
   if (!fresh.length) return out;
 
-  /* Haiku, once per spelling never seen before */
-  const values = [...new Set(fresh.map((r) => r.category_issue).filter((v): v is string => !!v))];
-  const known = new Map(
-    (await p.query<{ category: string; responsive: boolean }>("select category, responsive from ursp_categories where category = any($1)", [values])).rows.map((r) => [
-      r.category,
-      r.responsive,
-    ]),
-  );
-  for (const c of await classifyCategories(values.filter((v) => !known.has(v)))) {
-    known.set(c.value, c.responsive);
-    await p.query("insert into ursp_categories (category, responsive, by) values ($1, $2, $3) on conflict (category) do nothing", [c.value, c.responsive, c.by]);
+  /* Every new row is a target — unless recap_only_responsive asks Haiku
+     first (once per spelling never seen before). */
+  const onlyResponsive = cfg.recap_only_responsive === 1;
+  const known = new Map<string, boolean>();
+  if (onlyResponsive) {
+    const values = [...new Set(fresh.map((r) => r.category_issue).filter((v): v is string => !!v))];
+    for (const r of (await p.query<{ category: string; responsive: boolean }>("select category, responsive from ursp_categories where category = any($1)", [values])).rows)
+      known.set(r.category, r.responsive);
+    for (const c of await classifyCategories(values.filter((v) => !known.has(v)))) {
+      known.set(c.value, c.responsive);
+      await p.query("insert into ursp_categories (category, responsive, by) values ($1, $2, $3) on conflict (category) do nothing", [c.value, c.responsive, c.by]);
+    }
   }
 
   for (const r of fresh) {
-    const responsive = r.category_issue ? (known.get(r.category_issue) ?? false) : false;
-    await p.query("update ursp_recap_rows set responsive = $2 where row_key = $1", [r.key, responsive]);
-    if (!responsive) continue;
+    const taken = !onlyResponsive || (r.category_issue ? (known.get(r.category_issue) ?? false) : false);
+    /* responsive: whether the row was taken (all of them, unless only responsive ones are) */
+    await p.query("update ursp_recap_rows set responsive = $2 where row_key = $1", [r.key, taken]);
+    if (!taken) continue;
     out.responsive++;
     const skip: NewTarget["skip"] = resolutionSkipped(r.resolution, cfg)
       ? { code: "resolution", reason: `Resolution: ${r.resolution}` }

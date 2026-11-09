@@ -4,7 +4,7 @@
    ========================================================================== */
 
 export const SEGMENTS = {
-  recap: { label: "Recap", hint: "Ticket support có category responsive (file Recap)" },
+  recap: { label: "Recap", hint: "Ticket support mới trong file Recap (trừ Đợi TS check / Hết ca chưa giải quyết)" },
   active: { label: "Active", hint: "Store hoạt động hôm nay (AC2)" },
 } as const;
 export type Segment = keyof typeof SEGMENTS;

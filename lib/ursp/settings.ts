@@ -28,6 +28,8 @@ export const URSP_DEFAULTS = {
   max_published_pages: 20,
   /** resolutions that keep a Recap row out, comma separated */
   recap_skip_resolutions: "Đợi TS check, Hết ca chưa giải quyết",
+  /** 1: only Recap rows whose category_issue Haiku calls responsive; 0: every new row */
+  recap_only_responsive: 0,
   /** 1: the Recap segment runs */
   recap_enabled: 1,
   /** 1: the Active segment runs */
@@ -66,6 +68,7 @@ export const URSP_HELP: Record<UrspKey, string> = {
   active_subject: "Tiêu đề hội thoại / email cho phân khúc Active",
   max_published_pages: "Store có nhiều page publish hơn số này thì không gửi",
   recap_skip_resolutions: "Resolution trong file Recap thì bỏ qua (cách nhau dấu phẩy, không phân biệt hoa thường / dấu)",
+  recap_only_responsive: "0 = gửi cho mọi row Recap mới (trừ resolution bị bỏ qua) · 1 = chỉ row có category_issue là responsive (Haiku kiểm tra)",
   recap_enabled: "1 = chạy phân khúc Recap, 0 = tắt",
   active_enabled: "1 = chạy phân khúc Active, 0 = tắt",
   active_ac2_query: "Tham số đọc danh sách store của AC2 (dạng limit=300&…)",

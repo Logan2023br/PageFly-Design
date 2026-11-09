@@ -23,7 +23,7 @@ import { INTENT_LABEL, MOOD_LABEL, SEGMENTS, SKIP_REASONS, STATUS_LABEL, type Se
 
 /* /design/admin/responsive — Upsell Responsive: Logan offers BFMC customers
    a free review of their pages' responsive layout, and free fixes. Two
-   segments — Recap (a support ticket about responsive) and Active (a store
+   segments — Recap (a new support ticket in the Recap sheet) and Active (a store
    active today that has not talked to support) — each with how many stores
    were found, left out and why, sent, and what came of it: read, replied,
    agreed, handled, upgraded, reviewed, how satisfied. */
@@ -153,7 +153,7 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
     <AdminShell
       current="ursp"
       title="Upsell Responsive"
-      subtitle="Mùa BFMC: Logan mời khách review responsive mọi page + chỉnh sửa miễn phí. Phân khúc Recap (ticket responsive) và Active (store hoạt động hôm nay)."
+      subtitle="Mùa BFMC: Logan mời khách review responsive mọi page + chỉnh sửa miễn phí. Phân khúc Recap (ticket support mới) và Active (store hoạt động hôm nay)."
       actions={<RunControls on={run.on} />}
     >
       <div className="grid gap-4">
@@ -242,7 +242,7 @@ function StatusBar({
           {!cfg.recap_enabled ? " — đang tắt" : ""}:{" "}
           {sheetDirect ? "đọc thẳng file Recap mỗi 5 phút" : "chờ n8n gửi row mới (POST /api/ursp/recap) — server chưa có quyền đọc sheet"} ·{" "}
           {recap
-            ? `${short(recap.at)}: đọc ${recap.read} row, ${recap.added} mới, ${recap.responsive} responsive, ${recap.targets} store${recap.cursor ? ` · tới dòng ${recap.cursor}` : ""}${recap.note ? ` · ${recap.note}` : ""}`
+            ? `${short(recap.at)}: đọc ${recap.read} row, ${recap.added} mới, ${recap.responsive} vào danh sách, ${recap.targets} store${recap.cursor ? ` · tới dòng ${recap.cursor}` : ""}${recap.note ? ` · ${recap.note}` : ""}`
             : "chưa đọc"}{" "}
           ·{" "}
           <a href={RECAP_SHEET_URL} target="_blank" rel="noreferrer" className="text-pf-primary-hi hover:underline">
@@ -406,7 +406,7 @@ function SegmentPanel({ seg, s, href }: { seg: Segment; s: SegmentStats; href: (
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
           seg === "recap"
-            ? { label: "Khách responsive", n: s.found, note: `${s.rows} row Recap mới · ${s.responsive} responsive` }
+            ? { label: "Khách từ Recap", n: s.found, note: `${s.rows} row Recap mới · ${s.responsive} vào danh sách` }
             : { label: "Store được xét", n: s.found, note: "hoạt động hôm nay (AC2)" },
           { label: "Bị loại", n: s.skipped, note: pct(s.skipped, s.found), href: href({ tab: "skipped", seg }) },
           { label: "Đã gửi", n: s.sent, note: pct(s.sent, s.found), href: href({ tab: "sent", seg }) },
@@ -564,7 +564,7 @@ function RecentRecap({ rows }: { rows: Awaited<ReturnType<typeof recentRecapRows
               <th className="py-1 pr-3">Store</th>
               <th className="py-1 pr-3">category_issue</th>
               <th className="py-1 pr-3">Resolution</th>
-              <th className="py-1 pr-3">Responsive?</th>
+              <th className="py-1 pr-3">Vào danh sách?</th>
             </tr>
           </thead>
           <tbody>
@@ -590,9 +590,9 @@ function RecentRecap({ rows }: { rows: Awaited<ReturnType<typeof recentRecapRows
       </div>
       <div className="mt-4 grid gap-2">
         <p>
-          <strong className="text-pf-text">Recap:</strong> row mới của tab Recap v11 (từ lúc bấm Bắt đầu). Haiku xem category_issue có phải responsive không (viết khác
-          kiểu vẫn nhận ra, mỗi cách viết hỏi 1 lần). Resolution là &quot;Đợi TS check&quot; / &quot;Hết ca chưa giải quyết&quot; thì bỏ qua. Tin gửi thẳng vào chính
-          ticket đó, kèm note nội bộ, rồi resolved.
+          <strong className="text-pf-text">Recap:</strong> mọi row mới của tab Recap v11 (từ lúc bấm Bắt đầu), không cần category responsive (bật lại ở Cài
+          đặt: recap_only_responsive = 1, Haiku kiểm tra). Resolution là &quot;Đợi TS check&quot; / &quot;Hết ca chưa giải quyết&quot; thì bỏ qua. Store vẫn phải đủ
+          điều kiện như dưới. Tin gửi thẳng vào chính ticket đó, kèm note nội bộ, rồi resolved.
         </p>
         <p>
           <strong className="text-pf-text">Active:</strong> mỗi giờ đọc danh sách store của AC2, lấy store hoạt động trong hôm nay (giờ VN). Khách đã có hội thoại

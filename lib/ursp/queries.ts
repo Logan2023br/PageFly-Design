@@ -74,7 +74,7 @@ function where(tab: keyof typeof TAB_SQL | null, f: UrspFilters): { sql: string;
 }
 
 export type SegmentStats = {
-  /** Recap: new rows read since Bắt đầu, and how many Haiku called responsive */
+  /** Recap: new rows read since Bắt đầu, and how many were taken (all, or the responsive ones) */
   rows: number;
   responsive: number;
   /** stores looked at (one per store) */
