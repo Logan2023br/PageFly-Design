@@ -58,6 +58,8 @@ import { SEGMENTS, SKIP_REASONS, type Segment, type SkipCode, type UrspTarget } 
 
 const RECAP_SHEET_ID = process.env.URSP_RECAP_SHEET_ID ?? "164dn2Er7xjcwOtudVts7fahT8iiIoV6bNX8HHyx5pEg";
 const RECAP_TAB = process.env.URSP_RECAP_TAB ?? "Recap v11";
+/** The tab in A1 notation: quoted, its name has a space (and never the Recap Log tab beside it) */
+const TAB = `'${RECAP_TAB.replaceAll("'", "''")}'`;
 export const RECAP_SHEET_URL = `https://docs.google.com/spreadsheets/d/${RECAP_SHEET_ID}/edit`;
 /**
  * The service account that reads the Recap sheet — its own variable, not
@@ -544,12 +546,12 @@ async function readRecapSheet(): Promise<RecapResult | null> {
   if (!sa) return null;
   const cursor = await getState<{ row: number; header: string[] }>("recap_cursor");
   if (!cursor) {
-    const [col, head] = await Promise.all([readSheetValues(RECAP_SHEET_ID, `${RECAP_TAB}!A:A`, sa), readSheetValues(RECAP_SHEET_ID, `${RECAP_TAB}!1:1`, sa)]);
+    const [col, head] = await Promise.all([readSheetValues(RECAP_SHEET_ID, `${TAB}!A:A`, sa), readSheetValues(RECAP_SHEET_ID, `${TAB}!1:1`, sa)]);
     const row = col.length;
     await setState("recap_cursor", { row, header: head[0] ?? [] });
     return { at: new Date().toISOString(), source: "sheet", read: 0, added: 0, responsive: 0, targets: 0, cursor: row, note: `Bắt đầu từ sau dòng ${row}` };
   }
-  const values = await readSheetValues(RECAP_SHEET_ID, `${RECAP_TAB}!A${cursor.row + 1}:BH${cursor.row + RECAP_BATCH}`, sa);
+  const values = await readSheetValues(RECAP_SHEET_ID, `${TAB}!A${cursor.row + 1}:BH${cursor.row + RECAP_BATCH}`, sa);
   /* the last row with anything in it: a row half written is read next time */
   let last = values.length;
   while (last > 0 && !(values[last - 1] ?? []).some((c) => String(c ?? "").trim())) last--;

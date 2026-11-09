@@ -8,6 +8,7 @@ import { vnTime } from "@/lib/ucp2/core";
 import { RECAP_SHEET_URL, composeMessage, recapServiceAccount, deadlineText, offerUntil, withDeadline, type ActiveResult, type JobState, type RecapResult } from "@/lib/ursp/core";
 import { getState, hasUrspDatabase } from "@/lib/ursp/db";
 import {
+  SEEN,
   URSP_TABS,
   byDay,
   listTargets,
@@ -61,12 +62,13 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
     reason: one("reason"),
     intent: one("intent"),
     mood: one("mood"),
+    seen: one("seen"),
     open: one("open"),
     page: Number(one("page")) || 1,
   };
   const qs = (patch: Record<string, string | undefined>) => {
     const s = new URLSearchParams();
-    for (const [k, v] of Object.entries({ tab, q: f.q, seg: f.seg, from: f.from, to: f.to, reason: f.reason, intent: f.intent, mood: f.mood, open: f.open, ...patch }))
+    for (const [k, v] of Object.entries({ tab, q: f.q, seg: f.seg, from: f.from, to: f.to, reason: f.reason, intent: f.intent, mood: f.mood, seen: f.seen, open: f.open, ...patch }))
       if (v && !(k === "tab" && v === "overview")) s.set(k, v);
     const t = s.toString();
     return t ? `${HREF}?${t}` : HREF;
@@ -306,6 +308,14 @@ function Filters({ tab, f }: { tab: UrspTab; f: UrspFilters }) {
       )}
       {(tab === "replied" || tab === "done" || tab === "sent") && (
         <>
+          <select name="seen" defaultValue={f.seen ?? ""} className={`${FIELD} w-[210px]!`} aria-label="Trạng thái xem">
+            <option value="">Mọi trạng thái xem</option>
+            {Object.entries(SEEN).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v.label}
+              </option>
+            ))}
+          </select>
           <select name="intent" defaultValue={f.intent ?? ""} className={`${FIELD} w-[150px]!`} aria-label="Ý khách">
             <option value="">Mọi ý khách</option>
             {Object.entries(INTENT_LABEL).map(([k, v]) => (
@@ -694,6 +704,7 @@ const isPast = (at: string) => new Date(at).getTime() <= Date.now();
 /** Whether the customer has seen the offer — and where the reminder stands. */
 function Seen({ t, hours }: { t: UrspTarget; hours: number }) {
   const due = t.read_at ? new Date(new Date(t.read_at).getTime() + hours * 3_600_000).toISOString() : null;
+  const expired = !!t.offer_until && isPast(t.offer_until);
   const reminder =
     t.followup_status === "sent" && t.followup_sent_at ? (
       <span className="whitespace-nowrap text-pf-warn">Đã nhắc lại {short(t.followup_sent_at)}</span>
@@ -706,13 +717,12 @@ function Seen({ t, hours }: { t: UrspTarget; hours: number }) {
     ) : t.followup_status === "skipped" ? (
       <span className="text-pf-faint">Không nhắc lại</span>
     ) : t.read_at && !t.replied_at && !t.done_at && due ? (
-      t.offer_until && due >= new Date(t.offer_until).toISOString() ? (
-        <span className="text-pf-faint">Hết hạn ưu đãi trước giờ nhắc lại</span>
+      expired || (t.offer_until && due >= new Date(t.offer_until).toISOString()) ? (
+        <span className="text-pf-faint">Hết hạn ưu đãi — không nhắc lại</span>
       ) : (
         <span className="text-pf-faint">Chưa reply → nhắc lại lúc {short(due)}</span>
       )
     ) : null;
-  const expired = !!t.offer_until && isPast(t.offer_until);
   return (
     <div className="grid gap-1 text-[11.5px]">
       {t.read_at ? (

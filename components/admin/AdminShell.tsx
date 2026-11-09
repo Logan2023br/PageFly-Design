@@ -248,7 +248,13 @@ export function AdminShell({
           </aside>
 
           <main className="min-w-0 flex-1 pt-4 lg:pt-0">
-            <header className="flex flex-wrap items-end justify-between gap-3 border-b border-pf-border pb-3.5">
+            {/* The bell stays in the top right corner of the window on every
+                admin screen, scrolled or not; its list opens down and to the
+                left from there. The header keeps clear of it (pr-14). */}
+            <div className="fixed right-4 top-4 z-40">
+              <NotificationBell />
+            </div>
+            <header className="flex flex-wrap items-end justify-between gap-3 border-b border-pf-border pb-3.5 pr-14">
               <div className="grid gap-1">
                 <h1 className="font-display text-[22px] font-bold tracking-[-0.025em] text-pf-text sm:text-[26px]">
                   {title}
@@ -257,12 +263,7 @@ export function AdminShell({
                   <p className="text-[12.5px] text-pf-muted">{subtitle}</p>
                 )}
               </div>
-              {/* The bell sits at the top right of every admin screen; its list
-                  opens down and to the left from there. */}
-              <div className="flex items-center gap-3">
-                {actions}
-                <NotificationBell />
-              </div>
+              {actions && <div className="flex items-center gap-3">{actions}</div>}
             </header>
 
             <div className="pt-5">{children}</div>

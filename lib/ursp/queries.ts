@@ -39,10 +39,25 @@ export type UrspFilters = {
   intent?: string;
   mood?: string;
   open?: string;
+  /** whether they saw it, and where the reminder stands — a key of SEEN */
+  seen?: string;
   /** the queue's parts: pending (Chờ duyệt), waiting (Chờ gửi), failed */
   status?: "pending" | "waiting" | "failed";
   page?: number;
 };
+
+/** "Trạng thái xem" — fixed SQL per key; an unknown key filters nothing. */
+export const SEEN = {
+  seen: { label: "Đã xem", sql: "t.read_at is not null" },
+  unseen: { label: "Chưa xem", sql: "t.read_at is null" },
+  delivered: { label: "Đã tới, chưa xem", sql: "t.read_at is null and t.delivered_at is not null" },
+  seen_no_reply: { label: "Đã xem, chưa reply", sql: "t.read_at is not null and t.replied_at is null" },
+  followup_waiting: { label: "Chờ nhắc lại", sql: "t.read_at is not null and t.replied_at is null and t.done_at is null and t.followup_status is null" },
+  followup_sent: { label: "Đã nhắc lại", sql: "t.followup_sent_at is not null" },
+  followup_no_reply: { label: "Đã nhắc lại, vẫn chưa reply", sql: "t.followup_sent_at is not null and t.replied_at is null" },
+  offer_live: { label: "Ưu đãi còn hạn", sql: "t.offer_until > now()" },
+  offer_expired: { label: "Ưu đãi đã hết hạn", sql: "t.offer_until <= now()" },
+} as const;
 
 /* a row is in the queue for its first message, or (sent) for its reminder */
 const QUEUE_PART = {
@@ -69,6 +84,7 @@ function where(tab: keyof typeof TAB_SQL | null, f: UrspFilters): { sql: string;
   if (f.intent?.trim()) add((n) => `t.reply_intent = $${n}`, f.intent.trim());
   if (f.mood?.trim()) add((n) => `t.mood = $${n}`, f.mood.trim());
   if (f.open === "1") parts.push("t.done_at is null");
+  if (f.seen && Object.hasOwn(SEEN, f.seen)) parts.push(`(${SEEN[f.seen as keyof typeof SEEN].sql})`);
   if (f.status && Object.hasOwn(QUEUE_PART, f.status)) parts.push(QUEUE_PART[f.status]);
   return { sql: parts.length ? `where ${parts.join(" and ")}` : "", params };
 }

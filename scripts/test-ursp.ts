@@ -406,6 +406,14 @@ async function main() {
   const pub = convs[sid(30)].msgs.find((m) => m.from === "operator" && m.type === "text");
   check(String(pub?.content).includes("Thank you for reaching out to us recently") && !/how your pages look on mobile/.test(String(pub?.content)), "the Recap offer no longer assumes a mobile ticket");
 
+  console.log("seen filter");
+  const seenRows = (await queries.listTargets("sent", { seen: "seen" })).rows;
+  check(seenRows.length > 0 && seenRows.every((r) => r.read_at), "Đã xem keeps only rows read", seenRows.length);
+  const unseenRows = (await queries.listTargets("sent", { seen: "unseen" })).rows;
+  check(unseenRows.length > 0 && unseenRows.every((r) => !r.read_at), "Chưa xem keeps only rows not read", unseenRows.length);
+  check((await queries.listTargets("sent", { seen: "followup_sent" })).rows.every((r) => r.followup_sent_at), "Đã nhắc lại keeps only reminded rows");
+  check((await queries.listTargets("sent", { seen: "nonsense" })).total === (await queries.listTargets("sent", {})).total, "an unknown key filters nothing");
+
   console.log("never twice");
   /* same store queued in both segments (n8n's post racing the job): one message */
   store("twice.myshopify.com");
