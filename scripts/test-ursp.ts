@@ -236,7 +236,13 @@ async function main() {
   const good = await target("recap", "good.myshopify.com");
   check(good?.status === "sent" && good.session_id === sid(1), "Recap is sent in its own ticket", good?.status);
   const texts = convs[sid(1)].msgs.filter((m) => m.from === "operator" && m.type === "text");
-  check(texts.length === 1 && String(texts[0].content).includes("Logan") && String(texts[0].content).includes("November 30"), "the offer, from Logan, until November 30");
+  const offer = String(texts[0]?.content ?? "");
+  const day3 = core.deadlineText(new Date(Date.now() + 3 * 86_400_000));
+  check(texts.length === 1 && offer.includes("*3 DAYS only*") && offer.includes(`*${day3}*`), "the offer lasts 3 days, its last day written in, bold", offer.match(/valid.*$/m)?.[0]);
+  check(offer.startsWith("Hi *good* team") && offer.includes("This is *Logan*") && offer.includes("*Logan* – PageFly"), "the customer's name and Logan's are bold");
+  check(!offer.includes("{deadline}") && !offer.includes("{offer_days}"), "no placeholder left");
+  const goodRow = await target("recap", "good.myshopify.com");
+  check(goodRow?.offer_until && Math.abs(new Date(goodRow.offer_until).getTime() - Date.now() - 3 * 86_400_000) < 120_000, "offer_until is kept: 3 days from sending");
   check(convs[sid(1)].msgs.some((m) => m.type === "note" && String(m.content).includes("mention Logan")), "a private note says to mention Logan on a reply");
   check(convs[sid(1)].state === "resolved", "the ticket is resolved after");
   check(convs[sid(1)].segments.includes("upsell-responsive"), "the Crisp segment is added");
@@ -330,10 +336,24 @@ async function main() {
   const sp = (await target("recap", "spell.myshopify.com"))!;
   check(sp.followup_status === "sent" && sp.followup_sent_at, "read 25 hours ago, no reply: the reminder goes", sp.followup_status);
   const rem = convs[spellSid].msgs.filter((m) => m.from === "operator" && m.type === "text");
-  check(rem.length === 2 && /NOVEMBER/.test(String(rem[1].content)) && /100% FREE/.test(String(rem[1].content)), "in the same conversation: only in November, free");
+  const reminder = String(rem[1]?.content ?? "");
+  check(rem.length === 2 && reminder.includes(`expires on *${core.deadlineText(sp.offer_until!)}*`) && /100% FREE/.test(reminder), "in the same conversation: free, and the day the offer ends", reminder.match(/expires.*$/m)?.[0]);
+  check(reminder.startsWith("Hi *spell* team") && reminder.includes("from *Logan*"), "names bold in the reminder too");
   await core.runJob(true);
   check(convs[spellSid].msgs.filter((m) => m.from === "operator" && m.type === "text").length === 2, "one reminder only");
   check((await target("recap", "good.myshopify.com"))?.followup_status === null, "a store that replied gets no reminder");
+  /* sent before offers lasted 3 days: the reminder keeps November */
+  await p.query("update ursp_targets set offer_until = null, followup_status = null, followup_sent_at = null where store_domain = 'returning.myshopify.com'");
+  const retSid = (await target("active", "returning.myshopify.com"))!.session_id!;
+  convs[retSid].msgs.forEach((m) => (m.timestamp = Date.now() - 26 * 3_600_000));
+  await p.query("update ursp_targets set read_at = now() - interval '25 hours', tracked_at = now() where store_domain = 'returning.myshopify.com'");
+  await core.runJob(true);
+  const oldRem = convs[retSid].msgs.filter((m) => m.from === "operator" && m.type === "text").pop();
+  check(/in NOVEMBER/.test(String(oldRem?.content)), "an offer sent before the change: its reminder still says November");
+  /* the offer ran out: no reminder */
+  await p.query("update ursp_targets set offer_until = now() - interval '1 hour', read_at = now() - interval '30 hours', tracked_at = now() where store_domain = 'talking.myshopify.com'");
+  await core.runJob(true);
+  check((await target("active", "talking.myshopify.com"))?.followup_status === null, "the offer ended: no reminder");
   const s2 = await queries.segmentStats({});
   check(s2.recap.followup_sent === 1, "the reminder is counted", s2.recap.followup_sent);
 

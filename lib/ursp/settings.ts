@@ -17,8 +17,10 @@ export const URSP_DEFAULTS = {
   /** manual: each message waits on Chờ duyệt; auto: sent as soon as the store qualifies */
   mode: "auto",
   sender_name: "Logan",
-  /** the last day a message goes out (Vietnam time) — the offer ends with November */
+  /** the last day a message goes out (Vietnam time) */
   campaign_end: "2026-11-30",
+  /** how long the offer lasts from the moment it is sent — {deadline} in the message */
+  offer_days: 3,
   recap_template: "",
   active_template: "",
   active_subject: "Free responsive check for your store pages",
@@ -52,12 +54,13 @@ export const URSP_DEFAULTS = {
 export type UrspKey = keyof typeof URSP_DEFAULTS;
 export type UrspSettings = { [K in UrspKey]: (typeof URSP_DEFAULTS)[K] extends number ? number : string };
 
-const VARS = "{store_name} {pic} {end_date}";
+const VARS = "{store_name} {pic} {offer_days} {deadline} {end_date}";
 
 export const URSP_HELP: Record<UrspKey, string> = {
   mode: "auto = store đủ điều kiện được gửi luôn · manual = tin nằm ở Chờ duyệt, bấm duyệt mới gửi",
   sender_name: "Tên người gửi trên Crisp, cũng là người được mention khi khách reply ({pic})",
   campaign_end: "Ngày cuối gửi tin (YYYY-MM-DD, giờ Việt Nam) — {end_date} trong tin",
+  offer_days: "Ưu đãi có hiệu lực bấy nhiêu ngày kể từ lúc gửi — {offer_days} và {deadline} (ngày hết hạn, điền lúc gửi) trong tin. Hết hạn thì không nhắc lại",
   recap_template: `Tin cho phân khúc Recap (gửi vào chính ticket support đó). Biến: ${VARS}. Để trống dùng mẫu mặc định.`,
   active_template: `Tin cho phân khúc Active (vào hội thoại Crisp gần nhất của khách, chưa có thì mở hội thoại mới đi qua email). Biến: ${VARS}. Để trống dùng mẫu mặc định.`,
   active_subject: "Tiêu đề hội thoại / email cho phân khúc Active",
@@ -67,7 +70,7 @@ export const URSP_HELP: Record<UrspKey, string> = {
   active_enabled: "1 = chạy phân khúc Active, 0 = tắt",
   active_ac2_query: "Tham số đọc danh sách store của AC2 (dạng limit=300&…)",
   active_fields: "Các trường thời gian của store AC2 cho biết lần hoạt động gần nhất — trường đầu tiên có giá trị được dùng",
-  followup_enabled: "1 = khách đã xem tin mà chưa trả lời thì gửi 1 tin nhắc lại (dịch vụ miễn phí, chỉ trong tháng 11), 0 = tắt",
+  followup_enabled: "1 = khách đã xem tin mà chưa trả lời thì gửi 1 tin nhắc lại (miễn phí, sắp hết hạn), 0 = tắt",
   followup_after_hours: "Đã xem bấy nhiêu giờ mà chưa trả lời thì nhắc lại",
   followup_template: `Tin nhắc lại, gửi vào cùng hội thoại. Biến: ${VARS}. Để trống dùng mẫu mặc định.`,
   active_per_scan: "Mỗi lần quét (1 tiếng) xét tối đa bấy nhiêu store Active mới",

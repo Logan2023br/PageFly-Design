@@ -5,7 +5,7 @@ import { FIELD } from "@/components/admin/fieldClass";
 import { CrispLink, Pill } from "@/components/admin/upsell/bits";
 import { DoneButton, ModeSwitch, QueueActions, RunControls, SendAnyway, SettingsForm, TrackButton } from "@/components/admin/ursp/Controls";
 import { vnTime } from "@/lib/ucp2/core";
-import { RECAP_SHEET_URL, composeMessage, type ActiveResult, type JobState, type RecapResult } from "@/lib/ursp/core";
+import { RECAP_SHEET_URL, composeMessage, deadlineText, offerUntil, withDeadline, type ActiveResult, type JobState, type RecapResult } from "@/lib/ursp/core";
 import { getState, hasUrspDatabase } from "@/lib/ursp/db";
 import {
   URSP_TABS,
@@ -103,8 +103,9 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
         help={URSP_HELP}
         numeric={URSP_NUMERIC}
         samples={{
-          recap_template: composeMessage("recap", { store_name: "Sun Coast Elements", store_domain: "x.myshopify.com" }, { ...cfg, recap_template: "" }),
-          active_template: composeMessage("active", { store_name: "Sun Coast Elements", store_domain: "x.myshopify.com" }, { ...cfg, active_template: "" }),
+          recap_template: withDeadline(composeMessage("recap", { store_name: "Sun Coast Elements", store_domain: "x.myshopify.com" }, { ...cfg, recap_template: "" }), offerUntil(cfg)),
+          active_template: withDeadline(composeMessage("active", { store_name: "Sun Coast Elements", store_domain: "x.myshopify.com" }, { ...cfg, active_template: "" }), offerUntil(cfg)),
+          followup_template: withDeadline(composeMessage("followup", { store_name: "Sun Coast Elements", store_domain: "x.myshopify.com" }, { ...cfg, followup_template: "" }), offerUntil(cfg)),
         }}
       />
     );
@@ -123,7 +124,7 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
         </section>
         <QueueSection
           title="Chờ duyệt"
-          note="Tin mời và tin nhắc lại soạn sẵn, chờ bạn đọc / sửa rồi bấm Duyệt & gửi (chế độ Chờ duyệt)."
+          note={`Tin mời và tin nhắc lại soạn sẵn, chờ bạn đọc / sửa rồi bấm Duyệt & gửi (chế độ Chờ duyệt). {deadline} trong tin mời được điền lúc gửi: ngày gửi + ${cfg.offer_days} ngày.`}
           list={pending}
           empty={cfg.mode === "auto" ? "Đang Tự động gửi — tin mới không vào đây." : "Không có tin nào chờ duyệt."}
         />
@@ -229,6 +230,7 @@ function StatusBar({
               : "chưa chạy lần nào — bấm Bắt đầu để chạy"}
         </span>
         <Pill tone={cfg.mode === "auto" ? "primary" : "muted"}>{cfg.mode === "auto" ? "Tự gửi" : "Chờ duyệt rồi gửi"}</Pill>
+        <Pill tone="primary">Ưu đãi {cfg.offer_days} ngày từ lúc gửi</Pill>
         <Pill tone={over ? "bad" : "muted"}>
           {over ? "Hết hạn chương trình" : "Gửi tới hết"} {cfg.campaign_end.split("-").reverse().join("/")}
         </Pill>
@@ -686,6 +688,9 @@ function Msg({ text, label = "Xem tin đã gửi" }: { text: string | null; labe
   );
 }
 
+/** The time has come — outside the component: reading the clock is not a render's job. */
+const isPast = (at: string) => new Date(at).getTime() <= Date.now();
+
 /** Whether the customer has seen the offer — and where the reminder stands. */
 function Seen({ t, hours }: { t: UrspTarget; hours: number }) {
   const due = t.read_at ? new Date(new Date(t.read_at).getTime() + hours * 3_600_000).toISOString() : null;
@@ -701,8 +706,13 @@ function Seen({ t, hours }: { t: UrspTarget; hours: number }) {
     ) : t.followup_status === "skipped" ? (
       <span className="text-pf-faint">Không nhắc lại</span>
     ) : t.read_at && !t.replied_at && !t.done_at && due ? (
-      <span className="text-pf-faint">Chưa reply → nhắc lại lúc {short(due)}</span>
+      t.offer_until && due >= new Date(t.offer_until).toISOString() ? (
+        <span className="text-pf-faint">Hết hạn ưu đãi trước giờ nhắc lại</span>
+      ) : (
+        <span className="text-pf-faint">Chưa reply → nhắc lại lúc {short(due)}</span>
+      )
     ) : null;
+  const expired = !!t.offer_until && isPast(t.offer_until);
   return (
     <div className="grid gap-1 text-[11.5px]">
       {t.read_at ? (
@@ -713,6 +723,11 @@ function Seen({ t, hours }: { t: UrspTarget; hours: number }) {
         <span className="text-pf-faint">Chưa xem</span>
       )}
       {reminder}
+      {t.offer_until && (
+        <span className={expired ? "text-pf-faint" : "text-pf-muted"}>
+          {expired ? "Ưu đãi đã hết hạn" : "Ưu đãi tới"} {deadlineText(t.offer_until)}
+        </span>
+      )}
     </div>
   );
 }

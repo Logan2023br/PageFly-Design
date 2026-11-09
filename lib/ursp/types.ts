@@ -86,6 +86,7 @@ export type UrspTarget = {
   mood_note: string | null;
   classified_at: string | null;
   mentioned_at: string | null;
+  offer_until: string | null;
   followup_status: string | null;
   followup_message: string | null;
   followup_approved_by: string | null;

@@ -44,8 +44,9 @@ import { SEGMENTS, SKIP_REASONS, type Segment, type SkipCode, type UrspTarget } 
    looked at is kept — sent, or skipped with the reason — so the screen can
    say how many were found, how many left out and why.
 
-   Read and no reply a day later (followup_after_hours): one reminder in the
-   same conversation — the service is free, and only in November.
+   The offer lasts offer_days (3) from when it is sent. Read and no reply a
+   day later (followup_after_hours), while it lasts: one reminder in the
+   same conversation — free, and when it ends.
 
    After it goes: read / reply from Crisp (a reply puts a note on the ticket
    mentioning Logan, and Haiku reads what they want and how they feel), and a
@@ -73,7 +74,7 @@ const str = (v: unknown): string | null => {
 const fold = (s: string) =>
   s
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/đ/gi, "d")
     .toLowerCase()
     .replace(/\s+/g, " ")
@@ -95,23 +96,44 @@ const errText = (err: unknown) => (err instanceof Error ? err.message : String(e
 
 /* Crisp renders *bold* in chat and in the email it sends. Built to be
    answered: who we are, why now (BFCM shoppers are on their phones), what
-   they get (ALL pages, FREE, nothing to do), until when, and one easy reply. */
+   they get (ALL pages, FREE, nothing to do), that it lasts 3 days, and one
+   easy reply. The customer's name, Logan's and the time are bold.
+
+   {deadline} is the offer's last day — offer_days after the message goes —
+   so it stays in the text until it is sent, and is written in then. */
 const OFFER = `For a limited time, our experts will:
 ✅ *Review the responsive layout of ALL your PageFly pages* — mobile, tablet and desktop
 ✅ *Fix every issue we find, 100% FREE* — no work needed on your side
 
 Most of your *BLACK FRIDAY* shoppers will browse and buy *on their phones*, so a page that breaks on mobile can quietly cost you sales.
 
-⏰ This free service is only available until *{end_date}*.
+⏰ This free offer is valid for *{offer_days} DAYS only* — until *{deadline}*.
 
 👉 *Just reply "YES" to this message* and we will get started right away.
 
 Best regards,
-{pic} – PageFly Technical Team`;
+*{pic}* – PageFly Technical Team`;
 
-const DEFAULT_FOLLOWUP = `Hi {store_name} team,
+const DEFAULT_FOLLOWUP = `Hi *{store_name}* team,
 
-Just a quick follow-up from {pic} 😊
+Just a quick follow-up from *{pic}* 😊
+
+Your *FREE responsive review & fix* offer expires on *{deadline}* — after that, this free service is no longer available.
+
+✅ We check *ALL your PageFly pages* on mobile, tablet and desktop
+✅ We fix every issue we find, *100% FREE* — you don't need to do anything
+
+Your *BLACK FRIDAY* shoppers are on their way. Want us to make sure your store is ready for them?
+
+👉 *Just reply "YES"* and our team will start right away.
+
+Best regards,
+*{pic}* – PageFly Technical Team`;
+
+/* The reminder for an offer sent before it lasted 3 days: it promised the end of November. */
+const FOLLOWUP_NOVEMBER = `Hi *{store_name}* team,
+
+Just a quick follow-up from *{pic}* 😊
 
 Our *FREE responsive review & fix service* is only available *in NOVEMBER* — the last day is *{end_date}*.
 
@@ -123,19 +145,19 @@ Your *BLACK FRIDAY* shoppers are on their way. Want us to make sure your store i
 👉 *Just reply "YES"* and our team will start right away.
 
 Best regards,
-{pic} – PageFly Technical Team`;
+*{pic}* – PageFly Technical Team`;
 
 const DEFAULT_TEMPLATES: Record<Segment, string> = {
-  recap: `Hi {store_name} team,
+  recap: `Hi *{store_name}* team,
 
-This is {pic} from the *PageFly Technical Team* 👋
+This is *{pic}* from the *PageFly Technical Team* 👋
 
 You recently reached out to us about how your pages look on mobile. Before the *BLACK FRIDAY – CYBER MONDAY* rush, we would love to make sure *EVERY page* of your store looks perfect on every screen.
 
 ${OFFER}`,
-  active: `Hi {store_name} team,
+  active: `Hi *{store_name}* team,
 
-This is {pic} from the *PageFly Technical Team* 👋
+This is *{pic}* from the *PageFly Technical Team* 👋
 
 *BLACK FRIDAY – CYBER MONDAY* is the busiest week of the year — let's make sure *EVERY page* of your store looks perfect on every screen before your visitors arrive.
 
@@ -150,15 +172,32 @@ export function endDateText(ymd: string): string {
   return m ? `${MONTHS[Number(m[1]) - 1]} ${Number(m[2])}` : ymd;
 }
 
-export function composeMessage(segment: Segment | "followup", t: { store_name: string | null; store_domain: string }, cfg: UrspSettings): string {
+/** When an offer sent at `from` ends: offer_days later. */
+export const offerUntil = (cfg: UrspSettings, from = new Date()) => new Date(from.getTime() + cfg.offer_days * 86_400_000);
+
+/** "November 12" — the day `at` falls on, Vietnam time. */
+export const deadlineText = (at: Date | string) => endDateText(new Date(new Date(at).getTime() + 7 * 3_600_000).toISOString().slice(0, 10));
+
+/** {deadline} written in — when the message goes, or for a reminder of one that went. */
+export const withDeadline = (text: string, until: Date | string) => text.replaceAll("{deadline}", deadlineText(until));
+
+export function composeMessage(
+  segment: Segment | "followup" | "followup_november",
+  t: { store_name: string | null; store_domain: string },
+  cfg: UrspSettings,
+): string {
   const tpl =
     segment === "followup"
       ? cfg.followup_template.trim() || DEFAULT_FOLLOWUP
-      : (segment === "recap" ? cfg.recap_template : cfg.active_template).trim() || DEFAULT_TEMPLATES[segment];
-  const name = t.store_name?.trim() || t.store_domain.replace(/\.myshopify\.com$/, "");
+      : segment === "followup_november"
+        ? FOLLOWUP_NOVEMBER
+        : (segment === "recap" ? cfg.recap_template : cfg.active_template).trim() || DEFAULT_TEMPLATES[segment];
+  /* a * in the name would end the bold early */
+  const name = (t.store_name?.trim() || t.store_domain.replace(/\.myshopify\.com$/, "")).replaceAll("*", "");
   return tpl
     .replaceAll("{store_name}", name)
     .replaceAll("{pic}", cfg.sender_name)
+    .replaceAll("{offer_days}", String(cfg.offer_days))
     .replaceAll("{end_date}", endDateText(cfg.campaign_end));
 }
 
@@ -600,7 +639,9 @@ async function sendOne(t: UrspTarget, cfg: UrspSettings, actor: string): Promise
     });
     return;
   }
-  const text = t.message?.trim() || composeMessage(t.segment, t, cfg);
+  const draft = t.message?.trim() || composeMessage(t.segment, t, cfg);
+  const until = offerUntil(cfg);
+  const text = withDeadline(draft, until);
   const sender = await crispSender(cfg.sender_name, "");
   try {
     let sid = t.session_id;
@@ -639,9 +680,9 @@ async function sendOne(t: UrspTarget, cfg: UrspSettings, actor: string): Promise
     if (cfg.crisp_segment.trim()) await addSegment(sid, cfg.crisp_segment.trim()).catch(() => undefined);
     await tx(async (c) => {
       await c.query(
-        `update ursp_targets set status = 'sent', sent_at = now(), sent_by = $2, message = $3, session_id = $4, ticket_link = $5,
+        `update ursp_targets set status = 'sent', sent_at = now(), sent_by = $2, message = $3, session_id = $4, ticket_link = $5, offer_until = $6,
                 error = null, wait_until = null, tracked_at = null, updated_at = now() where id = $1`,
-        [t.id, actor, text, sid, link],
+        [t.id, actor, text, sid, link, draft.includes("{deadline}") ? until.toISOString() : null],
       );
       await logEvent(c, t.id, "sent", actor, { session_id: sid });
     });
@@ -687,12 +728,17 @@ async function sendDue(cfg: UrspSettings): Promise<{ sent: number; errors: strin
  * Read, no reply, not handled, followup_after_hours after it was seen: one
  * reminder each — waiting on Chờ duyệt (manual) or going out (auto).
  */
+/** The reminder: the 3-day offer's last day, or — for one sent before offers lasted 3 days — November. */
+const followupText = (t: UrspTarget, cfg: UrspSettings) =>
+  t.offer_until ? withDeadline(composeMessage("followup", t, cfg), t.offer_until) : composeMessage("followup_november", t, cfg);
+
 async function queueFollowups(cfg: UrspSettings): Promise<number> {
   if (!cfg.followup_enabled || campaignOver(cfg)) return 0;
   const p = await db();
   const { rows } = await p.query<UrspTarget>(
     `select * from ursp_targets
       where status = 'sent' and followup_status is null and read_at is not null and replied_at is null
+        and (offer_until is null or offer_until > now())
         and done_at is null and uninstalled_at is null and session_id is not null
         and read_at <= now() - make_interval(hours => $1)
       order by read_at limit 50`,
@@ -703,7 +749,7 @@ async function queueFollowups(cfg: UrspSettings): Promise<number> {
       const st = cfg.mode === "auto" ? "approved" : "pending";
       await c.query(
         "update ursp_targets set followup_status = $2, followup_message = $3, followup_approved_by = $4, updated_at = now() where id = $1 and followup_status is null",
-        [t.id, st, composeMessage("followup", t, cfg), st === "approved" ? "auto" : null],
+        [t.id, st, followupText(t, cfg), st === "approved" ? "auto" : null],
       );
       await logEvent(c, t.id, "followup_queued", "system", { status: st });
     });
@@ -742,7 +788,12 @@ async function sendFollowups(cfg: UrspSettings): Promise<{ sent: number; errors:
         ]);
         continue;
       }
-      const text = t.followup_message?.trim() || composeMessage("followup", t, cfg);
+      /* the offer ran out while it waited: no reminder */
+      if (t.offer_until && new Date(t.offer_until).getTime() <= Date.now()) {
+        await skip(t.id);
+        continue;
+      }
+      const text = t.followup_message?.trim() || followupText(t, cfg);
       await sendInConversation(t.session_id!, text, sender!);
       await sendNote(t.session_id!, `[Upsell Responsive] ${cfg.sender_name} nhắc lại: khách đã xem tin mời nhưng chưa trả lời. Khách reply → mention ${cfg.sender_name}.`).catch(
         () => undefined,

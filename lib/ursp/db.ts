@@ -117,6 +117,8 @@ alter table ursp_targets add column if not exists followup_message text;
 alter table ursp_targets add column if not exists followup_approved_by text;
 alter table ursp_targets add column if not exists followup_sent_at timestamptz;
 alter table ursp_targets add column if not exists followup_error text;
+-- when the offer in the message ends (offer_days after it went); null: sent before offers lasted 3 days
+alter table ursp_targets add column if not exists offer_until timestamptz;
 create index if not exists ursp_targets_status on ursp_targets (status, created_at desc);
 create index if not exists ursp_targets_domain on ursp_targets (store_domain);
 create index if not exists ursp_targets_sent on ursp_targets (sent_at desc);
