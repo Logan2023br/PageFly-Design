@@ -263,7 +263,7 @@ function StatusBar({
                   ? `Đang lấy row Recap từ ${backfill.from}${backfill.rows ? `: ${backfill.rows} row, ${backfill.stores} store…` : "…"}`
                   : backfill.error
                     ? `Lấy row Recap từ ${backfill.from} lỗi: ${backfill.error}`
-                    : `Đã lấy row Recap từ ${backfill.from} (${short(backfill.at)}, ${backfill.by.replace(/^admin:/, "")}): ${backfill.rows} row, ${backfill.stores} store → ${backfill.result?.added ?? 0} row mới, ${backfill.result?.targets ?? 0} store vào danh sách`}
+                    : `Đã lấy row Recap từ ${backfill.from} (${short(backfill.at)}, ${backfill.by.replace(/^admin:/, "")}): ${backfill.rows} row, ${backfill.stores} store → ${backfill.result?.added ?? 0} row mới, ${backfill.result?.targets ?? 0} store vào danh sách${backfill.split ? ` · một nửa mỗi ngày: ${backfill.sent_half ?? 0} gửi (bản A), ${backfill.held_half ?? 0} giữ cho bản B` : ""}`}
               </p>
             )}
           </div>
@@ -438,7 +438,7 @@ function SegmentPanel({ seg, s, href }: { seg: Segment; s: SegmentStats; href: (
           seg === "recap"
             ? { label: "Khách từ Recap", n: s.found, note: `${s.rows} row Recap mới · ${s.responsive} vào danh sách` }
             : { label: "Store được xét", n: s.found, note: "hoạt động hôm nay (AC2)" },
-          { label: "Bị loại", n: s.skipped, note: pct(s.skipped, s.found), href: href({ tab: "skipped", seg }) },
+          { label: "Bị loại", n: s.skipped, note: `${pct(s.skipped, s.found)}${s.held ? ` · ${s.held} giữ cho bản B` : ""}`, href: href({ tab: "skipped", seg }) },
           { label: "Đã gửi", n: s.sent, note: pct(s.sent, s.found), href: href({ tab: "sent", seg }) },
           {
             label: "Chờ gửi",

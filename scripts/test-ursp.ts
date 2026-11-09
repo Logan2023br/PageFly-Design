@@ -459,6 +459,41 @@ async function main() {
     check(!(await target("recap", "octold.myshopify.com")), "an October row is not taken");
     check((await target("recap", "nov1.myshopify.com"))?.status === "approved", "a November row is taken");
     check((await target("recap", "nov2.myshopify.com"))?.skip_code === "resolution", "a store's latest row decides (Đợi TS check)");
+
+    console.log("backfill, half each day");
+    const days = { "2026-11-06": ["d6a", "d6b", "d6c", "d6d"], "2026-11-07": ["d7a", "d7b", "d7c"] };
+    sheetValues = [head];
+    let n = 50;
+    for (const [day, names] of Object.entries(days))
+      for (const nm of names) {
+        store(`${nm}.myshopify.com`);
+        conv(sid(++n), `${nm}@x.test`, now - 3 * 86_400_000);
+        sheetValues.push(line(`${day} 09:00`, `${nm}.myshopify.com`, "Chờ khách phản hồi", sid(n)));
+      }
+    await core.startRecapBackfill("2026-11-06", "admin:tu", true);
+    for (let i = 0; i < 50; i++) {
+      const st = await (await import("../lib/ursp/db")).getState<import("../lib/ursp/core").BackfillState>("recap_backfill");
+      if (st && !st.running) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    const half = await (await import("../lib/ursp/db")).getState<import("../lib/ursp/core").BackfillState>("recap_backfill");
+    check(half?.sent_half === 4 && half.held_half === 3, "each day halved: 4 → 2 + 2, 3 → 2 + 1", half);
+    const split = (await p.query("select store_domain, status, variant from ursp_targets where store_domain like 'd6%' or store_domain like 'd7%'")).rows;
+    const perDay = (pre: string, st: string) => split.filter((r) => r.store_domain.startsWith(pre) && r.status === st).length;
+    check(perDay("d6", "held") === 2 && perDay("d7", "held") === 1, "the held half is per day", split);
+    check(split.filter((r) => r.status === "held").every((r) => r.variant === "B") && split.filter((r) => r.status !== "held").every((r) => r.variant === "A"), "A sent, B held");
+    await core.runJob(true);
+    const heldIds = split.filter((r) => r.status === "held").map((r) => r.store_domain);
+    const heldSent = heldIds.some((d) => convs[sid(50 + [...days["2026-11-06"], ...days["2026-11-07"]].indexOf(d.split(".")[0]) + 1)]?.msgs.some((m) => m.from === "operator"));
+    check(!heldSent, "nothing is sent to the held half");
+    check((await p.query("select count(*)::int as n from ursp_targets where variant = 'A' and status = 'sent' and (store_domain like 'd6%' or store_domain like 'd7%')")).rows[0].n === 4, "the A half is sent");
+    /* a held store active today is not messaged by Active */
+    ac2[heldIds[0]].lastActiveAt = iso(Date.now());
+    await p.query("delete from ursp_state where key = 'active'");
+    await core.runJob(true);
+    const act = await target("active", heldIds[0]);
+    check(!act || act.status === "skipped", "Active leaves a held store alone", act?.status);
+    check((await queries.segmentStats({})).recap.held === 3, "held counted in the stats");
     delete process.env.URSP_SHEET_SA_JSON;
   }
 

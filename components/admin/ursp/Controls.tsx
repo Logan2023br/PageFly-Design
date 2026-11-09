@@ -81,12 +81,17 @@ export function ModeSwitch({ mode }: { mode: string }) {
 export function RecapBackfill({ defaultFrom }: { defaultFrom: string }) {
   const [run, busy, error] = useAct();
   const [from, setFrom] = useState(defaultFrom);
+  const [split, setSplit] = useState(true);
   return (
     <div className="grid gap-1">
       <div className="flex flex-wrap items-center gap-2 text-[13px]">
         <span className="text-pf-muted">Lấy cả row Recap cũ từ ngày</span>
         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={`${FIELD} w-[150px]! py-1!`} aria-label="Từ ngày" />
-        <Button size="sm" variant="ghost" icon="RefreshCw" disabled={busy || !from} onClick={() => void run(RUN, { action: "backfill", from })}>
+        <label className="flex items-center gap-1.5 text-pf-muted" title="Mỗi ngày Recap: một nửa store hợp lệ (chọn ngẫu nhiên) được gửi ngay, nửa còn lại giữ cho bản B của A/B test">
+          <input type="checkbox" checked={split} onChange={(e) => setSplit(e.target.checked)} />
+          Chỉ gửi một nửa mỗi ngày (nửa kia giữ cho A/B test)
+        </label>
+        <Button size="sm" variant="ghost" icon="RefreshCw" disabled={busy || !from} onClick={() => void run(RUN, { action: "backfill", from, split })}>
           {busy ? "Đang bắt đầu…" : "Chạy Recap từ ngày này"}
         </Button>
       </div>

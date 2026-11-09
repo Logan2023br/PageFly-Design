@@ -96,6 +96,8 @@ export type SegmentStats = {
   /** stores looked at (one per store) */
   found: number;
   skipped: number;
+  /** kept back for the B half of an A/B test: nothing sent yet */
+  held: number;
   queued: number;
   failed: number;
   sent: number;
@@ -124,6 +126,7 @@ export type SegmentStats = {
 
 const STATS_SQL = `count(*)::int as found,
   count(*) filter (where t.status = 'skipped')::int as skipped,
+  count(*) filter (where t.status = 'held')::int as held,
   count(*) filter (where t.status in ('pending', 'approved', 'sending'))::int as queued,
   count(*) filter (where t.status = 'failed')::int as failed,
   count(*) filter (where t.status = 'sent')::int as sent,
@@ -171,6 +174,7 @@ export async function segmentStats(f: UrspFilters): Promise<Record<Segment, Segm
     responsive: 0,
     found: 0,
     skipped: 0,
+    held: 0,
     queued: 0,
     failed: 0,
     sent: 0,

@@ -17,6 +17,7 @@ export const STATUS_LABEL: Record<string, string> = {
   sent: "Đã gửi",
   failed: "Lỗi gửi",
   skipped: "Bị loại",
+  held: "Giữ cho bản B",
 };
 
 /** Why a store got no message — the code is what the stats group by. */
@@ -87,6 +88,7 @@ export type UrspTarget = {
   classified_at: string | null;
   mentioned_at: string | null;
   offer_until: string | null;
+  variant: string | null;
   followup_status: string | null;
   followup_message: string | null;
   followup_approved_by: string | null;

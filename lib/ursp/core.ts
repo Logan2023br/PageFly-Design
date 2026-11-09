@@ -275,6 +275,8 @@ type NewTarget = {
   facts: Partial<Facts>;
   /** a rule the segment broke before the store was looked up */
   skip?: { code: SkipCode; reason: string } | null;
+  /** qualifying, but kept back — "held", nothing sent (the B half of an A/B split) */
+  hold?: boolean;
 };
 
 /** Skipped for a reason that can change: the store is looked at again when it comes up again. */
@@ -344,7 +346,7 @@ async function addTarget(n: NewTarget, cfg: UrspSettings, actor: string): Promis
     }
   }
 
-  const status = skip ? "skipped" : cfg.mode === "auto" ? "approved" : "pending";
+  const status = skip ? "skipped" : n.hold ? "held" : cfg.mode === "auto" ? "approved" : "pending";
   const message = skip ? null : composeMessage(n.segment, { store_name: facts.store_name, store_domain: n.store_domain }, cfg);
   return tx(async (c) => {
     const vals = [
@@ -443,7 +445,12 @@ export type RecapResult = { at: string; source: "sheet" | "n8n"; read: number; a
  * New Recap rows in: kept, their categories put to Haiku (once per spelling),
  * and each one looked at as a target.
  */
-export async function ingestRecap(rows: RecapIn[], source: RecapResult["source"], actor: string): Promise<RecapResult> {
+export async function ingestRecap(
+  rows: RecapIn[],
+  source: RecapResult["source"],
+  actor: string,
+  opts: { hold?: boolean; made?: { id: string; status: string; day: string }[] } = {},
+): Promise<RecapResult> {
   const out: RecapResult = { at: new Date().toISOString(), source, read: rows.length, added: 0, responsive: 0, targets: 0 };
   const cfg = await getUrspSettings();
   const p = await db();
@@ -506,6 +513,7 @@ export async function ingestRecap(rows: RecapIn[], source: RecapResult["source"]
         },
         facts: { shopify_plan: r.shopify_plan, pages_published: r.pages_published, store_name: r.store_name, country: r.country },
         skip,
+        hold: opts.hold,
       },
       cfg,
       actor,
@@ -516,6 +524,7 @@ export async function ingestRecap(rows: RecapIn[], source: RecapResult["source"]
     });
     if (t) {
       out.targets++;
+      opts.made?.push({ ...t, day: r.recap_at ? vnDay(new Date(r.recap_at).getTime()) : "" });
       await p.query("update ursp_recap_rows set target_id = $2 where row_key = $1", [r.key, t.id]);
     }
   }
@@ -538,21 +547,38 @@ export async function importRecap(input: unknown, actor = "n8n"): Promise<RecapR
   return out;
 }
 
-export type BackfillState = { at: string; from: string; by: string; running: boolean; rows: number; stores: number; result?: RecapResult; error?: string };
+export type BackfillState = {
+  at: string;
+  from: string;
+  by: string;
+  running: boolean;
+  rows: number;
+  stores: number;
+  /** half of each day's qualifying stores sent (A), the other half held for B */
+  split?: boolean;
+  sent_half?: number;
+  held_half?: number;
+  result?: RecapResult;
+  error?: string;
+};
 
 /**
  * Rows already in the sheet from `from` (Vietnam date) on — the ones before
  * Bắt đầu that "only new rows" leaves out — taken as if they had just come.
  * The latest row per store only, so today's resolution decides. Runs in
  * the background; the screen reads `recap_backfill` for how it went.
+ *
+ * `split`: of the stores that qualify, each Recap day's are shuffled and
+ * half get the message now (variant A); the other half are held — nothing
+ * sent, not messaged by Active either — for the B message of an A/B test.
  */
-export async function startRecapBackfill(from: string, by: string): Promise<BackfillState> {
+export async function startRecapBackfill(from: string, by: string, split = false): Promise<BackfillState> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) throw new UpsellError("Ngày phải dạng YYYY-MM-DD.", 422);
   const sa = recapServiceAccount();
   if (!sa) throw new UpsellError("Server chưa đọc được file Recap (URSP_SHEET_SA_JSON chưa đặt).", 409);
   const cur = await getState<BackfillState>("recap_backfill");
   if (cur?.running && Date.now() - new Date(cur.at).getTime() < 30 * 60_000) throw new UpsellError("Đang chạy một lượt — đợi xong.", 409);
-  const state: BackfillState = { at: new Date().toISOString(), from, by, running: true, rows: 0, stores: 0 };
+  const state: BackfillState = { at: new Date().toISOString(), from, by, running: true, rows: 0, stores: 0, split };
   await setState("recap_backfill", state);
   void (async () => {
     try {
@@ -572,13 +598,41 @@ export async function startRecapBackfill(from: string, by: string): Promise<Back
       }
       const take = [...latest.values(), ...loose].sort((a, b) => a.recap_at!.localeCompare(b.recap_at!));
       await setState("recap_backfill", { ...state, rows: rows.length, stores: latest.size });
-      const result = await ingestRecap(take, "sheet", by);
-      await setState("recap_backfill", { ...state, running: false, rows: rows.length, stores: latest.size, result });
+      const made: { id: string; status: string; day: string }[] = [];
+      const result = await ingestRecap(take, "sheet", by, { hold: split, made });
+      const halves = split ? await splitHalves(made.filter((m) => m.status === "held")) : {};
+      await setState("recap_backfill", { ...state, running: false, rows: rows.length, stores: latest.size, result, ...halves });
     } catch (err) {
       await setState("recap_backfill", { ...state, running: false, error: errText(err) });
     }
   })();
   return state;
+}
+
+/** Each day's held stores, shuffled: the first half (rounded up) released as A, the rest kept as B. */
+async function splitHalves(held: { id: string; day: string }[]): Promise<{ sent_half: number; held_half: number }> {
+  const cfg = await getUrspSettings();
+  const byDay = new Map<string, string[]>();
+  for (const h of held) byDay.set(h.day, [...(byDay.get(h.day) ?? []), h.id]);
+  const a: string[] = [];
+  const b: string[] = [];
+  for (const ids of byDay.values()) {
+    const shuffled = ids
+      .map((id) => ({ id, r: Math.random() }))
+      .sort((x, y) => x.r - y.r)
+      .map((x) => x.id);
+    const cut = Math.ceil(shuffled.length / 2);
+    a.push(...shuffled.slice(0, cut));
+    b.push(...shuffled.slice(cut));
+  }
+  const p = await db();
+  if (a.length)
+    await p.query(
+      `update ursp_targets set variant = 'A', status = $2, approved_by = $3, updated_at = now() where id = any($1::bigint[]) and status = 'held'`,
+      [a, cfg.mode === "auto" ? "approved" : "pending", cfg.mode === "auto" ? "auto" : null],
+    );
+  if (b.length) await p.query("update ursp_targets set variant = 'B', updated_at = now() where id = any($1::bigint[]) and status = 'held'", [b]);
+  return { sent_half: a.length, held_half: b.length };
 }
 
 /**

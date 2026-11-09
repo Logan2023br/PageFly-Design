@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   if (!(await readAdminSection("ursp"))) return json({ ok: false, error: "Not signed in." }, 401);
   try {
-    const { action, from } = await readJson(req);
+    const { action, from, split } = await readJson(req);
     const by = `admin:${(await readAdminName()) ?? "admin"}`;
     if (action === "start" || action === "pause") {
       const run = await setRunning(action === "start", by);
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
       if (run.on) void runJob(true).catch((err) => console.error("[ursp] start run", err));
       return json({ ok: true, run });
     }
-    if (action === "backfill") return json({ ok: true, backfill: await startRecapBackfill(String(from ?? ""), by) });
+    if (action === "backfill") return json({ ok: true, backfill: await startRecapBackfill(String(from ?? ""), by, split === true) });
     if (action === "run") {
       if (!(await runState()).on) return json({ ok: false, error: "Đang tạm dừng — bấm Bắt đầu trước." }, 409);
       return json({ ok: true, job: await runJob(true) });
