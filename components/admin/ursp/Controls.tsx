@@ -37,6 +37,43 @@ export function RunControls({ on }: { on: boolean }) {
   );
 }
 
+const MODES = [
+  { id: "manual", label: "Chờ duyệt", hint: "Tin soạn sẵn nằm ở Chờ duyệt — bạn đọc, sửa, rồi bấm Duyệt & gửi" },
+  { id: "auto", label: "Tự động gửi", hint: "Store đủ điều kiện được gửi luôn, không cần duyệt" },
+] as const;
+
+/** Chờ duyệt / Tự động gửi — the `mode` setting, from the Chờ gửi tab. */
+export function ModeSwitch({ mode }: { mode: string }) {
+  const [run, busy, error] = useAct();
+  const current = MODES.find((m) => m.id === mode) ?? MODES[1];
+  return (
+    <div className="grid gap-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <div role="radiogroup" aria-label="Chế độ gửi" className="flex gap-1 rounded-xl border border-pf-border bg-pf-bg-deep p-1">
+          {MODES.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              role="radio"
+              aria-checked={current.id === m.id}
+              disabled={busy}
+              onClick={() => current.id !== m.id && void run("/api/admin/ursp/settings", { mode: m.id })}
+              className={`rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
+                current.id === m.id ? (m.id === "auto" ? "bg-pf-warn text-black" : "bg-pf-primary text-white") : "text-pf-muted hover:text-pf-text"
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        <span className="text-[12px] text-pf-muted">{current.hint}</span>
+      </div>
+      <p className="text-[11.5px] text-pf-faint">Đổi chế độ chỉ áp dụng cho store tìm thấy từ giờ; tin đang ở Chờ duyệt vẫn chờ bạn duyệt.</p>
+      <ErrorLine error={error} />
+    </div>
+  );
+}
+
 /** "Đã xử lý xong" on a sent row — pressed again (Hoàn tác) it is open again. */
 export function DoneButton({ id, done, by, at }: { id: string; done: boolean; by: string | null; at: string | null }) {
   const [run, busy, error] = useAct();
@@ -54,7 +91,7 @@ export function DoneButton({ id, done, by, at }: { id: string; done: boolean; by
           </button>
         </>
       ) : (
-        <Button size="sm" variant="ghost" icon="Check" disabled={busy} onClick={() => void run(row(id), { action: "done" })}>
+        <Button size="sm" variant="ghost" icon="Check" className="whitespace-nowrap" disabled={busy} onClick={() => void run(row(id), { action: "done" })}>
           Đã xử lý xong
         </Button>
       )}
@@ -82,7 +119,7 @@ export function QueueActions({ id, status, message }: { id: string; status: stri
   const [text, setText] = useState(message);
   const changed = text.trim() !== message.trim();
   return (
-    <div className="grid gap-2">
+    <div className="grid gap-2 text-[13px]">
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={9} className={`${FIELD} font-mono text-[12px] leading-relaxed`} aria-label="Nội dung tin" />
       <div className="flex flex-wrap items-center gap-2">
         {status === "pending" && (
@@ -143,7 +180,7 @@ export function SettingsForm({
     if (await run("/api/admin/ursp/settings", patch)) setSaved(true);
   };
   return (
-    <section className="grid gap-4 rounded-pf-card border border-pf-border bg-pf-card p-4">
+    <section className="grid gap-4 rounded-pf-card border border-pf-border bg-pf-card p-4 text-[13px]">
       {Object.keys(initial).map((k) => {
         const long = k.endsWith("_template");
         return (

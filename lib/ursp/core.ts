@@ -91,27 +91,37 @@ const errText = (err: unknown) => (err instanceof Error ? err.message : String(e
 
 /* ---------------------------------------------------------------- message */
 
+/* Crisp renders *bold* in chat and in the email it sends. Built to be
+   answered: who we are, why now (BFCM shoppers are on their phones), what
+   they get (ALL pages, FREE, nothing to do), until when, and one easy reply. */
+const OFFER = `For a limited time, our experts will:
+✅ *Review the responsive layout of ALL your PageFly pages* — mobile, tablet and desktop
+✅ *Fix every issue we find, 100% FREE* — no work needed on your side
+
+Most of your *BLACK FRIDAY* shoppers will browse and buy *on their phones*, so a page that breaks on mobile can quietly cost you sales.
+
+⏰ This free service is only available until *{end_date}*.
+
+👉 *Just reply "YES" to this message* and we will get started right away.
+
+Best regards,
+{pic} – PageFly Technical Team`;
+
 const DEFAULT_TEMPLATES: Record<Segment, string> = {
   recap: `Hi {store_name} team,
 
-This is {pic} from the PageFly technical team. Thank you for reaching out to us recently.
+This is {pic} from the *PageFly Technical Team* 👋
 
-During this Black Friday – Cyber Monday season, we are offering a free expert service until {end_date}: our specialists will review the responsive layout of all your PageFly pages and fix any issues for free, so every page displays correctly on mobile, tablet and desktop while your customers browse and shop.
+You recently reached out to us about how your pages look on mobile. Before the *BLACK FRIDAY – CYBER MONDAY* rush, we would love to make sure *EVERY page* of your store looks perfect on every screen.
 
-Would you like us to do this for your store? If yes, simply reply to this message and we will get started.
-
-Best regards,
-{pic} – PageFly Technical Team`,
+${OFFER}`,
   active: `Hi {store_name} team,
 
-This is {pic} from the PageFly technical team.
+This is {pic} from the *PageFly Technical Team* 👋
 
-During this Black Friday – Cyber Monday season, we are offering a free expert service until {end_date}: our specialists will review the responsive layout of all your PageFly pages and fix any issues for free, so every page displays correctly on mobile, tablet and desktop while your customers browse and shop.
+*BLACK FRIDAY – CYBER MONDAY* is the busiest week of the year — let's make sure *EVERY page* of your store looks perfect on every screen before your visitors arrive.
 
-Would you like us to do this for your store? If yes, simply reply to this message and we will get started.
-
-Best regards,
-{pic} – PageFly Technical Team`,
+${OFFER}`,
 };
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];

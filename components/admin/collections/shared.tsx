@@ -98,11 +98,7 @@ export function Segmented<T extends string>({
   );
 }
 
-export const FIELD =
-  "w-full rounded-pf-md border border-pf-border bg-pf-bg-deep px-3 py-2 text-[13px] text-pf-text outline-none transition-colors placeholder:text-pf-faint focus:border-pf-primary-hi";
-
-export const FIELD_LABEL =
-  "text-[11.5px] font-semibold uppercase tracking-[0.08em] text-pf-faint";
+export { FIELD, FIELD_LABEL } from "../fieldClass";
 
 /* ---- a panel folded to its title ------------------------------------------ */
 

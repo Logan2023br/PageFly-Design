@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { adminGate } from "@/components/admin/adminGate";
-import { FIELD } from "@/components/admin/collections/shared";
+import { FIELD } from "@/components/admin/fieldClass";
 import { CrispLink, Pill } from "@/components/admin/upsell/bits";
-import { DoneButton, QueueActions, RunControls, SendAnyway, SettingsForm, TrackButton } from "@/components/admin/ursp/Controls";
+import { DoneButton, ModeSwitch, QueueActions, RunControls, SendAnyway, SettingsForm, TrackButton } from "@/components/admin/ursp/Controls";
 import { vnTime } from "@/lib/ucp2/core";
 import { RECAP_SHEET_URL, composeMessage, type ActiveResult, type JobState, type RecapResult } from "@/lib/ursp/core";
 import { getState, hasUrspDatabase } from "@/lib/ursp/db";
@@ -108,13 +108,41 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
         }}
       />
     );
+  } else if (tab === "queue") {
+    const all = { ...f, page: 1 };
+    const [pending, waiting, failed] = await Promise.all([
+      listTargets("queue", { ...all, status: "pending" }),
+      listTargets("queue", { ...all, status: "waiting" }),
+      listTargets("queue", { ...all, status: "failed" }),
+    ]);
+    body = (
+      <>
+        <section className="grid gap-2 rounded-pf-card border border-pf-border bg-pf-card p-4">
+          <h3 className="text-[13px] font-semibold text-pf-text">Chế độ gửi</h3>
+          <ModeSwitch mode={cfg.mode} />
+        </section>
+        <QueueSection
+          title="Chờ duyệt"
+          note="Tin soạn sẵn, chờ bạn đọc / sửa rồi bấm Duyệt & gửi (chế độ Chờ duyệt)."
+          list={pending}
+          empty={cfg.mode === "auto" ? "Đang Tự động gửi — tin mới không vào đây." : "Không có tin nào chờ duyệt."}
+        />
+        <QueueSection
+          title="Chờ gửi"
+          note="Đã duyệt (hoặc tự động), sẽ gửi ở lần chạy tới — tin vào ticket support vừa có người nhắn thì đợi ticket yên rồi gửi."
+          list={waiting}
+          empty="Không có tin nào chờ gửi."
+        />
+        {failed.total > 0 && <QueueSection title="Lỗi gửi" note="Gửi không được — xem lỗi, bấm Gửi lại hoặc Bỏ qua." list={failed} empty="" />}
+      </>
+    );
   } else {
     const list = await listTargets(tab, f);
     const pager = <Pager list={list} href={(p) => qs({ page: String(p) })} />;
     body = (
       <>
         {pager}
-        {tab === "queue" ? <Queue rows={list.rows} /> : tab === "skipped" ? <SkippedTable rows={list.rows} /> : <SentTable rows={list.rows} />}
+        {tab === "skipped" ? <SkippedTable rows={list.rows} /> : <SentTable rows={list.rows} />}
         {list.total > 0 && pager}
       </>
     );
@@ -245,26 +273,27 @@ function StatusBar({
 
 function Filters({ tab, f }: { tab: UrspTab; f: UrspFilters }) {
   return (
-    <form method="get" className="flex flex-wrap items-end gap-2">
+    /* the reset gives fields `font: inherit`, which beats FIELD's text size: the form sets it */
+    <form method="get" className="flex flex-wrap items-end gap-2 text-[13px]">
       {tab !== "overview" && <input type="hidden" name="tab" value={tab} />}
-      <input name="q" defaultValue={f.q} placeholder="Domain, tên store, email…" className={`${FIELD} w-[220px]`} aria-label="Tìm" />
+      <input name="q" defaultValue={f.q} placeholder="Domain, tên store, email…" className={`${FIELD} w-[220px]!`} aria-label="Tìm" />
       {tab !== "overview" && (
-        <select name="seg" defaultValue={f.seg ?? ""} className={`${FIELD} w-[160px]`} aria-label="Phân khúc">
+        <select name="seg" defaultValue={f.seg ?? ""} className={`${FIELD} w-[160px]!`} aria-label="Phân khúc">
           <option value="">Mọi phân khúc</option>
           <option value="recap">Recap</option>
           <option value="active">Active</option>
         </select>
       )}
-      <label className="grid gap-0.5 text-[11px] text-pf-faint">
-        Từ ngày
-        <input type="date" name="from" defaultValue={f.from} className={`${FIELD} w-[150px]`} />
+      <label className="grid gap-0.5">
+        <span className="text-[11px] text-pf-faint">Từ ngày</span>
+        <input type="date" name="from" defaultValue={f.from} className={`${FIELD} w-[150px]!`} />
       </label>
-      <label className="grid gap-0.5 text-[11px] text-pf-faint">
-        Đến
-        <input type="date" name="to" defaultValue={f.to} className={`${FIELD} w-[150px]`} />
+      <label className="grid gap-0.5">
+        <span className="text-[11px] text-pf-faint">Đến</span>
+        <input type="date" name="to" defaultValue={f.to} className={`${FIELD} w-[150px]!`} />
       </label>
       {tab === "skipped" && (
-        <select name="reason" defaultValue={f.reason ?? ""} className={`${FIELD} w-[240px]`} aria-label="Lý do">
+        <select name="reason" defaultValue={f.reason ?? ""} className={`${FIELD} w-[240px]!`} aria-label="Lý do">
           <option value="">Mọi lý do</option>
           {Object.entries(SKIP_REASONS).map(([k, v]) => (
             <option key={k} value={k}>
@@ -275,7 +304,7 @@ function Filters({ tab, f }: { tab: UrspTab; f: UrspFilters }) {
       )}
       {(tab === "replied" || tab === "done" || tab === "sent") && (
         <>
-          <select name="intent" defaultValue={f.intent ?? ""} className={`${FIELD} w-[150px]`} aria-label="Ý khách">
+          <select name="intent" defaultValue={f.intent ?? ""} className={`${FIELD} w-[150px]!`} aria-label="Ý khách">
             <option value="">Mọi ý khách</option>
             {Object.entries(INTENT_LABEL).map(([k, v]) => (
               <option key={k} value={k}>
@@ -283,7 +312,7 @@ function Filters({ tab, f }: { tab: UrspTab; f: UrspFilters }) {
               </option>
             ))}
           </select>
-          <select name="mood" defaultValue={f.mood ?? ""} className={`${FIELD} w-[160px]`} aria-label="Hài lòng">
+          <select name="mood" defaultValue={f.mood ?? ""} className={`${FIELD} w-[160px]!`} aria-label="Hài lòng">
             <option value="">Mọi mức hài lòng</option>
             {Object.entries(MOOD_LABEL).map(([k, v]) => (
               <option key={k} value={k}>
@@ -294,7 +323,7 @@ function Filters({ tab, f }: { tab: UrspTab; f: UrspFilters }) {
         </>
       )}
       {tab === "replied" && (
-        <label className="flex h-[38px] items-center gap-1.5 text-[12.5px] text-pf-muted">
+        <label className="flex h-[38px] items-center gap-1.5 text-pf-muted">
           <input type="checkbox" name="open" value="1" defaultChecked={f.open === "1"} /> Chỉ chưa xử lý
         </label>
       )}
@@ -747,8 +776,26 @@ function SentTable({ rows }: { rows: UrspTarget[] }) {
   );
 }
 
+function QueueSection({ title, note, list, empty }: { title: string; note: string; list: { rows: UrspTarget[]; total: number }; empty: string }) {
+  return (
+    <section className="grid gap-2">
+      <div className="flex flex-wrap items-baseline gap-2">
+        <h3 className="text-[14px] font-semibold text-pf-text">
+          {title} <span className="text-pf-muted">({list.total})</span>
+        </h3>
+        <span className="text-[12px] text-pf-faint">{note}</span>
+      </div>
+      {list.rows.length ? (
+        <Queue rows={list.rows} />
+      ) : (
+        <p className="rounded-pf-card border border-pf-border bg-pf-card p-5 text-center text-[13px] text-pf-faint">{empty}</p>
+      )}
+      {list.total > list.rows.length && <p className="text-[12px] text-pf-faint">Đang hiện {list.rows.length}/{list.total} — lọc để xem phần còn lại.</p>}
+    </section>
+  );
+}
+
 function Queue({ rows }: { rows: UrspTarget[] }) {
-  if (!rows.length) return <p className="rounded-pf-card border border-pf-border bg-pf-card p-6 text-center text-[13px] text-pf-faint">Không có tin nào đang chờ.</p>;
   return (
     <div className="grid gap-3">
       {rows.map((t) => (

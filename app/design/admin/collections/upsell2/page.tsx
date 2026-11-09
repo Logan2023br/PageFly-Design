@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ReportsLink } from "@/components/admin/reports/ReportsLink";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { adminGate } from "@/components/admin/adminGate";
-import { FIELD } from "@/components/admin/collections/shared";
+import { FIELD } from "@/components/admin/fieldClass";
 import { RunNow } from "@/components/admin/ucp2/RunNow";
 import { CrispLink } from "@/components/admin/upsell/bits";
 import { SHEET_COLUMNS, TRACK_DAYS, getState, vnTime, type TrackState } from "@/lib/ucp2/core";
@@ -90,22 +90,22 @@ export default async function Ucp2Page(props: PageProps<"/design/admin/collectio
         </p>
 
         <form method="get" className="flex flex-wrap items-end gap-2">
-          <input name="q" defaultValue={f.q} placeholder="Domain, tên, email, code…" className={`${FIELD} w-[220px]`} aria-label="Tìm" />
+          <input name="q" defaultValue={f.q} placeholder="Domain, tên, email, code…" className={`${FIELD} w-[220px]!`} aria-label="Tìm" />
           <label className="grid gap-0.5 text-[11px] text-pf-faint">
             Gửi từ
-            <input type="date" name="from" defaultValue={f.from} className={`${FIELD} w-[150px]`} />
+            <input type="date" name="from" defaultValue={f.from} className={`${FIELD} w-[150px]!`} />
           </label>
           <label className="grid gap-0.5 text-[11px] text-pf-faint">
             Đến
-            <input type="date" name="to" defaultValue={f.to} className={`${FIELD} w-[150px]`} />
+            <input type="date" name="to" defaultValue={f.to} className={`${FIELD} w-[150px]!`} />
           </label>
-          <select name="type" defaultValue={f.type ?? ""} className={`${FIELD} w-[230px]`} aria-label="Type User">
+          <select name="type" defaultValue={f.type ?? ""} className={`${FIELD} w-[230px]!`} aria-label="Type User">
             <option value="">Mọi loại khách</option>
             {types.map((t) => (
               <option key={t}>{t}</option>
             ))}
           </select>
-          <select name="did" defaultValue={f.did ?? ""} className={`${FIELD} w-[170px]`} aria-label="Khách đã làm gì">
+          <select name="did" defaultValue={f.did ?? ""} className={`${FIELD} w-[170px]!`} aria-label="Khách đã làm gì">
             <option value="">Mọi hoạt động</option>
             {Object.entries(UCP2_DID).map(([k, v]) => (
               <option key={k} value={k}>

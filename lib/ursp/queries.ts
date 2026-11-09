@@ -30,7 +30,21 @@ const TAB_SQL: Record<Exclude<UrspTab, "overview" | "settings">, string> = {
   skipped: "t.status = 'skipped'",
 };
 
-export type UrspFilters = { q?: string; seg?: string; from?: string; to?: string; reason?: string; intent?: string; mood?: string; open?: string; page?: number };
+export type UrspFilters = {
+  q?: string;
+  seg?: string;
+  from?: string;
+  to?: string;
+  reason?: string;
+  intent?: string;
+  mood?: string;
+  open?: string;
+  /** the queue's parts: pending (Chờ duyệt), waiting (Chờ gửi), failed */
+  status?: "pending" | "waiting" | "failed";
+  page?: number;
+};
+
+const QUEUE_PART = { pending: "t.status = 'pending'", waiting: "t.status in ('approved', 'sending')", failed: "t.status = 'failed'" } as const;
 
 const VN = "Asia/Ho_Chi_Minh";
 
@@ -50,6 +64,7 @@ function where(tab: keyof typeof TAB_SQL | null, f: UrspFilters): { sql: string;
   if (f.intent?.trim()) add((n) => `t.reply_intent = $${n}`, f.intent.trim());
   if (f.mood?.trim()) add((n) => `t.mood = $${n}`, f.mood.trim());
   if (f.open === "1") parts.push("t.done_at is null");
+  if (f.status && Object.hasOwn(QUEUE_PART, f.status)) parts.push(QUEUE_PART[f.status]);
   return { sql: parts.length ? `where ${parts.join(" and ")}` : "", params };
 }
 
