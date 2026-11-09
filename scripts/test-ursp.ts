@@ -260,7 +260,7 @@ async function main() {
   check(goodRow?.offer_until && Math.abs(new Date(goodRow.offer_until).getTime() - Date.now() - 3 * 86_400_000) < 120_000, "offer_until is kept: 3 days from sending");
   check(convs[sid(1)].msgs.some((m) => m.type === "note" && String(m.content).includes("mention Logan")), "a private note says to mention Logan on a reply");
   const note = String(convs[sid(1)].msgs.find((m) => m.type === "note")?.content ?? "");
-  check(/^\[Upsell Responsive · Recap · version A\] Logan sent the free BFCM offer/.test(note) && note.includes(`valid until ${day3}`) && note.endsWith("If the customer agrees, FL please request collaborator access to the store.") && !/[àáạảãâăèéêìíòóôơùúưđ]/i.test(note), "the private note is in English, with version and the offer's last day", note);
+  check(/^\[Upsell Responsive · Recap · version A\] Logan sent the free BFCM offer/.test(note) && note.includes(`valid until ${day3}`) && note.endsWith("\n\nIf the customer agrees, FL please request collaborator access to the store.") && !/[àáạảãâăèéêìíòóôơùúưđ]/i.test(note), "the private note is in English, with version and the offer's last day", note);
   check(convs[sid(1)].state === "resolved", "the ticket is resolved after");
   check(convs[sid(1)].segments.includes("upsell-responsive"), "the Crisp segment is added");
   check(created === 0, "no new conversation for Recap");
