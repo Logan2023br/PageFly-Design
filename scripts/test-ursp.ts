@@ -200,7 +200,7 @@ async function main() {
 
   console.log("recap (only responsive)");
   check(cfg0.recap_only_responsive === 0, "by default every Recap row is taken");
-  await settings.saveUrspSettings({ recap_only_responsive: 1 });
+  await settings.saveUrspSettings({ recap_only_responsive: 1, ab_split: 0 });
   const sid = (n: number) => `session_aaaaaaaa-0000-0000-0000-${String(n).padStart(12, "0")}`;
   for (const [d, o] of [
     ["good.myshopify.com", {}],
@@ -509,7 +509,7 @@ async function main() {
     const aMsg = core.composeMessage("recap", { store_name: "Rep Global", store_domain: "x.myshopify.com" }, cfgNow, "A");
     check(bMsg !== aMsg && bMsg.includes("Quick question") && bMsg.includes("**REP GLOBAL**") && bMsg.includes("{deadline}"), "B is its own message, names bold capitals");
     const before = await queries.abStats();
-    check(before.B.held === 3 && before.B.sent === 0 && before.A.sent === 4, "held B counted, nothing sent to it", before.B);
+    check(before.B.held === 3 && before.B.sent === 0 && before.A.sent > 4, "held B counted, nothing sent to it; A counts every A sent", { A: before.A.sent, B: before.B });
     /* a run sends nothing to B */
     await core.runJob(true);
     check((await queries.abStats()).B.sent === 0, "the job leaves the held B alone");
@@ -521,13 +521,28 @@ async function main() {
     const bRow = (await p.query("select message from ursp_targets where variant = 'B' and status = 'sent' limit 1")).rows[0];
     check(/Quick question/.test(bRow?.message ?? "") && !/\{deadline\}/.test(bRow?.message ?? ""), "the B message went, its deadline written in");
     check((await queries.listTargets("sent", { variant: "B" })).total === 3, "Bản B filter");
-    /* ab_split: new stores get A or B */
+    /* ab_split: new stores join the half with fewer of their segment — B catches up, then even */
     await settings.saveUrspSettings({ ab_split: 1 });
-    for (let i = 0; i < 6; i++) store(`ab${i}.myshopify.com`);
-    await core.importRecap(Array.from({ length: 6 }, (_, i) => row({ store_domain: `ab${i}.myshopify.com`, session_id: sid(70 + i) })));
-    const vs = (await p.query("select variant from ursp_targets where store_domain like 'ab_.myshopify.com'")).rows.map((r) => r.variant);
-    check(vs.length === 6 && vs.every((v) => v === "A" || v === "B"), "ab_split: each new store gets A or B", vs);
+    const count = async () =>
+      (await p.query<{ a: number; b: number }>(
+        "select count(*) filter (where variant = 'A')::int as a, count(*) filter (where variant = 'B')::int as b from ursp_targets where segment = 'recap' and status <> 'skipped'",
+      )).rows[0];
+    const c0 = await count();
+    const gap = c0.a - c0.b;
+    const k = gap + 4;
+    for (let i = 0; i < k; i++) store(`ab${i}.myshopify.com`);
+    await core.importRecap(Array.from({ length: k }, (_, i) => row({ store_domain: `ab${i}.myshopify.com`, session_id: sid(100 + i) })));
+    const vs = (await p.query("select variant from ursp_targets where store_domain like 'ab%.myshopify.com' order by id")).rows.map((r) => r.variant);
+    check(gap > 0 && vs.slice(0, gap).every((v) => v === "B"), `B behind by ${gap}: the next ${gap} go to B`, vs);
+    const c1 = await count();
+    check(Math.abs(c1.a - c1.b) <= 1, "then the two stay even", c1);
     await settings.saveUrspSettings({ ab_split: 0 });
+    store("alla.myshopify.com");
+    await core.importRecap([row({ store_domain: "alla.myshopify.com", session_id: sid(140) })]);
+    const allA = await target("recap", "alla.myshopify.com");
+    check(allA?.variant === "A", "ab_split 0: A", { v: allA?.variant, st: allA?.status, sk: allA?.skip_code });
+    /* drain the queue the balancing test filled, so the next checks start clean */
+    for (let i = 0; i < 8; i++) await core.runJob(true);
   }
 
   console.log("never twice");

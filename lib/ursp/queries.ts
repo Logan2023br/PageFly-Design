@@ -379,3 +379,20 @@ export function abVerdict(xa: number, na: number, xb: number, nb: number): AbVer
   const needed = d > 0 ? Math.ceil(((1.96 + 0.84) ** 2 * (pa * (1 - pa) + pb * (1 - pb))) / d ** 2) : null;
   return { diff, p: p === null ? null : Math.round(p * 1000) / 1000, needed };
 }
+
+export type AbSegmentRow = { variant: "A" | "B"; segment: Segment; sent: number; held: number; queued: number; read: number; replied: number; agree: number };
+
+/** The same halves split by segment: both should have Recap and Active, in like numbers. */
+export async function abBySegment(): Promise<AbSegmentRow[]> {
+  const { rows } = await (await db()).query<AbSegmentRow>(
+    `select t.variant, t.segment,
+            count(*) filter (where t.status = 'sent')::int as sent,
+            count(*) filter (where t.status = 'held')::int as held,
+            count(*) filter (where t.status in ('pending', 'approved', 'sending'))::int as queued,
+            count(*) filter (where t.status = 'sent' and t.read_at is not null)::int as read,
+            count(*) filter (where t.status = 'sent' and t.replied_at is not null)::int as replied,
+            count(*) filter (where t.reply_intent = 'agree')::int as agree
+       from ursp_targets t where t.variant in ('A', 'B') group by 1, 2 order by 2, 1`,
+  );
+  return rows;
+}

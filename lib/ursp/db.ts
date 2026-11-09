@@ -146,6 +146,15 @@ create table if not exists ursp_settings (
   value      jsonb not null,
   updated_at timestamptz not null default now()
 );
+/* Once, on 2026-11-09: every store messaged before the A/B test got the A
+   message — it is variant A, so the test shows what was really sent. */
+do $$
+begin
+  if not exists (select 1 from ursp_state where key = '_once_variant_a_20261109') then
+    insert into ursp_state (key, value) values ('_once_variant_a_20261109', 'true'::jsonb);
+    update ursp_targets set variant = 'A' where variant is null and status in ('pending', 'approved', 'sending', 'sent', 'failed');
+  end if;
+end $$;
 `;
 
 let ensured: Promise<void> | null = null;

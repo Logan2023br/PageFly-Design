@@ -10,6 +10,7 @@ import { getState, hasUrspDatabase } from "@/lib/ursp/db";
 import {
   SEEN,
   URSP_TABS,
+  abBySegment,
   abStats,
   abVerdict,
   byDay,
@@ -18,6 +19,7 @@ import {
   segmentStats,
   tabCounts,
   type AbArm,
+  type AbSegmentRow,
   type SegmentStats,
   type UrspFilters,
   type UrspTab,
@@ -131,10 +133,11 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
     );
   } else if (tab === "ab") {
     const sample = { store_name: "Sun Coast Elements", store_domain: "x.myshopify.com" };
-    const [arms, held] = await Promise.all([abStats(), listTargets("ab", { ...f, page: f.page })]);
+    const [arms, held, bySeg] = await Promise.all([abStats(), listTargets("ab", { ...f, page: f.page }), abBySegment()]);
     body = (
       <AbView
         arms={arms}
+        bySeg={bySeg}
         held={held}
         heldHref={(p) => qs({ page: String(p) })}
         auto={cfg.mode === "auto"}
@@ -707,6 +710,7 @@ const rateOf = (n: number, of: number) => (of ? (n / of) * 100 : null);
 
 function AbView({
   arms,
+  bySeg,
   held,
   heldHref,
   auto,
@@ -714,6 +718,7 @@ function AbView({
   messages,
 }: {
   arms: Record<"A" | "B", AbArm>;
+  bySeg: AbSegmentRow[];
   held: Awaited<ReturnType<typeof listTargets>>;
   heldHref: (p: number) => string;
   auto: boolean;
@@ -752,10 +757,13 @@ function AbView({
           <div className="grid gap-1">
             <h3 className="text-[14px] font-semibold text-pf-text">A/B test mẫu tin</h3>
             <p className="text-[12.5px] text-pf-muted">
-              Bản A: mẫu hiện tại · Bản B: mẫu mới (mở bằng câu hỏi, ngắn, 1 việc cần làm). Store Recap từ 1/11 được chia ngẫu nhiên nửa A / nửa B theo từng ngày.
+              Bản A: mẫu hiện tại — mọi store đã nhận nó, cả Recap lẫn Active · Bản B: mẫu mới (mở bằng câu hỏi, ngắn, 1 việc cần làm).
             </p>
             <p className="text-[12.5px] text-pf-muted">
-              Store mới: {split ? "đang chia 50/50 A / B (ab_split = 1)" : "nhận bản A (bật chia 50/50: ab_split = 1 ở Cài đặt)"}.
+              Store mới:{" "}
+              {split
+                ? "vào bản đang ít store hơn trong cùng phân khúc — B được bù cho bằng A trước, rồi hai bản chia đều; cả 2 bản đều có Recap và Active."
+                : "nhận bản A (bật chia A/B: ab_split = 1 ở Cài đặt)."}
             </p>
           </div>
           <ReleaseB held={B.held} auto={auto} />
@@ -853,7 +861,59 @@ function AbView({
         </div>
         <p className="text-[11.5px] text-pf-faint">
           Tỷ lệ tính trên số tin đã gửi của từng bản. &quot;Chắc chắn&quot;: kiểm định 2 tỷ lệ, p &lt; 0.05 — chênh lệch nhiều khả năng do mẫu tin, không phải ngẫu nhiên.
-          Store gửi trước khi có A/B không tính.
+        </p>
+      </section>
+
+      <section className="grid gap-2 rounded-pf-card border border-pf-border bg-pf-card p-4">
+        <h3 className="text-[13px] font-semibold text-pf-text">Theo phân khúc</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-[12.5px]">
+            <thead className="text-[11px] uppercase tracking-[0.06em] text-pf-faint">
+              <tr>
+                {["Phân khúc", "Bản", "Đã gửi", "Chờ gửi", "Đang giữ", "Đã xem", "Phản hồi", "Đồng ý"].map((h, i) => (
+                  <th key={h} className={`py-1.5 pr-3 font-semibold ${i > 1 ? "text-right" : ""}`}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(["recap", "active"] as const).flatMap((seg) =>
+                (["A", "B"] as const).map((v) => {
+                  const r = bySeg.find((x) => x.segment === seg && x.variant === v);
+                  const pctOf = (n: number) => (r?.sent ? <span className="text-[11px] text-pf-faint"> {((n / r.sent) * 100).toFixed(1)}%</span> : null);
+                  return (
+                    <tr key={`${seg}${v}`} className="border-t border-pf-border">
+                      <td className="py-1.5 pr-3">
+                        <Pill tone={SEG_TONE[seg]}>{SEGMENTS[seg].label}</Pill>
+                      </td>
+                      <td className="py-1.5 pr-3">
+                        <Pill tone={v === "B" ? "ok" : "primary"}>Bản {v}</Pill>
+                      </td>
+                      <td className="py-1.5 pr-3 text-right text-pf-text">{r?.sent ?? 0}</td>
+                      <td className="py-1.5 pr-3 text-right text-pf-text">{r?.queued ?? 0}</td>
+                      <td className="py-1.5 pr-3 text-right text-pf-text">{r?.held ?? 0}</td>
+                      <td className="py-1.5 pr-3 text-right text-pf-text">
+                        {r?.read ?? 0}
+                        {pctOf(r?.read ?? 0)}
+                      </td>
+                      <td className="py-1.5 pr-3 text-right text-pf-text">
+                        {r?.replied ?? 0}
+                        {pctOf(r?.replied ?? 0)}
+                      </td>
+                      <td className="py-1.5 pr-3 text-right text-pf-text">
+                        {r?.agree ?? 0}
+                        {pctOf(r?.agree ?? 0)}
+                      </td>
+                    </tr>
+                  );
+                }),
+              )}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-[11.5px] text-pf-faint">
+          Recap nhận tin ngay trong ticket support, Active nhận qua hội thoại cũ hoặc email — tỷ lệ tự nhiên khác nhau, nên so A với B trong cùng một phân khúc là chính xác nhất.
         </p>
       </section>
 

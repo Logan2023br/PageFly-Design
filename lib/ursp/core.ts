@@ -340,6 +340,21 @@ const sentReason = (d: UrspTarget, domain: string) =>
   `${SKIP_REASONS.already_sent} — ${d.store_domain === domain ? "" : `cùng email với ${d.store_domain}, `}${SEGMENTS[d.segment].label}${d.sent_at ? ` ${new Date(d.sent_at).toISOString().slice(0, 10)}` : ""}`;
 
 /**
+ * The half a new store joins: whichever has fewer stores of its segment
+ * (sent, queued, or held for B) — so B fills up to A first, then the two
+ * grow evenly, and both always have Recap and Active alike. Even: at random.
+ */
+async function balancedVariant(segment: Segment): Promise<"A" | "B"> {
+  const { rows } = await (await db()).query<{ a: number; b: number }>(
+    `select count(*) filter (where variant = 'A')::int as a, count(*) filter (where variant = 'B')::int as b
+       from ursp_targets where segment = $1 and status <> 'skipped'`,
+    [segment],
+  );
+  const { a, b } = rows[0] ?? { a: 0, b: 0 };
+  return a === b ? (Math.random() < 0.5 ? "A" : "B") : a < b ? "A" : "B";
+}
+
+/**
  * Looks a store up and keeps it: skipped with the reason, or with the
  * message — pending (manual) or approved (auto). Returns the id, or null
  * when the store already has a target there is no reason to touch.
@@ -385,8 +400,8 @@ async function addTarget(n: NewTarget, cfg: UrspSettings, actor: string): Promis
   }
 
   const status = skip ? "skipped" : n.hold ? "held" : cfg.mode === "auto" ? "approved" : "pending";
-  /* ab_split on: each store that goes out now gets A or B at random; a held one is given its half later */
-  const variant = skip || n.hold || !cfg.ab_split ? null : Math.random() < 0.5 ? "A" : "B";
+  /* ab_split on: the half with fewer stores of this segment; off: A. A held one is given its half later. */
+  const variant = skip || n.hold ? null : cfg.ab_split ? await balancedVariant(n.segment) : "A";
   const message = skip ? null : composeMessage(n.segment, { store_name: facts.store_name, store_domain: n.store_domain }, cfg, variant);
   return tx(async (c) => {
     const vals = [
