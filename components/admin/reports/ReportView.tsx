@@ -153,11 +153,11 @@ export function ReportView({ report }: { report: Report }) {
 
       {report.data.byType && report.data.byType.length > 0 && (
         <section className="rp-section">
-          <h2>Theo loại khách (gửi trong tuần)</h2>
+          <h2>{def.byTypeTitle ?? "Theo loại khách (gửi trong tuần)"}</h2>
           <table>
             <thead>
               <tr>
-                <th>Type User</th>
+                <th>{def.byTypeHead ?? "Type User"}</th>
                 <th className="rp-num">Gửi</th>
                 <th className="rp-num">Đọc</th>
                 <th className="rp-num">Phản hồi</th>

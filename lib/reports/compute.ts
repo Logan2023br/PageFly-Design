@@ -5,6 +5,7 @@ import { SSU_KIND_LABEL } from "@/lib/storeSetUpsell/types";
 import { db as ucp2Db } from "@/lib/ucp2/db";
 import { UPGRADE_KINDS } from "@/lib/upsell/adminQueries";
 import { db as upsellDb } from "@/lib/upsell/db";
+import { db as urspDb } from "@/lib/ursp/db";
 import { KIND_LABEL } from "@/lib/upsell/format";
 import { addWeeks, type ReportData, type ReportUpsell } from "./defs";
 
@@ -168,7 +169,70 @@ async function ucp2(week: string): Promise<Omit<ReportData, "prev">> {
   return { metrics: m, messages: m.c_sent ? [{ label: "Tin mời Collection Pages", n: m.c_sent }] : [], byType: byType.rows };
 }
 
-const COMPUTE: Record<ReportUpsell, (week: string) => Promise<Omit<ReportData, "prev">>> = { bpu, ssu, ucp2 };
+async function ursp(week: string): Promise<Omit<ReportData, "prev">> {
+  const p = await urspDb();
+  const sent = inW("t.sent_at");
+  const [cohort, activity, messages, byType] = await Promise.all([
+    p.query<Row>(
+      `select count(*) filter (where ${sent}) as c_sent,
+              count(*) filter (where ${sent} and t.segment = 'recap') as c_sent_recap,
+              count(*) filter (where ${sent} and t.segment = 'active') as c_sent_active,
+              count(*) filter (where ${sent} and coalesce(t.variant, 'A') = 'A') as c_sent_a,
+              count(*) filter (where ${sent} and t.variant = 'B') as c_sent_b,
+              count(*) filter (where ${sent} and t.read_at is not null) as c_read,
+              count(*) filter (where ${sent} and t.followup_sent_at is not null) as c_followup,
+              count(*) filter (where ${sent} and t.replied_at is not null) as c_replied,
+              count(*) filter (where ${sent} and t.reply_intent = 'agree') as c_agree,
+              count(*) filter (where ${sent} and t.reply_intent = 'decline') as c_decline,
+              count(*) filter (where ${sent} and t.done_at is not null) as c_done,
+              count(*) filter (where ${sent} and t.upgraded_at is not null) as c_upgraded,
+              coalesce(sum(t.upgraded_price) filter (where ${sent} and t.upgraded_at is not null), 0) as c_mrr,
+              count(*) filter (where ${sent} and t.reviewed_at is not null) as c_reviewed,
+              count(*) filter (where ${sent} and t.mood = 'happy') as c_happy,
+              count(*) filter (where ${sent} and t.uninstalled_at is not null) as c_uninstalled
+         from ursp_targets t`,
+      [week],
+    ),
+    p.query<Row>(
+      `select count(*) filter (where ${inW("t.created_at")}) as a_found,
+              count(*) filter (where ${inW("t.created_at")} and t.status = 'skipped') as a_skipped,
+              count(*) filter (where ${inW("t.read_at")}) as a_read,
+              count(*) filter (where ${inW("t.replied_at")}) as a_replied,
+              count(*) filter (where ${inW("t.done_at")}) as a_done,
+              count(*) filter (where ${inW("t.upgraded_at")}) as a_upgraded,
+              coalesce(sum(t.upgraded_price) filter (where ${inW("t.upgraded_at")}), 0) as a_mrr,
+              count(*) filter (where ${inW("t.reviewed_at")}) as a_reviewed,
+              count(*) filter (where t.sent_at is not null and ${inW("t.uninstalled_at")}) as a_uninstalled
+         from ursp_targets t`,
+      [week],
+    ),
+    p.query<{ label: string; n: number }>(
+      `select k.label, k.n from (
+         select 'Tin mời bản A' as label, count(*) filter (where ${sent} and coalesce(t.variant, 'A') = 'A')::int as n, 1 as o from ursp_targets t
+         union all select 'Tin mời bản B', count(*) filter (where ${sent} and t.variant = 'B')::int, 2 from ursp_targets t
+         union all select 'Tin nhắc lại', count(*) filter (where ${inW("t.followup_sent_at")})::int, 3 from ursp_targets t
+       ) k where k.n > 0 order by k.o`,
+      [week],
+    ),
+    p.query<{ type: string; sent: number; read: number; replied: number; upgraded: number; reviewed: number }>(
+      `select initcap(t.segment) || ' · bản ' || coalesce(t.variant, 'A') as type, count(*)::int as sent,
+              count(*) filter (where t.read_at is not null)::int as read,
+              count(*) filter (where t.replied_at is not null)::int as replied,
+              count(*) filter (where t.upgraded_at is not null)::int as upgraded,
+              count(*) filter (where t.reviewed_at is not null)::int as reviewed
+         from ursp_targets t where ${sent} group by 1 order by 1`,
+      [week],
+    ),
+  ]);
+  const msgs = messages.rows;
+  return {
+    metrics: { ...nums(cohort.rows[0]), ...nums(activity.rows[0]), a_messages: msgs.reduce((s, m) => s + m.n, 0) },
+    messages: msgs,
+    byType: byType.rows,
+  };
+}
+
+const COMPUTE: Record<ReportUpsell, (week: string) => Promise<Omit<ReportData, "prev">>> = { bpu, ssu, ucp2, ursp };
 
 /** The week, and the one before it for the arrows — both as of now. */
 export async function computeReport(upsell: ReportUpsell, week: string): Promise<ReportData> {
@@ -182,6 +246,7 @@ export async function firstSentAt(upsell: ReportUpsell): Promise<Date | null> {
     bpu: async () => (await upsellDb()).query<{ at: Date | null }>(`select min(sent_at) as at from upsell_leads where "group" = 'test'`),
     ssu: async () => (await ssuDb()).query<{ at: Date | null }>("select min(sent_at) as at from ssu_customers"),
     ucp2: async () => (await ucp2Db()).query<{ at: Date | null }>("select min(sent_at) as at from ucp2_rows"),
+    ursp: async () => (await urspDb()).query<{ at: Date | null }>("select min(sent_at) as at from ursp_targets"),
   }[upsell];
   const at = (await q()).rows[0]?.at;
   return at ? new Date(at) : null;

@@ -1355,10 +1355,12 @@ export async function targetAction(id: string, action: TargetAction, by: string,
       if (t.segment === "active" && !t.email) throw new UpsellError("Store này không có email để mở hội thoại.", 409);
       const dup = await alreadySent(t.id, t.store_domain, t.email);
       if (dup) throw new UpsellError(`Không gửi: ${sentReason(dup, t.store_domain)}.`, 409);
-      const message = msg ?? composeMessage(t.segment, t, cfg, t.variant);
+      /* a store sent after all joins the A/B test like any other */
+      const variant = t.variant ?? (cfg.ab_split ? await balancedVariant(t.segment) : "A");
+      const message = msg ?? composeMessage(t.segment, t, cfg, variant);
       return set(
-        `status = '${cfg.mode === "auto" ? "approved" : "pending"}', skip_code = null, skip_reason = null, message = $2, approved_by = $3`,
-        [message, cfg.mode === "auto" ? by : null],
+        `status = '${cfg.mode === "auto" ? "approved" : "pending"}', skip_code = null, skip_reason = null, message = $2, approved_by = $3, variant = $4`,
+        [message, cfg.mode === "auto" ? by : null, variant],
         "send_anyway",
         { was: t.skip_code },
       );

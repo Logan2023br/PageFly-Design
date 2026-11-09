@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AdminShell } from "@/components/admin/AdminShell";
+import { ReportsLink } from "@/components/admin/reports/ReportsLink";
 import { adminGate } from "@/components/admin/adminGate";
 import { FIELD } from "@/components/admin/fieldClass";
 import { CrispLink, Pill } from "@/components/admin/upsell/bits";
@@ -199,7 +200,12 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
       current="ursp"
       title="Upsell Responsive"
       subtitle="Mùa BFMC: Logan mời khách review responsive mọi page + chỉnh sửa miễn phí. Phân khúc Recap (ticket support mới) và Active (store hoạt động hôm nay)."
-      actions={<RunControls on={run.on} />}
+      actions={
+        <div className="flex flex-wrap items-start gap-2">
+          <ReportsLink upsell="ursp" />
+          <RunControls on={run.on} />
+        </div>
+      }
     >
       <div className="grid gap-4">
         <StatusBar run={run} cfg={cfg} over={campaignOver(cfg)} recap={recap} active={active} job={job} backfill={backfill} />

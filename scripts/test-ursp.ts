@@ -584,6 +584,22 @@ async function main() {
   }
   check(refusedTwin, "Vẫn gửi refuses a store / email already sent");
 
+  console.log("weekly report");
+  {
+    const defs = await import("../lib/reports/defs");
+    const { computeReport } = await import("../lib/reports/compute");
+    const wk = defs.weekOf(new Date());
+    const r = await computeReport("ursp", wk);
+    const m = r.metrics;
+    const all = (await p.query("select count(*)::int as n from ursp_targets where sent_at is not null and sent_at >= ($1::date::timestamp at time zone 'Asia/Ho_Chi_Minh')", [wk])).rows[0].n;
+    check(m.c_sent === all && m.c_sent > 0, "this week's sends counted", { c_sent: m.c_sent, all });
+    check(m.c_sent_recap + m.c_sent_active === m.c_sent && m.c_sent_a + m.c_sent_b === m.c_sent, "split by segment and by version add up", m);
+    check(m.c_replied >= 1 && m.c_agree >= 1 && m.c_upgraded >= 1, "replies, a yes and an upgrade are there");
+    check(r.messages.some((x) => x.label === "Tin mời bản B") && r.messages.some((x) => x.label === "Tin nhắc lại"), "messages per kind: A, B, reminder", r.messages);
+    check((r.byType ?? []).some((t) => /^Recap · bản [AB]$/.test(t.type)) && (r.byType ?? []).some((t) => /^Active · bản [AB]$/.test(t.type)), "segment × version table", r.byType);
+    check(defs.REPORTS.ursp.byTypeHead === "Phân khúc · bản", "its own table heading");
+  }
+
   console.log("pause");
   await settings.setRunning(false, "admin:test");
   const sentBefore = convs[sid(2)].msgs.length;

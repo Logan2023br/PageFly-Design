@@ -17,7 +17,7 @@
 
 import type { AdminSection } from "@/lib/adminSections";
 
-export const REPORT_UPSELLS = ["ssu", "ucp2", "bpu"] as const;
+export const REPORT_UPSELLS = ["ssu", "ucp2", "bpu", "ursp"] as const;
 export type ReportUpsell = (typeof REPORT_UPSELLS)[number];
 
 export type Item = {
@@ -39,6 +39,9 @@ export type ReportDef = {
   /** the tiles at the top */
   headline: Item[];
   sections: Section[];
+  /** the byType table's title and first column, where the upsell has one */
+  byTypeTitle?: string;
+  byTypeHead?: string;
 };
 
 const COHORT_NOTE = "Khách nhận tin đầu tiên trong tuần, và những gì họ đã làm tính tới lúc lập báo cáo. Tỷ lệ tính trên số khách này.";
@@ -140,6 +143,62 @@ export const REPORTS: Record<ReportUpsell, ReportDef> = {
         ],
       },
     ],
+  },
+  ursp: {
+    label: "Upsell Responsive",
+    section: "ursp",
+    href: "/design/admin/responsive",
+    blurb: "Mùa BFMC: Logan mời khách review responsive mọi page + chỉnh sửa miễn phí (ưu đãi 3 ngày) — phân khúc Recap (ticket support) và Active (store hoạt động), A/B test 2 mẫu tin.",
+    headline: [
+      { key: "c_sent", label: "Khách được gửi" },
+      { key: "c_read", label: "Đã xem tin", of: "c_sent" },
+      { key: "c_replied", label: "Đã phản hồi", of: "c_sent" },
+      { key: "c_agree", label: "Đồng ý", of: "c_sent" },
+      { key: "c_upgraded", label: "Đã nâng cấp", of: "c_sent" },
+      { key: "c_mrr", label: "MRR tăng", money: true },
+    ],
+    sections: [
+      {
+        title: "Khách gửi trong tuần",
+        note: COHORT_NOTE,
+        items: [
+          { key: "c_sent", label: "Khách được gửi tin mời" },
+          { key: "c_sent_recap", label: "· Phân khúc Recap", of: "c_sent" },
+          { key: "c_sent_active", label: "· Phân khúc Active", of: "c_sent" },
+          { key: "c_sent_a", label: "· Bản A", of: "c_sent" },
+          { key: "c_sent_b", label: "· Bản B", of: "c_sent" },
+          { key: "c_read", label: "Đã xem tin", of: "c_sent" },
+          { key: "c_followup", label: "Đã nhắc lại (xem mà chưa reply)", of: "c_sent" },
+          { key: "c_replied", label: "Đã phản hồi", of: "c_sent" },
+          { key: "c_agree", label: "· Đồng ý", of: "c_replied" },
+          { key: "c_decline", label: "· Từ chối", of: "c_replied" },
+          { key: "c_done", label: "Đã xử lý xong", of: "c_sent" },
+          { key: "c_upgraded", label: "Đã nâng cấp", of: "c_sent" },
+          { key: "c_mrr", label: "MRR tăng", money: true },
+          { key: "c_reviewed", label: "Review 5★", of: "c_sent" },
+          { key: "c_happy", label: "Khách hài lòng", of: "c_replied" },
+          { key: "c_uninstalled", label: "Đã gỡ app", of: "c_sent" },
+        ],
+      },
+      {
+        title: "Hoạt động trong tuần",
+        note: ACTIVITY_NOTE,
+        items: [
+          { key: "a_found", label: "Store được xét (Recap + Active)" },
+          { key: "a_skipped", label: "· Bị loại (không đủ điều kiện)", of: "a_found" },
+          { key: "a_messages", label: "Tin nhắn đã gửi" },
+          { key: "a_read", label: "Khách xem tin" },
+          { key: "a_replied", label: "Khách phản hồi lần đầu" },
+          { key: "a_done", label: "Khách được xử lý xong" },
+          { key: "a_upgraded", label: "Lượt nâng cấp" },
+          { key: "a_mrr", label: "MRR tăng", money: true },
+          { key: "a_reviewed", label: "Lượt review 5★" },
+          { key: "a_uninstalled", label: "Lượt gỡ app" },
+        ],
+      },
+    ],
+    byTypeTitle: "Theo phân khúc và bản tin (gửi trong tuần)",
+    byTypeHead: "Phân khúc · bản",
   },
   bpu: {
     label: "Upsell Build 2 pages",
