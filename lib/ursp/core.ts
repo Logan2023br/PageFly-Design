@@ -814,7 +814,9 @@ async function scanActive(cfg: UrspSettings): Promise<ActiveResult> {
 const tag = (t: Pick<UrspTarget, "segment" | "variant">) => `[Upsell Responsive · ${SEGMENTS[t.segment].label}${t.variant ? ` · version ${t.variant}` : ""}]`;
 
 /** Fixing their pages needs their store: whoever is on the ticket asks for it — its own line, under the note. */
-const ACCESS = "If the customer agrees, FL please request collaborator access to the store.";
+const ACCESS =
+  "If the customer agrees, FL please request collaborator access to the store.\n" +
+  "Please tell the customer: our TS team will access the store and check the mobile responsive layout of the pages from 8 AM to 5 PM (GMT+7), Monday to Friday.";
 
 const noteText = (t: Pick<UrspTarget, "segment" | "variant">, cfg: UrspSettings, until: Date | null) =>
   `${tag(t)} ${cfg.sender_name} sent the free BFCM offer: a responsive review of all PageFly pages + free fixes` +
