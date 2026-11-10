@@ -726,14 +726,15 @@ async function main() {
 
   console.log("dev / bad-review segments");
   {
-    await settings.saveUrspSettings({ mode: "auto", ab_split: 0 });
+    /* the setting says bad-review, Crisp has badreview: the same segment */
+    await settings.saveUrspSettings({ mode: "auto", ab_split: 0, blocked_segments: "dev, bad-review" });
     store("devseg.myshopify.com");
     conv(sid(150), "devseg@x.test", now - 3 * 86_400_000);
     convs[sid(150)].segments = ["dev"];
     store("badrev.myshopify.com");
     conv(sid(151), "other@x.test", now - 3 * 86_400_000);
     conv("session_cccccccc-0000-0000-0000-000000000001", "badrev@x.test", now - 40 * 86_400_000);
-    convs["session_cccccccc-0000-0000-0000-000000000001"].segments = ["Bad-Review"];
+    convs["session_cccccccc-0000-0000-0000-000000000001"].segments = ["badreview"];
     store("late.myshopify.com");
     conv(sid(152), "late@x.test", now - 3 * 86_400_000);
     await core.importRecap([
@@ -742,7 +743,7 @@ async function main() {
       row({ store_domain: "late.myshopify.com", session_id: sid(152) }),
     ]);
     check((await target("recap", "devseg.myshopify.com"))?.skip_code === "blocked_segment", "the ticket has the dev segment: no message");
-    check((await target("recap", "badrev.myshopify.com"))?.skip_code === "blocked_segment", "another conversation of the same email has bad-review: no message");
+    check((await target("recap", "badrev.myshopify.com"))?.skip_code === "blocked_segment", "another conversation of the same email has badreview: no message");
     check((await target("recap", "late.myshopify.com"))?.status === "approved", "a clean customer is queued");
     /* marked after it was queued: the last check stops it */
     convs[sid(152)].segments = ["dev"];

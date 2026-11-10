@@ -346,13 +346,12 @@ const sentReason = (d: UrspTarget, domain: string) =>
  * of their Crisp conversations — null when there is none.
  */
 async function blockedBy(cfg: UrspSettings, email: string | null, sid: string | null): Promise<string | null> {
-  const blocked = cfg.blocked_segments
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-  if (!blocked.length || (!email && !sid)) return null;
+  /* spelled loosely: "bad-review", "badreview" and "Bad Review" are one segment */
+  const key = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+  const blocked = new Set(cfg.blocked_segments.split(",").map(key).filter(Boolean));
+  if (!blocked.size || (!email && !sid)) return null;
   const have = await customerSegments(email, sid);
-  return blocked.find((b) => have.has(b)) ?? null;
+  return [...have].find((h) => blocked.has(key(h))) ?? null;
 }
 
 const blockedReason = (seg: string) => `Khách có segment "${seg}" trên Crisp`;
