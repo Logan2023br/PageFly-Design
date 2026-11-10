@@ -9,6 +9,7 @@ import {
   removeSegment,
   conversationMessages,
   crispSender,
+  customerSegments,
   resolveConversation,
   reviewCheck,
   sendInConversation,
@@ -341,6 +342,22 @@ const sentReason = (d: UrspTarget, domain: string) =>
   `${SKIP_REASONS.already_sent} — ${d.store_domain === domain ? "" : `cùng email với ${d.store_domain}, `}${SEGMENTS[d.segment].label}${d.sent_at ? ` ${new Date(d.sent_at).toISOString().slice(0, 10)}` : ""}`;
 
 /**
+ * A segment that says "leave this customer alone" (dev, bad-review…) on any
+ * of their Crisp conversations — null when there is none.
+ */
+async function blockedBy(cfg: UrspSettings, email: string | null, sid: string | null): Promise<string | null> {
+  const blocked = cfg.blocked_segments
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  if (!blocked.length || (!email && !sid)) return null;
+  const have = await customerSegments(email, sid);
+  return blocked.find((b) => have.has(b)) ?? null;
+}
+
+const blockedReason = (seg: string) => `Khách có segment "${seg}" trên Crisp`;
+
+/**
  * The half a new store joins: whichever has fewer stores of its segment
  * (sent, queued, or held for B) — so B fills up to A first, then the two
  * grow evenly, and both always have Recap and Active alike. Even: at random.
@@ -384,6 +401,10 @@ async function addTarget(n: NewTarget, cfg: UrspSettings, actor: string): Promis
   if (!skip) {
     const dup = await alreadySent(same?.id ?? null, n.store_domain, facts.email);
     if (dup) skip = { code: "already_sent", reason: sentReason(dup, n.store_domain) };
+  }
+  if (!skip) {
+    const seg = await blockedBy(cfg, facts.email, n.session_id ?? null);
+    if (seg) skip = { code: "blocked_segment", reason: blockedReason(seg) };
   }
   let session_id = n.session_id ?? null;
   let ticket_link = n.ticket_link ?? null;
@@ -878,6 +899,15 @@ async function sendOne(t: UrspTarget, cfg: UrspSettings, actor: string): Promise
     });
     return;
   }
+  /* the customer may have been marked since the store was found */
+  const seg = await blockedBy(cfg, t.email, t.session_id);
+  if (seg) {
+    await tx(async (c) => {
+      await c.query("update ursp_targets set status = 'skipped', skip_code = 'blocked_segment', skip_reason = $2, updated_at = now() where id = $1", [t.id, blockedReason(seg)]);
+      await logEvent(c, t.id, "skipped", actor, { code: "blocked_segment", segment: seg });
+    });
+    return;
+  }
   const draft = t.message?.trim() || composeMessage(t.segment, t, cfg, t.variant);
   const until = offerUntil(cfg);
   const text = withDeadline(draft, until);
@@ -1024,6 +1054,11 @@ async function sendFollowups(cfg: UrspSettings): Promise<{ sent: number; errors:
           t.id,
           new Date(lastAt + cfg.quiet_minutes * 60_000).toISOString(),
         ]);
+        continue;
+      }
+      /* marked dev / bad-review since: no reminder */
+      if (await blockedBy(cfg, t.email, t.session_id)) {
+        await skip(t.id);
         continue;
       }
       /* the offer ran out while it waited: no reminder */

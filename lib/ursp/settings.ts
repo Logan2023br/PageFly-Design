@@ -55,6 +55,8 @@ export const URSP_DEFAULTS = {
   quiet_minutes: 30,
   /** how long a sent store is followed (read, reply, upgrade, review) */
   tracking_days: 45,
+  /** a customer with any of these Crisp segments gets nothing from this program, comma separated */
+  blocked_segments: "dev, bad-review",
   /** added to the conversation on Crisp when the customer agrees to the offer */
   crisp_segment: "upsell-responsive",
 } as const;
@@ -89,6 +91,7 @@ export const URSP_HELP: Record<UrspKey, string> = {
   active_per_scan: "Mỗi lần quét (1 tiếng) xét tối đa bấy nhiêu store Active mới",
   quiet_minutes: "Hội thoại có tin nhắn trong bấy nhiêu phút gần nhất (support đang chat) thì tin đợi, thử lại sau",
   tracking_days: "Theo dõi store đã gửi (đọc, phản hồi, nâng cấp, review) trong bấy nhiêu ngày",
+  blocked_segments: "Khách có segment nào trong danh sách này (trên bất kỳ hội thoại Crisp nào) thì không gửi tin mời, không nhắc lại. Cách nhau dấu phẩy",
   crisp_segment: "Segment gắn vào hội thoại trên Crisp khi khách reply đồng ý (Haiku đọc). Để trống: không gắn",
 };
 

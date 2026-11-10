@@ -688,6 +688,33 @@ async function main() {
     check(refused, "an empty note is refused");
   }
 
+  console.log("dev / bad-review segments");
+  {
+    await settings.saveUrspSettings({ mode: "auto", ab_split: 0 });
+    store("devseg.myshopify.com");
+    conv(sid(150), "devseg@x.test", now - 3 * 86_400_000);
+    convs[sid(150)].segments = ["dev"];
+    store("badrev.myshopify.com");
+    conv(sid(151), "other@x.test", now - 3 * 86_400_000);
+    conv("session_cccccccc-0000-0000-0000-000000000001", "badrev@x.test", now - 40 * 86_400_000);
+    convs["session_cccccccc-0000-0000-0000-000000000001"].segments = ["Bad-Review"];
+    store("late.myshopify.com");
+    conv(sid(152), "late@x.test", now - 3 * 86_400_000);
+    await core.importRecap([
+      row({ store_domain: "devseg.myshopify.com", session_id: sid(150) }),
+      row({ store_domain: "badrev.myshopify.com", session_id: sid(151) }),
+      row({ store_domain: "late.myshopify.com", session_id: sid(152) }),
+    ]);
+    check((await target("recap", "devseg.myshopify.com"))?.skip_code === "blocked_segment", "the ticket has the dev segment: no message");
+    check((await target("recap", "badrev.myshopify.com"))?.skip_code === "blocked_segment", "another conversation of the same email has bad-review: no message");
+    check((await target("recap", "late.myshopify.com"))?.status === "approved", "a clean customer is queued");
+    /* marked after it was queued: the last check stops it */
+    convs[sid(152)].segments = ["dev"];
+    for (let i = 0; i < 3; i++) await core.runJob(true);
+    const late = await target("recap", "late.myshopify.com");
+    check(late?.status === "skipped" && late.skip_code === "blocked_segment" && !convs[sid(152)].msgs.some((m) => m.from === "operator"), "marked dev before sending: never sent", late?.status);
+  }
+
   console.log("pause");
   await settings.setRunning(false, "admin:test");
   const sentBefore = convs[sid(2)].msgs.length;

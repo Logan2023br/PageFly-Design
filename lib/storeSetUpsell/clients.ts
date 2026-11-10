@@ -212,6 +212,7 @@ export type CrispConversation = {
   meta?: {
     email?: string;
     nickname?: string;
+    segments?: string[];
     data?: Record<string, unknown>;
     subject?: string;
     origin?: string;
@@ -354,6 +355,42 @@ export async function addSegment(sid: string, segment: string): Promise<void> {
   if (have.includes(segment)) return;
   const w = await crisp("PATCH", `/conversation/${sid}/meta`, { segments: [...have, segment] });
   if (!ok(w)) throw new Error(`Crisp segment ${w.status}: ${w.body?.reason ?? w.text.slice(0, 120)}`);
+}
+
+/**
+ * Every segment the customer carries on Crisp: those of `sid` (the ticket at
+ * hand) and of every conversation with their email. A conversation the
+ * list gives without its segments is asked for them (a few at most).
+ */
+export async function customerSegments(email: string | null, sid: string | null): Promise<Set<string>> {
+  const out = new Set<string>();
+  const metaOf = async (id: string) => {
+    const r = await crisp<{ segments?: string[] }>("GET", `/conversation/${id}/meta`);
+    if (ok(r) && Array.isArray(r.body?.data?.segments)) for (const s of r.body.data.segments) out.add(String(s).trim().toLowerCase());
+  };
+  const seen = new Set<string>();
+  if (sid) {
+    seen.add(sid);
+    await metaOf(sid);
+  }
+  const want = email?.trim().toLowerCase();
+  if (want) {
+    let asked = 0;
+    for (let page = 1; page <= 3; page++) {
+      const q: URLSearchParams = new URLSearchParams({ search_query: want, search_type: "text", per_page: "50" });
+      const r: Answer<CrispBody<CrispConversation[]>> = await crisp<CrispConversation[]>("GET", `/conversations/${page}?${q}`);
+      if (!ok(r)) throw new Error(`Crisp search ${r.status}: ${r.body?.reason ?? r.text.slice(0, 120)}`);
+      const list: CrispConversation[] = Array.isArray(r.body?.data) ? r.body.data : [];
+      for (const c of list as CrispConversation[]) {
+        if (!c.session_id || seen.has(c.session_id) || (c.meta?.email ?? "").trim().toLowerCase() !== want) continue;
+        seen.add(c.session_id);
+        if (Array.isArray(c.meta?.segments)) for (const s of c.meta.segments) out.add(String(s).trim().toLowerCase());
+        else if (asked++ < 10) await metaOf(c.session_id);
+      }
+      if (list.length < 50) break;
+    }
+  }
+  return out;
 }
 
 /** Takes a segment off a conversation, keeping the others. */
