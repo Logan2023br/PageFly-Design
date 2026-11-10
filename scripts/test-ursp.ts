@@ -262,7 +262,7 @@ async function main() {
   const note = String(convs[sid(1)].msgs.find((m) => m.type === "note")?.content ?? "");
   check(/^\[Upsell Responsive · Recap · version A\] Logan sent the free BFCM offer/.test(note) && note.includes(`valid until ${day3}`) && note.includes("\n\nIf the customer agrees, FL please request collaborator access to the store.\nPlease tell the customer: our TS team will access the store and check the mobile responsive layout of the pages from 8 AM to 5 PM (GMT+7), Monday to Friday.") && note.endsWith("Monday to Friday.") && !/[àáạảãâăèéêìíòóôơùúưđ]/i.test(note), "the private note is in English, with version and the offer's last day", note);
   check(convs[sid(1)].state === "resolved", "the ticket is resolved after");
-  check(convs[sid(1)].segments.includes("upsell-responsive"), "the Crisp segment is added");
+  check(!convs[sid(1)].segments.includes("upsell-responsive"), "no Crisp segment when the offer goes");
   check(created === 0, "no new conversation for Recap");
   const busy = await target("recap", "busy.myshopify.com");
   check(busy?.status === "approved" && busy.wait_until, "a ticket with a message a minute ago waits", busy?.status);
@@ -302,6 +302,7 @@ async function main() {
   const t2 = (await target("recap", "good.myshopify.com"))!;
   check(t2.read_at && t2.replied_at && t2.replies === 1, "read and the reply are seen");
   check(t2.reply_intent === "agree" && t2.mood === "happy", "Haiku reads the reply: agrees, happy", { i: t2.reply_intent, m: t2.mood });
+  check(convs[sid(1)].segments.includes("upsell-responsive"), "the customer agreed: the Crisp segment is added");
   const mention = convs[sid(1)].msgs.find((m) => m.type === "note" && m.mentions?.includes("u-logan"));
   check(mention && String(mention.content).includes("@Logan") && String(mention.content).includes("FL please request collaborator access"), "a note mentions Logan (his Crisp user id) and asks FL for access");
   check(t2.first_review === 0, "the review baseline is taken at the first look");
@@ -585,6 +586,24 @@ async function main() {
     refusedTwin = true;
   }
   check(refusedTwin, "Vẫn gửi refuses a store / email already sent");
+
+  console.log("segment cleanup");
+  {
+    const sentRows = (await p.query("select session_id, reply_intent from ursp_targets where status = 'sent' and session_id is not null")).rows;
+    for (const r of sentRows) if (convs[r.session_id]) convs[r.session_id].segments = ["upsell-responsive", "vip"];
+    await core.startSegmentCleanup("admin:tu");
+    let st: import("../lib/ursp/core").SegmentCleanup | null = null;
+    for (let i = 0; i < 200; i++) {
+      st = await (await import("../lib/ursp/db")).getState<import("../lib/ursp/core").SegmentCleanup>("segment_cleanup");
+      if (st && !st.running) break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    const agreed = sentRows.filter((r) => r.reply_intent === "agree" && convs[r.session_id]);
+    const others = sentRows.filter((r) => r.reply_intent !== "agree" && convs[r.session_id]);
+    check(st && !st.running && st.kept === sentRows.filter((r) => r.reply_intent === "agree").length, "cleanup ran", st);
+    check(agreed.length > 0 && agreed.every((r) => convs[r.session_id].segments.includes("upsell-responsive")), "those who agreed keep the segment");
+    check(others.length > 0 && others.every((r) => !convs[r.session_id].segments.includes("upsell-responsive") && convs[r.session_id].segments.includes("vip")), "the rest lose it, other segments stay");
+  }
 
   console.log("weekly report");
   {

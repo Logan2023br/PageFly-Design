@@ -356,6 +356,17 @@ export async function addSegment(sid: string, segment: string): Promise<void> {
   if (!ok(w)) throw new Error(`Crisp segment ${w.status}: ${w.body?.reason ?? w.text.slice(0, 120)}`);
 }
 
+/** Takes a segment off a conversation, keeping the others. */
+export async function removeSegment(sid: string, segment: string): Promise<boolean> {
+  const r = await crisp<{ segments?: string[] }>("GET", `/conversation/${sid}/meta`);
+  if (!ok(r)) throw new Error(`Crisp meta ${r.status}`);
+  const have = Array.isArray(r.body?.data?.segments) ? r.body.data.segments : [];
+  if (!have.includes(segment)) return false;
+  const w = await crisp("PATCH", `/conversation/${sid}/meta`, { segments: have.filter((s) => s !== segment) });
+  if (!ok(w)) throw new Error(`Crisp segment ${w.status}: ${w.body?.reason ?? w.text.slice(0, 120)}`);
+  return true;
+}
+
 /**
  * Opens a new conversation for the email and writes the message in it, as
  * BPU Ops does for the first upsell message: the email and store on the

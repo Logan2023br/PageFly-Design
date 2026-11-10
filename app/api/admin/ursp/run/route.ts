@@ -1,6 +1,6 @@
 import { fail, json, readJson } from "@/lib/upsell/api";
 import { readAdminName, readAdminSection } from "@/lib/session";
-import { releaseHeldB, runJob, runSend, startRecapBackfill } from "@/lib/ursp/core";
+import { releaseHeldB, runJob, runSend, startRecapBackfill, startSegmentCleanup } from "@/lib/ursp/core";
 import { runState, setRunning } from "@/lib/ursp/settings";
 
 /* POST /api/admin/ursp/run — {action: "start"} Bắt đầu, {action: "pause"}
@@ -21,6 +21,7 @@ export async function POST(req: Request) {
       if (run.on) void runJob(true).catch((err) => console.error("[ursp] start run", err));
       return json({ ok: true, run });
     }
+    if (action === "segment_cleanup") return json({ ok: true, cleanup: await startSegmentCleanup(by) });
     if (action === "release_b") return json({ ok: true, released: await releaseHeldB(by) });
     if (action === "backfill") return json({ ok: true, backfill: await startRecapBackfill(String(from ?? ""), by, split === true) });
     if (action === "run") {

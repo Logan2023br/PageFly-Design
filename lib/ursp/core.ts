@@ -6,6 +6,7 @@ import {
   ac2Stores,
   ac2UpgradeTime,
   addSegment,
+  removeSegment,
   conversationMessages,
   crispSender,
   resolveConversation,
@@ -665,6 +666,42 @@ export async function startRecapBackfill(from: string, by: string, split = false
   return state;
 }
 
+export type SegmentCleanup = { at: string; by: string; running: boolean; checked: number; removed: number; kept: number; errors: number };
+
+/**
+ * Once: the segment came with every offer before it meant "agreed" — it is
+ * taken off the conversations of those who did not agree. In the
+ * background, a little at a time (Crisp limits bursts).
+ */
+export async function startSegmentCleanup(by: string): Promise<SegmentCleanup> {
+  const cfg = await getUrspSettings();
+  const seg = cfg.crisp_segment.trim();
+  if (!seg) throw new UpsellError("Chưa đặt crisp_segment.", 409);
+  const cur = await getState<SegmentCleanup>("segment_cleanup");
+  if (cur?.running && Date.now() - new Date(cur.at).getTime() < 60 * 60_000) throw new UpsellError("Đang dọn — đợi xong.", 409);
+  const state: SegmentCleanup = { at: new Date().toISOString(), by, running: true, checked: 0, removed: 0, kept: 0, errors: 0 };
+  await setState("segment_cleanup", state);
+  void (async () => {
+    const { rows } = await (await db()).query<Pick<UrspTarget, "session_id" | "reply_intent">>(
+      "select session_id, reply_intent from ursp_targets where status = 'sent' and session_id is not null",
+    );
+    for (const r of rows) {
+      state.checked++;
+      if (r.reply_intent === "agree") state.kept++;
+      else
+        try {
+          if (await removeSegment(r.session_id!, seg)) state.removed++;
+        } catch {
+          state.errors++;
+        }
+      if (state.checked % 20 === 0) await setState("segment_cleanup", state).catch(() => undefined);
+      await new Promise((ok) => setTimeout(ok, 400));
+    }
+    await setState("segment_cleanup", { ...state, running: false });
+  })();
+  return state;
+}
+
 /**
  * "Gửi bản B": every store held for B gets the B message — queued as any
  * other (auto: goes out at the usual pace; manual: waits on Chờ duyệt).
@@ -877,7 +914,6 @@ async function sendOne(t: UrspTarget, cfg: UrspSettings, actor: string): Promise
       sid = r.session_id;
       link = r.ticket_link;
     }
-    if (cfg.crisp_segment.trim()) await addSegment(sid, cfg.crisp_segment.trim()).catch(() => undefined);
     await tx(async (c) => {
       await c.query(
         `update ursp_targets set status = 'sent', sent_at = now(), sent_by = $2, message = $3, session_id = $4, ticket_link = $5, offer_until = $6,
@@ -1078,6 +1114,11 @@ export async function trackOne(t: UrspTarget, cfg: UrspSettings, opts: { force?:
           const read = await readReply([t.message, t.followup_message].filter(Boolean).join("\n\n---\n\n"), text);
           Object.assign(patch, { reply_intent: read.intent, mood: read.mood, mood_note: read.note || null, classified_at: new Date().toISOString() });
           events.push(["classified", { intent: read.intent, mood: read.mood, by: read.by }]);
+          /* the segment marks the ones who said yes — not everyone who was sent the offer */
+          if (read.intent === "agree" && cfg.crisp_segment.trim()) {
+            await addSegment(t.session_id, cfg.crisp_segment.trim()).catch(() => undefined);
+            events.push(["segment", { segment: cfg.crisp_segment.trim() }]);
+          }
           /* the first reply: Logan is called in, once */
           if (!t.mentioned_at) {
             const who = await crispSender(cfg.sender_name, "");
