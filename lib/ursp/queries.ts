@@ -46,6 +46,8 @@ export type UrspFilters = {
   seen?: string;
   /** the A/B test's half: A or B */
   variant?: string;
+  /** what came of it — a key of OUTCOME */
+  outcome?: string;
   /** the queue's parts: pending (Chờ duyệt), waiting (Chờ gửi), failed */
   status?: "pending" | "waiting" | "failed";
   page?: number;
@@ -62,6 +64,20 @@ export const SEEN = {
   followup_no_reply: { label: "Đã nhắc lại, vẫn chưa reply", sql: "t.followup_sent_at is not null and t.replied_at is null" },
   offer_live: { label: "Ưu đãi còn hạn", sql: "t.offer_until > now()" },
   offer_expired: { label: "Ưu đãi đã hết hạn", sql: "t.offer_until <= now()" },
+} as const;
+
+/** "Kết quả" — fixed SQL per key; an unknown key filters nothing. */
+export const OUTCOME = {
+  upgraded: { label: "Đã nâng cấp", sql: "t.upgraded_at is not null" },
+  upgraded_after_done: { label: "Nâng cấp sau khi xử lý", sql: "t.upgraded_at is not null and t.done_at is not null and t.upgraded_at >= t.done_at" },
+  reviewed: { label: "Đã review app 5★", sql: "t.reviewed_at is not null" },
+  reviewed_after_done: { label: "Review sau khi xử lý", sql: "t.reviewed_at is not null and t.done_at is not null and t.reviewed_at >= t.done_at" },
+  reviewed_before: { label: "Đã 5★ từ trước khi gửi", sql: "t.first_review >= 5" },
+  not_upgraded: { label: "Chưa nâng cấp", sql: "t.upgraded_at is null" },
+  not_reviewed: { label: "Chưa review", sql: "t.reviewed_at is null and coalesce(t.first_review, 0) < 5" },
+  done: { label: "Đã xử lý xong", sql: "t.done_at is not null" },
+  not_done: { label: "Chưa xử lý", sql: "t.done_at is null" },
+  uninstalled: { label: "Đã gỡ app", sql: "t.uninstalled_at is not null" },
 } as const;
 
 /* a row is in the queue for its first message, or (sent) for its reminder */
@@ -89,6 +105,7 @@ function where(tab: keyof typeof TAB_SQL | null, f: UrspFilters): { sql: string;
   if (f.intent?.trim()) add((n) => `t.reply_intent = $${n}`, f.intent.trim());
   if (f.mood?.trim()) add((n) => `t.mood = $${n}`, f.mood.trim());
   if (f.open === "1") parts.push("t.done_at is null");
+  if (f.outcome && Object.hasOwn(OUTCOME, f.outcome)) parts.push(`(${OUTCOME[f.outcome as keyof typeof OUTCOME].sql})`);
   if (f.variant === "A" || f.variant === "B") add((n) => `t.variant = $${n}`, f.variant);
   if (f.seen && Object.hasOwn(SEEN, f.seen)) parts.push(`(${SEEN[f.seen as keyof typeof SEEN].sql})`);
   if (f.status && Object.hasOwn(QUEUE_PART, f.status)) parts.push(QUEUE_PART[f.status]);

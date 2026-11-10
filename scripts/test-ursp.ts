@@ -438,6 +438,11 @@ async function main() {
   const unseenRows = (await queries.listTargets("sent", { seen: "unseen" })).rows;
   check(unseenRows.length > 0 && unseenRows.every((r) => !r.read_at), "Chưa xem keeps only rows not read", unseenRows.length);
   check((await queries.listTargets("sent", { seen: "followup_sent" })).rows.every((r) => r.followup_sent_at), "Đã nhắc lại keeps only reminded rows");
+  const ups = (await queries.listTargets("sent", { outcome: "upgraded" })).rows;
+  check(ups.length > 0 && ups.every((r) => r.upgraded_at), "Kết quả: Đã nâng cấp", ups.length);
+  const revs = (await queries.listTargets("sent", { outcome: "reviewed" })).rows;
+  check(revs.length > 0 && revs.every((r) => r.reviewed_at), "Kết quả: Đã review app", revs.length);
+  check((await queries.listTargets("sent", { outcome: "upgraded_after_done" })).rows.every((r) => r.done_at && r.upgraded_at && r.upgraded_at >= r.done_at), "Kết quả: nâng cấp sau xử lý");
   check((await queries.listTargets("sent", { seen: "nonsense" })).total === (await queries.listTargets("sent", {})).total, "an unknown key filters nothing");
 
   console.log("backfill from a date");

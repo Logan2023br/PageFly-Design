@@ -9,6 +9,7 @@ import { vnTime } from "@/lib/ucp2/core";
 import { RECAP_SHEET_URL, composeMessage, recapServiceAccount, deadlineText, offerUntil, withDeadline, type ActiveResult, type BackfillState, type JobState, type RecapResult } from "@/lib/ursp/core";
 import { getState, hasUrspDatabase } from "@/lib/ursp/db";
 import {
+  OUTCOME,
   SEEN,
   URSP_TABS,
   abBySegment,
@@ -70,12 +71,13 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
     mood: one("mood"),
     seen: one("seen"),
     variant: one("variant"),
+    outcome: one("outcome"),
     open: one("open"),
     page: Number(one("page")) || 1,
   };
   const qs = (patch: Record<string, string | undefined>) => {
     const s = new URLSearchParams();
-    for (const [k, v] of Object.entries({ tab, q: f.q, seg: f.seg, from: f.from, to: f.to, reason: f.reason, intent: f.intent, mood: f.mood, seen: f.seen, variant: f.variant, open: f.open, ...patch }))
+    for (const [k, v] of Object.entries({ tab, q: f.q, seg: f.seg, from: f.from, to: f.to, reason: f.reason, intent: f.intent, mood: f.mood, seen: f.seen, variant: f.variant, outcome: f.outcome, open: f.open, ...patch }))
       if (v && !(k === "tab" && v === "overview")) s.set(k, v);
     const t = s.toString();
     return t ? `${HREF}?${t}` : HREF;
@@ -385,6 +387,14 @@ function Filters({ tab, f }: { tab: UrspTab; f: UrspFilters }) {
             <option value="">Mọi bản tin</option>
             <option value="A">Bản A</option>
             <option value="B">Bản B</option>
+          </select>
+          <select name="outcome" defaultValue={f.outcome ?? ""} className={`${FIELD} w-[200px]!`} aria-label="Kết quả">
+            <option value="">Mọi kết quả</option>
+            {Object.entries(OUTCOME).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v.label}
+              </option>
+            ))}
           </select>
           <select name="seen" defaultValue={f.seen ?? ""} className={`${FIELD} w-[210px]!`} aria-label="Trạng thái xem">
             <option value="">Mọi trạng thái xem</option>
