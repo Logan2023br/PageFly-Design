@@ -365,7 +365,7 @@ function Filters({ tab, f }: { tab: UrspTab; f: UrspFilters }) {
           ))}
         </select>
       )}
-      {(tab === "replied" || tab === "working" || tab === "done" || tab === "dismissed" || tab === "sent") && (
+      {(tab === "replied" || tab === "working" || tab === "done" || tab === "dismissed" || tab === "cancelled" || tab === "sent") && (
         <>
           <select name="variant" defaultValue={f.variant ?? ""} className={`${FIELD} w-[150px]!`} aria-label="Bản tin">
             <option value="">Mọi bản tin</option>
@@ -431,7 +431,7 @@ function AfterDone({ s, sentA, sentB }: { s: SegmentStats[]; sentA: number; sent
     { label: "Đã gửi", n: sent, note: `bản A ${sentA} · bản B ${sentB} · ${pct(sum("read"), sent)} đã xem · ${sum("followup_sent")} đã nhắc lại` },
     { label: "Phản hồi", n: sum("replied"), note: `${pct(sum("replied"), sent)} đã gửi` },
     { label: "Đồng ý", n: sum("agree"), note: `${pct(sum("agree"), sum("replied"))} người phản hồi` },
-    { label: "Đã xử lý xong", n: done, note: `${sum("working")} đang xử lý · ${sum("done_open")} phản hồi chưa xử lý` },
+    { label: "Đã xử lý xong", n: done, note: `${sum("working")} đang xử lý · ${sum("cancelled")} đã huỷ · ${sum("done_open")} phản hồi chưa xử lý` },
     { label: "Nâng cấp sau xử lý", n: sum("upgraded_after_done"), note: `${pct(sum("upgraded_after_done"), done)} đã xử lý · tổng ${sum("upgraded")} (+$${Math.round(sum("mrr"))})` },
     { label: "Review sau xử lý", n: sum("reviewed_after_done"), note: `${pct(sum("reviewed_after_done"), done)} đã xử lý · tổng ${sum("reviewed")}` },
     { label: "Hài lòng", n: sum("happy"), note: `${pct(sum("happy"), moods)} · ${sum("neutral")} bình thường · ${sum("unhappy")} không` },
@@ -1204,6 +1204,7 @@ function SentTable({ rows, followupHours, notes }: { rows: UrspTarget[]; followu
                   done={t.done_at ? { by: t.done_by, at: short(t.done_at) } : null}
                   working={t.working_at ? { by: t.working_by, at: short(t.working_at) } : null}
                   dismissed={t.dismissed_at ? { by: t.dismissed_by, at: short(t.dismissed_at), reason: t.dismiss_reason } : null}
+                  cancelled={t.cancelled_at ? { by: t.cancelled_by, at: short(t.cancelled_at) } : null}
                 />
                 <div className="mt-2">
                   <CaseNotes

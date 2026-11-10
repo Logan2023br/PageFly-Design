@@ -59,6 +59,7 @@ export const STAGE_LABEL: Record<string, string> = {
   working: "Đang xử lý",
   done: "Đã xử lý xong",
   dismissed: "Đã bỏ qua",
+  cancelled: "Đã huỷ",
 };
 
 export type UrspNote = { id: string; target_id: string; stage: string; text: string; by: string; at: string; kind: "team" | "customer" };
@@ -113,6 +114,8 @@ export type UrspTarget = {
   dismissed_at: string | null;
   dismissed_by: string | null;
   dismiss_reason: string | null;
+  cancelled_at: string | null;
+  cancelled_by: string | null;
   done_at: string | null;
   done_by: string | null;
   first_price: string | null;

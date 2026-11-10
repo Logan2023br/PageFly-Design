@@ -128,6 +128,9 @@ alter table ursp_targets add column if not exists working_by text;
 alter table ursp_targets add column if not exists dismissed_at timestamptz;
 alter table ursp_targets add column if not exists dismissed_by text;
 alter table ursp_targets add column if not exists dismiss_reason text;
+-- "Huỷ" on a case in hand: it leaves Đang xử lý for a list of its own (Đã huỷ)
+alter table ursp_targets add column if not exists cancelled_at timestamptz;
+alter table ursp_targets add column if not exists cancelled_by text;
 create index if not exists ursp_targets_status on ursp_targets (status, created_at desc);
 create index if not exists ursp_targets_domain on ursp_targets (store_domain);
 create index if not exists ursp_targets_sent on ursp_targets (sent_at desc);

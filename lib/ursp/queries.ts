@@ -19,6 +19,7 @@ export const URSP_TABS = [
   { id: "working", label: "Đang xử lý" },
   { id: "done", label: "Đã xử lý" },
   { id: "dismissed", label: "Đã bỏ qua" },
+  { id: "cancelled", label: "Đã huỷ" },
   { id: "skipped", label: "Bị loại" },
   { id: "ab", label: "A/B test" },
   { id: "settings", label: "Cài đặt" },
@@ -29,10 +30,12 @@ const TAB_SQL: Record<Exclude<UrspTab, "overview" | "settings">, string> = {
   queue: "(t.status in ('pending', 'approved', 'sending', 'failed') or t.followup_status in ('pending', 'approved', 'sending', 'failed'))",
   sent: "t.status = 'sent'",
   /* the inbox: replies no one has taken up or let go yet */
-  replied: "t.status = 'sent' and t.replied_at is not null and t.working_at is null and t.done_at is null and t.dismissed_at is null",
+  replied: "t.status = 'sent' and t.replied_at is not null and t.working_at is null and t.done_at is null and t.dismissed_at is null and t.cancelled_at is null",
   working: "t.status = 'sent' and t.working_at is not null and t.done_at is null and t.dismissed_at is null",
   done: "t.status = 'sent' and t.done_at is not null",
   dismissed: "t.status = 'sent' and t.dismissed_at is not null",
+  /* taken up, then called off */
+  cancelled: "t.status = 'sent' and t.cancelled_at is not null and t.working_at is null and t.done_at is null and t.dismissed_at is null",
   skipped: "t.status = 'skipped'",
   /* the A/B tab lists the stores held for B */
   ab: "t.status = 'held'",
@@ -64,7 +67,7 @@ export const SEEN = {
   unseen: { label: "Chưa xem", sql: "t.read_at is null" },
   delivered: { label: "Đã tới, chưa xem", sql: "t.read_at is null and t.delivered_at is not null" },
   seen_no_reply: { label: "Đã xem, chưa reply", sql: "t.read_at is not null and t.replied_at is null" },
-  followup_waiting: { label: "Chờ nhắc lại", sql: "t.read_at is not null and t.replied_at is null and t.done_at is null and t.working_at is null and t.dismissed_at is null and t.followup_status is null" },
+  followup_waiting: { label: "Chờ nhắc lại", sql: "t.read_at is not null and t.replied_at is null and t.done_at is null and t.working_at is null and t.dismissed_at is null and t.cancelled_at is null and t.followup_status is null" },
   followup_sent: { label: "Đã nhắc lại", sql: "t.followup_sent_at is not null" },
   followup_no_reply: { label: "Đã nhắc lại, vẫn chưa reply", sql: "t.followup_sent_at is not null and t.replied_at is null" },
   offer_live: { label: "Ưu đãi còn hạn", sql: "t.offer_until > now()" },
@@ -81,9 +84,10 @@ export const OUTCOME = {
   not_upgraded: { label: "Chưa nâng cấp", sql: "t.upgraded_at is null" },
   not_reviewed: { label: "Chưa review", sql: "t.reviewed_at is null and coalesce(t.first_review, 0) < 5" },
   done: { label: "Đã xử lý xong", sql: "t.done_at is not null" },
-  not_done: { label: "Chưa xử lý", sql: "t.done_at is null and t.dismissed_at is null and t.working_at is null" },
+  not_done: { label: "Chưa xử lý", sql: "t.done_at is null and t.dismissed_at is null and t.working_at is null and t.cancelled_at is null" },
   working: { label: "Đang xử lý", sql: "t.working_at is not null and t.done_at is null and t.dismissed_at is null" },
   dismissed: { label: "Đã bỏ qua", sql: "t.dismissed_at is not null" },
+  cancelled: { label: "Đã huỷ", sql: "t.cancelled_at is not null and t.working_at is null and t.done_at is null and t.dismissed_at is null" },
   uninstalled: { label: "Đã gỡ app", sql: "t.uninstalled_at is not null" },
 } as const;
 
@@ -105,13 +109,13 @@ function where(tab: keyof typeof TAB_SQL | null, f: UrspFilters): { sql: string;
   };
   if (f.q?.trim()) add((n) => `(t.store_domain ilike $${n} or t.store_name ilike $${n} or t.email ilike $${n})`, `%${f.q.trim()}%`);
   if (f.seg === "recap" || f.seg === "active") add((n) => `t.segment = $${n}`, f.seg);
-  const day = tab === "sent" || tab === "replied" || tab === "working" || tab === "done" || tab === "dismissed" ? "coalesce(t.sent_at, t.created_at)" : "t.created_at";
+  const day = tab === "sent" || tab === "replied" || tab === "working" || tab === "done" || tab === "dismissed" || tab === "cancelled" ? "coalesce(t.sent_at, t.created_at)" : "t.created_at";
   if (f.from) add((n) => `(${day} at time zone '${VN}')::date >= $${n}::date`, f.from);
   if (f.to) add((n) => `(${day} at time zone '${VN}')::date <= $${n}::date`, f.to);
   if (f.reason?.trim()) add((n) => `t.skip_code = $${n}`, f.reason.trim());
   if (f.intent?.trim()) add((n) => `t.reply_intent = $${n}`, f.intent.trim());
   if (f.mood?.trim()) add((n) => `t.mood = $${n}`, f.mood.trim());
-  if (f.open === "1") parts.push("t.done_at is null and t.dismissed_at is null and t.working_at is null");
+  if (f.open === "1") parts.push("t.done_at is null and t.dismissed_at is null and t.working_at is null and t.cancelled_at is null");
   if (f.outcome && Object.hasOwn(OUTCOME, f.outcome)) parts.push(`(${OUTCOME[f.outcome as keyof typeof OUTCOME].sql})`);
   if (f.variant === "A" || f.variant === "B") add((n) => `t.variant = $${n}`, f.variant);
   if (f.seen && Object.hasOwn(SEEN, f.seen)) parts.push(`(${SEEN[f.seen as keyof typeof SEEN].sql})`);
@@ -144,6 +148,7 @@ export type SegmentStats = {
   done_open: number;
   working: number;
   dismissed: number;
+  cancelled: number;
   upgraded: number;
   upgraded_after_done: number;
   mrr: number;
@@ -172,9 +177,10 @@ const STATS_SQL = `count(*)::int as found,
   count(*) filter (where t.followup_sent_at is not null)::int as followup_sent,
   count(*) filter (where t.followup_sent_at is not null and t.replied_at >= t.followup_sent_at)::int as replied_after_followup,
   count(*) filter (where t.done_at is not null)::int as done,
-  count(*) filter (where t.status = 'sent' and t.replied_at is not null and t.done_at is null and t.dismissed_at is null and t.working_at is null)::int as done_open,
+  count(*) filter (where t.status = 'sent' and t.replied_at is not null and t.done_at is null and t.dismissed_at is null and t.working_at is null and t.cancelled_at is null)::int as done_open,
   count(*) filter (where t.status = 'sent' and t.working_at is not null and t.done_at is null and t.dismissed_at is null)::int as working,
   count(*) filter (where t.dismissed_at is not null)::int as dismissed,
+  count(*) filter (where t.cancelled_at is not null and t.working_at is null and t.done_at is null and t.dismissed_at is null)::int as cancelled,
   count(*) filter (where t.upgraded_at is not null)::int as upgraded,
   count(*) filter (where t.upgraded_at is not null and t.done_at is not null and t.upgraded_at >= t.done_at)::int as upgraded_after_done,
   coalesce(sum(t.upgraded_price) filter (where t.upgraded_at is not null), 0)::float as mrr,
@@ -225,6 +231,7 @@ export async function segmentStats(f: UrspFilters): Promise<Record<Segment, Segm
     done_open: 0,
     working: 0,
     dismissed: 0,
+    cancelled: 0,
     upgraded: 0,
     upgraded_after_done: 0,
     mrr: 0,
@@ -272,7 +279,7 @@ export async function tabCounts(): Promise<Record<string, number>> {
             count(*) filter (where ${TAB_SQL.sent} and t.variant = 'B')::int as sent_b,
             count(*) filter (where ${TAB_SQL.replied} and t.variant = 'A')::int as replied_a,
             count(*) filter (where ${TAB_SQL.replied} and t.variant = 'B')::int as replied_b,
-            count(*) filter (where t.status = 'sent' and t.replied_at is not null and t.done_at is null and t.dismissed_at is null and t.working_at is null)::int as replied_open
+            count(*) filter (where t.status = 'sent' and t.replied_at is not null and t.done_at is null and t.dismissed_at is null and t.working_at is null and t.cancelled_at is null)::int as replied_open
        from ursp_targets t`,
   );
   return rows[0] ?? {};
@@ -296,6 +303,8 @@ export async function listTargets(
           ? "t.done_at desc"
           : tab === "dismissed"
             ? "t.dismissed_at desc"
+          : tab === "cancelled"
+            ? "t.cancelled_at desc"
           : tab === "queue"
         ? "case t.status when 'failed' then 0 when 'pending' then 1 else 2 end, t.created_at"
         : tab === "skipped"

@@ -137,11 +137,24 @@ type Who = { by: string | null; at: string | null };
 /**
  * A sent row's handling, one step at a time:
  *   not started   ▶ Tiến hành xử lý · ⊘ Bỏ qua (asks why)
- *   in hand       ● Đang tiến hành xử lý (lit) · ✓ Đã xử lý xong · ✕ Huỷ (back to not started)
+ *   in hand       ● Đang tiến hành xử lý (lit) · ✓ Đã xử lý xong · ✕ Huỷ (to Đã huỷ)
+ *   cancelled     ✕ Đã huỷ xử lý (lit) · ▶ Tiến hành xử lý lại · ⊘ Bỏ qua
  *   done          ✓ Đã xử lý xong (lit) — pressed again, back in hand
  *   dismissed     ⊘ Đã bỏ qua (lit, with the reason) — pressed again, back to not started
  */
-export function DoneButton({ id, done, working, dismissed }: { id: string; done: Who | null; working: Who | null; dismissed?: (Who & { reason: string | null }) | null }) {
+export function DoneButton({
+  id,
+  done,
+  working,
+  dismissed,
+  cancelled,
+}: {
+  id: string;
+  done: Who | null;
+  working: Who | null;
+  dismissed?: (Who & { reason: string | null }) | null;
+  cancelled?: Who | null;
+}) {
   const [run, busy, error] = useAct();
   const [asking, setAsking] = useState(false);
   const [why, setWhy] = useState("");
@@ -194,8 +207,14 @@ export function DoneButton({ id, done, working, dismissed }: { id: string; done:
 
   return (
     <div className="grid justify-items-start gap-1.5">
+      {cancelled && (
+        <>
+          <span className={`${lit} border-pf-danger/50 bg-pf-danger/10 text-pf-danger`}>✕ Đã huỷ xử lý</span>
+          {who(cancelled)}
+        </>
+      )}
       <Button size="sm" icon="Play" className="whitespace-nowrap" disabled={busy} onClick={() => void go("start")}>
-        Tiến hành xử lý
+        {cancelled ? "Tiến hành xử lý lại" : "Tiến hành xử lý"}
       </Button>
       {asking ? (
         <div className="grid w-[220px] gap-1.5 text-[13px]">
