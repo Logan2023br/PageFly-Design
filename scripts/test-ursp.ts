@@ -594,7 +594,11 @@ async function main() {
 
   console.log("segment cleanup");
   {
-    const sentRows = (await p.query("select session_id, reply_intent from ursp_targets where status = 'sent' and session_id is not null")).rows;
+    const sentRows = (
+      await p.query(
+        "select session_id, (replied_at is not null or working_at is not null or done_at is not null) as keep from ursp_targets where status = 'sent' and session_id is not null",
+      )
+    ).rows;
     for (const r of sentRows) if (convs[r.session_id]) convs[r.session_id].segments = ["upsell-responsive", "vip"];
     await core.startSegmentCleanup("admin:tu");
     let st: import("../lib/ursp/core").SegmentCleanup | null = null;
@@ -603,10 +607,10 @@ async function main() {
       if (st && !st.running) break;
       await new Promise((r) => setTimeout(r, 200));
     }
-    const agreed = sentRows.filter((r) => r.reply_intent === "agree" && convs[r.session_id]);
-    const others = sentRows.filter((r) => r.reply_intent !== "agree" && convs[r.session_id]);
-    check(st && !st.running && st.kept === sentRows.filter((r) => r.reply_intent === "agree").length, "cleanup ran", st);
-    check(agreed.length > 0 && agreed.every((r) => convs[r.session_id].segments.includes("upsell-responsive")), "those who agreed keep the segment");
+    const agreed = sentRows.filter((r) => r.keep && convs[r.session_id]);
+    const others = sentRows.filter((r) => !r.keep && convs[r.session_id]);
+    check(st && !st.running && st.kept === sentRows.filter((r) => r.keep).length, "cleanup ran", st);
+    check(agreed.length > 0 && agreed.every((r) => convs[r.session_id].segments.includes("upsell-responsive")), "those who replied or are in hand keep the segment");
     check(others.length > 0 && others.every((r) => !convs[r.session_id].segments.includes("upsell-responsive") && convs[r.session_id].segments.includes("vip")), "the rest lose it, other segments stay");
   }
 

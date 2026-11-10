@@ -670,8 +670,9 @@ export type SegmentCleanup = { at: string; by: string; running: boolean; checked
 
 /**
  * Once: the segment came with every offer before it meant "agreed" — it is
- * taken off the conversations of those who did not agree. In the
- * background, a little at a time (Crisp limits bursts).
+ * taken off every conversation except those where the customer replied or
+ * the case is (or was) in hand. In the background, a little at a time
+ * (Crisp limits bursts).
  */
 export async function startSegmentCleanup(by: string): Promise<SegmentCleanup> {
   const cfg = await getUrspSettings();
@@ -682,12 +683,13 @@ export async function startSegmentCleanup(by: string): Promise<SegmentCleanup> {
   const state: SegmentCleanup = { at: new Date().toISOString(), by, running: true, checked: 0, removed: 0, kept: 0, errors: 0 };
   await setState("segment_cleanup", state);
   void (async () => {
-    const { rows } = await (await db()).query<Pick<UrspTarget, "session_id" | "reply_intent">>(
-      "select session_id, reply_intent from ursp_targets where status = 'sent' and session_id is not null",
+    const { rows } = await (await db()).query<{ session_id: string; keep: boolean }>(
+      `select session_id, (replied_at is not null or working_at is not null or done_at is not null) as keep
+         from ursp_targets where status = 'sent' and session_id is not null`,
     );
     for (const r of rows) {
       state.checked++;
-      if (r.reply_intent === "agree") state.kept++;
+      if (r.keep) state.kept++;
       else
         try {
           if (await removeSegment(r.session_id!, seg)) state.removed++;
