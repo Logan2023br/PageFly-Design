@@ -652,6 +652,35 @@ async function main() {
     check(!(await target("active", "returning.myshopify.com"))?.dismissed_at, "pressed again: back to both buttons");
   }
 
+  console.log("handling steps and notes");
+  {
+    const w = (await target("active", "fresh.myshopify.com"))!;
+    await core.targetAction(w.id, "start", "tu");
+    const w1 = (await target("active", "fresh.myshopify.com"))!;
+    check(w1.working_at && w1.working_by === "tu" && !w1.done_at, "Tiến hành xử lý: in hand");
+    check((await queries.listTargets("working", {})).rows.some((r) => r.id === w.id), "it moves to Đang xử lý");
+    check(!(await queries.listTargets("sent", { outcome: "not_done" })).rows.some((r) => r.id === w.id), "and is no longer 'chưa xử lý'");
+    await core.targetAction(w.id, "note", "tu", "Đã xin collaborator access");
+    await core.targetAction(w.id, "note", "hew", "Khách đã cấp quyền, bắt đầu check mobile");
+    await core.targetAction(w.id, "done", "tu");
+    await core.targetAction(w.id, "note", "tu", "Đã sửa 3 page");
+    const ns = (await queries.notesFor([w.id]))[w.id] ?? [];
+    check(ns.length === 3 && ns[0].stage === "working" && ns[1].by === "hew" && ns[2].stage === "done", "several notes, each at its stage", ns.map((n) => `${n.stage}:${n.by}`));
+    check((await queries.listTargets("done", {})).rows.some((r) => r.id === w.id) && !(await queries.listTargets("working", {})).rows.some((r) => r.id === w.id), "done: in Đã xử lý, out of Đang xử lý");
+    await core.targetAction(w.id, "undone", "tu");
+    check((await queries.listTargets("working", {})).rows.some((r) => r.id === w.id), "done pressed again: back in hand");
+    await core.targetAction(w.id, "cancel", "tu");
+    const w2 = (await target("active", "fresh.myshopify.com"))!;
+    check(!w2.working_at && !w2.done_at, "Huỷ: back to not started");
+    let refused = false;
+    try {
+      await core.targetAction(w.id, "note", "tu", "   ");
+    } catch {
+      refused = true;
+    }
+    check(refused, "an empty note is refused");
+  }
+
   console.log("pause");
   await settings.setRunning(false, "admin:test");
   const sentBefore = convs[sid(2)].msgs.length;

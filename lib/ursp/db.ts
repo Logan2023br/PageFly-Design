@@ -121,6 +121,9 @@ alter table ursp_targets add column if not exists followup_error text;
 alter table ursp_targets add column if not exists offer_until timestamptz;
 -- A / B of an A/B test (null: before there was one); status 'held' is a B kept back, nothing sent
 alter table ursp_targets add column if not exists variant text;
+-- "Tiến hành xử lý": someone is on it
+alter table ursp_targets add column if not exists working_at timestamptz;
+alter table ursp_targets add column if not exists working_by text;
 -- "Bỏ qua": the team let this one go, and said why
 alter table ursp_targets add column if not exists dismissed_at timestamptz;
 alter table ursp_targets add column if not exists dismissed_by text;
@@ -138,6 +141,17 @@ create table if not exists ursp_events (
   at          timestamptz not null default now()
 );
 create index if not exists ursp_events_target on ursp_events (target_id, at desc);
+
+-- the team's notes on a case, each at the stage it was written
+create table if not exists ursp_notes (
+  id         bigserial primary key,
+  target_id  bigint not null,
+  stage      text not null,
+  text       text not null,
+  by         text not null,
+  at         timestamptz not null default now()
+);
+create index if not exists ursp_notes_target on ursp_notes (target_id, at);
 
 create table if not exists ursp_state (
   key        text primary key,

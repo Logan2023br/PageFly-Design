@@ -975,7 +975,7 @@ async function queueFollowups(cfg: UrspSettings): Promise<number> {
     `select * from ursp_targets
       where status = 'sent' and followup_status is null and read_at is not null and replied_at is null
         and (offer_until is null or offer_until > now())
-        and done_at is null and dismissed_at is null and uninstalled_at is null and session_id is not null
+        and done_at is null and dismissed_at is null and working_at is null and uninstalled_at is null and session_id is not null
         and read_at <= now() - make_interval(hours => $1)
       order by read_at limit 50`,
     [cfg.followup_after_hours],
@@ -1353,6 +1353,9 @@ export type TargetAction =
   | "undone"
   | "dismiss"
   | "undismiss"
+  | "start"
+  | "cancel"
+  | "note"
   | "retry"
   | "send_anyway"
   | "track"
@@ -1376,8 +1379,8 @@ export async function targetAction(id: string, action: TargetAction, by: string,
   const t = rows[0];
   if (!t) throw new UpsellError("Không có row này.", 404);
   const msg = text?.trim();
-  /* the text is a message, except for Bỏ qua, where it is the reason */
-  if (action !== "dismiss" && msg !== undefined && (msg.length < 20 || msg.length > 5000)) throw new UpsellError("Tin nhắn phải từ 20 tới 5000 ký tự.", 422);
+  /* the text is a message, except for Bỏ qua (the reason) and a note */
+  if (action !== "dismiss" && action !== "note" && msg !== undefined && (msg.length < 20 || msg.length > 5000)) throw new UpsellError("Tin nhắn phải từ 20 tới 5000 ký tự.", 422);
   const cfg = await getUrspSettings();
   const only = (...st: string[]) => {
     if (!st.includes(t.status)) throw new UpsellError(`Row đang ở trạng thái "${t.status}" — không làm được việc này.`, 409);
@@ -1432,11 +1435,27 @@ export async function targetAction(id: string, action: TargetAction, by: string,
       }
       if (action === "retry_followup") return set("followup_status = 'approved', followup_error = null, wait_until = null", [], "followup_retry");
       return set("followup_status = 'skipped'", [], "followup_skipped");
+    case "note": {
+      only("sent");
+      const body = text?.trim() ?? "";
+      if (!body || body.length > 2000) throw new UpsellError("Ghi chú từ 1 tới 2000 ký tự.", 422);
+      const stage = t.dismissed_at ? "dismissed" : t.done_at ? "done" : t.working_at ? "working" : "open";
+      await (await db()).query("insert into ursp_notes (target_id, stage, text, by) values ($1, $2, $3, $4)", [id, stage, body, by]);
+      return;
+    }
+    case "start":
+      only("sent");
+      if (t.dismissed_at) throw new UpsellError("Store này đã bị bỏ qua — hoàn tác trước.", 409);
+      if (t.working_at) return;
+      return set("working_at = now(), working_by = $2", [by], "working");
+    case "cancel":
+      only("sent");
+      return set("working_at = null, working_by = null, done_at = null, done_by = null", [], "cancelled");
     case "dismiss": {
       only("sent");
       const why = text?.trim() ?? "";
       if (why.length < 2 || why.length > 500) throw new UpsellError("Ghi lý do bỏ qua (2–500 ký tự).", 422);
-      if (t.done_at) throw new UpsellError("Store này đã xử lý xong — hoàn tác trước rồi mới bỏ qua.", 409);
+      if (t.done_at || t.working_at) throw new UpsellError("Store này đang / đã xử lý — huỷ trước rồi mới bỏ qua.", 409);
       return set("dismissed_at = now(), dismissed_by = $2, dismiss_reason = $3", [by, why], "dismissed", { reason: why });
     }
     case "undismiss":
@@ -1446,7 +1465,8 @@ export async function targetAction(id: string, action: TargetAction, by: string,
       only("sent");
       if (t.done_at) return;
       if (t.dismissed_at) throw new UpsellError("Store này đã bị bỏ qua — hoàn tác trước.", 409);
-      return set("done_at = now(), done_by = $2", [by], "done");
+      /* done means it was worked on: a store marked done straight away was in hand too */
+      return set("done_at = now(), done_by = $2, working_at = coalesce(working_at, now()), working_by = coalesce(working_by, $2)", [by], "done");
     case "undone":
       only("sent");
       return set("done_at = null, done_by = null", [], "undone");

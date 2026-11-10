@@ -132,45 +132,35 @@ export function ReleaseB({ held, auto }: { held: number; auto: boolean }) {
   );
 }
 
+type Who = { by: string | null; at: string | null };
+
 /**
- * A sent row's handling: two buttons, "Đã xử lý xong" and "Bỏ qua" (which
- * asks for the reason first). A pressed one stays lit with who and when —
- * pressed again, it is undone and both are back.
+ * A sent row's handling, one step at a time:
+ *   not started   ▶ Tiến hành xử lý · ⊘ Bỏ qua (asks why)
+ *   in hand       ● Đang tiến hành xử lý (lit) · ✓ Đã xử lý xong · ✕ Huỷ (back to not started)
+ *   done          ✓ Đã xử lý xong (lit) — pressed again, back in hand
+ *   dismissed     ⊘ Đã bỏ qua (lit, with the reason) — pressed again, back to not started
  */
-export function DoneButton({
-  id,
-  done,
-  by,
-  at,
-  dismissed,
-}: {
-  id: string;
-  done: boolean;
-  by: string | null;
-  at: string | null;
-  dismissed?: { by: string | null; at: string | null; reason: string | null } | null;
-}) {
+export function DoneButton({ id, done, working, dismissed }: { id: string; done: Who | null; working: Who | null; dismissed?: (Who & { reason: string | null }) | null }) {
   const [run, busy, error] = useAct();
   const [asking, setAsking] = useState(false);
   const [why, setWhy] = useState("");
   const lit = "inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-pf-md border px-3 text-[12.5px] font-semibold transition-colors disabled:opacity-60";
+  const go = (action: string, body: Record<string, unknown> = {}) => run(row(id), { action, ...body });
+  const who = (w: Who) => (
+    <span className="text-[11px] text-pf-faint">
+      {w.by ?? ""}
+      {w.at ? ` · ${w.at}` : ""}
+    </span>
+  );
 
   if (done)
     return (
       <div className="grid justify-items-start gap-1">
-        <button
-          type="button"
-          disabled={busy}
-          title="Bấm lần nữa để bỏ đánh dấu"
-          onClick={() => void run(row(id), { action: "undone" })}
-          className={`${lit} border-pf-success/50 bg-pf-success/15 text-pf-success hover:bg-pf-success/25`}
-        >
+        <button type="button" disabled={busy} title="Bấm lần nữa để trở lại Đang xử lý" onClick={() => void go("undone")} className={`${lit} border-pf-success/50 bg-pf-success/15 text-pf-success hover:bg-pf-success/25`}>
           ✓ Đã xử lý xong
         </button>
-        <span className="text-[11px] text-pf-faint">
-          {by ?? ""}
-          {at ? ` · ${at}` : ""}
-        </span>
+        {who(done)}
         <ErrorLine error={error} />
       </div>
     );
@@ -178,28 +168,34 @@ export function DoneButton({
   if (dismissed)
     return (
       <div className="grid max-w-[220px] justify-items-start gap-1">
-        <button
-          type="button"
-          disabled={busy}
-          title="Bấm lần nữa để bỏ đánh dấu"
-          onClick={() => void run(row(id), { action: "undismiss" })}
-          className={`${lit} border-pf-border-hi bg-pf-card-hi text-pf-muted hover:text-pf-text`}
-        >
+        <button type="button" disabled={busy} title="Bấm lần nữa để bỏ đánh dấu" onClick={() => void go("undismiss")} className={`${lit} border-pf-border-hi bg-pf-card-hi text-pf-muted hover:text-pf-text`}>
           ⊘ Đã bỏ qua
         </button>
         {dismissed.reason && <span className="text-[11.5px] text-pf-body">{dismissed.reason}</span>}
-        <span className="text-[11px] text-pf-faint">
-          {dismissed.by ?? ""}
-          {dismissed.at ? ` · ${dismissed.at}` : ""}
-        </span>
+        {who(dismissed)}
+        <ErrorLine error={error} />
+      </div>
+    );
+
+  if (working)
+    return (
+      <div className="grid justify-items-start gap-1.5">
+        <span className={`${lit} border-pf-warn/50 bg-pf-warn/15 text-pf-warn`}>● Đang tiến hành xử lý</span>
+        {who(working)}
+        <Button size="sm" variant="ghost" icon="Check" className="whitespace-nowrap" disabled={busy} onClick={() => void go("done")}>
+          Đã xử lý xong
+        </Button>
+        <Button size="sm" variant="quiet" className="whitespace-nowrap" disabled={busy} onClick={() => void go("cancel")}>
+          ✕ Huỷ
+        </Button>
         <ErrorLine error={error} />
       </div>
     );
 
   return (
     <div className="grid justify-items-start gap-1.5">
-      <Button size="sm" variant="ghost" icon="Check" className="whitespace-nowrap" disabled={busy} onClick={() => void run(row(id), { action: "done" })}>
-        Đã xử lý xong
+      <Button size="sm" icon="Play" className="whitespace-nowrap" disabled={busy} onClick={() => void go("start")}>
+        Tiến hành xử lý
       </Button>
       {asking ? (
         <div className="grid w-[220px] gap-1.5 text-[13px]">
@@ -213,12 +209,7 @@ export function DoneButton({
             aria-label="Lý do bỏ qua"
           />
           <div className="flex gap-1.5">
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={busy || why.trim().length < 2}
-              onClick={() => void run(row(id), { action: "dismiss", text: why.trim() }).then((ok) => ok && setAsking(false))}
-            >
+            <Button size="sm" variant="ghost" disabled={busy || why.trim().length < 2} onClick={() => void go("dismiss", { text: why.trim() }).then((ok) => ok && setAsking(false))}>
               Xác nhận bỏ qua
             </Button>
             <Button size="sm" variant="quiet" disabled={busy} onClick={() => setAsking(false)}>
@@ -233,6 +224,45 @@ export function DoneButton({
       )}
       <ErrorLine error={error} />
     </div>
+  );
+}
+
+export type NoteView = { id: string; stage: string; text: string; by: string; at: string };
+
+/**
+ * The case's notes: as many as needed, each filed under the stage it was
+ * written at, and a box to add one. Open by default while the case is in hand.
+ */
+export function CaseNotes({ id, notes, open }: { id: string; notes: NoteView[]; open: boolean }) {
+  const [run, busy, error] = useAct();
+  const [text, setText] = useState("");
+  return (
+    <details open={open || undefined} className="w-[230px] text-[12px]">
+      <summary className="cursor-pointer text-pf-muted hover:text-pf-text">Ghi chú ({notes.length})</summary>
+      <div className="mt-1.5 grid gap-1.5">
+        {notes.map((n) => (
+          <div key={n.id} className="rounded-pf-md border border-pf-border bg-pf-bg-deep px-2 py-1.5">
+            <div className="flex items-center justify-between gap-2 text-[10.5px] text-pf-faint">
+              <span className="font-semibold text-pf-muted">{n.stage}</span>
+              <span>
+                {n.by} · {n.at}
+              </span>
+            </div>
+            <div className="whitespace-pre-wrap text-[12px] text-pf-body">{n.text}</div>
+          </div>
+        ))}
+        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder="Thêm ghi chú…" className={`${FIELD} text-[12px]!`} aria-label="Ghi chú mới" />
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={busy || !text.trim()}
+          onClick={() => void run(row(id), { action: "note", text: text.trim() }).then((ok) => ok && setText(""))}
+        >
+          {busy ? "Đang lưu…" : "Thêm ghi chú"}
+        </Button>
+        <ErrorLine error={error} />
+      </div>
+    </details>
   );
 }
 

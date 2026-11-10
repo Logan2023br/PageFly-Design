@@ -52,6 +52,16 @@ export const MOOD_LABEL: Record<string, string> = {
   unhappy: "Không hài lòng",
 };
 
+/** Where a case stands — what a note is filed under. */
+export const STAGE_LABEL: Record<string, string> = {
+  open: "Chưa xử lý",
+  working: "Đang xử lý",
+  done: "Đã xử lý xong",
+  dismissed: "Đã bỏ qua",
+};
+
+export type UrspNote = { id: string; target_id: string; stage: string; text: string; by: string; at: string };
+
 export type UrspTarget = {
   id: string;
   segment: Segment;
@@ -94,6 +104,8 @@ export type UrspTarget = {
   followup_approved_by: string | null;
   followup_sent_at: string | null;
   followup_error: string | null;
+  working_at: string | null;
+  working_by: string | null;
   dismissed_at: string | null;
   dismissed_by: string | null;
   dismiss_reason: string | null;

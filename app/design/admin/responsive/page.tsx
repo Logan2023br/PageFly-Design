@@ -4,7 +4,7 @@ import { ReportsLink } from "@/components/admin/reports/ReportsLink";
 import { adminGate } from "@/components/admin/adminGate";
 import { FIELD } from "@/components/admin/fieldClass";
 import { CrispLink, Pill } from "@/components/admin/upsell/bits";
-import { DoneButton, ModeSwitch, RecapBackfill, ReleaseB, QueueActions, RunControls, SendAnyway, SettingsForm, TrackButton } from "@/components/admin/ursp/Controls";
+import { CaseNotes, DoneButton, ModeSwitch, RecapBackfill, ReleaseB, QueueActions, RunControls, SendAnyway, SettingsForm, TrackButton } from "@/components/admin/ursp/Controls";
 import { vnTime } from "@/lib/ucp2/core";
 import { RECAP_SHEET_URL, composeMessage, recapServiceAccount, deadlineText, offerUntil, withDeadline, type ActiveResult, type BackfillState, type JobState, type RecapResult } from "@/lib/ursp/core";
 import { getState, hasUrspDatabase } from "@/lib/ursp/db";
@@ -17,6 +17,7 @@ import {
   abVerdict,
   byDay,
   listTargets,
+  notesFor,
   recentRecapRows,
   segmentStats,
   tabCounts,
@@ -27,7 +28,7 @@ import {
   type UrspTab,
 } from "@/lib/ursp/queries";
 import { URSP_HELP, URSP_NUMERIC, campaignOver, getUrspSettings, runState } from "@/lib/ursp/settings";
-import { INTENT_LABEL, MOOD_LABEL, SEGMENTS, SKIP_REASONS, STATUS_LABEL, type Segment, type UrspTarget } from "@/lib/ursp/types";
+import { INTENT_LABEL, MOOD_LABEL, SEGMENTS, SKIP_REASONS, STAGE_LABEL, STATUS_LABEL, type Segment, type UrspNote, type UrspTarget } from "@/lib/ursp/types";
 
 /* /design/admin/responsive — Upsell Responsive: Logan offers BFMC customers
    a free review of their pages' responsive layout, and free fixes. Two
@@ -187,11 +188,12 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
     );
   } else {
     const list = await listTargets(tab, f);
+    const notes = tab === "skipped" ? {} : await notesFor(list.rows.map((r) => r.id));
     const pager = <Pager list={list} href={(p) => qs({ page: String(p) })} />;
     body = (
       <>
         {pager}
-        {tab === "skipped" ? <SkippedTable rows={list.rows} /> : <SentTable rows={list.rows} followupHours={cfg.followup_after_hours} />}
+        {tab === "skipped" ? <SkippedTable rows={list.rows} /> : <SentTable rows={list.rows} followupHours={cfg.followup_after_hours} notes={notes} />}
         {list.total > 0 && pager}
       </>
     );
@@ -213,20 +215,7 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
         <StatusBar run={run} cfg={cfg} over={campaignOver(cfg)} recap={recap} active={active} job={job} backfill={backfill} />
         <nav className="flex flex-wrap gap-1 border-b border-pf-border">
           {URSP_TABS.map((t) => {
-            const n =
-              t.id === "queue"
-                ? counts.queue
-                : t.id === "sent"
-                  ? counts.sent
-                  : t.id === "replied"
-                    ? counts.replied
-                    : t.id === "done"
-                      ? counts.done
-                      : t.id === "skipped"
-                        ? counts.skipped
-                        : t.id === "ab"
-                          ? counts.ab
-                          : undefined;
+            const n = t.id === "overview" || t.id === "settings" ? undefined : counts[t.id];
             const on = tab === t.id;
             return (
               <Link
@@ -381,7 +370,7 @@ function Filters({ tab, f }: { tab: UrspTab; f: UrspFilters }) {
           ))}
         </select>
       )}
-      {(tab === "replied" || tab === "done" || tab === "sent") && (
+      {(tab === "replied" || tab === "working" || tab === "done" || tab === "sent") && (
         <>
           <select name="variant" defaultValue={f.variant ?? ""} className={`${FIELD} w-[150px]!`} aria-label="Bản tin">
             <option value="">Mọi bản tin</option>
@@ -452,7 +441,7 @@ function AfterDone({ s, sentA, sentB }: { s: SegmentStats[]; sentA: number; sent
     { label: "Đã gửi", n: sent, note: `bản A ${sentA} · bản B ${sentB} · ${pct(sum("read"), sent)} đã xem · ${sum("followup_sent")} đã nhắc lại` },
     { label: "Phản hồi", n: sum("replied"), note: `${pct(sum("replied"), sent)} đã gửi` },
     { label: "Đồng ý", n: sum("agree"), note: `${pct(sum("agree"), sum("replied"))} người phản hồi` },
-    { label: "Đã xử lý xong", n: done, note: `${sum("done_open")} phản hồi chưa xử lý` },
+    { label: "Đã xử lý xong", n: done, note: `${sum("working")} đang xử lý · ${sum("done_open")} phản hồi chưa xử lý` },
     { label: "Nâng cấp sau xử lý", n: sum("upgraded_after_done"), note: `${pct(sum("upgraded_after_done"), done)} đã xử lý · tổng ${sum("upgraded")} (+$${Math.round(sum("mrr"))})` },
     { label: "Review sau xử lý", n: sum("reviewed_after_done"), note: `${pct(sum("reviewed_after_done"), done)} đã xử lý · tổng ${sum("reviewed")}` },
     { label: "Hài lòng", n: sum("happy"), note: `${pct(sum("happy"), moods)} · ${sum("neutral")} bình thường · ${sum("unhappy")} không` },
@@ -1138,7 +1127,7 @@ function Seen({ t, hours }: { t: UrspTarget; hours: number }) {
   );
 }
 
-function SentTable({ rows, followupHours }: { rows: UrspTarget[]; followupHours: number }) {
+function SentTable({ rows, followupHours, notes }: { rows: UrspTarget[]; followupHours: number; notes: Record<string, UrspNote[]> }) {
   const TH = "px-3 py-2 font-semibold";
   const TD = "px-3 py-2 align-top";
   return (
@@ -1222,11 +1211,17 @@ function SentTable({ rows, followupHours }: { rows: UrspTarget[]; followupHours:
               <td className={TD}>
                 <DoneButton
                   id={t.id}
-                  done={!!t.done_at}
-                  by={t.done_by}
-                  at={short(t.done_at)}
+                  done={t.done_at ? { by: t.done_by, at: short(t.done_at) } : null}
+                  working={t.working_at ? { by: t.working_by, at: short(t.working_at) } : null}
                   dismissed={t.dismissed_at ? { by: t.dismissed_by, at: short(t.dismissed_at), reason: t.dismiss_reason } : null}
                 />
+                <div className="mt-2">
+                  <CaseNotes
+                    id={t.id}
+                    open={!!t.working_at && !t.done_at && !t.dismissed_at}
+                    notes={(notes[t.id] ?? []).map((n) => ({ id: n.id, stage: STAGE_LABEL[n.stage] ?? n.stage, text: n.text, by: n.by.replace(/^admin:/, ""), at: short(n.at) }))}
+                  />
+                </div>
               </td>
             </tr>
           ))}
