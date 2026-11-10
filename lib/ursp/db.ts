@@ -128,9 +128,6 @@ alter table ursp_targets add column if not exists working_by text;
 alter table ursp_targets add column if not exists dismissed_at timestamptz;
 alter table ursp_targets add column if not exists dismissed_by text;
 alter table ursp_targets add column if not exists dismiss_reason text;
--- "Huỷ" on a case in hand: it leaves Đang xử lý for a list of its own (Đã huỷ)
-alter table ursp_targets add column if not exists cancelled_at timestamptz;
-alter table ursp_targets add column if not exists cancelled_by text;
 create index if not exists ursp_targets_status on ursp_targets (status, created_at desc);
 create index if not exists ursp_targets_domain on ursp_targets (store_domain);
 create index if not exists ursp_targets_sent on ursp_targets (sent_at desc);
@@ -176,6 +173,14 @@ begin
   if not exists (select 1 from ursp_state where key = '_once_variant_a_20261109') then
     insert into ursp_state (key, value) values ('_once_variant_a_20261109', 'true'::jsonb);
     update ursp_targets set variant = 'A' where variant is null and status in ('pending', 'approved', 'sending', 'sent', 'failed');
+  end if;
+end $$;
+/* once: the cases cancelled into the short-lived Đã huỷ list go to Đã bỏ qua, where a cancel now leads */
+do $$
+begin
+  if exists (select 1 from information_schema.columns where table_name = 'ursp_targets' and column_name = 'cancelled_at') then
+    execute $q$update ursp_targets set dismissed_at = cancelled_at, dismissed_by = cancelled_by, dismiss_reason = 'Huỷ khi đang xử lý', cancelled_at = null
+               where cancelled_at is not null and dismissed_at is null and working_at is null and done_at is null$q$;
   end if;
 end $$;
 `;

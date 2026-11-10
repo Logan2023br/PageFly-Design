@@ -679,13 +679,10 @@ async function main() {
     check((await queries.listTargets("working", {})).rows.some((r) => r.id === w.id), "done pressed again: back in hand");
     await core.targetAction(w.id, "cancel", "tu");
     const w2 = (await target("active", "fresh.myshopify.com"))!;
-    check(!w2.working_at && !w2.done_at && w2.cancelled_at && w2.cancelled_by === "tu", "Huỷ: off Đang xử lý, with who");
-    check((await queries.listTargets("cancelled", {})).rows.some((r) => r.id === w.id), "it moves to Đã huỷ");
+    check(!w2.working_at && !w2.done_at && w2.dismissed_at && w2.dismiss_reason === "Huỷ khi đang xử lý", "Huỷ: off Đang xử lý, let go");
+    check((await queries.listTargets("dismissed", {})).rows.some((r) => r.id === w.id), "it moves to Đã bỏ qua");
     check(!(await queries.listTargets("working", {})).rows.some((r) => r.id === w.id), "and out of Đang xử lý");
-    check(!(await queries.listTargets("sent", { outcome: "not_done" })).rows.some((r) => r.id === w.id), "a cancelled case is not 'chưa xử lý'");
-    await core.targetAction(w.id, "start", "tu");
-    const w3 = (await target("active", "fresh.myshopify.com"))!;
-    check(w3.working_at && !w3.cancelled_at && !(await queries.listTargets("cancelled", {})).rows.some((r) => r.id === w.id), "taken up again: back in Đang xử lý");
+    await core.targetAction(w.id, "undismiss", "tu");
     let refused = false;
     try {
       await core.targetAction(w.id, "note", "tu", "   ");
