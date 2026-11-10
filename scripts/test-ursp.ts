@@ -643,6 +643,7 @@ async function main() {
     await core.targetAction(d.id, "dismiss", "tu", "Khách không dùng PageFly nữa");
     const d1 = (await target("active", "returning.myshopify.com"))!;
     check(d1.dismissed_at && d1.dismissed_by === "tu" && d1.dismiss_reason === "Khách không dùng PageFly nữa", "dismissed with who and why");
+    check((await queries.listTargets("dismissed", {})).rows.some((r) => r.id === d.id), "it moves to Đã bỏ qua");
     check((await queries.listTargets("sent", { outcome: "dismissed" })).rows.some((r) => r.id === d.id), "Kết quả: Đã bỏ qua");
     check(!(await queries.listTargets("sent", { outcome: "not_done" })).rows.some((r) => r.id === d.id), "a dismissed store is not 'chưa xử lý'");
     let refusedDone = false;
@@ -671,6 +672,8 @@ async function main() {
     const ns = (await queries.notesFor([w.id]))[w.id] ?? [];
     check(ns.length === 3 && ns[0].stage === "working" && ns[1].by === "hew" && ns[2].stage === "done", "several notes, each at its stage", ns.map((n) => `${n.stage}:${n.by}`));
     check((await queries.listTargets("done", {})).rows.some((r) => r.id === w.id) && !(await queries.listTargets("working", {})).rows.some((r) => r.id === w.id), "done: in Đã xử lý, out of Đang xử lý");
+    const goodRow = (await target("recap", "good.myshopify.com"))!;
+    check(goodRow.replied_at && !(await queries.listTargets("replied", {})).rows.some((r) => r.id === goodRow.id), "a reply that was handled leaves Khách phản hồi");
     await core.targetAction(w.id, "undone", "tu");
     check((await queries.listTargets("working", {})).rows.some((r) => r.id === w.id), "done pressed again: back in hand");
     await core.targetAction(w.id, "cancel", "tu");

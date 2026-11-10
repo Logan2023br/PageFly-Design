@@ -18,6 +18,7 @@ export const URSP_TABS = [
   { id: "replied", label: "Khách phản hồi" },
   { id: "working", label: "Đang xử lý" },
   { id: "done", label: "Đã xử lý" },
+  { id: "dismissed", label: "Đã bỏ qua" },
   { id: "skipped", label: "Bị loại" },
   { id: "ab", label: "A/B test" },
   { id: "settings", label: "Cài đặt" },
@@ -27,9 +28,11 @@ export type UrspTab = (typeof URSP_TABS)[number]["id"];
 const TAB_SQL: Record<Exclude<UrspTab, "overview" | "settings">, string> = {
   queue: "(t.status in ('pending', 'approved', 'sending', 'failed') or t.followup_status in ('pending', 'approved', 'sending', 'failed'))",
   sent: "t.status = 'sent'",
-  replied: "t.status = 'sent' and t.replied_at is not null",
+  /* the inbox: replies no one has taken up or let go yet */
+  replied: "t.status = 'sent' and t.replied_at is not null and t.working_at is null and t.done_at is null and t.dismissed_at is null",
   working: "t.status = 'sent' and t.working_at is not null and t.done_at is null and t.dismissed_at is null",
   done: "t.status = 'sent' and t.done_at is not null",
+  dismissed: "t.status = 'sent' and t.dismissed_at is not null",
   skipped: "t.status = 'skipped'",
   /* the A/B tab lists the stores held for B */
   ab: "t.status = 'held'",
@@ -102,7 +105,7 @@ function where(tab: keyof typeof TAB_SQL | null, f: UrspFilters): { sql: string;
   };
   if (f.q?.trim()) add((n) => `(t.store_domain ilike $${n} or t.store_name ilike $${n} or t.email ilike $${n})`, `%${f.q.trim()}%`);
   if (f.seg === "recap" || f.seg === "active") add((n) => `t.segment = $${n}`, f.seg);
-  const day = tab === "sent" || tab === "replied" || tab === "working" || tab === "done" ? "coalesce(t.sent_at, t.created_at)" : "t.created_at";
+  const day = tab === "sent" || tab === "replied" || tab === "working" || tab === "done" || tab === "dismissed" ? "coalesce(t.sent_at, t.created_at)" : "t.created_at";
   if (f.from) add((n) => `(${day} at time zone '${VN}')::date >= $${n}::date`, f.from);
   if (f.to) add((n) => `(${day} at time zone '${VN}')::date <= $${n}::date`, f.to);
   if (f.reason?.trim()) add((n) => `t.skip_code = $${n}`, f.reason.trim());
@@ -286,11 +289,13 @@ export async function listTargets(
   const page = Math.min(Math.max(1, Math.floor(f.page ?? 1) || 1), pages);
   const order =
     tab === "replied"
-      ? "(t.done_at is not null or t.dismissed_at is not null), (t.working_at is not null), t.last_reply_at desc nulls last"
+      ? "t.last_reply_at desc nulls last"
       : tab === "working"
         ? "t.working_at desc"
         : tab === "done"
           ? "t.done_at desc"
+          : tab === "dismissed"
+            ? "t.dismissed_at desc"
           : tab === "queue"
         ? "case t.status when 'failed' then 0 when 'pending' then 1 else 2 end, t.created_at"
         : tab === "skipped"

@@ -231,11 +231,6 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
                     <span className="text-pf-success">B {t.id === "sent" ? counts.sent_b : counts.replied_b}</span>
                   </span>
                 )}
-                {t.id === "replied" && counts.replied_open > 0 && (
-                  <span className="rounded-pf-pill bg-pf-warn/15 px-1.5 text-[11px] text-pf-warn" title="Đã phản hồi, chưa xử lý xong">
-                    {counts.replied_open} chưa xử lý
-                  </span>
-                )}
                 {t.id === "queue" && counts.pending > 0 && (
                   <span className="rounded-pf-pill bg-pf-primary/15 px-1.5 text-[11px] text-pf-primary-hi">{counts.pending} chờ duyệt</span>
                 )}
@@ -370,7 +365,7 @@ function Filters({ tab, f }: { tab: UrspTab; f: UrspFilters }) {
           ))}
         </select>
       )}
-      {(tab === "replied" || tab === "working" || tab === "done" || tab === "sent") && (
+      {(tab === "replied" || tab === "working" || tab === "done" || tab === "dismissed" || tab === "sent") && (
         <>
           <select name="variant" defaultValue={f.variant ?? ""} className={`${FIELD} w-[150px]!`} aria-label="Bản tin">
             <option value="">Mọi bản tin</option>
@@ -410,11 +405,6 @@ function Filters({ tab, f }: { tab: UrspTab; f: UrspFilters }) {
             ))}
           </select>
         </>
-      )}
-      {tab === "replied" && (
-        <label className="flex h-[38px] items-center gap-1.5 text-pf-muted">
-          <input type="checkbox" name="open" value="1" defaultChecked={f.open === "1"} /> Chỉ chưa xử lý
-        </label>
       )}
       <button type="submit" className="h-[38px] rounded-pf-md bg-pf-primary px-4 text-[13px] font-semibold text-white hover:bg-pf-primary-hi">
         Lọc

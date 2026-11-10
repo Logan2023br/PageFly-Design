@@ -151,7 +151,7 @@ export async function recentNotices(sections: AdminSection[]): Promise<AdminNoti
               tone: "reply",
               text: `Upsell Responsive: khách ${who} vừa phản hồi tin nhắn.`,
               detail: said ? (said.length > 160 ? `${said.slice(0, 160)}…` : said) : undefined,
-              href: urspHref("replied", r.store_domain),
+              href: urspHref("sent", r.store_domain),
             });
           }
           /* Haiku read it as a yes: the moment to act */
@@ -161,7 +161,7 @@ export async function recentNotices(sections: AdminSection[]): Promise<AdminNoti
               at: new Date(r.classified_at).toISOString(),
               tone: "celebrate",
               text: `Upsell Responsive: khách ${who} đồng ý review responsive — xử lý ngay!`,
-              href: urspHref("replied", r.store_domain),
+              href: urspHref("sent", r.store_domain),
             });
           if (recent(r.upgraded_at))
             out.push({
