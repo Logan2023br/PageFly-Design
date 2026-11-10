@@ -86,6 +86,26 @@ export async function classifyCategories(values: string[]): Promise<{ value: str
   );
 }
 
+/**
+ * What the customer wrote, in one short Vietnamese sentence — for the case's
+ * notes. Without the model: the first words of it.
+ */
+export async function summarizeReply(text: string): Promise<string> {
+  const said = text.replace(/\s+/g, " ").trim();
+  const a = await ask(
+    [
+      "A Shopify merchant wrote this to PageFly support (latest last):",
+      "<<<",
+      said.slice(-1500),
+      ">>>",
+      "Sum it up in ONE short Vietnamese sentence (at most 25 words): what they say or want. Reply with the sentence only.",
+    ].join("\n"),
+    120,
+  );
+  const line = a?.replace(/\s+/g, " ").trim();
+  return line && line.length > 3 ? line.slice(0, 300) : said.length > 160 ? `${said.slice(0, 160)}…` : said;
+}
+
 export type ReplyRead = { intent: "agree" | "decline" | "question" | "other"; mood: "happy" | "neutral" | "unhappy"; note: string; by: "haiku" | "match" };
 
 /**

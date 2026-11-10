@@ -61,7 +61,10 @@ export const STAGE_LABEL: Record<string, string> = {
   dismissed: "Đã bỏ qua",
 };
 
-export type UrspNote = { id: string; target_id: string; stage: string; text: string; by: string; at: string };
+export type UrspNote = { id: string; target_id: string; stage: string; text: string; by: string; at: string; kind: "team" | "customer" };
+
+/** "1: …" typed by hand: the numbering is the screen's, so the typed one goes. */
+export const unnumbered = (s: string) => s.replace(/^\s*\d+\s*[:.)\-–]\s*/, "").trim();
 
 export type UrspTarget = {
   id: string;

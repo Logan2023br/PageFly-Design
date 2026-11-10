@@ -441,7 +441,7 @@ export async function abBySegment(): Promise<AbSegmentRow[]> {
 export async function notesFor(ids: string[]): Promise<Record<string, UrspNote[]>> {
   if (!ids.length) return {};
   const { rows } = await (await db()).query<UrspNote>(
-    "select id, target_id, stage, text, by, at from ursp_notes where target_id = any($1::bigint[]) order by at",
+    "select id, target_id, stage, text, by, at, kind from ursp_notes where target_id = any($1::bigint[]) order by at, id",
     [ids],
   );
   const out: Record<string, UrspNote[]> = {};

@@ -22,10 +22,10 @@ import { connection } from "@/lib/storeSetUpsell/settings";
 import { readSheetValues } from "@/lib/sheet";
 import { sessionOf, sheetTime } from "@/lib/ucp2/core";
 import { UpsellError } from "@/lib/upsell/types";
-import { classifyCategories, readReply } from "./ai";
+import { classifyCategories, readReply, summarizeReply } from "./ai";
 import { db, getState, hasUrspDatabase, logEvent, setState, tx } from "./db";
 import { campaignOver, getUrspSettings, runState, type UrspSettings } from "./settings";
-import { SEGMENTS, SKIP_REASONS, type Segment, type SkipCode, type UrspTarget } from "./types";
+import { SEGMENTS, SKIP_REASONS, unnumbered, type Segment, type SkipCode, type UrspTarget } from "./types";
 
 /* ==========================================================================
    Upsell Responsive: who gets Logan's offer, the offer, and what came of it.
@@ -1121,6 +1121,7 @@ export async function trackOne(t: UrspTarget, cfg: UrspSettings, opts: { force?:
   const sent = new Date(t.sent_at).getTime();
   const patch: Record<string, unknown> = {};
   const events: [string, Record<string, unknown>][] = [];
+  const customerNotes: { text: string; at: string }[] = [];
   const errors: string[] = [];
 
   if (opts.force || age(t.crisp_checked_at) > CRISP_EVERY_MS) {
@@ -1148,6 +1149,16 @@ export async function trackOne(t: UrspTarget, cfg: UrspSettings, opts: { force?:
             .slice(0, 1500);
           Object.assign(patch, { last_reply_at: new Date(lastSec * 1000).toISOString(), last_reply_text: text });
           events.push(["replied", { text: text.slice(0, 300) }]);
+          /* a case in hand: what they wrote since goes into its notes, summed up, in turn with the team's */
+          if (t.working_at && !t.done_at && !t.dismissed_at) {
+            const after = Math.max(t.last_reply_at ? new Date(t.last_reply_at).getTime() : 0, new Date(t.working_at).getTime());
+            const fresh = replies.filter((m) => Number(m.timestamp) > after + 999);
+            if (fresh.length)
+              customerNotes.push({
+                text: await summarizeReply(fresh.map((m) => textOf(m.content)).join("\n")),
+                at: new Date(Number(fresh[fresh.length - 1].timestamp)).toISOString(),
+              });
+          }
           const read = await readReply([t.message, t.followup_message].filter(Boolean).join("\n\n---\n\n"), text);
           Object.assign(patch, { reply_intent: read.intent, mood: read.mood, mood_note: read.note || null, classified_at: new Date().toISOString() });
           events.push(["classified", { intent: read.intent, mood: read.mood, by: read.by }]);
@@ -1221,6 +1232,8 @@ export async function trackOne(t: UrspTarget, cfg: UrspSettings, opts: { force?:
     const sets = keys.map((k, i) => `${k} = $${i + 2}`);
     await c.query(`update ursp_targets set ${[...sets, "tracked_at = now()", "updated_at = now()"].join(", ")} where id = $1`, [t.id, ...keys.map((k) => patch[k])]);
     for (const [type, detail] of events) await logEvent(c, t.id, type, actor, detail);
+    for (const n of customerNotes)
+      await c.query("insert into ursp_notes (target_id, stage, text, by, kind, at) values ($1, 'working', $2, 'Khách', 'customer', $3)", [t.id, n.text, n.at]);
     if (errors.length) await logEvent(c, t.id, "track_failed", actor, { errors });
   });
 }
@@ -1474,7 +1487,7 @@ export async function targetAction(id: string, action: TargetAction, by: string,
       return set("followup_status = 'skipped'", [], "followup_skipped");
     case "note": {
       only("sent");
-      const body = text?.trim() ?? "";
+      const body = unnumbered(text ?? "");
       if (!body || body.length > 2000) throw new UpsellError("Ghi chú từ 1 tới 2000 ký tự.", 422);
       const stage = t.dismissed_at ? "dismissed" : t.done_at ? "done" : t.working_at ? "working" : "open";
       await (await db()).query("insert into ursp_notes (target_id, stage, text, by) values ($1, $2, $3, $4)", [id, stage, body, by]);

@@ -28,7 +28,7 @@ import {
   type UrspTab,
 } from "@/lib/ursp/queries";
 import { URSP_HELP, URSP_NUMERIC, campaignOver, getUrspSettings, runState } from "@/lib/ursp/settings";
-import { INTENT_LABEL, MOOD_LABEL, SEGMENTS, SKIP_REASONS, STAGE_LABEL, STATUS_LABEL, type Segment, type UrspNote, type UrspTarget } from "@/lib/ursp/types";
+import { INTENT_LABEL, MOOD_LABEL, SEGMENTS, SKIP_REASONS, STAGE_LABEL, STATUS_LABEL, unnumbered, type Segment, type UrspNote, type UrspTarget } from "@/lib/ursp/types";
 
 /* /design/admin/responsive — Upsell Responsive: Logan offers BFMC customers
    a free review of their pages' responsive layout, and free fixes. Two
@@ -1209,7 +1209,14 @@ function SentTable({ rows, followupHours, notes }: { rows: UrspTarget[]; followu
                   <CaseNotes
                     id={t.id}
                     open={!!t.working_at && !t.done_at && !t.dismissed_at}
-                    notes={(notes[t.id] ?? []).map((n) => ({ id: n.id, stage: STAGE_LABEL[n.stage] ?? n.stage, text: n.text, by: n.by.replace(/^admin:/, ""), at: short(n.at) }))}
+                    notes={(notes[t.id] ?? []).map((n) => ({
+                      id: n.id,
+                      stage: STAGE_LABEL[n.stage] ?? n.stage,
+                      text: unnumbered(n.text),
+                      by: n.by.replace(/^admin:/, ""),
+                      at: short(n.at),
+                      customer: n.kind === "customer",
+                    }))}
                   />
                 </div>
               </td>

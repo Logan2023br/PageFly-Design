@@ -152,6 +152,8 @@ create table if not exists ursp_notes (
   at         timestamptz not null default now()
 );
 create index if not exists ursp_notes_target on ursp_notes (target_id, at);
+-- team: written on the screen; customer: what they replied, summed up, added by the tracker
+alter table ursp_notes add column if not exists kind text not null default 'team';
 
 create table if not exists ursp_state (
   key        text primary key,

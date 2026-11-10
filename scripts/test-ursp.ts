@@ -93,6 +93,7 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
       const cats = [...prompt.matchAll(/^- (".*")$/gm)].map((m) => JSON.parse(m[1]) as string);
       return reply({ content: [{ type: "text", text: JSON.stringify(Object.fromEntries(cats.map((c) => [c, /respons|repons|mobile/i.test(c)]))) }] });
     }
+    if (prompt.includes("ONE short Vietnamese sentence")) return reply({ content: [{ type: "text", text: "Khách hỏi khi nào team bắt đầu kiểm tra." }] });
     return reply({ content: [{ type: "text", text: '{"intent":"agree","mood":"happy","note":"Khách đồng ý, nhờ check trang chủ"}' }] });
   }
 
@@ -686,6 +687,38 @@ async function main() {
       refused = true;
     }
     check(refused, "an empty note is refused");
+  }
+
+  console.log("a case in hand: the thread");
+  {
+    store("thread.myshopify.com");
+    const tsid = "session_dddddddd-0000-0000-0000-000000000001";
+    await settings.saveUrspSettings({ mode: "auto", ab_split: 0 });
+    store("thread.myshopify.com", { lastActiveAt: iso(Date.now()) });
+    conv(tsid, "thread@x.test", now - 40 * 86_400_000);
+    await p.query("delete from ursp_state where key = 'active'");
+    await core.runJob(true);
+    await core.runJob(true);
+    const th = (await target("active", "thread.myshopify.com"))!;
+    check(th?.status === "sent" && th.session_id === tsid, "sent into the old conversation", th?.status);
+    /* the customer agrees; the team takes it up and writes "1: …" */
+    convs[tsid].msgs.push({ type: "text", from: "user", content: "YES please", timestamp: Date.now() + 1000 });
+    await p.query("update ursp_targets set tracked_at = null, crisp_checked_at = null where id = $1", [th.id]);
+    await core.trackOne((await target("active", "thread.myshopify.com"))!, await settings.getUrspSettings());
+    await core.targetAction(th.id, "start", "tu");
+    await core.targetAction(th.id, "note", "tu", "1: Đã xin access, chờ khách cấp quyền");
+    /* the customer writes again while the case is in hand */
+    await new Promise((r) => setTimeout(r, 1100));
+    convs[tsid].msgs.push({ type: "text", from: "user", content: "When will your team start? I just added you.", timestamp: Date.now() + 2000 });
+    await core.trackOne((await target("active", "thread.myshopify.com"))!, await settings.getUrspSettings(), { force: true });
+    await new Promise((r) => setTimeout(r, 2100));
+    await core.targetAction(th.id, "note", "tu", "Đã bắt đầu check mobile");
+    const thread = (await queries.notesFor([th.id]))[th.id] ?? [];
+    check(
+      thread.length === 3 && thread[0].kind === "team" && thread[0].text === "Đã xin access, chờ khách cấp quyền" && thread[1].kind === "customer" && thread[1].text === "Khách hỏi khi nào team bắt đầu kiểm tra." && thread[2].kind === "team",
+      "1 team, 2 the customer's reply summed up, 3 team — the typed '1:' dropped",
+      thread.map((n) => `${n.kind}:${n.text}`),
+    );
   }
 
   console.log("dev / bad-review segments");

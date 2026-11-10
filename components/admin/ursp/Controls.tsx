@@ -227,7 +227,7 @@ export function DoneButton({ id, done, working, dismissed }: { id: string; done:
   );
 }
 
-export type NoteView = { id: string; stage: string; text: string; by: string; at: string };
+export type NoteView = { id: string; stage: string; text: string; by: string; at: string; customer: boolean };
 
 /**
  * The case's notes: as many as needed, each filed under the stage it was
@@ -240,15 +240,16 @@ export function CaseNotes({ id, notes, open }: { id: string; notes: NoteView[]; 
     <details open={open || undefined} className="w-[230px] text-[12px]">
       <summary className="cursor-pointer text-pf-muted hover:text-pf-text">Ghi chú ({notes.length})</summary>
       <div className="mt-1.5 grid gap-1.5">
-        {notes.map((n) => (
-          <div key={n.id} className="rounded-pf-md border border-pf-border bg-pf-bg-deep px-2 py-1.5">
+        {/* one thread, numbered in time: the team's notes and, in between, what the customer replied */}
+        {notes.map((n, i) => (
+          <div key={n.id} className={`rounded-pf-md border px-2 py-1.5 ${n.customer ? "border-pf-primary-hi/40 bg-pf-primary/10" : "border-pf-border bg-pf-bg-deep"}`}>
             <div className="flex items-center justify-between gap-2 text-[10.5px] text-pf-faint">
-              <span className="font-semibold text-pf-muted">{n.stage}</span>
-              <span>
-                {n.by} · {n.at}
-              </span>
+              <span className={`font-semibold ${n.customer ? "text-pf-primary-hi" : "text-pf-muted"}`}>{n.customer ? "💬 Khách phản hồi" : n.stage}</span>
+              <span>{n.customer ? n.at : `${n.by} · ${n.at}`}</span>
             </div>
-            <div className="whitespace-pre-wrap text-[12px] text-pf-body">{n.text}</div>
+            <div className="whitespace-pre-wrap text-[12px] text-pf-body">
+              <b className="text-pf-text">{i + 1}:</b> {n.text}
+            </div>
           </div>
         ))}
         <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder="Thêm ghi chú…" className={`${FIELD} text-[12px]!`} aria-label="Ghi chú mới" />
