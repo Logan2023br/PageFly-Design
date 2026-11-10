@@ -1220,7 +1220,13 @@ function SentTable({ rows, followupHours }: { rows: UrspTarget[]; followupHours:
                 </div>
               </td>
               <td className={TD}>
-                <DoneButton id={t.id} done={!!t.done_at} by={t.done_by} at={short(t.done_at)} />
+                <DoneButton
+                  id={t.id}
+                  done={!!t.done_at}
+                  by={t.done_by}
+                  at={short(t.done_at)}
+                  dismissed={t.dismissed_at ? { by: t.dismissed_by, at: short(t.dismissed_at), reason: t.dismiss_reason } : null}
+                />
               </td>
             </tr>
           ))}

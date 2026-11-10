@@ -94,6 +94,9 @@ export type UrspTarget = {
   followup_approved_by: string | null;
   followup_sent_at: string | null;
   followup_error: string | null;
+  dismissed_at: string | null;
+  dismissed_by: string | null;
+  dismiss_reason: string | null;
   done_at: string | null;
   done_by: string | null;
   first_price: string | null;

@@ -132,25 +132,103 @@ export function ReleaseB({ held, auto }: { held: number; auto: boolean }) {
   );
 }
 
-/** "Đã xử lý xong" on a sent row — pressed again (Hoàn tác) it is open again. */
-export function DoneButton({ id, done, by, at }: { id: string; done: boolean; by: string | null; at: string | null }) {
+/**
+ * A sent row's handling: two buttons, "Đã xử lý xong" and "Bỏ qua" (which
+ * asks for the reason first). A pressed one stays lit with who and when —
+ * pressed again, it is undone and both are back.
+ */
+export function DoneButton({
+  id,
+  done,
+  by,
+  at,
+  dismissed,
+}: {
+  id: string;
+  done: boolean;
+  by: string | null;
+  at: string | null;
+  dismissed?: { by: string | null; at: string | null; reason: string | null } | null;
+}) {
   const [run, busy, error] = useAct();
+  const [asking, setAsking] = useState(false);
+  const [why, setWhy] = useState("");
+  const lit = "inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-pf-md border px-3 text-[12.5px] font-semibold transition-colors disabled:opacity-60";
+
+  if (done)
+    return (
+      <div className="grid justify-items-start gap-1">
+        <button
+          type="button"
+          disabled={busy}
+          title="Bấm lần nữa để bỏ đánh dấu"
+          onClick={() => void run(row(id), { action: "undone" })}
+          className={`${lit} border-pf-success/50 bg-pf-success/15 text-pf-success hover:bg-pf-success/25`}
+        >
+          ✓ Đã xử lý xong
+        </button>
+        <span className="text-[11px] text-pf-faint">
+          {by ?? ""}
+          {at ? ` · ${at}` : ""}
+        </span>
+        <ErrorLine error={error} />
+      </div>
+    );
+
+  if (dismissed)
+    return (
+      <div className="grid max-w-[220px] justify-items-start gap-1">
+        <button
+          type="button"
+          disabled={busy}
+          title="Bấm lần nữa để bỏ đánh dấu"
+          onClick={() => void run(row(id), { action: "undismiss" })}
+          className={`${lit} border-pf-border-hi bg-pf-card-hi text-pf-muted hover:text-pf-text`}
+        >
+          ⊘ Đã bỏ qua
+        </button>
+        {dismissed.reason && <span className="text-[11.5px] text-pf-body">{dismissed.reason}</span>}
+        <span className="text-[11px] text-pf-faint">
+          {dismissed.by ?? ""}
+          {dismissed.at ? ` · ${dismissed.at}` : ""}
+        </span>
+        <ErrorLine error={error} />
+      </div>
+    );
+
   return (
-    <div className="grid gap-1">
-      {done ? (
-        <>
-          <span className="inline-flex items-center gap-1 whitespace-nowrap text-[12px] font-semibold text-pf-success">✓ Đã xử lý xong</span>
-          <span className="text-[11px] text-pf-faint">
-            {by ?? ""}
-            {at ? ` · ${at}` : ""}
-          </span>
-          <button type="button" disabled={busy} onClick={() => void run(row(id), { action: "undone" })} className="text-left text-[11px] text-pf-faint hover:text-pf-text">
-            Hoàn tác
-          </button>
-        </>
+    <div className="grid justify-items-start gap-1.5">
+      <Button size="sm" variant="ghost" icon="Check" className="whitespace-nowrap" disabled={busy} onClick={() => void run(row(id), { action: "done" })}>
+        Đã xử lý xong
+      </Button>
+      {asking ? (
+        <div className="grid w-[220px] gap-1.5 text-[13px]">
+          <textarea
+            value={why}
+            onChange={(e) => setWhy(e.target.value)}
+            rows={3}
+            autoFocus
+            placeholder="Lý do bỏ qua…"
+            className={`${FIELD} text-[12.5px]!`}
+            aria-label="Lý do bỏ qua"
+          />
+          <div className="flex gap-1.5">
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy || why.trim().length < 2}
+              onClick={() => void run(row(id), { action: "dismiss", text: why.trim() }).then((ok) => ok && setAsking(false))}
+            >
+              Xác nhận bỏ qua
+            </Button>
+            <Button size="sm" variant="quiet" disabled={busy} onClick={() => setAsking(false)}>
+              Huỷ
+            </Button>
+          </div>
+        </div>
       ) : (
-        <Button size="sm" variant="ghost" icon="Check" className="whitespace-nowrap" disabled={busy} onClick={() => void run(row(id), { action: "done" })}>
-          Đã xử lý xong
+        <Button size="sm" variant="ghost" className="whitespace-nowrap" disabled={busy} onClick={() => setAsking(true)}>
+          ⊘ Bỏ qua
         </Button>
       )}
       <ErrorLine error={error} />

@@ -975,7 +975,7 @@ async function queueFollowups(cfg: UrspSettings): Promise<number> {
     `select * from ursp_targets
       where status = 'sent' and followup_status is null and read_at is not null and replied_at is null
         and (offer_until is null or offer_until > now())
-        and done_at is null and uninstalled_at is null and session_id is not null
+        and done_at is null and dismissed_at is null and uninstalled_at is null and session_id is not null
         and read_at <= now() - make_interval(hours => $1)
       order by read_at limit 50`,
     [cfg.followup_after_hours],
@@ -1351,6 +1351,8 @@ export type TargetAction =
   | "edit"
   | "done"
   | "undone"
+  | "dismiss"
+  | "undismiss"
   | "retry"
   | "send_anyway"
   | "track"
@@ -1374,7 +1376,8 @@ export async function targetAction(id: string, action: TargetAction, by: string,
   const t = rows[0];
   if (!t) throw new UpsellError("Không có row này.", 404);
   const msg = text?.trim();
-  if (msg !== undefined && (msg.length < 20 || msg.length > 5000)) throw new UpsellError("Tin nhắn phải từ 20 tới 5000 ký tự.", 422);
+  /* the text is a message, except for Bỏ qua, where it is the reason */
+  if (action !== "dismiss" && msg !== undefined && (msg.length < 20 || msg.length > 5000)) throw new UpsellError("Tin nhắn phải từ 20 tới 5000 ký tự.", 422);
   const cfg = await getUrspSettings();
   const only = (...st: string[]) => {
     if (!st.includes(t.status)) throw new UpsellError(`Row đang ở trạng thái "${t.status}" — không làm được việc này.`, 409);
@@ -1429,9 +1432,20 @@ export async function targetAction(id: string, action: TargetAction, by: string,
       }
       if (action === "retry_followup") return set("followup_status = 'approved', followup_error = null, wait_until = null", [], "followup_retry");
       return set("followup_status = 'skipped'", [], "followup_skipped");
+    case "dismiss": {
+      only("sent");
+      const why = text?.trim() ?? "";
+      if (why.length < 2 || why.length > 500) throw new UpsellError("Ghi lý do bỏ qua (2–500 ký tự).", 422);
+      if (t.done_at) throw new UpsellError("Store này đã xử lý xong — hoàn tác trước rồi mới bỏ qua.", 409);
+      return set("dismissed_at = now(), dismissed_by = $2, dismiss_reason = $3", [by, why], "dismissed", { reason: why });
+    }
+    case "undismiss":
+      only("sent");
+      return set("dismissed_at = null, dismissed_by = null, dismiss_reason = null", [], "undismissed");
     case "done":
       only("sent");
       if (t.done_at) return;
+      if (t.dismissed_at) throw new UpsellError("Store này đã bị bỏ qua — hoàn tác trước.", 409);
       return set("done_at = now(), done_by = $2", [by], "done");
     case "undone":
       only("sent");

@@ -626,6 +626,32 @@ async function main() {
     check(defs.REPORTS.ursp.byTypeHead === "Phân khúc · bản", "its own table heading");
   }
 
+  console.log("dismiss");
+  {
+    const d = (await target("active", "returning.myshopify.com"))!;
+    let refusedShort = false;
+    try {
+      await core.targetAction(d.id, "dismiss", "tu", " ");
+    } catch {
+      refusedShort = true;
+    }
+    check(refusedShort, "Bỏ qua needs a reason");
+    await core.targetAction(d.id, "dismiss", "tu", "Khách không dùng PageFly nữa");
+    const d1 = (await target("active", "returning.myshopify.com"))!;
+    check(d1.dismissed_at && d1.dismissed_by === "tu" && d1.dismiss_reason === "Khách không dùng PageFly nữa", "dismissed with who and why");
+    check((await queries.listTargets("sent", { outcome: "dismissed" })).rows.some((r) => r.id === d.id), "Kết quả: Đã bỏ qua");
+    check(!(await queries.listTargets("sent", { outcome: "not_done" })).rows.some((r) => r.id === d.id), "a dismissed store is not 'chưa xử lý'");
+    let refusedDone = false;
+    try {
+      await core.targetAction(d.id, "done", "tu");
+    } catch {
+      refusedDone = true;
+    }
+    check(refusedDone, "a dismissed store cannot be marked done until undone");
+    await core.targetAction(d.id, "undismiss", "tu");
+    check(!(await target("active", "returning.myshopify.com"))?.dismissed_at, "pressed again: back to both buttons");
+  }
+
   console.log("pause");
   await settings.setRunning(false, "admin:test");
   const sentBefore = convs[sid(2)].msgs.length;

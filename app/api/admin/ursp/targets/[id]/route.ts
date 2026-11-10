@@ -7,7 +7,22 @@ import { targetAction, type TargetAction } from "@/lib/ursp/core";
    done / undone (Đã xử lý xong), track (check Crisp and AC2 now). */
 export const dynamic = "force-dynamic";
 
-const ACTIONS: TargetAction[] = ["approve", "skip", "edit", "done", "undone", "retry", "send_anyway", "track"];
+const ACTIONS: TargetAction[] = [
+  "approve",
+  "skip",
+  "edit",
+  "done",
+  "undone",
+  "dismiss",
+  "undismiss",
+  "retry",
+  "send_anyway",
+  "track",
+  "approve_followup",
+  "skip_followup",
+  "edit_followup",
+  "retry_followup",
+];
 
 export async function POST(req: Request, ctx: RouteContext<"/api/admin/ursp/targets/[id]">) {
   if (!(await readAdminSection("ursp"))) return json({ ok: false, error: "Not signed in." }, 401);

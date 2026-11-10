@@ -121,6 +121,10 @@ alter table ursp_targets add column if not exists followup_error text;
 alter table ursp_targets add column if not exists offer_until timestamptz;
 -- A / B of an A/B test (null: before there was one); status 'held' is a B kept back, nothing sent
 alter table ursp_targets add column if not exists variant text;
+-- "Bỏ qua": the team let this one go, and said why
+alter table ursp_targets add column if not exists dismissed_at timestamptz;
+alter table ursp_targets add column if not exists dismissed_by text;
+alter table ursp_targets add column if not exists dismiss_reason text;
 create index if not exists ursp_targets_status on ursp_targets (status, created_at desc);
 create index if not exists ursp_targets_domain on ursp_targets (store_domain);
 create index if not exists ursp_targets_sent on ursp_targets (sent_at desc);
