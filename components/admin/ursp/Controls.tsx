@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { FIELD } from "../collections/shared";
 import { Button } from "../../ui";
@@ -136,13 +137,14 @@ type Who = { by: string | null; at: string | null };
 
 /**
  * A sent row's handling, one step at a time:
- *   not started   ▶ Tiến hành xử lý · ⊘ Bỏ qua (asks why)
+ *   not started   ▶ Tiến hành xử lý (and the screen follows it to Đang xử lý) · ⊘ Bỏ qua (asks why)
  *   in hand       ● Đang tiến hành xử lý (lit) · ✓ Đã xử lý xong · ✕ Huỷ (to Đã bỏ qua)
  *   done          ✓ Đã xử lý xong (lit) — pressed again, back in hand
  *   dismissed     ⊘ Đã bỏ qua (lit, with the reason) — pressed again, back to not started
  */
 export function DoneButton({ id, done, working, dismissed }: { id: string; done: Who | null; working: Who | null; dismissed?: (Who & { reason: string | null }) | null }) {
   const [run, busy, error] = useAct();
+  const router = useRouter();
   const [asking, setAsking] = useState(false);
   const [why, setWhy] = useState("");
   const lit = "inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-pf-md border px-3 text-[12.5px] font-semibold transition-colors disabled:opacity-60";
@@ -194,7 +196,7 @@ export function DoneButton({ id, done, working, dismissed }: { id: string; done:
 
   return (
     <div className="grid justify-items-start gap-1.5">
-      <Button size="sm" icon="Play" className="whitespace-nowrap" disabled={busy} onClick={() => void go("start")}>
+      <Button size="sm" icon="Play" className="whitespace-nowrap" disabled={busy} onClick={() => void go("start").then((ok) => ok && router.push(`/design/admin/responsive?tab=working&focus=${id}#case-${id}`))}>
         Tiến hành xử lý
       </Button>
       {asking ? (

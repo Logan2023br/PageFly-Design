@@ -193,7 +193,7 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
     body = (
       <>
         {pager}
-        {tab === "skipped" ? <SkippedTable rows={list.rows} /> : <SentTable rows={list.rows} followupHours={cfg.followup_after_hours} notes={notes} />}
+        {tab === "skipped" ? <SkippedTable rows={list.rows} /> : <SentTable rows={list.rows} followupHours={cfg.followup_after_hours} notes={notes} focus={one("focus")} />}
         {list.total > 0 && pager}
       </>
     );
@@ -1117,7 +1117,8 @@ function Seen({ t, hours }: { t: UrspTarget; hours: number }) {
   );
 }
 
-function SentTable({ rows, followupHours, notes }: { rows: UrspTarget[]; followupHours: number; notes: Record<string, UrspNote[]> }) {
+/** `focus`: the case just taken up — the screen lands on it, lit */
+function SentTable({ rows, followupHours, notes, focus }: { rows: UrspTarget[]; followupHours: number; notes: Record<string, UrspNote[]>; focus?: string }) {
   const TH = "px-3 py-2 font-semibold";
   const TD = "px-3 py-2 align-top";
   return (
@@ -1136,7 +1137,7 @@ function SentTable({ rows, followupHours, notes }: { rows: UrspTarget[]; followu
         </thead>
         <tbody>
           {rows.map((t) => (
-            <tr key={t.id} className="border-t border-pf-border">
+            <tr key={t.id} id={`case-${t.id}`} className={`scroll-mt-20 border-t border-pf-border ${focus === t.id ? "bg-pf-primary/10" : ""}`}>
               <td className={TD}>
                 <StoreCell t={t} />
               </td>
