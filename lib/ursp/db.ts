@@ -133,6 +133,8 @@ alter table ursp_targets add column if not exists review_ask_status text;
 alter table ursp_targets add column if not exists review_asked_at timestamptz;
 alter table ursp_targets add column if not exists review_asked_by text;
 alter table ursp_targets add column if not exists review_ask_error text;
+-- where it asked: shopify (the app's review form) | trustpilot | null (thanks only)
+alter table ursp_targets add column if not exists review_ask_where text;
 -- what Haiku made of the last reply after Đã xử lý xong: confirmed | more | unhappy | other
 alter table ursp_targets add column if not exists after_done_read text;
 create index if not exists ursp_targets_status on ursp_targets (status, created_at desc);

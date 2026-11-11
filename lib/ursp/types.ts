@@ -118,6 +118,7 @@ export type UrspTarget = {
   review_asked_at: string | null;
   review_asked_by: string | null;
   review_ask_error: string | null;
+  review_ask_where: string | null;
   after_done_read: string | null;
   done_at: string | null;
   done_by: string | null;

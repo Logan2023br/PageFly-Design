@@ -131,11 +131,13 @@ export async function recentNotices(sections: AdminSection[]): Promise<AdminNoti
     reads.push(
       (async () => {
         const { rows } = await (await upsellDb()).query(
-          `select store_domain, store_name, segment, variant, last_reply_at, last_reply_text, reply_intent, classified_at, upgraded_at, upgraded_to, reviewed_at, app_review
+          `select store_domain, store_name, segment, variant, last_reply_at, last_reply_text, reply_intent, classified_at, upgraded_at, upgraded_to, reviewed_at, app_review,
+                  review_ask_status, review_asked_at, review_asked_by, review_ask_where
              from ursp_targets
             where last_reply_at > now() - make_interval(hours => $1)
                or upgraded_at > now() - make_interval(hours => $1)
-               or reviewed_at > now() - make_interval(hours => $1)`,
+               or reviewed_at > now() - make_interval(hours => $1)
+               or (review_ask_status = 'sent' and review_asked_at > now() - make_interval(hours => $1))`,
           [WINDOW_HOURS],
         );
         const since = Date.now() - WINDOW_HOURS * 3_600_000;
@@ -178,6 +180,17 @@ export async function recentNotices(sections: AdminSection[]): Promise<AdminNoti
               tone: "celebrate",
               text: `Upsell Responsive: khách ${who} vừa review ${r.app_review ?? 5}★.`,
               href: urspHref("sent", r.store_domain),
+            });
+          /* the bot (or someone, by hand) thanked them and asked for a review */
+          if (r.review_ask_status === "sent" && recent(r.review_asked_at))
+            out.push({
+              id: `ursp-askreview:${r.store_domain}`,
+              at: new Date(r.review_asked_at).toISOString(),
+              tone: "done",
+              text: `Upsell Responsive: ${r.review_asked_by === "system" ? "bot " : ""}vừa gửi xin ${
+                r.review_ask_where === "trustpilot" ? "review Trustpilot" : r.review_ask_where === "shopify" ? "app review" : "lời cảm ơn (không xin review)"
+              } đối với store ${who}.`,
+              href: urspHref("done", r.store_domain),
             });
         }
       })(),

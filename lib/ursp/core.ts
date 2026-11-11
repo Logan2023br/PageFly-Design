@@ -1090,8 +1090,8 @@ async function askReview(id: string, cfg: UrspSettings, actor: string): Promise<
     await resolveConversation(t.session_id!).catch(() => undefined);
     await tx(async (c) => {
       await c.query(
-        "update ursp_targets set review_ask_status = 'sent', review_asked_at = now(), review_asked_by = $2, review_ask_error = null, updated_at = now() where id = $1",
-        [id, actor],
+        "update ursp_targets set review_ask_status = 'sent', review_asked_at = now(), review_asked_by = $2, review_ask_where = $3, review_ask_error = null, updated_at = now() where id = $1",
+        [id, actor, m.where],
       );
       await logEvent(c, id, "review_asked", actor, { where: m.where, stars: m.stars });
       await autoNote(
