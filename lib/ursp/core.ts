@@ -997,6 +997,8 @@ async function sendDue(cfg: UrspSettings): Promise<{ sent: number; errors: strin
 /* ---------------------------------------------------------------- review request */
 
 const REVIEW_URL = "https://apps.shopify.com/pagefly?#modal-show=ReviewListingModal";
+/* for a customer who already reviewed the app */
+const TRUSTPILOT_URL = "https://www.trustpilot.com/review/pagefly.io";
 
 const DEFAULT_REVIEW_THANKS = "Thanks so much for getting back to us, it’s great to hear that everything is working!";
 
@@ -1004,26 +1006,32 @@ const DEFAULT_REVIEW_ASK = `I’m really happy we could help you get ready for B
 
 If you have a moment, we’d love to hear about your experience with this PageFly service. Your honest feedback helps us keep improving our service for Black Friday and beyond.
 
-*[⭐ Share your experience with PageFly](${REVIEW_URL})*
+*[⭐ Share your experience with PageFly]({review_link})*
 
 Thank you, and we’re always here whenever you need us.`;
 
-/** The thank-you, then the review request — `ask` empty when they already gave 5★. */
+/**
+ * The thank-you, then the review request: the app's review form — or, when
+ * they already reviewed the app, Trustpilot. Rated under 4★: thanks only.
+ */
 export function reviewMessages(t: { store_name: string | null; store_domain: string } & Partial<Pick<UrspTarget, "reviewed_at" | "app_review" | "first_review">>, cfg: UrspSettings) {
   const fill = (s: string) =>
     s
       .replaceAll("{store_name}", (t.store_name?.trim() || t.store_domain.replace(/\.myshopify\.com$/, "")).replaceAll("*", "").toUpperCase())
       .replaceAll("{pic}", cfg.sender_name.toUpperCase());
-  const rated = !!t.reviewed_at || (t.app_review ?? 0) >= 5 || (t.first_review ?? 0) >= 5;
+  const stars = Math.max(t.reviewed_at ? 5 : 0, t.app_review ?? 0, t.first_review ?? 0);
+  const where = stars === 0 ? "shopify" : stars >= 4 ? "trustpilot" : null;
   return {
     thanks: fill(cfg.review_thanks_template.trim() || DEFAULT_REVIEW_THANKS),
-    ask: rated ? "" : fill(cfg.review_ask_template.trim() || DEFAULT_REVIEW_ASK),
+    ask: where ? fill(cfg.review_ask_template.trim() || DEFAULT_REVIEW_ASK).replaceAll("{review_link}", where === "trustpilot" ? TRUSTPILOT_URL : REVIEW_URL) : "",
+    where,
+    stars,
   };
 }
 
 /** Support asking for a review already — a link to the review form, or the words for it. Not our offer's "Review the responsive layout". */
 const ASKS_REVIEW =
-  /apps\.shopify\.com\/pagefly[^\s)]*(review|modal-show)|ReviewListingModal|leave (us |a |an )*(quick |short |honest )*review|write (us )?a review|(share|tell us about) your (experience|feedback)|rate us|rating for|give us (a |5 )|⭐{2,}|5[- ]?stars?\b|review (us )?on (the )?shopify/i;
+  /apps\.shopify\.com\/pagefly[^\s)]*(review|modal-show)|ReviewListingModal|leave (us |a |an )*(quick |short |honest )*review|write (us )?a review|(share|tell us about) your (experience|feedback)|rate us|rating for|give us (a |5 )|⭐{2,}|5[- ]?stars?\b|review (us )?on (the )?shopify|trustpilot\.com\/review/i;
 
 type Queryable = { query: (sql: string, params: unknown[]) => Promise<unknown> };
 const autoNote = (c: Queryable, id: string, stage: string, text: string) =>
@@ -1052,8 +1060,10 @@ async function askReview(id: string, cfg: UrspSettings, actor: string): Promise<
     });
     return blockedReason(seg);
   }
-  const m = reviewMessages(t, cfg);
   try {
+    /* their app review as it is now: reviewed already → Trustpilot */
+    const now = t.email ? await reviewCheck(t.email).catch(() => null) : null;
+    const m = reviewMessages({ ...t, app_review: now?.app_review ?? t.app_review }, cfg);
     /* read the conversation right before: support may have asked already (the loop runs every minute, they can be faster) */
     const msgs = await conversationMessages(t.session_id!);
     if (msgs.some((x) => x.from === "operator" && x.type === "text" && ASKS_REVIEW.test(textOf(x.content)))) {
@@ -1069,7 +1079,7 @@ async function askReview(id: string, cfg: UrspSettings, actor: string): Promise<
     if (m.ask) await sendInConversation(t.session_id!, m.ask, sender);
     await sendNote(
       t.session_id!,
-      `${tag(t)} The customer confirmed the fixed pages work. ${cfg.sender_name} thanked them${m.ask ? " and asked for an app review" : " (they already rated PageFly 5★, so no review request)"}.`,
+      `${tag(t)} The customer confirmed the fixed pages work. ${cfg.sender_name} thanked them${m.where === "shopify" ? " and asked for an app review" : m.where === "trustpilot" ? ` and, as they already reviewed the app (${m.stars}★), asked for a Trustpilot review` : ` (app review ${m.stars}★: no review request)`}.`,
     ).catch(() => undefined);
     await resolveConversation(t.session_id!).catch(() => undefined);
     await tx(async (c) => {
@@ -1077,8 +1087,17 @@ async function askReview(id: string, cfg: UrspSettings, actor: string): Promise<
         "update ursp_targets set review_ask_status = 'sent', review_asked_at = now(), review_asked_by = $2, review_ask_error = null, updated_at = now() where id = $1",
         [id, actor],
       );
-      await logEvent(c, id, "review_asked", actor, { thanks_only: !m.ask });
-      await autoNote(c, id, stage, m.ask ? `Đã gửi tin cảm ơn và tin xin review (${cfg.sender_name}).` : `Đã gửi tin cảm ơn (${cfg.sender_name}) — khách đã 5★ từ trước nên không xin review.`);
+      await logEvent(c, id, "review_asked", actor, { where: m.where, stars: m.stars });
+      await autoNote(
+        c,
+        id,
+        stage,
+        m.where === "shopify"
+          ? `Đã gửi tin cảm ơn và tin xin review app (${cfg.sender_name}).`
+          : m.where === "trustpilot"
+            ? `Đã gửi tin cảm ơn và tin xin review Trustpilot (${cfg.sender_name}) — khách đã review app ${m.stars}★.`
+            : `Đã gửi tin cảm ơn (${cfg.sender_name}) — khách review app ${m.stars}★ nên không xin review.`,
+      );
     });
     return null;
   } catch (err) {
