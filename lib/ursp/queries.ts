@@ -84,6 +84,9 @@ export const OUTCOME = {
   not_done: { label: "Chưa xử lý", sql: "t.done_at is null and t.dismissed_at is null and t.working_at is null" },
   working: { label: "Đang xử lý", sql: "t.working_at is not null and t.done_at is null and t.dismissed_at is null" },
   dismissed: { label: "Đã bỏ qua", sql: "t.dismissed_at is not null" },
+  review_asked: { label: "Đã xin review", sql: "t.review_ask_status = 'sent'" },
+  confirmed_after_done: { label: "Khách xác nhận ổn sau xử lý", sql: "t.after_done_read = 'confirmed'" },
+  more_after_done: { label: "Khách cần thêm / chưa hài lòng sau xử lý", sql: "t.after_done_read in ('more', 'unhappy')" },
   uninstalled: { label: "Đã gỡ app", sql: "t.uninstalled_at is not null" },
 } as const;
 

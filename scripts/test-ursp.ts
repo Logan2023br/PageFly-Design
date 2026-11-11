@@ -93,6 +93,11 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
       const cats = [...prompt.matchAll(/^- (".*")$/gm)].map((m) => JSON.parse(m[1]) as string);
       return reply({ content: [{ type: "text", text: JSON.stringify(Object.fromEntries(cats.map((c) => [c, /respons|repons|mobile/i.test(c)]))) }] });
     }
+    if (prompt.includes("NEW replies since then")) {
+      const said = prompt.split("NEW replies since then")[1].split(">>>")[0].toLowerCase();
+      const verdict = /still|another|also fix|broken/.test(said) ? "more" : /thank|works|great/.test(said) ? "confirmed" : "other";
+      return reply({ content: [{ type: "text", text: JSON.stringify({ verdict, summary: verdict === "more" ? "Khách nhờ sửa thêm footer trên mobile." : "Khách cảm ơn, mọi thứ đã ổn." }) }] });
+    }
     if (prompt.includes("ONE short Vietnamese sentence")) return reply({ content: [{ type: "text", text: "Khách hỏi khi nào team bắt đầu kiểm tra." }] });
     return reply({ content: [{ type: "text", text: '{"intent":"agree","mood":"happy","note":"Khách đồng ý, nhờ check trang chủ"}' }] });
   }
@@ -722,6 +727,40 @@ async function main() {
       "1 team, 2 the customer's reply summed up, 3 team — the typed '1:' dropped",
       thread.map((n) => `${n.kind}:${n.text}`),
     );
+  }
+
+  console.log("after Đã xử lý xong: thanks and a review request, or FL");
+  {
+    const th = (await target("active", "thread.myshopify.com"))!;
+    const tsid = th.session_id!;
+    const cfg = await settings.getUrspSettings();
+    const ours = () => convs[tsid].msgs.filter((m) => m.from === "operator" && m.type === "text").length;
+    await core.targetAction(th.id, "done", "tu");
+    /* they want more: nothing goes out, FL replies */
+    const before = ours();
+    convs[tsid].msgs.push({ type: "text", from: "user", content: "Thanks, but the footer is still broken on mobile", timestamp: Date.now() + 3000 });
+    await core.trackOne((await target("active", "thread.myshopify.com"))!, cfg, { force: true });
+    let t1 = (await target("active", "thread.myshopify.com"))!;
+    let ns = (await queries.notesFor([th.id]))[th.id] ?? [];
+    check(t1.after_done_read === "more" && !t1.review_ask_status && ours() === before, "wants more: no message", { read: t1.after_done_read, sent: ours() - before });
+    check(ns.some((n) => n.kind === "customer" && n.stage === "done") && ns.some((n) => n.kind === "auto" && n.text.includes("FL reply")), "the reply and 'FL reply' go into the notes", ns.map((n) => `${n.kind}:${n.text}`));
+    /* then pleased: Logan thanks them and asks for a review, once */
+    await new Promise((r) => setTimeout(r, 1100));
+    convs[tsid].msgs.push({ type: "text", from: "user", content: "Thank you so much, everything works great now!", timestamp: Date.now() + 4000 });
+    await core.trackOne((await target("active", "thread.myshopify.com"))!, cfg, { force: true });
+    t1 = (await target("active", "thread.myshopify.com"))!;
+    const out = convs[tsid].msgs.filter((m) => m.from === "operator" && m.type === "text").slice(-2).map((m) => String(m.content));
+    check(t1.review_ask_status === "sent" && ours() === before + 2, "confirmed: two messages", { status: t1.review_ask_status, read: t1.after_done_read, sent: ours() - before, ns: (await queries.notesFor([th.id]))[th.id]?.map((n) => n.text) });
+    check(out[0].startsWith("Thanks so much for getting back to us") && out[1].includes("[⭐ Share your experience with PageFly](https://apps.shopify.com/pagefly?#modal-show=ReviewListingModal)"), "the thanks, then the review request with its link", out);
+    ns = (await queries.notesFor([th.id]))[th.id] ?? [];
+    check(ns.some((n) => n.kind === "auto" && n.text.startsWith("Đã gửi tin cảm ơn và tin xin review")), "noted");
+    let again = false;
+    try {
+      await core.targetAction(th.id, "ask_review", "tu");
+    } catch {
+      again = true;
+    }
+    check(again && ours() === before + 2, "never twice");
   }
 
   console.log("dev / bad-review segments");

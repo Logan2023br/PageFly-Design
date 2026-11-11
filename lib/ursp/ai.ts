@@ -1,7 +1,7 @@
 import "server-only";
 
 /* ==========================================================================
-   The two questions Haiku answers for Upsell Responsive:
+   The questions Haiku answers for Upsell Responsive:
 
      category   is a Recap row's category_issue about mobile / responsive
                 layout? Support types it by hand — "Mobile/Responsive",
@@ -10,6 +10,8 @@ import "server-only";
                 ursp_categories by the caller.
      reply      what the customer's answer means (agrees, declines, asks)
                 and how satisfied they sound.
+     after done what they say once the pages were fixed: confirmed (→ thanks
+                and a review request), more, unhappy, other.
 
    Without ANTHROPIC_API_KEY, or when the call fails, a plain word match
    stands in, so the workflow never stops on the model.
@@ -104,6 +106,49 @@ export async function summarizeReply(text: string): Promise<string> {
   );
   const line = a?.replace(/\s+/g, " ").trim();
   return line && line.length > 3 ? line.slice(0, 300) : said.length > 160 ? `${said.slice(0, 160)}…` : said;
+}
+
+export type AfterDoneRead = { verdict: "confirmed" | "more" | "unhappy" | "other"; summary: string; by: "haiku" | "none" };
+
+/**
+ * After the team fixed the pages: what the customer's new replies say.
+ *   confirmed  thanks, appreciates it, confirms it works — and asks for nothing more
+ *   more       wants something else fixed or changed, reports something still off, asks a new question
+ *   unhappy    angry, annoyed, says it is not fixed or got worse
+ *   other      anything else
+ * Without the model nothing is "confirmed": no message goes out on a guess.
+ */
+export async function readAfterDone(context: string, replies: string): Promise<AfterDoneRead> {
+  const said = replies.replace(/\s+/g, " ").trim();
+  const a = json<{ verdict?: string; summary?: string }>(
+    await ask(
+      [
+        "PageFly support (a Shopify page builder) offered a merchant a free check of their pages on mobile, with free fixes.",
+        "The team has done the work and told the merchant. Earlier in the conversation:",
+        "<<<",
+        context.slice(-1500),
+        ">>>",
+        "The merchant's NEW replies since then (latest last):",
+        "<<<",
+        said.slice(-2000),
+        ">>>",
+        "Answer JSON only:",
+        '{"verdict": "confirmed" | "more" | "unhappy" | "other", "summary": "<ONE short Vietnamese sentence, at most 25 words: what they say or want>"}',
+        "confirmed = they thank us, appreciate it, or confirm it is fixed / works / looks good, AND ask for nothing more and raise no problem.",
+        "more = they want something else fixed, changed or checked, report something still wrong, or ask a new question — even if they also say thanks.",
+        "unhappy = they sound angry, annoyed or disappointed, or say it is not fixed or is worse.",
+        "other = anything else (unclear, unrelated, just an emoji).",
+        "When in doubt between confirmed and anything else, do NOT answer confirmed.",
+      ].join("\n"),
+      200,
+    ),
+  );
+  const verdicts = ["confirmed", "more", "unhappy", "other"] as const;
+  const summary = String(a?.summary ?? "").replace(/\s+/g, " ").trim();
+  const fallback = said.length > 160 ? `${said.slice(0, 160)}…` : said;
+  if (a && verdicts.includes(a.verdict as never))
+    return { verdict: a.verdict as AfterDoneRead["verdict"], summary: summary.length > 3 ? summary.slice(0, 300) : fallback, by: "haiku" };
+  return { verdict: "other", summary: fallback, by: "none" };
 }
 
 export type ReplyRead = { intent: "agree" | "decline" | "question" | "other"; mood: "happy" | "neutral" | "unhappy"; note: string; by: "haiku" | "match" };

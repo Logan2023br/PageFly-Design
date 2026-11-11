@@ -21,6 +21,7 @@ const ACTIONS: TargetAction[] = [
   "retry",
   "send_anyway",
   "track",
+  "ask_review",
   "approve_followup",
   "skip_followup",
   "edit_followup",

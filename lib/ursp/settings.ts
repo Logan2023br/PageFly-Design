@@ -57,6 +57,12 @@ export const URSP_DEFAULTS = {
   tracking_days: 45,
   /** a customer with any of these Crisp segments gets nothing from this program, comma separated */
   blocked_segments: "dev, bad-review, badreview",
+  /** 1: after Đã xử lý xong, a customer who confirms it works (Haiku reads it) is thanked and asked for a review, by sender_name */
+  review_ask_enabled: 1,
+  /** the thank-you sent first — empty: the built-in one */
+  review_thanks_template: "",
+  /** the review request sent after it — empty: the built-in one */
+  review_ask_template: "",
   /** added to the conversation on Crisp when the customer agrees to the offer */
   crisp_segment: "upsell-responsive",
 } as const;
@@ -92,6 +98,10 @@ export const URSP_HELP: Record<UrspKey, string> = {
   quiet_minutes: "Hội thoại có tin nhắn trong bấy nhiêu phút gần nhất (support đang chat) thì tin đợi, thử lại sau",
   tracking_days: "Theo dõi store đã gửi (đọc, phản hồi, nâng cấp, review) trong bấy nhiêu ngày",
   blocked_segments: "Khách có segment nào trong danh sách này (trên bất kỳ hội thoại Crisp nào) thì không gửi tin mời, không nhắc lại. Cách nhau dấu phẩy; không phân biệt hoa thường, gạch nối, dấu cách (bad-review = badreview)",
+  review_ask_enabled:
+    "1 = sau khi bấm Đã xử lý xong, khách reply cảm ơn / xác nhận đã ổn (Haiku đọc) thì tự gửi 2 tin dưới tên người gửi: cảm ơn, rồi xin review. Khách khó chịu / còn lỗi / muốn fix thêm thì không gửi gì, để FL reply · 0 = tắt",
+  review_thanks_template: "Tin cảm ơn gửi trước. Biến: {store_name} {pic}. Để trống dùng mẫu mặc định.",
+  review_ask_template: "Tin xin review gửi sau tin cảm ơn — link review viết dạng [chữ](link). Biến: {store_name} {pic}. Để trống dùng mẫu mặc định.",
   crisp_segment: "Segment gắn vào hội thoại trên Crisp khi khách reply đồng ý (Haiku đọc). Để trống: không gắn",
 };
 

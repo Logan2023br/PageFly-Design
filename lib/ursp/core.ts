@@ -22,7 +22,7 @@ import { connection } from "@/lib/storeSetUpsell/settings";
 import { readSheetValues } from "@/lib/sheet";
 import { sessionOf, sheetTime } from "@/lib/ucp2/core";
 import { UpsellError } from "@/lib/upsell/types";
-import { classifyCategories, readReply, summarizeReply } from "./ai";
+import { classifyCategories, readAfterDone, readReply, summarizeReply } from "./ai";
 import { db, getState, hasUrspDatabase, logEvent, setState, tx } from "./db";
 import { campaignOver, getUrspSettings, runState, type UrspSettings } from "./settings";
 import { SEGMENTS, SKIP_REASONS, unnumbered, type Segment, type SkipCode, type UrspTarget } from "./types";
@@ -72,6 +72,8 @@ export const recapServiceAccount = (): string | null => process.env.URSP_SHEET_S
 const RECAP_EVERY_MS = 5 * 60_000;
 const ACTIVE_EVERY_MS = 60 * 60_000;
 const CRISP_EVERY_MS = 15 * 60_000;
+/* a case in hand or done: its replies are read sooner — notes, and the review request */
+const CASE_EVERY_MS = 4 * 60_000;
 const SLOW_EVERY_MS = 6 * 60 * 60_000;
 const TRACK_BATCH = 25;
 const RECAP_BATCH = 500;
@@ -989,6 +991,89 @@ async function sendDue(cfg: UrspSettings): Promise<{ sent: number; errors: strin
   return out;
 }
 
+/* ---------------------------------------------------------------- review request */
+
+const REVIEW_URL = "https://apps.shopify.com/pagefly?#modal-show=ReviewListingModal";
+
+const DEFAULT_REVIEW_THANKS = "Thanks so much for getting back to us, it’s great to hear that everything is working!";
+
+const DEFAULT_REVIEW_ASK = `I’m really happy we could help you get ready for Black Friday. Your customers will now have a smooth experience every time they visit your store.
+
+If you have a moment, we’d love to hear about your experience with this PageFly service. Your honest feedback helps us keep improving our service for Black Friday and beyond.
+
+[⭐ Share your experience with PageFly](${REVIEW_URL})
+
+Thank you, and we’re always here whenever you need us.`;
+
+/** The thank-you, then the review request — `ask` empty when they already gave 5★. */
+export function reviewMessages(t: { store_name: string | null; store_domain: string } & Partial<Pick<UrspTarget, "reviewed_at" | "app_review" | "first_review">>, cfg: UrspSettings) {
+  const fill = (s: string) =>
+    s
+      .replaceAll("{store_name}", (t.store_name?.trim() || t.store_domain.replace(/\.myshopify\.com$/, "")).replaceAll("*", "").toUpperCase())
+      .replaceAll("{pic}", cfg.sender_name.toUpperCase());
+  const rated = !!t.reviewed_at || (t.app_review ?? 0) >= 5 || (t.first_review ?? 0) >= 5;
+  return {
+    thanks: fill(cfg.review_thanks_template.trim() || DEFAULT_REVIEW_THANKS),
+    ask: rated ? "" : fill(cfg.review_ask_template.trim() || DEFAULT_REVIEW_ASK),
+  };
+}
+
+type Queryable = { query: (sql: string, params: unknown[]) => Promise<unknown> };
+const autoNote = (c: Queryable, id: string, stage: string, text: string) =>
+  c.query("insert into ursp_notes (target_id, stage, text, by, kind) values ($1, $2, $3, 'Tự động', 'auto')", [id, stage, text]);
+
+/**
+ * The customer said the fixed pages work: sender_name thanks them and asks
+ * for a review, in their conversation — once per store (claimed, so two runs
+ * never send it twice). Returns why not, or null when sent.
+ */
+async function askReview(id: string, cfg: UrspSettings, actor: string): Promise<string | null> {
+  const p = await db();
+  const { rows } = await p.query<UrspTarget>(
+    `update ursp_targets set review_ask_status = 'sending', updated_at = now()
+      where id = $1 and status = 'sent' and session_id is not null and (review_ask_status is null or review_ask_status = 'failed') returning *`,
+    [id],
+  );
+  const t = rows[0];
+  if (!t) return "Đã gửi xin review rồi (hoặc đang gửi).";
+  const stage = t.done_at ? "done" : t.working_at ? "working" : "open";
+  const seg = await blockedBy(cfg, t.email, t.session_id).catch(() => null);
+  if (seg) {
+    await tx(async (c) => {
+      await c.query("update ursp_targets set review_ask_status = 'skipped', updated_at = now() where id = $1", [id]);
+      await autoNote(c, id, stage, `Không gửi xin review: ${blockedReason(seg).toLowerCase()}.`);
+    });
+    return blockedReason(seg);
+  }
+  const m = reviewMessages(t, cfg);
+  try {
+    const sender = await crispSender(cfg.sender_name, "");
+    await sendInConversation(t.session_id!, m.thanks, sender);
+    if (m.ask) await sendInConversation(t.session_id!, m.ask, sender);
+    await sendNote(
+      t.session_id!,
+      `${tag(t)} The customer confirmed the fixed pages work. ${cfg.sender_name} thanked them${m.ask ? " and asked for an app review" : " (they already rated PageFly 5★, so no review request)"}.`,
+    ).catch(() => undefined);
+    await resolveConversation(t.session_id!).catch(() => undefined);
+    await tx(async (c) => {
+      await c.query(
+        "update ursp_targets set review_ask_status = 'sent', review_asked_at = now(), review_asked_by = $2, review_ask_error = null, updated_at = now() where id = $1",
+        [id, actor],
+      );
+      await logEvent(c, id, "review_asked", actor, { thanks_only: !m.ask });
+      await autoNote(c, id, stage, m.ask ? `Đã gửi tin cảm ơn và tin xin review (${cfg.sender_name}).` : `Đã gửi tin cảm ơn (${cfg.sender_name}) — khách đã 5★ từ trước nên không xin review.`);
+    });
+    return null;
+  } catch (err) {
+    await tx(async (c) => {
+      await c.query("update ursp_targets set review_ask_status = 'failed', review_ask_error = $2, updated_at = now() where id = $1", [id, errText(err).slice(0, 500)]);
+      await logEvent(c, id, "review_ask_failed", actor, { error: errText(err).slice(0, 300) });
+    });
+    if (err instanceof ConfigMissing) throw err;
+    return `Gửi xin review lỗi: ${errText(err)}`;
+  }
+}
+
 /* ---------------------------------------------------------------- follow-up */
 
 /**
@@ -1120,10 +1205,14 @@ export async function trackOne(t: UrspTarget, cfg: UrspSettings, opts: { force?:
   const sent = new Date(t.sent_at).getTime();
   const patch: Record<string, unknown> = {};
   const events: [string, Record<string, unknown>][] = [];
-  const customerNotes: { text: string; at: string }[] = [];
+  const notes: { stage: string; text: string; at: string | null; kind: "customer" | "auto" }[] = [];
   const errors: string[] = [];
+  /* what the reply after Đã xử lý xong calls for, done once the row is saved */
+  let afterDone: "confirmed" | "more" | "unhappy" | "other" | null = null;
+  let answeredSince = false;
+  const inCase = !!(t.working_at || t.done_at) && !t.dismissed_at;
 
-  if (opts.force || age(t.crisp_checked_at) > CRISP_EVERY_MS) {
+  if (opts.force || age(t.crisp_checked_at) > (inCase ? CASE_EVERY_MS : CRISP_EVERY_MS)) {
     try {
       const msgs = await conversationMessages(t.session_id);
       const ours = msgs.filter((m) => m.from === "operator" && m.type === "text" && Number(m.timestamp) >= sent - 10 * 60_000);
@@ -1148,15 +1237,29 @@ export async function trackOne(t: UrspTarget, cfg: UrspSettings, opts: { force?:
             .slice(0, 1500);
           Object.assign(patch, { last_reply_at: new Date(lastSec * 1000).toISOString(), last_reply_text: text });
           events.push(["replied", { text: text.slice(0, 300) }]);
-          /* a case in hand: what they wrote since goes into its notes, summed up, in turn with the team's */
-          if (t.working_at && !t.done_at && !t.dismissed_at) {
-            const after = Math.max(t.last_reply_at ? new Date(t.last_reply_at).getTime() : 0, new Date(t.working_at).getTime());
+          /* a case in hand or done: what they wrote since goes into its notes, summed up, in turn with the team's */
+          if (inCase) {
+            const after = Math.max(t.last_reply_at ? new Date(t.last_reply_at).getTime() : 0, new Date((t.working_at ?? t.done_at)!).getTime());
             const fresh = replies.filter((m) => Number(m.timestamp) > after + 999);
-            if (fresh.length)
-              customerNotes.push({
-                text: await summarizeReply(fresh.map((m) => textOf(m.content)).join("\n")),
-                at: new Date(Number(fresh[fresh.length - 1].timestamp)).toISOString(),
-              });
+            const lastAt = fresh.length ? Number(fresh[fresh.length - 1].timestamp) : 0;
+            const at = new Date(lastAt).toISOString();
+            if (fresh.length && t.done_at) {
+              /* after the fixes: Haiku reads whether they are pleased and want nothing more */
+              const context = msgs
+                .filter((m) => m.from === "operator" && m.type === "text" && Number(m.timestamp) < Number(fresh[0].timestamp))
+                .slice(-3)
+                .map((m) => textOf(m.content))
+                .join("\n---\n");
+              const r = await readAfterDone(context, fresh.map((m) => textOf(m.content)).join("\n"));
+              afterDone = r.verdict;
+              /* support already answered them: nothing goes out on its own */
+              answeredSince = msgs.some((m) => m.from === "operator" && m.type === "text" && Number(m.timestamp) > lastAt);
+              patch.after_done_read = r.verdict;
+              events.push(["after_done", { verdict: r.verdict, by: r.by }]);
+              notes.push({ stage: "done", text: r.summary, at, kind: "customer" });
+              if (r.verdict === "more") notes.push({ stage: "done", text: "Khách muốn fix / hỏi thêm — không tự gửi gì, để FL reply.", at: null, kind: "auto" });
+              if (r.verdict === "unhappy") notes.push({ stage: "done", text: "Khách chưa hài lòng / còn lỗi — không tự gửi gì, để FL reply.", at: null, kind: "auto" });
+            } else if (fresh.length) notes.push({ stage: "working", text: await summarizeReply(fresh.map((m) => textOf(m.content)).join("\n")), at, kind: "customer" });
           }
           const read = await readReply([t.message, t.followup_message].filter(Boolean).join("\n\n---\n\n"), text);
           Object.assign(patch, { reply_intent: read.intent, mood: read.mood, mood_note: read.note || null, classified_at: new Date().toISOString() });
@@ -1231,16 +1334,34 @@ export async function trackOne(t: UrspTarget, cfg: UrspSettings, opts: { force?:
     const sets = keys.map((k, i) => `${k} = $${i + 2}`);
     await c.query(`update ursp_targets set ${[...sets, "tracked_at = now()", "updated_at = now()"].join(", ")} where id = $1`, [t.id, ...keys.map((k) => patch[k])]);
     for (const [type, detail] of events) await logEvent(c, t.id, type, actor, detail);
-    for (const n of customerNotes)
-      await c.query("insert into ursp_notes (target_id, stage, text, by, kind, at) values ($1, 'working', $2, 'Khách', 'customer', $3)", [t.id, n.text, n.at]);
+    for (const n of notes)
+      await c.query("insert into ursp_notes (target_id, stage, text, by, kind, at) values ($1, $2, $3, $4, $5, coalesce($6::timestamptz, now()))", [
+        t.id,
+        n.stage,
+        n.text,
+        n.kind === "customer" ? "Khách" : "Tự động",
+        n.kind,
+        n.at,
+      ]);
     if (errors.length) await logEvent(c, t.id, "track_failed", actor, { errors });
   });
+
+  /* pleased, and nothing more asked: thanks and a review request — once */
+  if (afterDone === "confirmed" && !t.review_ask_status) {
+    const p = await db();
+    if (!cfg.review_ask_enabled) await autoNote(p, t.id, "done", "Khách xác nhận đã ổn — tự gửi xin review đang tắt, có thể bấm Gửi xin review.");
+    else if (answeredSince) await autoNote(p, t.id, "done", "Khách xác nhận đã ổn, nhưng support đã trả lời trước — không tự gửi; bấm Gửi xin review nếu cần.");
+    else await askReview(t.id, cfg, actor);
+  }
 }
 
 async function trackBatch(cfg: UrspSettings): Promise<{ tracked: number; remaining: number; errors: string[] }> {
   const p = await db();
-  const due = `status = 'sent' and sent_at > now() - make_interval(days => $1) and (tracked_at is null or tracked_at < now() - interval '10 minutes')`;
-  const { rows } = await p.query<UrspTarget>(`select * from ursp_targets where ${due} order by tracked_at nulls first, sent_at desc limit $2`, [
+  /* cases in hand or done first, and every few minutes; the rest every ~15 */
+  const inCase = "((working_at is not null or done_at is not null) and dismissed_at is null)";
+  const due = `status = 'sent' and sent_at > now() - make_interval(days => $1)
+               and (tracked_at is null or tracked_at < now() - case when ${inCase} then interval '3 minutes' else interval '10 minutes' end)`;
+  const { rows } = await p.query<UrspTarget>(`select * from ursp_targets where ${due} order by ${inCase} desc, tracked_at nulls first, sent_at desc limit $2`, [
     cfg.tracking_days,
     TRACK_BATCH,
   ]);
@@ -1408,6 +1529,7 @@ export type TargetAction =
   | "retry"
   | "send_anyway"
   | "track"
+  | "ask_review"
   | "approve_followup"
   | "skip_followup"
   | "edit_followup"
@@ -1530,5 +1652,12 @@ export async function targetAction(id: string, action: TargetAction, by: string,
     case "track":
       only("sent");
       return trackOne(t, cfg, { force: true, actor: by });
+    case "ask_review": {
+      only("sent");
+      if (!t.done_at) throw new UpsellError("Chỉ xin review khi case đã xử lý xong.", 409);
+      const why = await askReview(t.id, cfg, by);
+      if (why) throw new UpsellError(why, 409);
+      return;
+    }
   }
 }

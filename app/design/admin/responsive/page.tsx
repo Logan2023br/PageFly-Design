@@ -6,7 +6,7 @@ import { FIELD } from "@/components/admin/fieldClass";
 import { CrispLink, Pill } from "@/components/admin/upsell/bits";
 import { CaseNotes, DoneButton, ModeSwitch, RecapBackfill, ReleaseB, QueueActions, RunControls, SendAnyway, SettingsForm, TrackButton } from "@/components/admin/ursp/Controls";
 import { vnTime } from "@/lib/ucp2/core";
-import { RECAP_SHEET_URL, composeMessage, recapServiceAccount, deadlineText, offerUntil, withDeadline, type ActiveResult, type BackfillState, type JobState, type RecapResult } from "@/lib/ursp/core";
+import { RECAP_SHEET_URL, composeMessage, recapServiceAccount, deadlineText, offerUntil, reviewMessages, withDeadline, type ActiveResult, type BackfillState, type JobState, type RecapResult } from "@/lib/ursp/core";
 import { getState, hasUrspDatabase } from "@/lib/ursp/db";
 import {
   OUTCOME,
@@ -136,6 +136,8 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
           recap_template: withDeadline(composeMessage("recap", { store_name: "Sun Coast Elements", store_domain: "x.myshopify.com" }, { ...cfg, recap_template: "" }), offerUntil(cfg)),
           active_template: withDeadline(composeMessage("active", { store_name: "Sun Coast Elements", store_domain: "x.myshopify.com" }, { ...cfg, active_template: "" }), offerUntil(cfg)),
           followup_template: withDeadline(composeMessage("followup", { store_name: "Sun Coast Elements", store_domain: "x.myshopify.com" }, { ...cfg, followup_template: "" }), offerUntil(cfg)),
+          review_thanks_template: reviewMessages({ store_name: "Sun Coast Elements", store_domain: "x.myshopify.com" }, { ...cfg, review_thanks_template: "" }).thanks,
+          review_ask_template: reviewMessages({ store_name: "Sun Coast Elements", store_domain: "x.myshopify.com" }, { ...cfg, review_ask_template: "" }).ask,
         }}
       />
     );
@@ -1117,6 +1119,14 @@ function Seen({ t, hours }: { t: UrspTarget; hours: number }) {
   );
 }
 
+/** What Haiku made of the reply after Đã xử lý xong. */
+const AFTER_DONE: Record<string, { label: string; tone: string }> = {
+  confirmed: { label: "Sau xử lý: khách xác nhận ổn", tone: "text-pf-success" },
+  more: { label: "Sau xử lý: khách cần thêm — FL reply", tone: "text-pf-warn" },
+  unhappy: { label: "Sau xử lý: khách chưa hài lòng — FL reply", tone: "text-pf-danger" },
+  other: { label: "Sau xử lý: khách có phản hồi", tone: "text-pf-muted" },
+};
+
 /** `focus`: the case just taken up — the screen lands on it, lit */
 function SentTable({ rows, followupHours, notes, focus }: { rows: UrspTarget[]; followupHours: number; notes: Record<string, UrspNote[]>; focus?: string }) {
   const TH = "px-3 py-2 font-semibold";
@@ -1195,6 +1205,9 @@ function SentTable({ rows, followupHours, notes, focus }: { rows: UrspTarget[]; 
                   ) : (
                     <span className="text-pf-faint">Chưa review{t.app_review ? ` · ${t.app_review}★` : ""}</span>
                   )}
+                  {t.review_ask_status === "sent" && t.review_asked_at && <span className="text-pf-success">⭐ Đã xin review {short(t.review_asked_at)}</span>}
+                  {t.review_ask_status === "failed" && <span className="text-pf-danger">Xin review lỗi: {t.review_ask_error}</span>}
+                  {t.done_at && t.after_done_read && <span className={AFTER_DONE[t.after_done_read]?.tone ?? "text-pf-muted"}>{AFTER_DONE[t.after_done_read]?.label ?? t.after_done_read}</span>}
                   {t.uninstalled_at && <span className="text-pf-warn">Gỡ app {short(t.uninstalled_at)}</span>}
                   <TrackButton id={t.id} />
                 </div>
@@ -1205,11 +1218,12 @@ function SentTable({ rows, followupHours, notes, focus }: { rows: UrspTarget[]; 
                   done={t.done_at ? { by: t.done_by, at: short(t.done_at) } : null}
                   working={t.working_at ? { by: t.working_by, at: short(t.working_at) } : null}
                   dismissed={t.dismissed_at ? { by: t.dismissed_by, at: short(t.dismissed_at), reason: t.dismiss_reason } : null}
+                  reviewAsked={t.review_ask_status === "sent"}
                 />
                 <div className="mt-2">
                   <CaseNotes
                     id={t.id}
-                    open={!!t.working_at && !t.done_at && !t.dismissed_at}
+                    open={!!(t.working_at || t.done_at) && !t.dismissed_at}
                     notes={(notes[t.id] ?? []).map((n) => ({
                       id: n.id,
                       stage: STAGE_LABEL[n.stage] ?? n.stage,
@@ -1217,6 +1231,7 @@ function SentTable({ rows, followupHours, notes, focus }: { rows: UrspTarget[]; 
                       by: n.by.replace(/^admin:/, ""),
                       at: short(n.at),
                       customer: n.kind === "customer",
+                      auto: n.kind === "auto",
                     }))}
                   />
                 </div>

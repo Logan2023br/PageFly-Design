@@ -128,6 +128,13 @@ alter table ursp_targets add column if not exists working_by text;
 alter table ursp_targets add column if not exists dismissed_at timestamptz;
 alter table ursp_targets add column if not exists dismissed_by text;
 alter table ursp_targets add column if not exists dismiss_reason text;
+-- after Đã xử lý xong: the customer confirmed it works → Logan thanks them and asks for a review, once
+alter table ursp_targets add column if not exists review_ask_status text;
+alter table ursp_targets add column if not exists review_asked_at timestamptz;
+alter table ursp_targets add column if not exists review_asked_by text;
+alter table ursp_targets add column if not exists review_ask_error text;
+-- what Haiku made of the last reply after Đã xử lý xong: confirmed | more | unhappy | other
+alter table ursp_targets add column if not exists after_done_read text;
 create index if not exists ursp_targets_status on ursp_targets (status, created_at desc);
 create index if not exists ursp_targets_domain on ursp_targets (store_domain);
 create index if not exists ursp_targets_sent on ursp_targets (sent_at desc);
@@ -152,7 +159,8 @@ create table if not exists ursp_notes (
   at         timestamptz not null default now()
 );
 create index if not exists ursp_notes_target on ursp_notes (target_id, at);
--- team: written on the screen; customer: what they replied, summed up, added by the tracker
+-- team: written on the screen; customer: what they replied, summed up, added by the tracker;
+-- auto: what the workflow did or held back on its own (the review request, "FL reply")
 alter table ursp_notes add column if not exists kind text not null default 'team';
 
 create table if not exists ursp_state (

@@ -139,10 +139,22 @@ type Who = { by: string | null; at: string | null };
  * A sent row's handling, one step at a time:
  *   not started   ▶ Tiến hành xử lý (and the screen follows it to Đang xử lý) · ⊘ Bỏ qua (asks why)
  *   in hand       ● Đang tiến hành xử lý (lit) · ✓ Đã xử lý xong · ✕ Huỷ (to Đã bỏ qua)
- *   done          ✓ Đã xử lý xong (lit) — pressed again, back in hand
+ *   done          ✓ Đã xử lý xong (lit) — pressed again, back in hand · ⭐ Gửi xin review (by hand, once)
  *   dismissed     ⊘ Đã bỏ qua (lit, with the reason) — pressed again, back to not started
  */
-export function DoneButton({ id, done, working, dismissed }: { id: string; done: Who | null; working: Who | null; dismissed?: (Who & { reason: string | null }) | null }) {
+export function DoneButton({
+  id,
+  done,
+  working,
+  dismissed,
+  reviewAsked,
+}: {
+  id: string;
+  done: Who | null;
+  working: Who | null;
+  dismissed?: (Who & { reason: string | null }) | null;
+  reviewAsked?: boolean;
+}) {
   const [run, busy, error] = useAct();
   const router = useRouter();
   const [asking, setAsking] = useState(false);
@@ -163,6 +175,11 @@ export function DoneButton({ id, done, working, dismissed }: { id: string; done:
           ✓ Đã xử lý xong
         </button>
         {who(done)}
+        {!reviewAsked && (
+          <Button size="sm" variant="ghost" className="whitespace-nowrap" disabled={busy} onClick={() => void go("ask_review")}>
+            ⭐ Gửi xin review
+          </Button>
+        )}
         <ErrorLine error={error} />
       </div>
     );
@@ -229,7 +246,7 @@ export function DoneButton({ id, done, working, dismissed }: { id: string; done:
   );
 }
 
-export type NoteView = { id: string; stage: string; text: string; by: string; at: string; customer: boolean };
+export type NoteView = { id: string; stage: string; text: string; by: string; at: string; customer: boolean; auto?: boolean };
 
 /**
  * The case's notes: as many as needed, each filed under the stage it was
@@ -244,10 +261,15 @@ export function CaseNotes({ id, notes, open }: { id: string; notes: NoteView[]; 
       <div className="mt-1.5 grid gap-1.5">
         {/* one thread, numbered in time: the team's notes and, in between, what the customer replied */}
         {notes.map((n, i) => (
-          <div key={n.id} className={`rounded-pf-md border px-2 py-1.5 ${n.customer ? "border-pf-primary-hi/40 bg-pf-primary/10" : "border-pf-border bg-pf-bg-deep"}`}>
+          <div
+            key={n.id}
+            className={`rounded-pf-md border px-2 py-1.5 ${n.customer ? "border-pf-primary-hi/40 bg-pf-primary/10" : n.auto ? "border-pf-success/40 bg-pf-success/10" : "border-pf-border bg-pf-bg-deep"}`}
+          >
             <div className="flex items-center justify-between gap-2 text-[10.5px] text-pf-faint">
-              <span className={`font-semibold ${n.customer ? "text-pf-primary-hi" : "text-pf-muted"}`}>{n.customer ? "💬 Khách phản hồi" : n.stage}</span>
-              <span>{n.customer ? n.at : `${n.by} · ${n.at}`}</span>
+              <span className={`font-semibold ${n.customer ? "text-pf-primary-hi" : n.auto ? "text-pf-success" : "text-pf-muted"}`}>
+                {n.customer ? "💬 Khách phản hồi" : n.auto ? `🤖 Tự động · ${n.stage}` : n.stage}
+              </span>
+              <span>{n.customer || n.auto ? n.at : `${n.by} · ${n.at}`}</span>
             </div>
             <div className="whitespace-pre-wrap text-[12px] text-pf-body">
               <b className="text-pf-text">{i + 1}:</b> {n.text}
