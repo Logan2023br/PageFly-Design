@@ -1222,7 +1222,9 @@ function SentTable({ rows, followupHours, notes, focus }: { rows: UrspTarget[]; 
                   reviewAsked={t.review_ask_status === "sent" || t.review_ask_status === "skipped"}
                 />
                 <div className="mt-2">
+                  {/* keyed on open: a <details> keeps whatever it was when the row moves from tab to tab, so it starts over open */}
                   <CaseNotes
+                    key={t.working_at || t.done_at ? "open" : "shut"}
                     id={t.id}
                     open={!!(t.working_at || t.done_at) && !t.dismissed_at}
                     notes={(notes[t.id] ?? []).map((n) => ({
