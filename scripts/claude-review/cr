@@ -2,7 +2,7 @@
 # ./cr <script.py> [args...] — run a Claude Review script with a Python that has the review packages.
 #
 # The first call finds a working interpreter (packages + Playwright that launches the preinstalled
-# Chromium), installs what is missing (pinned Playwright 1.56 = the Chromium in /opt/pw-browsers),
+# Chromium), installs what is missing (the Playwright version of the image's Node Playwright, = the Chromium in /opt/pw-browsers),
 # and remembers it in $CR_WORK/.python. Every later call reuses it. Never runs `playwright install`.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,11 +21,14 @@ EOF
 
 if [ ! -s "$PYF" ] || ! "$(cat "$PYF")" -c "import numpy, PIL, playwright" >/dev/null 2>&1; then
   found=""
+  # Python Playwright must match the preinstalled Chromium; Node Playwright in the image tells which.
+  PWV="$(node -e "console.log(require('playwright/package.json').version)" 2>/dev/null | cut -d. -f1,2 || true)"
+  PWV="${PWV:-1.56}"
   for p in /usr/bin/python3 python3 python3.13 python3.12 python3.11; do
     command -v "$p" >/dev/null 2>&1 || continue
     p="$(command -v "$p")"
     works "$p" && { found="$p"; break; }
-    "$p" -m pip install --break-system-packages -q pillow numpy "playwright==1.56.*" >/dev/null 2>&1 || true
+    "$p" -m pip install --break-system-packages -q pillow numpy "playwright==$PWV.*" >/dev/null 2>&1 || true
     works "$p" && { found="$p"; break; }
   done
   if [ -z "$found" ]; then
