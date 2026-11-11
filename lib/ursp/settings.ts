@@ -101,7 +101,7 @@ export const URSP_HELP: Record<UrspKey, string> = {
   review_ask_enabled:
     "1 = sau khi bấm Đã xử lý xong, khách reply cảm ơn / xác nhận đã ổn (Haiku đọc) thì tự gửi 2 tin dưới tên người gửi: cảm ơn, rồi xin review. Khách khó chịu / còn lỗi / muốn fix thêm thì không gửi gì, để FL reply · 0 = tắt",
   review_thanks_template: "Tin cảm ơn gửi trước. Biến: {store_name} {pic}. Để trống dùng mẫu mặc định.",
-  review_ask_template: "Tin xin review gửi sau tin cảm ơn — link review viết dạng [chữ](link). Biến: {store_name} {pic}. Để trống dùng mẫu mặc định.",
+  review_ask_template: "Tin xin review gửi sau tin cảm ơn — link review viết dạng [chữ](link), in nghiêng bọc *…*. Biến: {store_name} {pic}. Để trống dùng mẫu mặc định.",
   crisp_segment: "Segment gắn vào hội thoại trên Crisp khi khách reply đồng ý (Haiku đọc). Để trống: không gắn",
 };
 

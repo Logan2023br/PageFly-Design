@@ -1001,7 +1001,7 @@ const DEFAULT_REVIEW_ASK = `I’m really happy we could help you get ready for B
 
 If you have a moment, we’d love to hear about your experience with this PageFly service. Your honest feedback helps us keep improving our service for Black Friday and beyond.
 
-[⭐ Share your experience with PageFly](${REVIEW_URL})
+*[⭐ Share your experience with PageFly](${REVIEW_URL})*
 
 Thank you, and we’re always here whenever you need us.`;
 
