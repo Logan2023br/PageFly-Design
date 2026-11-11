@@ -9,7 +9,7 @@ import {
   removeSegment,
   conversationMessages,
   crispSender,
-  customerSegments,
+  customerMeta,
   resolveConversation,
   reviewCheck,
   sendInConversation,
@@ -346,20 +346,25 @@ async function alreadySent(id: string | null, domain: string, email: string | nu
 const sentReason = (d: UrspTarget, domain: string) =>
   `${SKIP_REASONS.already_sent} — ${d.store_domain === domain ? "" : `cùng email với ${d.store_domain}, `}${SEGMENTS[d.segment].label}${d.sent_at ? ` ${new Date(d.sent_at).toISOString().slice(0, 10)}` : ""}`;
 
+type Block = { code: "blocked_segment" | "reviewed"; reason: string };
+
 /**
- * A segment that says "leave this customer alone" (dev, bad-review…) on any
- * of their Crisp conversations — null when there is none.
+ * Why this customer is left alone, from their Crisp conversations: a segment
+ * that says so (dev, bad-review…), or — for the offer, not the review
+ * request — an app review of skip_app_review stars already. Null: none.
  */
-async function blockedBy(cfg: UrspSettings, email: string | null, sid: string | null): Promise<string | null> {
+async function blockedBy(cfg: UrspSettings, email: string | null, sid: string | null, opts: { review?: boolean } = {}): Promise<Block | null> {
   /* spelled loosely: "bad-review", "badreview" and "Bad Review" are one segment */
   const key = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
   const blocked = new Set(cfg.blocked_segments.split(",").map(key).filter(Boolean));
-  if (!blocked.size || (!email && !sid)) return null;
-  const have = await customerSegments(email, sid);
-  return [...have].find((h) => blocked.has(key(h))) ?? null;
+  const stars = opts.review === false ? 0 : cfg.skip_app_review;
+  if ((!blocked.size && !stars) || (!email && !sid)) return null;
+  const m = await customerMeta(email, sid);
+  const seg = [...m.segments].find((h) => blocked.has(key(h)));
+  if (seg) return { code: "blocked_segment", reason: `Khách có segment "${seg}" trên Crisp` };
+  if (stars && m.app_review !== null && m.app_review >= stars) return { code: "reviewed", reason: `Khách đã review app ${m.app_review}★ (app_review trên Crisp)` };
+  return null;
 }
-
-const blockedReason = (seg: string) => `Khách có segment "${seg}" trên Crisp`;
 
 /**
  * The half a new store joins: whichever has fewer stores of its segment
@@ -407,8 +412,8 @@ async function addTarget(n: NewTarget, cfg: UrspSettings, actor: string): Promis
     if (dup) skip = { code: "already_sent", reason: sentReason(dup, n.store_domain) };
   }
   if (!skip) {
-    const seg = await blockedBy(cfg, facts.email, n.session_id ?? null);
-    if (seg) skip = { code: "blocked_segment", reason: blockedReason(seg) };
+    const b = await blockedBy(cfg, facts.email, n.session_id ?? null);
+    if (b) skip = b;
   }
   let session_id = n.session_id ?? null;
   let ticket_link = n.ticket_link ?? null;
@@ -904,11 +909,11 @@ async function sendOne(t: UrspTarget, cfg: UrspSettings, actor: string): Promise
     return;
   }
   /* the customer may have been marked since the store was found */
-  const seg = await blockedBy(cfg, t.email, t.session_id);
-  if (seg) {
+  const b = await blockedBy(cfg, t.email, t.session_id);
+  if (b) {
     await tx(async (c) => {
-      await c.query("update ursp_targets set status = 'skipped', skip_code = 'blocked_segment', skip_reason = $2, updated_at = now() where id = $1", [t.id, blockedReason(seg)]);
-      await logEvent(c, t.id, "skipped", actor, { code: "blocked_segment", segment: seg });
+      await c.query("update ursp_targets set status = 'skipped', skip_code = $3, skip_reason = $2, updated_at = now() where id = $1", [t.id, b.reason, b.code]);
+      await logEvent(c, t.id, "skipped", actor, { code: b.code, reason: b.reason });
     });
     return;
   }
@@ -1052,13 +1057,14 @@ async function askReview(id: string, cfg: UrspSettings, actor: string): Promise<
   const t = rows[0];
   if (!t) return "Đã gửi xin review rồi (hoặc đang gửi).";
   const stage = t.done_at ? "done" : t.working_at ? "working" : "open";
-  const seg = await blockedBy(cfg, t.email, t.session_id).catch(() => null);
-  if (seg) {
+  /* segments only: a 5★ app review sends them to Trustpilot, below */
+  const b = await blockedBy(cfg, t.email, t.session_id, { review: false }).catch(() => null);
+  if (b) {
     await tx(async (c) => {
       await c.query("update ursp_targets set review_ask_status = 'skipped', updated_at = now() where id = $1", [id]);
-      await autoNote(c, id, stage, `Không gửi xin review: ${blockedReason(seg).toLowerCase()}.`);
+      await autoNote(c, id, stage, `Không gửi xin review: ${b.reason.toLowerCase()}.`);
     });
-    return blockedReason(seg);
+    return b.reason;
   }
   try {
     /* their app review as it is now: reviewed already → Trustpilot */
@@ -1176,7 +1182,7 @@ async function sendFollowups(cfg: UrspSettings): Promise<{ sent: number; errors:
         ]);
         continue;
       }
-      /* marked dev / bad-review since: no reminder */
+      /* marked dev / bad-review, or reviewed the app 5★, since: no reminder */
       if (await blockedBy(cfg, t.email, t.session_id)) {
         await skip(t.id);
         continue;

@@ -35,6 +35,7 @@ export const SKIP_REASONS = {
   other_segment: "Đã nhắn ở phân khúc khác",
   already_sent: "Đã gửi tin này cho store / email này rồi",
   blocked_segment: "Khách có segment dev / bad-review trên Crisp",
+  reviewed: "Khách đã review app 5★ trên Crisp",
   ended: "Chương trình đã kết thúc",
   admin: "Admin bỏ qua",
 } as const;

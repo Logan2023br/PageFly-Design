@@ -363,10 +363,21 @@ export async function addSegment(sid: string, segment: string): Promise<void> {
  * list gives without its segments is asked for them (a few at most).
  */
 export async function customerSegments(email: string | null, sid: string | null): Promise<Set<string>> {
+  return (await customerMeta(email, sid)).segments;
+}
+
+/** Their segments (as above) and their app_review — the highest on any of their conversations. */
+export async function customerMeta(email: string | null, sid: string | null): Promise<{ segments: Set<string>; app_review: number | null }> {
   const out = new Set<string>();
+  let review: number | null = null;
+  const rate = (v: unknown) => {
+    const n = reviewValue(v);
+    if (n !== null && (review === null || n > review)) review = n;
+  };
   const metaOf = async (id: string) => {
-    const r = await crisp<{ segments?: string[] }>("GET", `/conversation/${id}/meta`);
+    const r = await crisp<{ segments?: string[]; data?: Record<string, unknown> }>("GET", `/conversation/${id}/meta`);
     if (ok(r) && Array.isArray(r.body?.data?.segments)) for (const s of r.body.data.segments) out.add(String(s).trim().toLowerCase());
+    if (ok(r)) rate(r.body?.data?.data?.app_review);
   };
   const seen = new Set<string>();
   if (sid) {
@@ -384,13 +395,15 @@ export async function customerSegments(email: string | null, sid: string | null)
       for (const c of list as CrispConversation[]) {
         if (!c.session_id || seen.has(c.session_id) || (c.meta?.email ?? "").trim().toLowerCase() !== want) continue;
         seen.add(c.session_id);
-        if (Array.isArray(c.meta?.segments)) for (const s of c.meta.segments) out.add(String(s).trim().toLowerCase());
-        else if (asked++ < 10) await metaOf(c.session_id);
+        if (Array.isArray(c.meta?.segments) && c.meta?.data) {
+          for (const s of c.meta.segments) out.add(String(s).trim().toLowerCase());
+          rate(c.meta.data.app_review);
+        } else if (asked++ < 10) await metaOf(c.session_id);
       }
       if (list.length < 50) break;
     }
   }
-  return out;
+  return { segments: out, app_review: review };
 }
 
 /** Takes a segment off a conversation, keeping the others. */

@@ -70,7 +70,7 @@ const store = (d: string, o: Store = {}) =>
   (ac2[d] = { shopDomain: d, name: d.split(".")[0], email: `${d.split(".")[0]}@x.test`, shopifyPlan: "Basic", pageflyPlan: "Free", pageflyPrice: 0, numPublished: 3, status: "installed", ...o });
 
 type Msg = { type: string; from: "user" | "operator"; content: unknown; timestamp: number; read?: string; delivered?: string; mentions?: string[]; user?: unknown };
-const convs: Record<string, { email?: string; updated_at: number; msgs: Msg[]; state?: string; segments: string[] }> = {};
+const convs: Record<string, { email?: string; updated_at: number; msgs: Msg[]; state?: string; segments: string[]; app_review?: number }> = {};
 let created = 0;
 const conv = (sid: string, email: string | undefined, updatedAt: number, msgs: Msg[] = []) => (convs[sid] = { email, updated_at: updatedAt, msgs, segments: [] });
 const reviews: Record<string, number> = {};
@@ -126,7 +126,7 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
       const q = (u.searchParams.get("search_query") ?? "").toLowerCase();
       const list = Object.entries(convs)
         .filter(([, c]) => c.email === q)
-        .map(([sid, c]) => ({ session_id: sid, updated_at: c.updated_at, meta: { email: c.email, data: {} } }));
+        .map(([sid, c]) => ({ session_id: sid, updated_at: c.updated_at, meta: { email: c.email, data: { app_review: c.app_review } } }));
       return reply({ data: m[1] === "1" ? list : [] });
     }
     if ((m = p.match(/^\/people\/data\/(.+)$/))) return reply({ data: { data: { app_review: reviews[decodeURIComponent(m[1])] ?? null } } });
@@ -143,7 +143,7 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
         if (body.segments) c.segments = body.segments;
         return reply({ data: {} });
       }
-      if (m[2] === "meta") return reply({ data: { segments: c.segments, data: {} } });
+      if (m[2] === "meta") return reply({ data: { segments: c.segments, data: { app_review: c.app_review } } });
       if (m[2] === "state") {
         c.state = body.state;
         return reply({ data: {} });
@@ -797,11 +797,19 @@ async function main() {
     convs["session_cccccccc-0000-0000-0000-000000000001"].segments = ["badreview"];
     store("late.myshopify.com");
     conv(sid(152), "late@x.test", now - 3 * 86_400_000);
+    /* app_review 5 on another of their conversations */
+    store("fivestar.myshopify.com");
+    conv(sid(153), "fivestar@x.test", now - 3 * 86_400_000);
+    conv("session_cccccccc-0000-0000-0000-000000000002", "fivestar@x.test", now - 60 * 86_400_000);
+    convs["session_cccccccc-0000-0000-0000-000000000002"].app_review = 5;
     await core.importRecap([
       row({ store_domain: "devseg.myshopify.com", session_id: sid(150) }),
       row({ store_domain: "badrev.myshopify.com", session_id: sid(151) }),
       row({ store_domain: "late.myshopify.com", session_id: sid(152) }),
+      row({ store_domain: "fivestar.myshopify.com", session_id: sid(153) }),
     ]);
+    const five = await target("recap", "fivestar.myshopify.com");
+    check(five?.skip_code === "reviewed" && five.skip_reason?.includes("5★"), "reviewed the app 5★: no message", five?.skip_reason);
     check((await target("recap", "devseg.myshopify.com"))?.skip_code === "blocked_segment", "the ticket has the dev segment: no message");
     check((await target("recap", "badrev.myshopify.com"))?.skip_code === "blocked_segment", "another conversation of the same email has badreview: no message");
     check((await target("recap", "late.myshopify.com"))?.status === "approved", "a clean customer is queued");

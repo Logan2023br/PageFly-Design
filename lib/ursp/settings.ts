@@ -63,6 +63,8 @@ export const URSP_DEFAULTS = {
   review_thanks_template: "",
   /** the review request sent after it — empty: the built-in one */
   review_ask_template: "",
+  /** a customer whose app_review on Crisp is this many stars or more gets no offer; 0: off */
+  skip_app_review: 5,
   /** added to the conversation on Crisp when the customer agrees to the offer */
   crisp_segment: "upsell-responsive",
 } as const;
@@ -102,6 +104,7 @@ export const URSP_HELP: Record<UrspKey, string> = {
     "1 = sau khi bấm Đã xử lý xong, khách reply cảm ơn / xác nhận đã ổn (Haiku đọc) thì tự gửi 2 tin dưới tên người gửi: cảm ơn, rồi xin review. Khách khó chịu / còn lỗi / muốn fix thêm thì không gửi gì, để FL reply · 0 = tắt",
   review_thanks_template: "Tin cảm ơn gửi trước. Biến: {store_name} {pic}. Để trống dùng mẫu mặc định.",
   review_ask_template: "Tin xin review gửi sau tin cảm ơn — link viết {review_link}: form review app trên Shopify, hoặc Trustpilot nếu khách đã review app (≥4★; dưới 4★ chỉ gửi tin cảm ơn). Dạng [chữ]({review_link}), in nghiêng bọc *…*. Biến: {store_name} {pic} {review_link}. Để trống dùng mẫu mặc định.",
+  skip_app_review: "Khách có app_review trên Crisp (bất kỳ hội thoại nào) từ số sao này trở lên thì không gửi tin mời, không nhắc lại. 0 = tắt",
   crisp_segment: "Segment gắn vào hội thoại trên Crisp khi khách reply đồng ý (Haiku đọc). Để trống: không gắn",
 };
 
