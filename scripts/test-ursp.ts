@@ -763,6 +763,17 @@ async function main() {
       again = true;
     }
     check(again && ours() === before + 2, "never twice");
+    /* support asked for a review first: ours is not sent */
+    await p.query("update ursp_targets set review_ask_status = null where id = $1", [th.id]);
+    convs[tsid].msgs.push({ type: "text", from: "operator", content: "Glad it helped! Would you mind leaving us a review? https://apps.shopify.com/pagefly/reviews", timestamp: Date.now() + 5000 });
+    const n0 = ours();
+    let held = "";
+    try {
+      await core.targetAction(th.id, "ask_review", "tu");
+    } catch (err) {
+      held = String((err as Error).message);
+    }
+    check(held.includes("đã xin review") && ours() === n0 && (await target("active", "thread.myshopify.com"))?.review_ask_status === "skipped", "support asked already: not sent again", held);
   }
 
   console.log("dev / bad-review segments");

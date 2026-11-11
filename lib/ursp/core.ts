@@ -1021,6 +1021,10 @@ export function reviewMessages(t: { store_name: string | null; store_domain: str
   };
 }
 
+/** Support asking for a review already — a link to the review form, or the words for it. Not our offer's "Review the responsive layout". */
+const ASKS_REVIEW =
+  /apps\.shopify\.com\/pagefly[^\s)]*(review|modal-show)|ReviewListingModal|leave (us |a |an )*(quick |short |honest )*review|write (us )?a review|(share|tell us about) your (experience|feedback)|rate us|rating for|give us (a |5 )|⭐{2,}|5[- ]?stars?\b|review (us )?on (the )?shopify/i;
+
 type Queryable = { query: (sql: string, params: unknown[]) => Promise<unknown> };
 const autoNote = (c: Queryable, id: string, stage: string, text: string) =>
   c.query("insert into ursp_notes (target_id, stage, text, by, kind) values ($1, $2, $3, 'Tự động', 'auto')", [id, stage, text]);
@@ -1050,6 +1054,16 @@ async function askReview(id: string, cfg: UrspSettings, actor: string): Promise<
   }
   const m = reviewMessages(t, cfg);
   try {
+    /* read the conversation right before: support may have asked already (the loop runs every minute, they can be faster) */
+    const msgs = await conversationMessages(t.session_id!);
+    if (msgs.some((x) => x.from === "operator" && x.type === "text" && ASKS_REVIEW.test(textOf(x.content)))) {
+      await tx(async (c) => {
+        await c.query("update ursp_targets set review_ask_status = 'skipped', updated_at = now() where id = $1", [id]);
+        await logEvent(c, id, "review_ask_skipped", actor, { why: "asked_already" });
+        await autoNote(c, id, stage, "Support đã xin review trong hội thoại rồi — không gửi lại.");
+      });
+      return "Support đã xin review trong hội thoại rồi — không gửi lại.";
+    }
     const sender = await crispSender(cfg.sender_name, "");
     await sendInConversation(t.session_id!, m.thanks, sender);
     if (m.ask) await sendInConversation(t.session_id!, m.ask, sender);

@@ -1206,6 +1206,7 @@ function SentTable({ rows, followupHours, notes, focus }: { rows: UrspTarget[]; 
                     <span className="text-pf-faint">Chưa review{t.app_review ? ` · ${t.app_review}★` : ""}</span>
                   )}
                   {t.review_ask_status === "sent" && t.review_asked_at && <span className="text-pf-success">⭐ Đã xin review {short(t.review_asked_at)}</span>}
+                  {t.review_ask_status === "skipped" && <span className="text-pf-muted">Không xin review (support đã xin / segment chặn)</span>}
                   {t.review_ask_status === "failed" && <span className="text-pf-danger">Xin review lỗi: {t.review_ask_error}</span>}
                   {t.done_at && t.after_done_read && <span className={AFTER_DONE[t.after_done_read]?.tone ?? "text-pf-muted"}>{AFTER_DONE[t.after_done_read]?.label ?? t.after_done_read}</span>}
                   {t.uninstalled_at && <span className="text-pf-warn">Gỡ app {short(t.uninstalled_at)}</span>}
@@ -1218,7 +1219,7 @@ function SentTable({ rows, followupHours, notes, focus }: { rows: UrspTarget[]; 
                   done={t.done_at ? { by: t.done_by, at: short(t.done_at) } : null}
                   working={t.working_at ? { by: t.working_by, at: short(t.working_at) } : null}
                   dismissed={t.dismissed_at ? { by: t.dismissed_by, at: short(t.dismissed_at), reason: t.dismiss_reason } : null}
-                  reviewAsked={t.review_ask_status === "sent"}
+                  reviewAsked={t.review_ask_status === "sent" || t.review_ask_status === "skipped"}
                 />
                 <div className="mt-2">
                   <CaseNotes
