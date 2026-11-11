@@ -747,7 +747,9 @@ async function main() {
     /* then pleased: Logan thanks them and asks for a review, once */
     await new Promise((r) => setTimeout(r, 1100));
     convs[tsid].msgs.push({ type: "text", from: "user", content: "Thank you so much, everything works great now!", timestamp: Date.now() + 4000 });
-    await core.trackOne((await target("active", "thread.myshopify.com"))!, cfg, { force: true });
+    /* the minute loop of done cases picks it up */
+    await p.query("update ursp_targets set crisp_checked_at = now() - interval '2 minutes' where id = $1", [th.id]);
+    check((await core.runTrackDone()) >= 1, "the done cases' own loop reads it");
     t1 = (await target("active", "thread.myshopify.com"))!;
     const out = convs[tsid].msgs.filter((m) => m.from === "operator" && m.type === "text").slice(-2).map((m) => String(m.content));
     check(t1.review_ask_status === "sent" && ours() === before + 2, "confirmed: two messages", { status: t1.review_ask_status, read: t1.after_done_read, sent: ours() - before, ns: (await queries.notesFor([th.id]))[th.id]?.map((n) => n.text) });

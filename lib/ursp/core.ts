@@ -72,8 +72,11 @@ export const recapServiceAccount = (): string | null => process.env.URSP_SHEET_S
 const RECAP_EVERY_MS = 5 * 60_000;
 const ACTIVE_EVERY_MS = 60 * 60_000;
 const CRISP_EVERY_MS = 15 * 60_000;
-/* a case in hand or done: its replies are read sooner — notes, and the review request */
+/* a case in hand: its replies are read sooner, for its notes */
 const CASE_EVERY_MS = 4 * 60_000;
+/* a case done: every minute, on its own loop — the customer's "it works" is answered with the review request while they are still there */
+const DONE_EVERY_MS = 55_000;
+const DONE_TICK_MS = 60_000;
 const SLOW_EVERY_MS = 6 * 60 * 60_000;
 const TRACK_BATCH = 25;
 const RECAP_BATCH = 500;
@@ -1211,8 +1214,9 @@ export async function trackOne(t: UrspTarget, cfg: UrspSettings, opts: { force?:
   let afterDone: "confirmed" | "more" | "unhappy" | "other" | null = null;
   let answeredSince = false;
   const inCase = !!(t.working_at || t.done_at) && !t.dismissed_at;
+  const every = inCase ? (t.done_at ? DONE_EVERY_MS : CASE_EVERY_MS) : CRISP_EVERY_MS;
 
-  if (opts.force || age(t.crisp_checked_at) > (inCase ? CASE_EVERY_MS : CRISP_EVERY_MS)) {
+  if (opts.force || age(t.crisp_checked_at) > every) {
     try {
       const msgs = await conversationMessages(t.session_id);
       const ours = msgs.filter((m) => m.from === "operator" && m.type === "text" && Number(m.timestamp) >= sent - 10 * 60_000);
@@ -1357,9 +1361,9 @@ export async function trackOne(t: UrspTarget, cfg: UrspSettings, opts: { force?:
 
 async function trackBatch(cfg: UrspSettings): Promise<{ tracked: number; remaining: number; errors: string[] }> {
   const p = await db();
-  /* cases in hand or done first, and every few minutes; the rest every ~15 */
-  const inCase = "((working_at is not null or done_at is not null) and dismissed_at is null)";
-  const due = `status = 'sent' and sent_at > now() - make_interval(days => $1)
+  /* cases in hand first, and every few minutes; the rest every ~15. Done cases are trackDone's */
+  const inCase = "(working_at is not null and dismissed_at is null)";
+  const due = `status = 'sent' and sent_at > now() - make_interval(days => $1) and not (${DONE_SQL})
                and (tracked_at is null or tracked_at < now() - case when ${inCase} then interval '3 minutes' else interval '10 minutes' end)`;
   const { rows } = await p.query<UrspTarget>(`select * from ursp_targets where ${due} order by ${inCase} desc, tracked_at nulls first, sent_at desc limit $2`, [
     cfg.tracking_days,
@@ -1378,6 +1382,37 @@ async function trackBatch(cfg: UrspSettings): Promise<{ tracked: number; remaini
   out.remaining = (await p.query<{ n: number }>(`select count(*)::int as n from ursp_targets where ${due}`, [cfg.tracking_days])).rows[0]?.n ?? 0;
   out.errors = [...new Set(out.errors)];
   return out;
+}
+
+const DONE_SQL = "done_at is not null and dismissed_at is null";
+
+let trackingDone: Promise<number> | null = null;
+
+/** The done cases, every minute, apart from the job: their replies read, the review request sent. */
+export function runTrackDone(): Promise<number> {
+  if (!trackingDone) trackingDone = trackDone().finally(() => (trackingDone = null));
+  return trackingDone;
+}
+
+async function trackDone(): Promise<number> {
+  if (!(await runState()).on) return 0;
+  const cfg = await getUrspSettings();
+  const { rows } = await (await db()).query<UrspTarget>(
+    `select * from ursp_targets where status = 'sent' and ${DONE_SQL} and sent_at > now() - make_interval(days => $1)
+      order by tracked_at nulls first limit 40`,
+    [cfg.tracking_days],
+  );
+  let n = 0;
+  for (const t of rows) {
+    try {
+      await trackOne(t, cfg);
+      n++;
+    } catch (err) {
+      if (err instanceof ConfigMissing) break;
+      console.error("[ursp] done case", t.store_domain, errText(err));
+    }
+  }
+  return n;
 }
 
 /* ---------------------------------------------------------------- the job */
@@ -1495,7 +1530,7 @@ async function job(force: boolean): Promise<JobState | null> {
 const TICK_MS = 2 * 60_000;
 let started = false;
 
-/** Every two minutes, from instrumentation.ts. Postgres only; off with URSP_DISABLE_TIMER=1. */
+/** Every two minutes (done cases every minute), from instrumentation.ts. Postgres only; off with URSP_DISABLE_TIMER=1. */
 export function startUrspTimer(): void {
   if (started || !hasUrspDatabase() || process.env.URSP_DISABLE_TIMER === "1") return;
   started = true;
@@ -1511,6 +1546,8 @@ export function startUrspTimer(): void {
   };
   setTimeout(tick, 75_000).unref?.();
   setInterval(tick, TICK_MS).unref?.();
+  /* the done cases: every minute */
+  setInterval(() => void runTrackDone().catch((err) => console.error("[ursp] done cases failed", err)), DONE_TICK_MS).unref?.();
 }
 
 /* ---------------------------------------------------------------- admin */
