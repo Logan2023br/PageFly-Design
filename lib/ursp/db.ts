@@ -193,6 +193,14 @@ begin
     update ursp_settings set value = '10'::jsonb where key = 'max_published_pages' and value::text in ('20', '"20"');
   end if;
 end $$;
+/* once: later on 11-11 it narrows to 5 published pages or fewer — a saved 10 or 20 follows */
+do $$
+begin
+  if not exists (select 1 from ursp_state where key = '_once_max_pages_5_20261111') then
+    insert into ursp_state (key, value) values ('_once_max_pages_5_20261111', 'true'::jsonb);
+    update ursp_settings set value = '5'::jsonb where key = 'max_published_pages' and value::text in ('10', '"10"', '20', '"20"');
+  end if;
+end $$;
 /* once: the cases cancelled into the short-lived Đã huỷ list go to Đã bỏ qua, where a cancel now leads */
 do $$
 begin

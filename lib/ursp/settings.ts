@@ -31,7 +31,7 @@ export const URSP_DEFAULTS = {
   ab_split: 1,
   active_subject: "Free responsive check for your store pages",
   /** a store with more published pages than this gets no message */
-  max_published_pages: 10,
+  max_published_pages: 5,
   /** resolutions that keep a Recap row out, comma separated */
   recap_skip_resolutions: "Đợi TS check, Hết ca chưa giải quyết",
   /** 1: only Recap rows whose category_issue Haiku calls responsive; 0: every new row */
