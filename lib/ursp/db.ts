@@ -183,6 +183,14 @@ begin
     update ursp_targets set variant = 'A' where variant is null and status in ('pending', 'approved', 'sending', 'sent', 'failed');
   end if;
 end $$;
+/* once: from 11-11 the program is for stores with 10 published pages or fewer (was 20) — a saved 20 follows */
+do $$
+begin
+  if not exists (select 1 from ursp_state where key = '_once_max_pages_10_20261111') then
+    insert into ursp_state (key, value) values ('_once_max_pages_10_20261111', 'true'::jsonb);
+    update ursp_settings set value = '10'::jsonb where key = 'max_published_pages' and value::text in ('20', '"20"');
+  end if;
+end $$;
 /* once: the cases cancelled into the short-lived Đã huỷ list go to Đã bỏ qua, where a cancel now leads */
 do $$
 begin
