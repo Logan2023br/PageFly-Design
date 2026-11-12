@@ -194,9 +194,14 @@ export function DoneButton({
           </Button>
         )}
         {/* closed for good: off to Kết thúc, no more tracking or notices for it */}
-        <Button size="sm" variant="quiet" className="whitespace-nowrap" disabled={busy} onClick={() => void go("close").then((ok) => ok && router.push("/design/admin/responsive?tab=closed"))}>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void go("close").then((ok) => ok && router.push("/design/admin/responsive?tab=closed"))}
+          className={`${lit} border-[#15803d] bg-[#15803d] text-white hover:bg-[#166534]`}
+        >
           ■ Kết thúc
-        </Button>
+        </button>
         <ErrorLine error={error} />
       </div>
     );
