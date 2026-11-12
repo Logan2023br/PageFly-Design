@@ -128,6 +128,9 @@ alter table ursp_targets add column if not exists working_by text;
 alter table ursp_targets add column if not exists dismissed_at timestamptz;
 alter table ursp_targets add column if not exists dismissed_by text;
 alter table ursp_targets add column if not exists dismiss_reason text;
+-- "Kết thúc": a done case closed for good — no more tracking, no more notices
+alter table ursp_targets add column if not exists closed_at timestamptz;
+alter table ursp_targets add column if not exists closed_by text;
 -- after Đã xử lý xong: the customer confirmed it works → Logan thanks them and asks for a review, once
 alter table ursp_targets add column if not exists review_ask_status text;
 alter table ursp_targets add column if not exists review_asked_at timestamptz;

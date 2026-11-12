@@ -367,7 +367,7 @@ function Filters({ tab, f }: { tab: UrspTab; f: UrspFilters }) {
           ))}
         </select>
       )}
-      {(tab === "replied" || tab === "working" || tab === "done" || tab === "dismissed" || tab === "sent") && (
+      {(tab === "replied" || tab === "working" || tab === "done" || tab === "closed" || tab === "dismissed" || tab === "sent") && (
         <>
           <select name="variant" defaultValue={f.variant ?? ""} className={`${FIELD} w-[150px]!`} aria-label="Bản tin">
             <option value="">Mọi bản tin</option>
@@ -1219,6 +1219,7 @@ function SentTable({ rows, followupHours, notes, focus }: { rows: UrspTarget[]; 
                   done={t.done_at ? { by: t.done_by, at: short(t.done_at) } : null}
                   working={t.working_at ? { by: t.working_by, at: short(t.working_at) } : null}
                   dismissed={t.dismissed_at ? { by: t.dismissed_by, at: short(t.dismissed_at), reason: t.dismiss_reason } : null}
+                  closed={t.closed_at ? { by: t.closed_by, at: short(t.closed_at) } : null}
                   reviewAsked={t.review_ask_status === "sent" || t.review_ask_status === "skipped"}
                 />
                 <div className="mt-2">

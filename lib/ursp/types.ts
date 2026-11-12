@@ -122,6 +122,8 @@ export type UrspTarget = {
   after_done_read: string | null;
   done_at: string | null;
   done_by: string | null;
+  closed_at: string | null;
+  closed_by: string | null;
   first_price: string | null;
   first_ac2_at: string | null;
   first_review: number | null;

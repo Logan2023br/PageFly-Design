@@ -134,10 +134,10 @@ export async function recentNotices(sections: AdminSection[]): Promise<AdminNoti
           `select store_domain, store_name, segment, variant, last_reply_at, last_reply_text, reply_intent, classified_at, upgraded_at, upgraded_to, reviewed_at, app_review,
                   review_ask_status, review_asked_at, review_asked_by, review_ask_where
              from ursp_targets
-            where last_reply_at > now() - make_interval(hours => $1)
+            where closed_at is null and (last_reply_at > now() - make_interval(hours => $1)
                or upgraded_at > now() - make_interval(hours => $1)
                or reviewed_at > now() - make_interval(hours => $1)
-               or (review_ask_status = 'sent' and review_asked_at > now() - make_interval(hours => $1))`,
+               or (review_ask_status = 'sent' and review_asked_at > now() - make_interval(hours => $1)))`,
           [WINDOW_HOURS],
         );
         const since = Date.now() - WINDOW_HOURS * 3_600_000;

@@ -147,10 +147,12 @@ export function DoneButton({
   done,
   working,
   dismissed,
+  closed,
   reviewAsked,
 }: {
   id: string;
   done: Who | null;
+  closed?: Who | null;
   working: Who | null;
   dismissed?: (Who & { reason: string | null }) | null;
   reviewAsked?: boolean;
@@ -168,6 +170,17 @@ export function DoneButton({
     </span>
   );
 
+  if (closed)
+    return (
+      <div className="grid justify-items-start gap-1">
+        <button type="button" disabled={busy} title="Bấm lần nữa để mở lại, về Đã xử lý" onClick={() => void go("reopen")} className={`${lit} border-pf-border-hi bg-pf-card-hi text-pf-muted hover:text-pf-text`}>
+          ■ Đã kết thúc
+        </button>
+        {who(closed)}
+        <ErrorLine error={error} />
+      </div>
+    );
+
   if (done)
     return (
       <div className="grid justify-items-start gap-1">
@@ -180,6 +193,10 @@ export function DoneButton({
             ⭐ Gửi xin review
           </Button>
         )}
+        {/* closed for good: off to Kết thúc, no more tracking or notices for it */}
+        <Button size="sm" variant="quiet" className="whitespace-nowrap" disabled={busy} onClick={() => void go("close").then((ok) => ok && router.push("/design/admin/responsive?tab=closed"))}>
+          ■ Kết thúc
+        </Button>
         <ErrorLine error={error} />
       </div>
     );

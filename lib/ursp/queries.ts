@@ -18,6 +18,7 @@ export const URSP_TABS = [
   { id: "replied", label: "Khách phản hồi" },
   { id: "working", label: "Đang xử lý" },
   { id: "done", label: "Đã xử lý" },
+  { id: "closed", label: "Kết thúc" },
   { id: "dismissed", label: "Đã bỏ qua" },
   { id: "skipped", label: "Bị loại" },
   { id: "ab", label: "A/B test" },
@@ -31,7 +32,8 @@ const TAB_SQL: Record<Exclude<UrspTab, "overview" | "settings">, string> = {
   /* the inbox: replies no one has taken up or let go yet */
   replied: "t.status = 'sent' and t.replied_at is not null and t.working_at is null and t.done_at is null and t.dismissed_at is null",
   working: "t.status = 'sent' and t.working_at is not null and t.done_at is null and t.dismissed_at is null",
-  done: "t.status = 'sent' and t.done_at is not null",
+  done: "t.status = 'sent' and t.done_at is not null and t.closed_at is null",
+  closed: "t.status = 'sent' and t.closed_at is not null",
   dismissed: "t.status = 'sent' and t.dismissed_at is not null",
   skipped: "t.status = 'skipped'",
   /* the A/B tab lists the stores held for B */
@@ -297,6 +299,8 @@ export async function listTargets(
         ? "t.working_at desc"
         : tab === "done"
           ? "t.done_at desc"
+          : tab === "closed"
+            ? "t.closed_at desc"
           : tab === "dismissed"
             ? "t.dismissed_at desc"
           : tab === "queue"

@@ -680,6 +680,18 @@ async function main() {
     check((await queries.listTargets("done", {})).rows.some((r) => r.id === w.id) && !(await queries.listTargets("working", {})).rows.some((r) => r.id === w.id), "done: in Đã xử lý, out of Đang xử lý");
     const goodRow = (await target("recap", "good.myshopify.com"))!;
     check(goodRow.replied_at && !(await queries.listTargets("replied", {})).rows.some((r) => r.id === goodRow.id), "a reply that was handled leaves Khách phản hồi");
+    await core.targetAction(w.id, "close", "tu");
+    const wc = (await target("active", "fresh.myshopify.com"))!;
+    check(wc.closed_at && wc.closed_by === "tu", "Kết thúc: closed");
+    check(
+      (await queries.listTargets("closed", {})).rows.some((r) => r.id === w.id) && !(await queries.listTargets("done", {})).rows.some((r) => r.id === w.id),
+      "it moves to Kết thúc, out of Đã xử lý",
+    );
+    const before = wc.tracked_at;
+    await core.trackOne(wc, await settings.getUrspSettings());
+    check((await target("active", "fresh.myshopify.com"))!.tracked_at === before, "a closed case is no longer read");
+    await core.targetAction(w.id, "reopen", "tu");
+    check((await queries.listTargets("done", {})).rows.some((r) => r.id === w.id), "Đã kết thúc pressed again: back in Đã xử lý");
     await core.targetAction(w.id, "undone", "tu");
     check((await queries.listTargets("working", {})).rows.some((r) => r.id === w.id), "done pressed again: back in hand");
     await core.targetAction(w.id, "cancel", "tu");

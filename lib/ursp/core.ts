@@ -1244,6 +1244,8 @@ const age = (t: string | null) => (t ? Date.now() - new Date(t).getTime() : Infi
 export async function trackOne(t: UrspTarget, cfg: UrspSettings, opts: { force?: boolean; actor?: string } = {}): Promise<void> {
   const actor = opts.actor ?? "system";
   if (!t.sent_at || !t.session_id) return;
+  /* Kết thúc: the case is closed, nothing more is read unless someone asks */
+  if (t.closed_at && !opts.force) return;
   const sent = new Date(t.sent_at).getTime();
   const patch: Record<string, unknown> = {};
   const events: [string, Record<string, unknown>][] = [];
@@ -1402,7 +1404,7 @@ async function trackBatch(cfg: UrspSettings): Promise<{ tracked: number; remaini
   const p = await db();
   /* cases in hand first, and every few minutes; the rest every ~15. Done cases are trackDone's */
   const inCase = "(working_at is not null and dismissed_at is null)";
-  const due = `status = 'sent' and sent_at > now() - make_interval(days => $1) and not (${DONE_SQL})
+  const due = `status = 'sent' and sent_at > now() - make_interval(days => $1) and done_at is null and closed_at is null
                and (tracked_at is null or tracked_at < now() - case when ${inCase} then interval '3 minutes' else interval '10 minutes' end)`;
   const { rows } = await p.query<UrspTarget>(`select * from ursp_targets where ${due} order by ${inCase} desc, tracked_at nulls first, sent_at desc limit $2`, [
     cfg.tracking_days,
@@ -1423,7 +1425,7 @@ async function trackBatch(cfg: UrspSettings): Promise<{ tracked: number; remaini
   return out;
 }
 
-const DONE_SQL = "done_at is not null and dismissed_at is null";
+const DONE_SQL = "done_at is not null and dismissed_at is null and closed_at is null";
 
 let trackingDone: Promise<number> | null = null;
 
@@ -1606,6 +1608,8 @@ export type TargetAction =
   | "send_anyway"
   | "track"
   | "ask_review"
+  | "close"
+  | "reopen"
   | "approve_followup"
   | "skip_followup"
   | "edit_followup"
@@ -1724,13 +1728,23 @@ export async function targetAction(id: string, action: TargetAction, by: string,
       return set("done_at = now(), done_by = $2, working_at = coalesce(working_at, now()), working_by = coalesce(working_by, $2)", [by], "done");
     case "undone":
       only("sent");
+      if (t.closed_at) throw new UpsellError("Case đã kết thúc — mở lại trước.", 409);
       return set("done_at = null, done_by = null", [], "undone");
+    case "close":
+      only("sent");
+      if (t.closed_at) return;
+      if (!t.done_at) throw new UpsellError("Chỉ kết thúc case đã xử lý xong.", 409);
+      return set("closed_at = now(), closed_by = $2", [by], "closed");
+    case "reopen":
+      only("sent");
+      return set("closed_at = null, closed_by = null", [], "reopened");
     case "track":
       only("sent");
       return trackOne(t, cfg, { force: true, actor: by });
     case "ask_review": {
       only("sent");
       if (!t.done_at) throw new UpsellError("Chỉ xin review khi case đã xử lý xong.", 409);
+      if (t.closed_at) throw new UpsellError("Case đã kết thúc — mở lại trước.", 409);
       const why = await askReview(t.id, cfg, by);
       if (why) throw new UpsellError(why, 409);
       return;
