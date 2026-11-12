@@ -1007,13 +1007,13 @@ const TRUSTPILOT_URL = "https://www.trustpilot.com/review/pagefly.io";
 
 const DEFAULT_REVIEW_THANKS = "Thanks so much for getting back to us, it’s great to hear that everything is working!";
 
-const DEFAULT_REVIEW_ASK = `I’m really happy we could help you get ready for Black Friday. Your customers will now have a smooth experience every time they visit your store.
+const DEFAULT_REVIEW_ASK = `I’m really happy we could help you get ready for BLACK FRIDAY. Your customers will now have a smooth experience every time they visit your store.
 
-Hope you can spare a little time, we’d love to hear about your experience with this PageFly service. Your honest feedback helps us keep improving our service for Black Friday and beyond.
+Hope you can spare a little time, we’d love to hear about your experience with this PAGEFLY SERVICE. Your honest feedback helps us keep improving our service for BLACK FRIDAY and beyond.
 
 *[⭐ Share your experience with PageFly]({review_link})*
 
-Thank you, and we’re always here whenever you need us.`;
+THANK YOU, and we’re always here whenever you need us.`;
 
 /**
  * The thank-you, then the review request: the app's review form — or, when
