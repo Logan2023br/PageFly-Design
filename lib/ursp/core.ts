@@ -1009,7 +1009,7 @@ const DEFAULT_REVIEW_THANKS = "Thanks so much for getting back to us, it’s gre
 
 const DEFAULT_REVIEW_ASK = `I’m really happy we could help you get ready for Black Friday. Your customers will now have a smooth experience every time they visit your store.
 
-If you have a moment, we’d love to hear about your experience with this PageFly service. Your honest feedback helps us keep improving our service for Black Friday and beyond.
+Hope you can spare a little time, we’d love to hear about your experience with this PageFly service. Your honest feedback helps us keep improving our service for Black Friday and beyond.
 
 *[⭐ Share your experience with PageFly]({review_link})*
 
