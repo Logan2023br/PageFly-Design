@@ -319,9 +319,9 @@ def greet(lead):
 
 def cmd_track(args):
     cfg = settings()
-    # Crisp (read receipts, replies) and the drafts that hang on them: twice a day, in the 00h and 12h UTC
-    # runs, to spare the Crisp API; --crisp reads it now. AC2 is still read every run.
-    crisp_due = "--crisp" in args or now_utc().hour % 12 == 0
+    # Crisp (read receipts, replies) and the drafts that hang on them: every 6 hours, in the 00h, 06h, 12h
+    # and 18h UTC runs, to spare the Crisp API; --crisp reads it now. AC2 is still read every run.
+    crisp_due = "--crisp" in args or now_utc().hour % 6 == 0
     s, j = pfd("GET", f"/api/upsell/leads/export?active=1&tracking_days={int(cfg['tracking_days'])}")
     if s != 200:
         sys.exit("Cannot read leads from PageFly Design")

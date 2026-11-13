@@ -40,8 +40,8 @@ const SEND_BATCH = 10;
 const TRACK_BATCH = 30;
 const TRACK_EVERY_MS = 10 * 60_000;
 const RECHECK_MS = 60 * 60_000;
-/* Crisp, twice a day: the messages and app_review — to spare the Crisp API */
-const CRISP_EVERY_MS = 12 * 60 * 60_000;
+/* Crisp, every 6 hours: the messages and app_review — to spare the Crisp API */
+const CRISP_EVERY_MS = 6 * 60 * 60_000;
 
 const str = (v: unknown): string | null => {
   if (v === null || v === undefined) return null;
