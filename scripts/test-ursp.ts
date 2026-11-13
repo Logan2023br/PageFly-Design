@@ -759,8 +759,8 @@ async function main() {
     /* then pleased: Logan thanks them and asks for a review, once */
     await new Promise((r) => setTimeout(r, 1100));
     convs[tsid].msgs.push({ type: "text", from: "user", content: "Thank you so much, everything works great now!", timestamp: Date.now() + 4000 });
-    /* the minute loop of done cases picks it up */
-    await p.query("update ursp_targets set crisp_checked_at = now() - interval '2 minutes' where id = $1", [th.id]);
+    /* the 10-minute loop of done cases picks it up */
+    await p.query("update ursp_targets set crisp_checked_at = now() - interval '11 minutes' where id = $1", [th.id]);
     check((await core.runTrackDone()) >= 1, "the done cases' own loop reads it");
     t1 = (await target("active", "thread.myshopify.com"))!;
     const out = convs[tsid].msgs.filter((m) => m.from === "operator" && m.type === "text").slice(-2).map((m) => String(m.content));

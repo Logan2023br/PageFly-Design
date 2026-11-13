@@ -74,9 +74,9 @@ const ACTIVE_EVERY_MS = 60 * 60_000;
 const CRISP_EVERY_MS = 15 * 60_000;
 /* a case in hand: its replies are read sooner, for its notes */
 const CASE_EVERY_MS = 4 * 60_000;
-/* a case done: every minute, on its own loop — the customer's "it works" is answered with the review request while they are still there */
-const DONE_EVERY_MS = 55_000;
-const DONE_TICK_MS = 60_000;
+/* a case done: every 10 minutes, on its own loop — the customer's "it works" is answered with the review request soon after */
+const DONE_EVERY_MS = 9.5 * 60_000;
+const DONE_TICK_MS = 10 * 60_000;
 const SLOW_EVERY_MS = 6 * 60 * 60_000;
 const TRACK_BATCH = 25;
 const RECAP_BATCH = 500;
@@ -1070,7 +1070,7 @@ async function askReview(id: string, cfg: UrspSettings, actor: string): Promise<
     /* their app review as it is now: reviewed already → Trustpilot */
     const now = t.email ? await reviewCheck(t.email).catch(() => null) : null;
     const m = reviewMessages({ ...t, app_review: now?.app_review ?? t.app_review }, cfg);
-    /* read the conversation right before: support may have asked already (the loop runs every minute, they can be faster) */
+    /* read the conversation right before: support may have asked already (the loop runs every 10 minutes, they can be faster) */
     const msgs = await conversationMessages(t.session_id!);
     if (msgs.some((x) => x.from === "operator" && x.type === "text" && ASKS_REVIEW.test(textOf(x.content)))) {
       await tx(async (c) => {
@@ -1429,7 +1429,7 @@ const DONE_SQL = "done_at is not null and dismissed_at is null and closed_at is 
 
 let trackingDone: Promise<number> | null = null;
 
-/** The done cases, every minute, apart from the job: their replies read, the review request sent. */
+/** The done cases, every 10 minutes, apart from the job: their replies read, the review request sent. */
 export function runTrackDone(): Promise<number> {
   if (!trackingDone) trackingDone = trackDone().finally(() => (trackingDone = null));
   return trackingDone;
@@ -1571,7 +1571,7 @@ async function job(force: boolean): Promise<JobState | null> {
 const TICK_MS = 2 * 60_000;
 let started = false;
 
-/** Every two minutes (done cases every minute), from instrumentation.ts. Postgres only; off with URSP_DISABLE_TIMER=1. */
+/** Every two minutes (done cases every 10 minutes), from instrumentation.ts. Postgres only; off with URSP_DISABLE_TIMER=1. */
 export function startUrspTimer(): void {
   if (started || !hasUrspDatabase() || process.env.URSP_DISABLE_TIMER === "1") return;
   started = true;
@@ -1587,7 +1587,7 @@ export function startUrspTimer(): void {
   };
   setTimeout(tick, 75_000).unref?.();
   setInterval(tick, TICK_MS).unref?.();
-  /* the done cases: every minute */
+  /* the done cases: every 10 minutes */
   setInterval(() => void runTrackDone().catch((err) => console.error("[ursp] done cases failed", err)), DONE_TICK_MS).unref?.();
 }
 
