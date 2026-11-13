@@ -782,7 +782,7 @@ async function main() {
     convs[tsid].msgs = convs[tsid].msgs.filter((m) => !String(m.content).includes("Share your experience"));
     await core.targetAction(th.id, "ask_review", "tu");
     const tp = convs[tsid].msgs.filter((m) => m.from === "operator" && m.type === "text").slice(-1).map((m) => String(m.content))[0];
-    check(tp.includes("(https://www.trustpilot.com/review/pagefly.io)") && !tp.includes("apps.shopify.com"), "reviewed the app already: the Trustpilot link", tp.slice(-200));
+    check(tp.includes("[⭐Share your experience with PageFly with Trustpilot](https://www.trustpilot.com/review/pagefly.io)") && !tp.includes("apps.shopify.com"), "reviewed the app already: the Trustpilot link, saying so", tp.slice(-200));
     /* support asked for a review first: ours is not sent */
     await p.query("update ursp_targets set review_ask_status = null where id = $1", [th.id]);
     convs[tsid].msgs.push({ type: "text", from: "operator", content: "Glad it helped! Would you mind leaving us a review? https://apps.shopify.com/pagefly/reviews", timestamp: Date.now() + 5000 });

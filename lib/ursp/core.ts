@@ -1028,7 +1028,12 @@ export function reviewMessages(t: { store_name: string | null; store_domain: str
   const where = stars === 0 ? "shopify" : stars >= 4 ? "trustpilot" : null;
   return {
     thanks: fill(cfg.review_thanks_template.trim() || DEFAULT_REVIEW_THANKS),
-    ask: where ? fill(cfg.review_ask_template.trim() || DEFAULT_REVIEW_ASK).replaceAll("{review_link}", where === "trustpilot" ? TRUSTPILOT_URL : REVIEW_URL) : "",
+    ask: where
+      ? fill(cfg.review_ask_template.trim() || DEFAULT_REVIEW_ASK)
+          /* on Trustpilot the link says so */
+          .replaceAll("[⭐ Share your experience with PageFly]({review_link})", where === "trustpilot" ? `[⭐Share your experience with PageFly with Trustpilot](${TRUSTPILOT_URL})` : `[⭐ Share your experience with PageFly](${REVIEW_URL})`)
+          .replaceAll("{review_link}", where === "trustpilot" ? TRUSTPILOT_URL : REVIEW_URL)
+      : "",
     where,
     stars,
   };
