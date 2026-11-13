@@ -89,6 +89,7 @@ export type SsuCustomer = {
   last_selected_at: string | null;
   ac2_synced_at: string | null;
   crisp_checked_at: string | null;
+  crisp_read_at: string | null;
   crisp_conversations: number | null;
   crisp_sessions:
     | { session_id: string; link?: string; updated_at: string | null; app_review: number | null; subject: string | null; state: string | null; inapp?: boolean }[]

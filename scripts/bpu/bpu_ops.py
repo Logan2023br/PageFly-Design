@@ -319,6 +319,9 @@ def greet(lead):
 
 def cmd_track(args):
     cfg = settings()
+    # Crisp (read receipts, replies) and the drafts that hang on them: twice a day, in the 00h and 12h UTC
+    # runs, to spare the Crisp API; --crisp reads it now. AC2 is still read every run.
+    crisp_due = "--crisp" in args or now_utc().hour % 12 == 0
     s, j = pfd("GET", f"/api/upsell/leads/export?active=1&tracking_days={int(cfg['tracking_days'])}")
     if s != 200:
         sys.exit("Cannot read leads from PageFly Design")
@@ -352,7 +355,7 @@ def cmd_track(args):
                 up["status"] = "used"
         # Crisp read receipt + replies
         sid = L.get("crisp_session")
-        if sid:
+        if sid and crisp_due:
             cs, cj = crisp("GET", f"/conversation/{sid}/messages")
             msgs = cj.get("data") if isinstance(cj, dict) and isinstance(cj.get("data"), list) else []
             sent_ts = (parse_iso(L.get("sent_at")) or now_utc()).timestamp() * 1000
@@ -368,7 +371,7 @@ def cmd_track(args):
                     to_classify.append({"lead_id": lid, "store": L.get("store_name") or d, "text": text})
         sync.append(up)
         # follow-up drafts (need admin approval in PageFly Design before sending)
-        if L.get("group") != "test" or not sid or L.get("status") in ("uninstalled", "upgraded", "rejected"):
+        if not crisp_due or L.get("group") != "test" or not sid or L.get("status") in ("uninstalled", "upgraded", "rejected"):
             continue
         have = set(L.get("message_kinds") or [])
         fill = {"hi": greet(L), "link": L.get("design_url", ""), "pic": cfg["pic"], "review": cfg["review_url"]}
@@ -388,7 +391,7 @@ def cmd_track(args):
     for c in chunks(drafts):
         pfd("POST", "/api/upsell/messages", {"messages": c})
     json.dump(to_classify, open("replies_to_classify.json", "w"), ensure_ascii=False, indent=1)
-    print(json.dumps({"tracked": len(leads), "upgraded_now": [u["lead_id"] for u in sync if u.get("upgraded")],
+    print(json.dumps({"tracked": len(leads), "crisp_read": crisp_due, "upgraded_now": [u["lead_id"] for u in sync if u.get("upgraded")],
                       "drafts": [f"{x['lead_id']}:{x['kind']}" for x in drafts], "replies_to_classify": len(to_classify)}, ensure_ascii=False))
 
 

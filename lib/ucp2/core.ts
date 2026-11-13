@@ -25,7 +25,8 @@ import { db, getState, hasUcp2Database, logEvent, setState, tx, type Db } from "
 
 export const TRACK_DAYS = 60;
 const TRACK_BATCH = 25;
-const CRISP_EVERY_MS = 20 * 60_000;
+/* Crisp, twice a day: the messages and app_review — to spare the Crisp API */
+const CRISP_EVERY_MS = 12 * 60 * 60_000;
 const SLOW_EVERY_MS = 6 * 60 * 60_000;
 const VN_OFFSET = "+07:00";
 
@@ -283,8 +284,8 @@ export async function trackOne(row: Ucp2Row, opts: { force?: boolean; actor?: st
     }
   }
 
-  /* The slow checks, a few times a day: app_review on Crisp, the store on AC2. */
-  if (row.email && !row.reviewed_at && !row.reviewed_before && (opts.force || age(row.review_checked_at) > SLOW_EVERY_MS)) {
+  /* The slow checks: app_review on Crisp twice a day, the store on AC2 a few times. */
+  if (row.email && !row.reviewed_at && !row.reviewed_before && (opts.force || age(row.review_checked_at) > CRISP_EVERY_MS)) {
     try {
       const r = await reviewCheck(row.email);
       patch.review_checked_at = new Date().toISOString();

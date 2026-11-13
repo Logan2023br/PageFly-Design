@@ -132,6 +132,8 @@ alter table ssu_customers add column if not exists edit_days_at_send int;
 alter table ssu_customers add column if not exists upgraded_from text;
 alter table ssu_customers add column if not exists upgraded_price numeric;
 alter table ssu_customers add column if not exists upgrade_exact boolean;
+-- when the conversation's messages were last read (twice a day)
+alter table ssu_customers add column if not exists crisp_read_at timestamptz;
 update ssu_customers set plan_at_send = 'Free' where plan_at_send is null and sent_at is not null and price_at_send = 0;
 update ssu_customers set upgraded_from = coalesce(plan_at_send, case when price_at_send = 0 then 'Free' else '$' || price_at_send end)
  where upgraded_at is not null and upgraded_from is null;

@@ -153,7 +153,7 @@ def test_track_syncs_outcomes_and_drafts(bpu, capsys):
         {"from": "user", "type": "text", "content": "Love it, thanks!", "timestamp": sent_ms},
     ]
 
-    bpu.cmd_track([])
+    bpu.cmd_track(["--crisp"])
     assert ("GET", "/api/upsell/leads/export?active=1&tracking_days=30") in pfd.calls
     synced = {u["lead_id"]: u for u in pfd.synced}
     assert set(synced) == {"LA", "LB", "LC", "LD", "LE", "LF"}
@@ -188,7 +188,7 @@ def test_track_does_not_reclassify_a_known_reply(bpu):
     pfd.export = [L]
     w.stores["d.myshopify.com"] = good_store("d.myshopify.com")
     w.crisp_msgs["session_LD"] = [{"from": "user", "type": "text", "content": "hi", "timestamp": reply_ts * 1000}]
-    bpu.cmd_track([])
+    bpu.cmd_track(["--crisp"])
     assert json.load(open("replies_to_classify.json")) == []
 
 

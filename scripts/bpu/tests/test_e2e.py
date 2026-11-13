@@ -226,14 +226,14 @@ def test_one_lead_end_to_end(live):
     ]
     world.stores[domain].update(pageflyPlan="Silver", pageflyPrice=24, totalPages=3)
     world.activities[domain] = [{"type": "SUBSCRIPTION_CHARGE_ACTIVATED", "occurredAt": bpu.iso()}]
-    bpu.cmd_track([])
+    bpu.cmd_track(["--crisp"])
     lead = lead_by_domain(domain)
     assert lead["status"] == "upgraded" and lead["upgraded"] is True and lead["mrr_added"] == 24
     assert lead["replied"] is True and lead["message_read"] is True and lead["used_page"] is True
     assert any(c["lead_id"] == lid for c in json.load(open("replies_to_classify.json")))
 
     # A second run: the same reply is not news, and no event is written twice.
-    bpu.cmd_track([])
+    bpu.cmd_track(["--crisp"])
     assert not any(c["lead_id"] == lid for c in json.load(open("replies_to_classify.json")))
     s, j = jcall("GET", "/api/upsell/events/export?limit=5000")
     mine = [e for e in j["events"] if e["lead_id"] == lid]

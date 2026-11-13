@@ -40,6 +40,8 @@ const SEND_BATCH = 10;
 const TRACK_BATCH = 30;
 const TRACK_EVERY_MS = 10 * 60_000;
 const RECHECK_MS = 60 * 60_000;
+/* Crisp, twice a day: the messages and app_review — to spare the Crisp API */
+const CRISP_EVERY_MS = 12 * 60 * 60_000;
 
 const str = (v: unknown): string | null => {
   if (v === null || v === undefined) return null;
@@ -317,7 +319,9 @@ export async function trackOne(cu: SsuCustomer, actor = "system"): Promise<void>
   const patch: Record<string, unknown> = {};
   const events: [string, Record<string, unknown>][] = [];
 
-  if (cu.crisp_session) {
+  /* "Cập nhật" by hand reads now */
+  if (cu.crisp_session && (actor !== "system" || !cu.crisp_read_at || Date.now() - new Date(cu.crisp_read_at).getTime() > CRISP_EVERY_MS)) {
+    patch.crisp_read_at = new Date().toISOString();
     const msgs = await conversationMessages(cu.crisp_session);
     const ours = msgs.filter((m) => m.from === "operator" && m.type === "text" && Number(m.timestamp) >= sent - 60_000);
     if (!cu.delivered_at && ours.some((m) => m.delivered || m.read)) {
@@ -357,7 +361,7 @@ export async function trackOne(cu: SsuCustomer, actor = "system"): Promise<void>
     }
   }
 
-  if (cu.email && (!cu.crisp_checked_at || Date.now() - new Date(cu.crisp_checked_at).getTime() > RECHECK_MS)) {
+  if (cu.email && (!cu.crisp_checked_at || Date.now() - new Date(cu.crisp_checked_at).getTime() > CRISP_EVERY_MS)) {
     const r = await reviewCheck(cu.email);
     await writeReview(cu.store_domain, r);
     if (r.app_review !== null && r.app_review >= 5 && !cu.reviewed_at) {
