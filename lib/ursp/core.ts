@@ -72,8 +72,8 @@ export const recapServiceAccount = (): string | null => process.env.URSP_SHEET_S
 const RECAP_EVERY_MS = 5 * 60_000;
 const ACTIVE_EVERY_MS = 60 * 60_000;
 const CRISP_EVERY_MS = 15 * 60_000;
-/* a case in hand: its replies are read sooner, for its notes */
-const CASE_EVERY_MS = 4 * 60_000;
+/* a case in hand: its replies are read every 10 minutes, for its notes */
+const CASE_EVERY_MS = 9.5 * 60_000;
 /* a case done: every 10 minutes, on its own loop — the customer's "it works" is answered with the review request soon after */
 const DONE_EVERY_MS = 9.5 * 60_000;
 const DONE_TICK_MS = 10 * 60_000;
@@ -1402,10 +1402,10 @@ export async function trackOne(t: UrspTarget, cfg: UrspSettings, opts: { force?:
 
 async function trackBatch(cfg: UrspSettings): Promise<{ tracked: number; remaining: number; errors: string[] }> {
   const p = await db();
-  /* cases in hand first, and every few minutes; the rest every ~15. Done cases are trackDone's */
+  /* cases in hand first, every 10 minutes like the rest. Done cases are trackDone's */
   const inCase = "(working_at is not null and dismissed_at is null)";
   const due = `status = 'sent' and sent_at > now() - make_interval(days => $1) and done_at is null and closed_at is null
-               and (tracked_at is null or tracked_at < now() - case when ${inCase} then interval '3 minutes' else interval '10 minutes' end)`;
+               and (tracked_at is null or tracked_at < now() - interval '10 minutes')`;
   const { rows } = await p.query<UrspTarget>(`select * from ursp_targets where ${due} order by ${inCase} desc, tracked_at nulls first, sent_at desc limit $2`, [
     cfg.tracking_days,
     TRACK_BATCH,
