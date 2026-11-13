@@ -765,7 +765,7 @@ async function main() {
     t1 = (await target("active", "thread.myshopify.com"))!;
     const out = convs[tsid].msgs.filter((m) => m.from === "operator" && m.type === "text").slice(-2).map((m) => String(m.content));
     check(t1.review_ask_status === "sent" && ours() === before + 2, "confirmed: two messages", { status: t1.review_ask_status, read: t1.after_done_read, sent: ours() - before, ns: (await queries.notesFor([th.id]))[th.id]?.map((n) => n.text) });
-    check(out[0].startsWith("Thanks so much for getting back to us") && out[1].includes("\n*[⭐ Share your experience with PageFly](https://apps.shopify.com/pagefly?#modal-show=ReviewListingModal)*\n"), "the thanks, then the review request with its link", out);
+    check(out[0].startsWith("Thanks so much for getting back to us") && out[1].includes("\n[⭐ Share your experience with PageFly](https://apps.shopify.com/pagefly?#modal-show=ReviewListingModal)\n"), "the thanks, then the review request with its link", out);
     ns = (await queries.notesFor([th.id]))[th.id] ?? [];
     check(ns.some((n) => n.kind === "auto" && n.text.startsWith("Đã gửi tin cảm ơn và tin xin review")), "noted");
     let again = false;
