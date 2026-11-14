@@ -78,7 +78,12 @@ Every one of them must be buildable in PageFly (pagefly-builder rules) and do a 
 - flat vector illustrations or drawn products standing in for photography;
 - filler copy ("elevate your", "crafted with care", "superior quality").
 
-**Photography, not illustration.** A premium store sells with photos. Every set has one consistent **photo direction** (light, colour grade, backgrounds, models, props) from the brief, shown on all 7 pages: the same products look the same on every page, and the people and places belong to the market. Images are made and hosted as the routine instructions say ("Images"); never a stock photo that does not show this brand's product, never an unrelated landscape.
+**Photography, not illustration.** A premium store sells with photos. Every set has one consistent **photo direction** (light, colour grade, backgrounds, models, props) from the brief, shown on all 7 pages: the same products look the same on every page, and the people and places belong to the market. Images come from Unsplash and Pexels (tier 1), chosen like an art director, not by the first search result:
+- **one look across the set:** pick photos with the same light, colour grade and background family — ideally several from one photographer or one shoot (search the photographer's profile and collections once you find a good one);
+- **the product is the product:** a photo that shows this kind of product, in this brand's style, used for the same product on every page (the same bottle on Home, Collection and Product); never a photo of something else, never an unrelated landscape or city;
+- **the market:** people, places, food, interiors and seasons that belong to that country — search in its terms too (e.g. "Tokyo apartment interior", "Marrakech riad", "São Paulo street style");
+- **looks like a campaign, not like stock:** no posed office smiles, no watermark-style compositions; crop to the frame on purpose;
+- the shot list in the brief says which photo goes where; if no good photo exists for a shot, change the shot, not the standard.
 
 # The set (tier 3 — all required)
 
@@ -111,7 +116,7 @@ Required — a page that fails one of these is not done:
 - Home and every selling page have a **hero with a headline, a CTA button and an image**.
 - **3 to 12 sections** per page.
 - Product and Sale **show prices**.
-- **Images:** never hotlinked from Unsplash, Pexels or another shop's CDN — only images we may use, and each image's source is listed (see the summary). Compressed, WebP, about 300 KB each at most. No more than 20 images per page.
+- **Images:** free stock photos from **Unsplash or Pexels** (free licence, linked from their own CDN with a width parameter, e.g. `?w=1600&fm=webp&q=80`) — never another shop's images or a paid stock site. Each image's source page is listed in the summary. About 300 KB each at most (hero ≤ 200 KB), no more than 20 images per page.
 - **Mobile 375 px:** no horizontal overflow, no overlapping text, no content lost.
 
 Should have:
