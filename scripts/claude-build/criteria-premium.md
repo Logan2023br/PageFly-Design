@@ -35,11 +35,50 @@ Every set is built for **one market** chosen before the concept. The mix follows
 - **Headlines and buttons fit the language** — German, French and Portuguese run 20–30% longer than English, Japanese and Arabic need more line height. No text baked into images.
 - **Light on mobile**, and lightest of all for IN-PK and LATAM-TR: their customers shop on mid-range phones over slow networks — no video background, motion on `transform`/`opacity` only, images within the tier 1 limits.
 
-# Learn from the best in the market
+# Learn from the best in the market — then go beyond it
 
-Before choosing the look, study **3–5 leading brand websites in the set's market and industry** — brands customers in that country actually buy from, on their local site and in the local language (e.g. Japan: Aesop JP, Muji, Shiseido, Kinto; France: Sézane, Diptyque, Maison Kitsuné; Germany: Hessnatur, Manufactum; India: Sabyasachi, FabIndia, Nykaa; Brazil: Farm Rio, Granado; Gulf: Ajmal, Arabian Oud, Ounass). At most one global brand, and only if it is big in that market. Note what makes them feel premium: hero composition, type, how products are shown, the motion and 3D, how they sell. Use what you learn as patterns, **never copy** a layout, copy text, logo or image. List the sites you studied in the summary.
+**Research before any idea.** Find the **5–8 best online stores in the set's market and industry**: the ones customers there actually buy from and that people in the trade hold up as the best (category leaders, fast-growing DTC brands, Awwwards / Shopify-showcase picks from that country). Look at them on their local site, in the local language — e.g. Japan: Aesop JP, Muji, Shiseido, Kinto, Beams; France: Sézane, Diptyque, Maison Kitsuné, Jacquemus; Germany: Hessnatur, Manufactum, Armedangels; India: Sabyasachi, FabIndia, Nykaa; Brazil: Farm Rio, Granado, Osklen; Gulf: Ajmal, Arabian Oud, Ounass. At most one global brand, and only if it is big in that market.
 
-A set is checked in 4 tiers. Tier 1 is pass/fail, tier 2 is scored per page, tier 3 is the set as a whole, tier 4 is the rules for each section type. Build to all four from the start — do not design first and patch later.
+For each one, screenshot Home and a Product page at 1440 px and 375 px (with a headless browser if one is available; otherwise read the page's HTML and describe it) and write down:
+- the **hero**: what fills the first screen, how the product is shown, where the price, offer and CTA sit;
+- the **sections** in order, and which ones are **unusual** — the ones a basic template does not have;
+- the **selling devices**: social proof, urgency, bundles, guarantees, size or shade help, payment and delivery cues;
+- the **look**: type, colour, image style, density, motion.
+
+Put the screenshots and notes together as a **reference board** in the brief. Learn the patterns, then make something of our own that is at least as good: **never copy** a layout, text, logo or image.
+
+# The creative bar — fashionable, distinctive, makes people buy
+
+The test for every selling page (Home, Product, Sale): **a shopper from that market looks at the first screen and wants the product right now** — it looks like the most fashionable brand in its category this year, and the way to buy is obvious.
+
+**Distinctive sections, not a basic template.** A page made only of hero → 3 cards → image/text → testimonials → newsletter is a fail. Each selling page has **at least 3 sections that a basic template does not have**, and Home, Product and Sale do not share the same ones. Choose what fits the industry and the market, for example:
+- shop-the-look / lookbook with product hotspots; a horizontal-scroll editorial strip;
+- before/after slider; shade, size or fit finder; a "which one is for you" quiz-style picker;
+- ingredient, material or origin explorer (tabs or a map); a "how it is made" step timeline with photos;
+- comparison table (us vs the usual alternative); a routine or bundle builder with a bundle price;
+- UGC / customer-photo wall; press-quote marquee; a stats row with count-up;
+- a scent, flavour or texture profile chart; a "complete the set" / frequently-bought-together block; a sticky add-to-cart bar on mobile.
+Every one of them must be buildable in PageFly (pagefly-builder rules) and do a selling job — never decoration. Name the set's distinctive sections in the `blurb`.
+
+**Conversion built in from the first screen:**
+- Above the fold on Home and Product: the product (on a person or in use, not floating alone), the benefit headline, the price or offer, one strong CTA, and a social-proof line (stars with a count, a press name, a number of customers).
+- The buying journey has no dead ends: every section ends in a next step; the Product page answers price, delivery, returns, size/shade and payment before the shopper has to ask.
+- Proof is specific (named reviews with a detail, real-looking numbers); urgency is honest (a dated offer, real stock), never fake.
+- The local cues that make that market trust a shop (payment logos, instalments, cash on delivery, local delivery times, the return promise) sit next to the CTA.
+
+**SEO, in the market's language:**
+- Each page targets one **primary search phrase people in that market type in their language** (e.g. JP 「オーガニック 化粧水」, FR "huile d'olive bio", DE "Leinen Bettwäsche") plus 2–3 related ones. It appears in the H1, the meta title (≤ 60 characters), the meta description (≤ 155), the first paragraph and at least one H2 — naturally, never stuffed. List them in the summary.
+- One H1, headings in order, real text (never text in images), descriptive alt text in the market's language, internal links between the set's pages with descriptive anchor text, FAQ written as the questions people search.
+- Fast: hero image ≤ 200 KB, every image sized for its frame, no layout shift; light on mobile.
+
+**Never the "AI template" look.** None of these, which the first sets all fell into:
+- a vertical numbered rail down the left edge with dots; mono uppercase eyebrow labels like "01 — …" on every section;
+- the split hero (big headline left, picture right) as the default — choose the hero from the reference board and do not repeat the previous set's hero type (full-bleed photo, editorial collage, centred hero product, text over image, lookbook grid, video/image sequence…);
+- a grotesk + mono font pairing; every card with the same radius and border; a row of 4 identical cards on every page;
+- flat vector illustrations or drawn products standing in for photography;
+- filler copy ("elevate your", "crafted with care", "superior quality").
+
+**Photography, not illustration.** A premium store sells with photos. Every set has one consistent **photo direction** (light, colour grade, backgrounds, models, props) from the brief, shown on all 7 pages: the same products look the same on every page, and the people and places belong to the market. Images are made and hosted as the routine instructions say ("Images"); never a stock photo that does not show this brand's product, never an unrelated landscape.
 
 # The set (tier 3 — all required)
 
