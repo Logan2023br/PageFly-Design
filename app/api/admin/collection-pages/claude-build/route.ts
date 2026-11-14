@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { RESERVED_SET_SLUGS, slugify } from "@/lib/collectionPages";
+import { RESERVED_SET_SLUGS, SLUG_RE, slugify } from "@/lib/collectionPages";
 import { newId } from "@/lib/collectionPagesServer";
 import {
   ClaudeBuildFailure,
@@ -12,6 +12,7 @@ import {
   isBuildStep,
   jobOf,
   listJobs,
+  markBuilt,
   readSetting,
   readTrigger,
   reportStep,
@@ -40,7 +41,10 @@ import { fail, failFrom, firstIssue, buildGuardOrKey } from "../shared";
      { action: "claim" }                   → { job, criteria } — or job null: nothing to build
      { action: "step", id, step, detail?, progress? }  → { cancel } — stop if true
      { action: "set", id, name, blurb? }   → { set: { id, slug } } — the set to upload into
-     { action: "finish", id }              the set is uploaded
+     { action: "built", id, pages: [{ slug, label, title, pageId?, editorUrl?, previewUrl? }] }
+                                           every page is built in the Logan store and its .html is in:
+                                           the set waits for an admin's export (PUT …/claude-build/export)
+     { action: "finish", id }              the set is uploaded (each page's .pagefly too)
      { action: "fail", id, error }
 
    Files go to PUT …/claude-build/files (see that route).
@@ -85,6 +89,23 @@ const scriptBody = z.discriminatedUnion("action", [
   }),
   z.object({ action: z.literal("set"), id: z.string().max(64), name: z.string().trim().min(1).max(120), blurb: z.string().max(400).optional() }),
   z.object({ action: z.literal("finish"), id: z.string().max(64) }),
+  z.object({
+    action: z.literal("built"),
+    id: z.string().max(64),
+    pages: z
+      .array(
+        z.object({
+          slug: z.string().regex(SLUG_RE).max(80),
+          label: z.string().trim().min(1).max(60),
+          title: z.string().trim().min(1).max(200),
+          pageId: z.string().max(120).optional(),
+          editorUrl: z.string().url().max(1000).optional(),
+          previewUrl: z.string().url().max(1000).optional(),
+        }),
+      )
+      .min(1)
+      .max(12),
+  }),
   z.object({ action: z.literal("fail"), id: z.string().max(64), error: z.string().max(1000) }),
 ]);
 
@@ -146,6 +167,22 @@ export async function POST(request: Request) {
       });
       await attachSet(b.id, { id, slug, name: b.name });
       return Response.json({ ok: true, set: { id, slug } }, nocache);
+    }
+    if (b.action === "built") {
+      /* Every page is built in the Logan store and its .html uploaded: the
+         set waits for an admin to export the pages (panel), and the routine
+         goes on to the next job. */
+      const job = await jobOf(b.id);
+      const set = job?.setId ? await getRepo().getCollectionSet(job.setId) : null;
+      if (!job || job.status !== "running" || !set) return fail("Create the set (action \"set\") first.", 409);
+      const noHtml = b.pages.filter((p) => set.pages.find((sp) => sp.slug === p.slug)?.htmlSize == null).map((p) => p.slug);
+      if (noHtml.length) return fail(`Upload the .html of every page first: ${noHtml.join(", ")}.`, 409);
+      if (new Set(b.pages.map((p) => p.slug)).size !== b.pages.length) return fail("Each page once.");
+      await markBuilt(
+        b.id,
+        b.pages.map((p) => ({ slug: p.slug, label: p.label, title: p.title, pageId: p.pageId ?? null, editorUrl: p.editorUrl ?? null, previewUrl: p.previewUrl ?? null })),
+      );
+      return Response.json({ ok: true, waiting: "export" }, nocache);
     }
     if (b.action === "finish") {
       const job = await jobOf(b.id);

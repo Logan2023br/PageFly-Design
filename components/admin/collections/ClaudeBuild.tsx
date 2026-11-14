@@ -18,10 +18,11 @@ import { FIELD, FoldTitle, api, useFolded } from "./shared";
    ========================================================================== */
 
 type Data = { jobs: BuildJob[]; criteria: string; trigger: BuildTrigger };
-type Tab = "running" | "queued" | "done" | "closed";
+type Tab = "running" | "export" | "queued" | "done" | "closed";
 
 const TABS: { id: Tab; label: string; statuses: BuildJobStatus[] }[] = [
   { id: "running", label: "Đang build", statuses: ["running"] },
+  { id: "export", label: "Chờ export", statuses: ["export"] },
   { id: "queued", label: "Chờ build", statuses: ["queued"] },
   { id: "done", label: "Đã build", statuses: ["done"] },
   { id: "closed", label: "Lỗi / Huỷ", statuses: ["failed", "cancelled"] },
@@ -29,6 +30,7 @@ const TABS: { id: Tab; label: string; statuses: BuildJobStatus[] }[] = [
 
 const STATUS: Record<BuildJobStatus, { label: string; cls: string }> = {
   running: { label: "Đang build", cls: "border-pf-primary-hi/30 bg-pf-primary/10 text-pf-primary-hi" },
+  export: { label: "Chờ export", cls: "border-pf-primary-hi/40 bg-pf-card-hi text-pf-text" },
   queued: { label: "Chờ build", cls: "border-pf-warn/30 bg-pf-warn/10 text-pf-warn" },
   done: { label: "Đã build", cls: "border-pf-success/30 bg-pf-success/10 text-pf-success" },
   failed: { label: "Lỗi", cls: "border-pf-danger/30 bg-pf-danger/10 text-pf-danger" },
@@ -109,6 +111,7 @@ export function ClaudeBuild() {
 
   const counts = Object.fromEntries(TABS.map((t) => [t.id, data.jobs.filter((j) => t.statuses.includes(j.status)).length])) as Record<Tab, number>;
   const running = data.jobs.filter((j) => j.status === "running");
+  const waiting = data.jobs.filter((j) => j.status === "export");
   const rows = data.jobs.filter((j) => TABS.find((t) => t.id === tab)!.statuses.includes(j.status));
   const builtPages = data.jobs.filter((j) => j.status === "done").reduce((n, j) => n + j.pages, 0);
 
@@ -117,7 +120,8 @@ export function ClaudeBuild() {
       <Panel className="flex flex-wrap items-center gap-x-3 gap-y-1 border-pf-primary-hi/30 px-4 py-3">
         <FoldTitle icon="Rocket" title="Claude Build Premium" folded onFlip={flip} />
         <span className="text-[12.5px] text-pf-muted">
-          Đang build {counts.running} · Chờ build {counts.queued} · Đã build {counts.done}
+          Đang build {counts.running}
+          {counts.export ? ` · Chờ export ${counts.export}` : ""} · Chờ build {counts.queued} · Đã build {counts.done}
           {counts.closed ? ` · Lỗi / huỷ ${counts.closed}` : ""}
         </span>
       </Panel>
@@ -254,10 +258,11 @@ export function ClaudeBuild() {
       )}
 
       {/* counts */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         {(
           [
             ["Đang build", counts.running, "text-pf-primary-hi"],
+            ["Chờ export", counts.export, "text-pf-text"],
             ["Chờ build", counts.queued, "text-pf-warn"],
             ["Đã build", counts.done, "text-pf-success"],
             ["Lỗi / Huỷ", counts.closed, "text-pf-danger"],
@@ -274,6 +279,11 @@ export function ClaudeBuild() {
       {/* what is being built, step by step */}
       {running.map((j) => (
         <RunningJob key={j.id} job={j} now={now} busy={busy} onCancel={() => void post({ action: "cancel", id: j.id })} />
+      ))}
+
+      {/* built in the Logan store, waiting for someone to export the pages */}
+      {waiting.map((j) => (
+        <ExportJob key={j.id} job={j} busy={busy} onDone={() => setTick((n) => n + 1)} onCancel={() => void post({ action: "cancel", id: j.id })} />
       ))}
 
       {/* the list */}
@@ -358,6 +368,106 @@ function RunningJob({ job, now, busy, onCancel }: { job: BuildJob; now: number; 
   );
 }
 
+type ExportAnswer = { stored: { slug: string; entry: string }[]; unmatched: string[]; missing: string[]; done: boolean };
+
+/* A set the routine built in the Logan store. Someone opens each page in the
+   PageFly editor, exports it (one by one, or "All Pages" at once), and drops
+   the file here: each page's .pagefly goes into the set; when every page has
+   one, the build is done. */
+function ExportJob({ job, busy, onDone, onCancel }: { job: BuildJob; busy: boolean; onDone: () => void; onCancel: () => void }) {
+  const [sending, setSending] = useState(false);
+  const [answer, setAnswer] = useState<ExportAnswer | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [drag, setDrag] = useState(false);
+
+  const send = async (file: File | undefined) => {
+    if (!file) return;
+    setSending(true);
+    setError(null);
+    const res = await api<ExportAnswer>(`/api/admin/collection-pages/claude-build/export?job=${encodeURIComponent(job.id)}`, {
+      method: "PUT",
+      body: file,
+      headers: { "Content-Type": "application/octet-stream" },
+    });
+    setSending(false);
+    if (!res.ok) return setError(res.error);
+    setAnswer(res);
+    onDone();
+  };
+
+  return (
+    <div className="grid gap-3 rounded-pf-md border border-pf-primary-hi/40 bg-pf-card-hi/40 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[13.5px] font-semibold text-pf-text">
+          {job.setName ?? "Bộ mới"}
+          <span className="ml-2 text-[12px] font-normal text-pf-faint">đã dựng xong {job.loganPages.length} page trong store Logan · chờ export</span>
+        </p>
+        <div className="flex items-center gap-2">
+          {job.setId && (
+            <Link href={`/design/admin/collections/${job.setId}`} className="text-[12.5px] font-semibold text-pf-primary-hi hover:underline">
+              Mở bộ
+            </Link>
+          )}
+          <Button size="sm" variant="quiet" icon="X" disabled={busy || sending} onClick={onCancel}>
+            Huỷ
+          </Button>
+        </div>
+      </div>
+      <p className="text-[12px] text-pf-muted">
+        Mở PageFly editor của store Logan, export các page dưới đây (từng page hoặc “All Pages”), rồi thả file .pagefly vào ô bên dưới. File được tách ra
+        từng page và lưu vào bộ; đủ page là bộ xong.
+      </p>
+      <ul className="grid gap-1 text-[12.5px]">
+        {job.loganPages.map((p) => (
+          <li key={p.slug} className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+            <span className="min-w-[110px] font-semibold text-pf-text">{p.label}</span>
+            <span className="text-pf-faint">{p.title}</span>
+            {p.editorUrl && (
+              <a href={p.editorUrl} target="_blank" rel="noreferrer" className="font-semibold text-pf-primary-hi hover:underline">
+                Mở editor
+              </a>
+            )}
+            {p.previewUrl && (
+              <a href={p.previewUrl} target="_blank" rel="noreferrer" className="font-semibold text-pf-body hover:text-pf-text">
+                Xem bản dựng
+              </a>
+            )}
+            {answer?.stored.some((s) => s.slug === p.slug) && (
+              <span className="inline-flex items-center gap-1 text-pf-success">
+                <Icon name="Check" size={12} /> đã có .pagefly
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+      <label
+        onDragOver={(e) => (e.preventDefault(), setDrag(true))}
+        onDragLeave={() => setDrag(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDrag(false);
+          void send(e.dataTransfer.files[0]);
+        }}
+        className={`flex cursor-pointer flex-col items-center gap-1 rounded-pf-md border border-dashed px-3 py-4 text-center text-[12.5px] ${
+          drag ? "border-pf-primary-hi bg-pf-primary/10 text-pf-text" : "border-pf-border text-pf-muted hover:text-pf-text"
+        }`}
+      >
+        <Icon name={sending ? "Loader" : "Upload"} size={16} className={sending ? "animate-spin" : undefined} />
+        {sending ? "Đang lưu…" : "Thả file export (.pagefly) vào đây, hoặc bấm để chọn"}
+        <input type="file" accept=".pagefly,.zip" className="hidden" disabled={sending} onChange={(e) => void send(e.target.files?.[0])} />
+      </label>
+      {answer && (
+        <p className="text-[12px] text-pf-muted">
+          Đã lưu {answer.stored.length} page.
+          {answer.missing.length ? ` Còn thiếu: ${answer.missing.join(", ")}.` : " Đủ page — bộ đã xong."}
+          {answer.unmatched.length ? ` Không khớp page nào: ${answer.unmatched.join(", ")}.` : ""}
+        </p>
+      )}
+      {error && <p className="text-[12px] text-pf-danger">{error}</p>}
+    </div>
+  );
+}
+
 function JobRow({ job, busy, onCancel, onRetry }: { job: BuildJob; busy: boolean; onCancel: () => void; onRetry: () => void }) {
   const [open, setOpen] = useState(false);
   const s = STATUS[job.status];
@@ -384,7 +494,7 @@ function JobRow({ job, busy, onCancel, onRetry }: { job: BuildJob; busy: boolean
             Xem trang
           </a>
         )}
-        {job.status === "queued" && (
+        {(job.status === "queued" || job.status === "export") && (
           <Button size="sm" variant="danger" icon="X" className="border-transparent bg-pf-danger text-white hover:bg-pf-danger/85 disabled:bg-pf-card disabled:text-pf-faint" disabled={busy} onClick={onCancel}>
             Huỷ
           </Button>

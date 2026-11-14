@@ -114,7 +114,7 @@ Required — a page that fails one of these is not done:
 - **Every image has an alt** that describes what is actually in it.
 - **No placeholder text** ("lorem ipsum", "this is your heading text", "button text") and **no placeholder images**.
 - Home and every selling page have a **hero with a headline, a CTA button and an image**.
-- **3 to 12 sections** per page.
+- **3 to 10 sections** per page (the PageFly MCP builds at most 10).
 - Product and Sale **show prices**.
 - **Images:** free stock photos from **Unsplash or Pexels** (free licence, linked from their own CDN with a width parameter, e.g. `?w=1600&fm=webp&q=80`) — never another shop's images or a paid stock site. Each image's source page is listed in the summary. About 300 KB each at most (hero ≤ 200 KB), no more than 20 images per page.
 - **Mobile 375 px:** no horizontal overflow, no overlapping text, no content lost.
@@ -163,7 +163,7 @@ Any other section type: give it what that type needs to do its job, by the same 
 - Spacing on an 8-px scale; a clear type scale (display / headings / body / caption); body 16–18 px, line length 60–75 characters, line-height 1.5–1.7.
 - One accent colour, used deliberately; text contrast at least WCAG AA.
 - Refined dividers, eyebrow labels, numbered sections; one consistent icon set; nothing default-looking.
-- Only what PageFly can reproduce (follow the pagefly-builder rules), and the `.pagefly` must render identically to its HTML.
+- Only what PageFly can reproduce (follow the pagefly-builder rules), and the page built in the Logan store must render identically to its HTML.
 
 # Motion (required — a premium set must feel alive)
 
@@ -195,7 +195,7 @@ Limits:
 
 # Before upload
 
-For each page, after scoring: tier 1 all required lines pass, tier 2 weakest criterion meets its threshold, every section meets tier 4, and the motion list above is in place and matches between the HTML and the `.pagefly`. Then for the set: every tier 3 line passes and the set is clearly different from everything in `existing`. Only then upload.
+For each page, after scoring: tier 1 all required lines pass, tier 2 weakest criterion meets its threshold, every section meets tier 4, and the motion list above is in place and matches between the HTML and the page built in the Logan store. Then for the set: every tier 3 line passes and the set is clearly different from everything in `existing`. Only then upload.
 
 Also for the set: every word a customer sees is in the market's language, the look fits that market, its currency and commerce cues are used throughout, and no headline or button overflows in that language (GULF: mirrored right-to-left).
 

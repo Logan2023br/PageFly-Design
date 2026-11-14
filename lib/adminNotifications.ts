@@ -117,12 +117,14 @@ export async function recentNotices(sections: AdminSection[]): Promise<AdminNoti
           out.push({
             id: `cb:${j.id}:${j.status}`,
             at: j.finishedAt,
-            tone: j.status === "done" ? "done" : "error",
+            tone: j.status === "failed" ? "error" : "done",
             href: "/design/admin/collections",
             text:
               j.status === "done"
                 ? `Claude Build đã build xong bộ ${j.setName ?? "mới"}, ${j.pages} page.`
-                : `Claude Build báo lỗi${j.setName ? ` ở bộ ${j.setName}` : ""}.`,
+                : j.status === "export"
+                  ? `Claude Build đã dựng xong bộ ${j.setName ?? "mới"} trong store Logan, ${j.pages} page. Cần export để lưu file pagefly.`
+                  : `Claude Build báo lỗi${j.setName ? ` ở bộ ${j.setName}` : ""}.`,
           });
       })(),
     );

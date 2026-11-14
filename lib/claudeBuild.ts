@@ -22,10 +22,10 @@ import { databaseUrl } from "@/lib/db";
    POSTGRES ONLY, its own small pool, like Claude Review and Upsell.
    ========================================================================== */
 
-import { BUILD_STEPS, isBuildStep, type BuildJob, type BuildJobStatus, type BuildStepKey, type BuildTrigger } from "./claudeBuildShared";
+import { BUILD_STEPS, isBuildStep, type BuildJob, type BuildJobStatus, type BuildStepKey, type BuildTrigger, type LoganPage } from "./claudeBuildShared";
 
 export { BUILD_STEPS, isBuildStep };
-export type { BuildJob, BuildJobStatus, BuildStepKey, BuildTrigger };
+export type { BuildJob, BuildJobStatus, BuildStepKey, BuildTrigger, LoganPage };
 
 export class ClaudeBuildFailure extends Error {
   constructor(message: string, readonly status = 400) {
@@ -73,6 +73,7 @@ function db(): Pool {
          heartbeat_at     timestamptz
        );
        create index if not exists claude_build_jobs_status on claude_build_jobs (status, created_at);
+       alter table claude_build_jobs add column if not exists logan_pages jsonb not null default '[]';
        create table if not exists claude_build_settings (
          key        text primary key,
          value      text,
@@ -107,6 +108,7 @@ function toJob(r: Record<string, unknown>): BuildJob {
     setSlug: (r.set_slug as string) ?? null,
     setName: (r.set_name as string) ?? null,
     pages: Number(r.pages ?? 0),
+    loganPages: Array.isArray(r.logan_pages) ? (r.logan_pages as LoganPage[]) : [],
     error: (r.error as string) ?? null,
     cancelRequested: Boolean(r.cancel_requested),
     requestedBy: (r.requested_by as string) ?? null,
@@ -217,7 +219,13 @@ export async function cancelJob(id: string): Promise<void> {
     `update claude_build_jobs set status = 'cancelled', finished_at = now() where id = $1 and status = 'queued'`,
     [id],
   );
-  if (!rowCount) await p.query(`update claude_build_jobs set cancel_requested = true where id = $1 and status = 'running'`, [id]);
+  if (rowCount) return;
+  /* A set waiting for its export is not being worked on: cancelled at once. */
+  const { rowCount: waiting } = await p.query(
+    `update claude_build_jobs set status = 'cancelled', finished_at = now() where id = $1 and status = 'export'`,
+    [id],
+  );
+  if (!waiting) await p.query(`update claude_build_jobs set cancel_requested = true where id = $1 and status = 'running'`, [id]);
 }
 
 /** A failed or cancelled job goes back to the queue, and the routine is fired. */
@@ -331,16 +339,53 @@ export async function finishJob(id: string, pages: number): Promise<void> {
   });
 }
 
+/**
+ * The routine built every page in the Logan store: the job waits for the
+ * admin's export (status "export") and the routine moves on to the next one.
+ */
+export async function markBuilt(id: string, pages: LoganPage[]): Promise<void> {
+  await inTx(async (c) => {
+    const job = await running(c, id);
+    if (!job.setId) throw new ClaudeBuildFailure("Create the set (action \"set\") before reporting the pages built.", 409);
+    const at = new Date().toISOString();
+    const log = [...job.log, { at, step: "upload", detail: `${pages.length} page dựng xong trong store Logan — chờ export` }].slice(-60);
+    await c.query(
+      `update claude_build_jobs
+          set status = 'export', logan_pages = $2, progress = greatest(progress, 95), log = $3, heartbeat_at = now()
+        where id = $1`,
+      [id, JSON.stringify(pages), JSON.stringify(log)],
+    );
+  });
+}
+
+/** Every page of a set waiting for its export has its .pagefly now: done. */
+export async function completeExport(id: string, pages: number): Promise<void> {
+  const p = await ready();
+  await p.query(
+    `update claude_build_jobs set status = 'done', progress = 100, pages = $2, finished_at = now(), heartbeat_at = now()
+      where id = $1 and status = 'export'`,
+    [id, pages],
+  );
+}
+
 /** Builds that ended (done or failed) in the last `hours` — the admin's sound notice. */
 export async function endedJobs(hours: number): Promise<{ id: string; status: string; setName: string | null; pages: number; finishedAt: string }[]> {
   const p = await ready();
   const { rows } = await p.query(
-    `select id, status, set_name, pages, finished_at from claude_build_jobs
-      where status in ('done', 'failed') and finished_at > now() - make_interval(hours => $1)
-      order by finished_at`,
+    `select id, status, set_name, pages, coalesce(finished_at, heartbeat_at) as at, logan_pages from claude_build_jobs
+      where (status in ('done', 'failed') and finished_at > now() - make_interval(hours => $1))
+         or (status = 'export' and heartbeat_at > now() - make_interval(hours => $1))
+      order by 5`,
     [hours],
   );
-  return rows.map((r) => ({ id: r.id, status: r.status, setName: r.set_name ?? null, pages: Number(r.pages ?? 0), finishedAt: new Date(r.finished_at).toISOString() }));
+  /* "export" too: the set is built in the Logan store and waits for someone to export it. */
+  return rows.map((r) => ({
+    id: r.id,
+    status: r.status,
+    setName: r.set_name ?? null,
+    pages: r.status === "export" && Array.isArray(r.logan_pages) ? r.logan_pages.length : Number(r.pages ?? 0),
+    finishedAt: new Date(r.at).toISOString(),
+  }));
 }
 
 export async function failJob(id: string, error: string): Promise<void> {
