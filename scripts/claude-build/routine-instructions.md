@@ -31,9 +31,9 @@ Repeat until `claim` returns `"job": null`, then end with the summary:
    Steps, in order: `idea` (the concept: industry, brand, page list) → `style` (the art direction: palette, fonts, motion, 3D) → `html` (building the HTML mockups) → `review` (scoring and improving against the criteria) → `pagefly` (converting to .pagefly) → `check` (the review-collection-pages review) → `upload`. Report the same step again with a new `detail` as you move through pages (`"detail":"page 4/7 · Product"`), and keep `progress` rising — the admin watches this live. Report at least every 10 minutes; a job silent for 30 minutes is marked failed.
 3. **First choose the market** (step `idea`, `"detail":"market: <slot>"`): follow "Which market — choose it first" in the master criteria — count `existing` per slot, take the one furthest below its share, unless `criteria` or `job.note` names a market. Builds earlier in this run count too.
    **Everything runs on Opus 5.5** — this run, and every agent you start (the creative director, the scorers): always pass `model: "opus"` to the Agent tool, never another model.
-   **The idea and the style come from a creative-director agent** (steps `idea` and `style`), so the concept is thought through apart from the build. Start one agent with the Agent tool and `model: "opus"`, and give it everything it needs, in full: the master criteria file, the admin's `criteria`, `job.note`, the whole `existing` list, and the sets you built earlier in this run. Tell it the market slot you chose — the concept must be built for that market. Ask it to think as a creative director and return a **creative brief**:
-   - market slot, the market's currency and buying cues (payment, shipping, returns, sizes), industry label, store concept, target customer, brand name, one-line positioning, voice, sample product line with names and prices;
-   - the 3–5 leading brand websites it studied (it may search and fetch the web) and what it takes from each — patterns, never copies;
+   **The idea and the style come from a creative-director agent** (steps `idea` and `style`), so the concept is thought through apart from the build. Start one agent with the Agent tool and `model: "opus"`, and give it everything it needs, in full: the master criteria file, the admin's `criteria`, `job.note`, the whole `existing` list, and the sets you built earlier in this run. Tell it the market slot you chose — the concept, the language and the look must be built for that market (master criteria, "Which market"). Ask it to think as a creative director and return a **creative brief**:
+   - market slot, the country and the language of the copy, the market's currency and buying cues (payment, shipping, returns, sizes, holidays), what that market's taste expects from a premium brand, industry label, store concept, target customer, brand name, one-line positioning, voice, sample product line with names and prices;
+   - the 3–5 leading brand websites **in that market** it studied, on their local sites (it may search and fetch the web) and what it takes from each — patterns, never copies;
    - art direction: palette (hex values and roles), font pairing, button/card shapes, image treatment, the signature layout idea;
    - the motion system, the signature motion, and whether to use 3D and how (per the master criteria);
    - for each of the 7 pages: its sections in order, with the job of each;
@@ -43,6 +43,7 @@ Repeat until `claim` returns `"job": null`, then end with the summary:
 4. **Build the HTML** following the brief and the three layers above (step `html`). Use the `pagefly-builder` skill for everything PageFly-specific, and read its rules before designing so the mockups only use what PageFly can reproduce. Each page is **content only: no header, navigation, announcement bar or footer** — the merchant's theme supplies those (master criteria, tier 1).
    **Then review and improve every page — at least 3 full rounds per page, and keep going until you are genuinely wowed** (step `review`). Quality matters more than tokens or time here: spend whatever it takes. Each round, for each page:
    - screenshot it at 1440 px and 375 px and look at it as a demanding art director and a merchant who expects the best set in the library;
+   - read every word as a native speaker of the market's language would: nothing that sounds translated, no English left over, no line that overflows;
    - score the 7 tier-2 criteria (3 independent scorers, median) and check tier 1, tier 4, motion and 3D;
    - name the weakest things — at least 3 concrete ones per round (a spacing, a headline, a weak section, a flat hover, an image that does not fit, a mobile break…) — and fix them all;
    - compare it with the leading sites the creative director studied: is it at that level? If not, what is missing?
@@ -54,7 +55,7 @@ Repeat until `claim` returns `"job": null`, then end with the summary:
    ```bash
    curl -sS "${H[@]}" -X POST "$API" -d '{"action":"set","id":"<job id>","name":"<Store name>","blurb":"<one line: what the store is, its look>"}'
    ```
-   The `blurb` is how later builds know what this set looks like and which market it serves, so start it with the market slot, then the industry and the look (e.g. "EN · Skincare boutique · ivory and sage, editorial serif, asymmetric grid · signature: slow hero zoom").
+   The `blurb` is how later builds know what this set looks like and which market it serves, so start it with the market slot, then the industry and the look (e.g. "JP (Japan, Japanese) · Skincare boutique · ivory and sage, editorial serif, asymmetric grid · signature: slow hero zoom").
    → `{ "set": { "id", "slug" } }`. It is created as **Preview** (not on the public list until the team checks it).
 7. **Upload every page**, both files — the reviewed versions (step `upload`):
    ```bash

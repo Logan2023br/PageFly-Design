@@ -14,27 +14,30 @@ Each set is a **premium set with an unlimited budget** — the best work we can 
 
 Every set is built for **one market** chosen before the concept. The mix follows where PageFly's stores are (AC2, 14/11/2026: 559k stores — English-speaking ~43%, Europe ~19%, emerging markets ~24%, Asia & Middle East ~7%), weighted by who pays for a premium set. Out of every 10 sets:
 
-| Slot | Market | Count per 10 | Direction (a starting point, not a rule) |
-|---|---|---|---|
-| EN | English-speaking: US, UK, Canada, Australia | 3 | The biggest categories there, one per set: beauty/skincare, fashion, home, supplements/wellness, pets, outdoor. Prices in $, £, C$ or A$ — vary the country between EN sets; local shipping and returns, Klarna/Afterpay-style instalments |
-| FR-IT | France / Italy | 1 | Fashion, fragrance, artisanal food. Magazine look, prices in € (29,90 €) |
-| DE-NL-NORDIC | Germany / Netherlands / Nordics | 1 | Minimal, furniture and design objects. Prices in €; headlines that survive long German words |
-| IN-PK | India / Pakistan | 1 | Ethnic wear, jewellery. Mobile-first and light; a place for cash on delivery and a WhatsApp contact; prices in ₹ |
-| LATAM-TR | Brazil / Latin America / Turkey | 1 | Fashion, activewear, beauty. Bold colour, mobile-first, instalment prices (R$, "12x") |
-| JP | Japan | 2 | Minimal yet information-rich, tea, ceramics, skincare, stationery, fashion; prices in ¥ (税込); the copy reads well when translated into Japanese; fonts with a Noto Sans/Serif JP fallback |
-| GULF | UAE / Saudi Arabia | 1 | Fragrance (oud), modest fashion, luxury gifting. AED/SAR; a layout that also works mirrored right-to-left |
+| Slot | Market | Count per 10 | Language of the copy | Style and direction (a starting point — the local research decides) |
+|---|---|---|---|---|
+| EN | English-speaking: US, UK, Canada, Australia — one country per set, vary it between EN sets | 3 | English of that country (US or British spelling, its idioms) | US: bold, benefit-led, heavy social proof, Klarna/Afterpay. UK: refined, understated, editorial. AU/CA: relaxed, outdoorsy, sustainable. Biggest categories: beauty/skincare, fashion, home, supplements/wellness, pets, outdoor. $, £, C$ or A$ |
+| FR-IT | France or Italy — one per set | 1 | French or Italian | Elegant, editorial, heritage and savoir-faire / artigianalità; restrained colour, refined serifs, lots of white space. Fashion, fragrance, artisanal food. € written the local way (29,90 €) |
+| DE-NL-NORDIC | Germany, Netherlands, Sweden, Denmark or Norway — one per set | 1 | That country's language | Functional, calm, precise, grid-strict; muted natural palette; facts and specs up front, trust and quality seals, clear returns. Furniture, design objects, outdoor. € / kr |
+| IN-PK | India or Pakistan — one per set | 1 | English, as Indian/Pakistani e-commerce writes it (₹ / Rs, lakh, sizes S–XXL and free-size), with Hindi or Urdu words where the brands there use them (product names, festival lines) | Rich colour and pattern, festive (Diwali, Eid, wedding season), jewellery and ethnic wear shown on people; mobile-first and light; cash on delivery and a WhatsApp contact |
+| LATAM-TR | Brazil, Mexico, Colombia or Turkey — one per set | 1 | Brazilian Portuguese, Spanish (Latin American) or Turkish | Warm, bold colour, energetic, people-first imagery; mobile-first; instalment prices (R$ "em até 12x", "meses sin intereses", "taksit"), Pix / OXXO cues |
+| JP | Japan | 2 | Japanese | Minimal yet information-dense, careful hierarchy, small precise type, soft palette, seasonal cues; detailed specs and gift wrapping (ギフト包装); ¥ with 税込. Tea, ceramics, skincare, stationery, fashion |
+| GULF | UAE or Saudi Arabia — one per set | 1 | Arabic (right-to-left), with English product names where brands there keep them | Luxury, gold/black or sand tones, oud and fragrance, modest fashion, gifting; generous imagery; AED / SAR, cash on delivery, Tabby/Tamara instalments |
 
 **How to choose:** read `existing` and count the sets per slot — by the market tag at the start of each `blurb`. A set without a tag (the older ones, and US/UK/AU/CA tags) counts by its currency and look; if that is unclear, count it as EN. Then pick the slot furthest below its share (target = its count per 10 × (number of sets + 1) / 10, minus what it already has); on a tie, the slot with the larger count per 10, then the one higher in the table. If the batch note or the admin's criteria name a market or a country, that wins.
 
 **Every set, whatever the market:**
-- Copy in **English** (merchants translate it themselves), but the market's currency, price format, payment, shipping and returns cues, sizes and units.
-- **Survives translation:** headlines, buttons and cards still fit with text 30% longer (German, French); no text baked into images; fonts with **Latin Extended** coverage (Turkish ğ ş ı, Polish, Portuguese, Vietnamese) — check the Google Fonts subsets before choosing.
+- **All copy in the market's language** (the column above) — headlines, buttons, product names and descriptions, reviews, FAQ, blog article, image alts, meta title and description. Written as a native copywriter in that country would write it for a premium brand, never translated word for word from English. The `<html lang>` matches it. The admin-facing `blurb` and the summary stay in English/Vietnamese.
+- **Style fits that market's taste** — not a global template with a local language on top. The look, density, imagery, colour and the way it sells come from the leading brands in that country (see below). The people, places and occasions in the photos belong to that market — real to someone who lives there, never a cliché of it.
+- **Local commerce cues throughout:** currency and price format, the payment methods and instalments people there use, shipping and returns as stores there phrase them, sizes and units, the holidays and seasons they shop for.
+- **Fonts that cover the language** — check the Google Fonts subsets before choosing: Latin Extended for Turkish, Polish, Portuguese, Scandinavian; a Japanese face (e.g. Noto Sans/Serif JP, Zen Kaku Gothic, Shippori Mincho) for JP; an Arabic face (e.g. Noto Kufi Arabic, Tajawal, IBM Plex Sans Arabic) for GULF. The 2-family limit still holds — pair the local face with one Latin face at most.
+- **GULF is right-to-left:** `dir="rtl"`, layout mirrored (text start on the right, arrows and carousels reversed). Follow the pagefly-builder rules for RTL; if a piece cannot be mirrored in PageFly, choose a layout that does not need it.
+- **Headlines and buttons fit the language** — German, French and Portuguese run 20–30% longer than English, Japanese and Arabic need more line height. No text baked into images.
 - **Light on mobile**, and lightest of all for IN-PK and LATAM-TR: their customers shop on mid-range phones over slow networks — no video background, motion on `transform`/`opacity` only, images within the tier 1 limits.
-- The concept, the customers in the photos and the copy belong to that market — real to someone who lives there, never a cliché of it.
 
 # Learn from the best in the market
 
-Before choosing the look, study **3–5 leading brand websites** in the set's industry and adjacent premium brands (for example Aesop, Glossier, Le Labo, Apple, Allbirds, Gentle Monster, Bang & Olufsen, Kinfolk — pick the ones that fit the industry). Note what makes them feel premium: hero composition, type, how products are shown, the motion and 3D, how they sell. Use what you learn as patterns, **never copy** a layout, copy text, logo or image. List the sites you studied in the summary.
+Before choosing the look, study **3–5 leading brand websites in the set's market and industry** — brands customers in that country actually buy from, on their local site and in the local language (e.g. Japan: Aesop JP, Muji, Shiseido, Kinto; France: Sézane, Diptyque, Maison Kitsuné; Germany: Hessnatur, Manufactum; India: Sabyasachi, FabIndia, Nykaa; Brazil: Farm Rio, Granado; Gulf: Ajmal, Arabian Oud, Ounass). At most one global brand, and only if it is big in that market. Note what makes them feel premium: hero composition, type, how products are shown, the motion and 3D, how they sell. Use what you learn as patterns, **never copy** a layout, copy text, logo or image. List the sites you studied in the summary.
 
 A set is checked in 4 tiers. Tier 1 is pass/fail, tier 2 is scored per page, tier 3 is the set as a whole, tier 4 is the rules for each section type. Build to all four from the start — do not design first and patch later.
 
@@ -57,7 +60,7 @@ A set is checked in 4 tiers. Tier 1 is pass/fail, tier 2 is scored per page, tie
    editorial magazine · Swiss / grid-strict · quiet luxury (ivory, serif, airy) · dark luxe (black, gold or metal, high contrast) · brutalist / raw · retro 70s · Japanese minimal · Scandinavian soft · Mediterranean warm · bold colour-blocking · organic / earthy textures · techno-futuristic · art-deco · handcrafted / artisanal · playful pop.
    Make it specific before any HTML: the exact palette (4–6 hex values with their roles), a font pairing (Google Fonts; one display face with character + one readable text face), button and card shapes, the image treatment (full-bleed, framed, duotone, cut-out on colour…), and one signature layout idea that recurs across the set.
 3. **Neither the structure nor the style may repeat an existing template.** Structure: no page's section sequence and layouts match the same page of an existing set (`public/collection-sets/<slug>/*.html` holds most of them — compare against the real HTML, not just the names). Style: no same display font, no near-identical palette. If your concept and look are close to an existing blurb, choose again.
-4. Write it in the `blurb`: `<market slot> · <industry label> · <look: palette, type, signature layout> · <what makes it worth paying for>` — e.g. `FR-IT · Artisanal fragrance · ivory and oxblood, Didone serif, asymmetric editorial grid · signature: split-text reveal`.
+4. Write it in the `blurb` (in English): `<market slot> (<country, language>) · <industry label> · <look: palette, type, signature layout> · <what makes it worth paying for>` — e.g. `FR-IT (France, French) · Artisanal fragrance · ivory and oxblood, Didone serif, asymmetric editorial grid · signature: split-text reveal`.
 
 # Tier 1 — technical floor (every page, pass/fail)
 
@@ -150,6 +153,6 @@ Limits:
 
 For each page, after scoring: tier 1 all required lines pass, tier 2 weakest criterion meets its threshold, every section meets tier 4, and the motion list above is in place and matches between the HTML and the `.pagefly`. Then for the set: every tier 3 line passes and the set is clearly different from everything in `existing`. Only then upload.
 
-Also for the set: the market's currency and cues are used throughout, and every page still fits with text 30% longer.
+Also for the set: every word a customer sees is in the market's language, the look fits that market, its currency and commerce cues are used throughout, and no headline or button overflows in that language (GULF: mirrored right-to-left).
 
 In the final summary, for each set add: the market slot and why it was chosen (the counts per slot); the industry label; each page's 7 tier-2 scores (median) and its weakest criterion; any tier-1 "should have" not met; the proposed meta title and description of each page; the set's signature motion; and the source of every image.
