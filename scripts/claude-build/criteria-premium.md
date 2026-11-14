@@ -10,6 +10,29 @@
 
 Each set is a **premium set with an unlimited budget** — the best work we can make, as if money were no object: no cap on effort, rounds, tokens or polish. It is a Builder-plan set, so it must pass the **Builder threshold** below, not just the free one. It should make a merchant's store look like a top-tier brand, the kind of site a leading design agency would be proud to ship. If a set would not make a merchant say "this looks expensive" in the first three seconds, it is not finished. When in doubt, cut, refine and polish instead of adding.
 
+# Which market — choose it first
+
+Every set is built for **one market** chosen before the concept. The mix follows where PageFly's stores are (AC2, 14/11/2026: 559k stores — English-speaking ~43%, Europe ~19%, emerging markets ~24%, Asia & Middle East ~7%), weighted by who pays for a premium set. Out of every 10 sets:
+
+| Slot | Market | Count per 10 | Direction (a starting point, not a rule) |
+|---|---|---|---|
+| US | United States | 3 | The biggest US categories, one per set: beauty/skincare, fashion, home, supplements/wellness, pets. Prices in $, US shipping and 30-day returns, Klarna/Afterpay-style instalments |
+| UK | United Kingdom | 1 | Refined, editorial. Prices in £, UK delivery |
+| AU-CA | Australia / Canada | 1 | Outdoor lifestyle, swim & resort, sustainable goods. A$ or C$ |
+| FR-IT | France / Italy | 1 | Fashion, fragrance, artisanal food. Magazine look, prices in € (29,90 €) |
+| DE-NL-NORDIC | Germany / Netherlands / Nordics | 1 | Minimal, furniture and design objects. Prices in €; headlines that survive long German words |
+| IN-PK | India / Pakistan | 1 | Ethnic wear, jewellery. Mobile-first and light; a place for cash on delivery and a WhatsApp contact; prices in ₹ |
+| LATAM-TR | Brazil / Latin America / Turkey | 1 | Fashion, activewear, beauty. Bold colour, mobile-first, instalment prices (R$, "12x") |
+| JP-GULF | Japan or UAE / Saudi Arabia, alternating | 1 | Japan: minimal, information-rich, ¥. Gulf: fragrance, modest fashion, luxury, AED/SAR |
+
+**How to choose:** read `existing` and count the sets per slot — by the market tag at the start of each `blurb`. A set without a tag counts by its currency and look; if that is unclear, count it as US. Then pick the slot furthest below its share (target = its count per 10 × (number of sets + 1) / 10, minus what it already has); on a tie, the slot higher in the table. If the batch note or the admin's criteria name a market or a country, that wins.
+
+**Every set, whatever the market:**
+- Copy in **English** (merchants translate it themselves), but the market's currency, price format, payment, shipping and returns cues, sizes and units.
+- **Survives translation:** headlines, buttons and cards still fit with text 30% longer (German, French); no text baked into images; fonts with **Latin Extended** coverage (Turkish ğ ş ı, Polish, Portuguese, Vietnamese) — check the Google Fonts subsets before choosing.
+- **Light on mobile**, and lightest of all for IN-PK and LATAM-TR: their customers shop on mid-range phones over slow networks — no video background, motion on `transform`/`opacity` only, images within the tier 1 limits.
+- The concept, the customers in the photos and the copy belong to that market — real to someone who lives there, never a cliché of it.
+
 # Learn from the best in the market
 
 Before choosing the look, study **3–5 leading brand websites** in the set's industry and adjacent premium brands (for example Aesop, Glossier, Le Labo, Apple, Allbirds, Gentle Monster, Bang & Olufsen, Kinfolk — pick the ones that fit the industry). Note what makes them feel premium: hero composition, type, how products are shown, the motion and 3D, how they sell. Use what you learn as patterns, **never copy** a layout, copy text, logo or image. List the sites you studied in the summary.
@@ -20,7 +43,7 @@ A set is checked in 4 tiers. Tier 1 is pass/fail, tier 2 is scored per page, tie
 
 - **Exactly 7 pages**, in this order: Home, Product, Collection, About, Contact, Blog Article, Sale (the promotion landing page).
 - **One brand throughout:** one invented store name, one voice, one product line on every page (never jewellery on Home and cosmetics on Product). Real-sounding product names, prices and copy. No lorem ipsum, no "Product name".
-- **One industry, nameable as a label** (e.g. "Fine jewellery", "Specialty coffee") — put it first in the set's `blurb`.
+- **One market** (from "Which market" above) and **one industry, nameable as a label** (e.g. "Fine jewellery", "Specialty coffee") — put both first in the set's `blurb`, market then industry.
 - **One visual system** on all 7 pages: same palette, fonts, corner radius, button style, image style.
 - **At most 2 font families** for the whole set.
 - **A buying journey:** every CTA points somewhere real in the set — Home → Collection, Collection → Product, Sale → Product or Collection.
@@ -35,7 +58,7 @@ A set is checked in 4 tiers. Tier 1 is pass/fail, tier 2 is scored per page, tie
    editorial magazine · Swiss / grid-strict · quiet luxury (ivory, serif, airy) · dark luxe (black, gold or metal, high contrast) · brutalist / raw · retro 70s · Japanese minimal · Scandinavian soft · Mediterranean warm · bold colour-blocking · organic / earthy textures · techno-futuristic · art-deco · handcrafted / artisanal · playful pop.
    Make it specific before any HTML: the exact palette (4–6 hex values with their roles), a font pairing (Google Fonts; one display face with character + one readable text face), button and card shapes, the image treatment (full-bleed, framed, duotone, cut-out on colour…), and one signature layout idea that recurs across the set.
 3. **Neither the structure nor the style may repeat an existing template.** Structure: no page's section sequence and layouts match the same page of an existing set (`public/collection-sets/<slug>/*.html` holds most of them — compare against the real HTML, not just the names). Style: no same display font, no near-identical palette. If your concept and look are close to an existing blurb, choose again.
-4. Write it in the `blurb`: `<industry label> · <look: palette, type, signature layout> · <what makes it worth paying for>`.
+4. Write it in the `blurb`: `<market slot> · <industry label> · <look: palette, type, signature layout> · <what makes it worth paying for>` — e.g. `FR-IT · Artisanal fragrance · ivory and oxblood, Didone serif, asymmetric editorial grid · signature: split-text reveal`.
 
 # Tier 1 — technical floor (every page, pass/fail)
 
@@ -128,4 +151,6 @@ Limits:
 
 For each page, after scoring: tier 1 all required lines pass, tier 2 weakest criterion meets its threshold, every section meets tier 4, and the motion list above is in place and matches between the HTML and the `.pagefly`. Then for the set: every tier 3 line passes and the set is clearly different from everything in `existing`. Only then upload.
 
-In the final summary, for each set add: the industry label; each page's 7 tier-2 scores (median) and its weakest criterion; any tier-1 "should have" not met; the proposed meta title and description of each page; the set's signature motion; and the source of every image.
+Also for the set: the market's currency and cues are used throughout, and every page still fits with text 30% longer.
+
+In the final summary, for each set add: the market slot and why it was chosen (the counts per slot); the industry label; each page's 7 tier-2 scores (median) and its weakest criterion; any tier-1 "should have" not met; the proposed meta title and description of each page; the set's signature motion; and the source of every image.
