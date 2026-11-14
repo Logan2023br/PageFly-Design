@@ -16,16 +16,15 @@ Every set is built for **one market** chosen before the concept. The mix follows
 
 | Slot | Market | Count per 10 | Direction (a starting point, not a rule) |
 |---|---|---|---|
-| US | United States | 3 | The biggest US categories, one per set: beauty/skincare, fashion, home, supplements/wellness, pets. Prices in $, US shipping and 30-day returns, Klarna/Afterpay-style instalments |
-| UK | United Kingdom | 1 | Refined, editorial. Prices in £, UK delivery |
-| AU-CA | Australia / Canada | 1 | Outdoor lifestyle, swim & resort, sustainable goods. A$ or C$ |
+| EN | English-speaking: US, UK, Canada, Australia | 3 | The biggest categories there, one per set: beauty/skincare, fashion, home, supplements/wellness, pets, outdoor. Prices in $, £, C$ or A$ — vary the country between EN sets; local shipping and returns, Klarna/Afterpay-style instalments |
 | FR-IT | France / Italy | 1 | Fashion, fragrance, artisanal food. Magazine look, prices in € (29,90 €) |
 | DE-NL-NORDIC | Germany / Netherlands / Nordics | 1 | Minimal, furniture and design objects. Prices in €; headlines that survive long German words |
 | IN-PK | India / Pakistan | 1 | Ethnic wear, jewellery. Mobile-first and light; a place for cash on delivery and a WhatsApp contact; prices in ₹ |
 | LATAM-TR | Brazil / Latin America / Turkey | 1 | Fashion, activewear, beauty. Bold colour, mobile-first, instalment prices (R$, "12x") |
-| JP-GULF | Japan or UAE / Saudi Arabia, alternating | 1 | Japan: minimal, information-rich, ¥. Gulf: fragrance, modest fashion, luxury, AED/SAR |
+| JP | Japan | 2 | Minimal yet information-rich, tea, ceramics, skincare, stationery, fashion; prices in ¥ (税込); the copy reads well when translated into Japanese; fonts with a Noto Sans/Serif JP fallback |
+| GULF | UAE / Saudi Arabia | 1 | Fragrance (oud), modest fashion, luxury gifting. AED/SAR; a layout that also works mirrored right-to-left |
 
-**How to choose:** read `existing` and count the sets per slot — by the market tag at the start of each `blurb`. A set without a tag counts by its currency and look; if that is unclear, count it as US. Then pick the slot furthest below its share (target = its count per 10 × (number of sets + 1) / 10, minus what it already has); on a tie, the slot higher in the table. If the batch note or the admin's criteria name a market or a country, that wins.
+**How to choose:** read `existing` and count the sets per slot — by the market tag at the start of each `blurb`. A set without a tag (the older ones, and US/UK/AU/CA tags) counts by its currency and look; if that is unclear, count it as EN. Then pick the slot furthest below its share (target = its count per 10 × (number of sets + 1) / 10, minus what it already has); on a tie, the slot with the larger count per 10, then the one higher in the table. If the batch note or the admin's criteria name a market or a country, that wins.
 
 **Every set, whatever the market:**
 - Copy in **English** (merchants translate it themselves), but the market's currency, price format, payment, shipping and returns cues, sizes and units.
