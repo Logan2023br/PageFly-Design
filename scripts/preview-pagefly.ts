@@ -32,6 +32,7 @@ type Item = {
   type: string;
   data?: Record<string, unknown>;
   children: string[];
+  options?: Record<string, unknown>;
 };
 type Style = { id?: string; styles: string };
 
@@ -64,6 +65,20 @@ const TAG: Record<string, string> = {
   Body: "div",
   Layout: "div",
 };
+
+/* Responsive visibility lives in `options`, and the render path turns each flag
+   into a class (`stores/element/element-render.tsx`, see formats.md). */
+const HIDE: [string, string][] = [
+  ["hideOnDesktop", "pf-lg-hide"],
+  ["hideOnLaptop", "pf-md-hide"],
+  ["hideOnTablet", "pf-sm-hide"],
+  ["hideOnMobile", "pf-hide"],
+];
+const HIDE_CSS =
+  "@media (min-width:1199.5px){.pf-lg-hide{display:none!important}}" +
+  `@media ${MEDIA.laptop}{.pf-md-hide{display:none!important}}` +
+  `@media ${MEDIA.tablet}{.pf-sm-hide{display:none!important}}` +
+  `@media ${MEDIA.mobile}{.pf-hide{display:none!important}}`;
 
 export function previewHtml(bytes: Uint8Array): string {
   const files = unzipSync(bytes);
@@ -132,14 +147,23 @@ export function previewHtml(bytes: Uint8Array): string {
     if (!item) return "";
     const k = num.get(id);
     const d = item.data ?? {};
+    /* Attributes > Class (`data.className`) and Attributes > ID (`data.id`)
+       are published on the element itself, next to the pf-N_ hook — page
+       customCSS targets them, so leaving them out unstyled every custom class. */
     const cls = [
       `pf-${k}_`,
       typeof d.classGlobalStyling === "string" ? d.classGlobalStyling : "",
+      typeof d.className === "string" ? d.className : "",
+      ...HIDE.filter(([k]) => item.options?.[k] === true).map(([, c]) => c),
     ]
       .filter(Boolean)
       .join(" ");
-    const tag = TAG[item.type] ?? "div";
-    const attrs = `data-pf-type="${item.type}" class="${cls}"`;
+    const tag =
+      item.type === "Heading2" && typeof d.tag === "string" && /^h[1-6]$/.test(d.tag)
+        ? d.tag
+        : (TAG[item.type] ?? "div");
+    const idAttr = typeof d.id === "string" && d.id ? ` id="${d.id}"` : "";
+    const attrs = `data-pf-type="${item.type}" class="${cls}"${idAttr}`;
 
     if (item.type === "Custom.HTML") {
       /* Raw by design — this is the one element whose content IS markup. */
@@ -163,6 +187,11 @@ export function previewHtml(bytes: Uint8Array): string {
        PageFly allows inline markup inside a text value, so it is not escaped —
        the same decision `builder.ts` makes when it writes the value. */
     const inner = `${text}${kids}`;
+
+    /* Live wraps a ProductBox's children in its product form, and the box's
+       own layout rules hang off `& > form` — without it they match nothing. */
+    if (item.type === "ProductBox")
+      return `<${tag} ${attrs}><form class="pf-product-form">${inner}</form></${tag}>`;
 
     if (item.type === "FlexSection")
       return `<section ${attrs}><div class="pf-flex-section">${inner}</div></section>`;
@@ -188,6 +217,7 @@ export function previewHtml(bytes: Uint8Array): string {
        the thing measured. `display:contents` takes it out of the layout
        entirely, so what is compared is the file rather than this file. */
     `.pf-flex-section{display:contents}`,
+    HIDE_CSS,
     sheet,
     `</style>`,
     doc.customCSS ? `<style>${doc.customCSS}</style>` : "",
