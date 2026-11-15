@@ -124,6 +124,27 @@ export function previewHtml(bytes: Uint8Array): string {
     )
     .join("\n");
 
+  /* Accordion3 `preopen` = the index of the item that starts open. */
+  const openWrappers = new Set<string>();
+  for (const it of doc.items) {
+    const po = it.data?.preopen;
+    if (it.type === "Accordion3" && typeof po === "number" && it.children[po]) openWrappers.add(it.children[po]);
+  }
+  /* options.hideOn* become display:none in that range when published. */
+  const HIDE: Record<string, string> = {
+    hideOnDesktop: "(min-width:1199.5px)",
+    hideOnLaptop: MEDIA.laptop as string,
+    hideOnTablet: MEDIA.tablet as string,
+    hideOnMobile: MEDIA.mobile as string,
+  };
+  const hiddenRules: string[] = [];
+  for (const it of doc.items as (Item & { options?: Record<string, unknown> })[]) {
+    const k = num.get(it.id);
+    if (k === undefined || !it.options) continue;
+    for (const [flag, mq] of Object.entries(HIDE))
+      if (it.options[flag]) hiddenRules.push(`@media ${mq}{.__pf .pf-${k}_{display:none !important}}`);
+  }
+
   /* ---- items[] → markup ------------------------------------------------ */
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
 
@@ -132,14 +153,19 @@ export function previewHtml(bytes: Uint8Array): string {
     if (!item) return "";
     const k = num.get(id);
     const d = item.data ?? {};
+    /* Attributes > Class (`data.className`) is published on the element next to
+       the Global Styles presets, and Attributes > ID as its id — live pages carry
+       both, so customCSS written against them must match here too. */
     const cls = [
       `pf-${k}_`,
       typeof d.classGlobalStyling === "string" ? d.classGlobalStyling : "",
+      typeof d.className === "string" ? d.className : "",
     ]
       .filter(Boolean)
       .join(" ");
     const tag = TAG[item.type] ?? "div";
-    const attrs = `data-pf-type="${item.type}" class="${cls}"`;
+    const idAttr = typeof d.id === "string" && d.id ? ` id="${esc(d.id)}"` : "";
+    const attrs = `data-pf-type="${item.type}" class="${cls}"${idAttr}`;
 
     if (item.type === "Custom.HTML") {
       /* Raw by design — this is the one element whose content IS markup. */
@@ -152,6 +178,21 @@ export function previewHtml(bytes: Uint8Array): string {
         ? `<img ${attrs} src="${esc(src)}" alt="">`
         : `<div ${attrs} style="background:#e6e3dc;min-height:80px"></div>`;
     }
+
+    if (item.type === "Accordion3.Content.Wrapper") {
+      /* <details>/<summary>, closed unless preopened — as PageFly publishes it. */
+      const [hdrId, contentId] = item.children;
+      const hdr = byId.get(hdrId);
+      const content = byId.get(contentId);
+      const hk = num.get(hdrId);
+      const hc = typeof hdr?.data?.className === "string" ? ` ${hdr.data.className}` : "";
+      const label = typeof hdr?.data?.label === "string" ? hdr.data.label : "";
+      const ck = num.get(contentId);
+      const inner = (content?.children ?? []).map(render).join("");
+      const open = openWrappers.has(id) ? " open" : "";
+      return `<details ${attrs}${open}><summary><div data-pf-type="Accordion3.Header" class="pf-${hk}_ pf-anchor pf-header-item-wrapper${hc}"><span class="pf-accordion-icon"></span><span>${label}</span></div></summary><div data-pf-type="Accordion3.Content" class="pf-${ck}_ pf-accordion-body"><div class="pf-accordion-display-content">${inner}</div></div></details>`;
+    }
+    if (item.type === "Paragraph4") return `<p ${attrs}><span>${textOf(item)}</span></p>`;
 
     const text = textOf(item);
     const kids = item.children.map(render).join("");
@@ -171,6 +212,7 @@ export function previewHtml(bytes: Uint8Array): string {
   };
 
   const body = render(root.id);
+  const hidden = hiddenRules.join("\n");
 
   return [
     `<!doctype html>`,
@@ -188,7 +230,9 @@ export function previewHtml(bytes: Uint8Array): string {
        the thing measured. `display:contents` takes it out of the layout
        entirely, so what is compared is the file rather than this file. */
     `.pf-flex-section{display:contents}`,
+    `.__pf details>.pf-accordion-body{display:none}.__pf details[open]>.pf-accordion-body{display:block}.__pf summary{list-style:none}.__pf summary::-webkit-details-marker{display:none}`,
     sheet,
+    hidden,
     `</style>`,
     doc.customCSS ? `<style>${doc.customCSS}</style>` : "",
     `</head><body>`,
