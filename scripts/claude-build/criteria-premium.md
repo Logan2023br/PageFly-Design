@@ -114,7 +114,7 @@ Required — a page that fails one of these is not done:
 - **Every image has an alt** that describes what is actually in it.
 - **No placeholder text** ("lorem ipsum", "this is your heading text", "button text") and **no placeholder images**.
 - Home and every selling page have a **hero with a headline, a CTA button and an image**.
-- **3 to 10 sections** per page (the PageFly MCP builds at most 10).
+- **At least 3 sections** per page, and as many as the design needs — no upper limit while sets are built as HTML only. (When building in the Logan store with the PageFly MCP is turned back on, it builds at most 10 per page.)
 - Product and Sale **show prices**.
 - **Images:** free stock photos from **Unsplash or Pexels** (free licence, linked from their own CDN with a width parameter, e.g. `?w=1600&fm=webp&q=80`) — never another shop's images or a paid stock site. Each image's source page is listed in the summary. About 300 KB each at most (hero ≤ 200 KB), no more than 20 images per page.
 - **Mobile 375 px:** no horizontal overflow, no overlapping text, no content lost.
