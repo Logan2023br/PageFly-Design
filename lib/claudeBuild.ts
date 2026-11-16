@@ -417,12 +417,17 @@ async function triggerToken(): Promise<{ token: string | null; from: "env" | "pa
  * (https://platform.claude.com/docs/en/api/claude-code/routines-fire). It
  * answers once the session exists; the session then works through the queue.
  *
- * ONE SESSION AT A TIME. Each fire opens a new session and there is no
- * idempotency key, so if a build is already running (and alive) nothing is
- * fired: that session claims the newly queued jobs when it finishes its
- * current one. Without a trigger configured the jobs wait for the routine's
+ * IN PARALLEL, UP TO MAX_SESSIONS. Each fire opens a new session, which
+ * claims the oldest queued job (claim skips locked rows, so two sessions never
+ * take the same one) — a set queued while another builds starts at once
+ * instead of waiting hours. When MAX_SESSIONS builds are already running (and
+ * alive) nothing is fired: those sessions claim the queued jobs as they
+ * finish. Without a trigger configured the jobs wait for the routine's
  * schedule — slower, nothing lost. Never throws; the panel shows the result.
  */
+/** How many builds may run at once — each in its own routine session. */
+const MAX_SESSIONS = 3;
+
 export async function fireTrigger(reason: string, force = false): Promise<void> {
   const { token } = await triggerToken();
   if (!token) {
@@ -432,10 +437,13 @@ export async function fireTrigger(reason: string, force = false): Promise<void> 
   if (!force) {
     const p = await ready();
     const { rows } = await p.query(
-      `select 1 from claude_build_jobs where status = 'running' and coalesce(heartbeat_at, started_at) > now() - interval '10 minutes' limit 1`,
+      `select count(*)::int as n from claude_build_jobs where status = 'running' and coalesce(heartbeat_at, started_at) > now() - interval '10 minutes'`,
     );
-    if (rows[0]) {
-      await writeSetting("trigger", JSON.stringify({ at: new Date().toISOString(), result: "Đang có phiên chạy — phiên đó sẽ nhận các bộ mới" }));
+    if (rows[0].n >= MAX_SESSIONS) {
+      await writeSetting(
+        "trigger",
+        JSON.stringify({ at: new Date().toISOString(), result: `Đang có ${rows[0].n} phiên chạy song song — bộ mới chờ một phiên rảnh` }),
+      );
       return;
     }
   }
