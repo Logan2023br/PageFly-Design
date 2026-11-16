@@ -278,6 +278,31 @@ export async function claimJob(): Promise<BuildJob | null> {
   });
 }
 
+/** A build running alongside — what it is making, so a parallel session makes something else. */
+export type PeerBuild = { id: string; note: string | null; startedAt: string | null; setName: string | null; idea: string | null; style: string | null };
+
+/**
+ * The other builds running now (alive in the last 30 minutes), with the
+ * concept each has reported so far: its latest `idea` detail (market,
+ * industry) and `style` detail (store, palette, fonts, hero, signature
+ * motion). A set appears in `existing` only once its HTML is up — an hour in
+ * — so without this two parallel sessions could pick the same look.
+ */
+export async function peerBuilds(exceptId: string | null): Promise<PeerBuild[]> {
+  const p = await ready();
+  const { rows } = await p.query(
+    `select * from claude_build_jobs
+      where status = 'running' and coalesce(heartbeat_at, started_at) > now() - interval '30 minutes' and id <> coalesce($1, '')
+      order by started_at`,
+    [exceptId],
+  );
+  return rows.map((r) => {
+    const job = toJob(r);
+    const last = (step: string) => [...job.log].reverse().find((e) => e.step === step && e.detail)?.detail ?? null;
+    return { id: job.id, note: job.note, startedAt: job.startedAt, setName: job.setName, idea: last("idea"), style: last("style") };
+  });
+}
+
 async function running(c: PoolClient, id: string): Promise<BuildJob> {
   const { rows } = await c.query(`select * from claude_build_jobs where id = $1 for update`, [id]);
   if (!rows[0]) throw new ClaudeBuildFailure("No such build.", 404);

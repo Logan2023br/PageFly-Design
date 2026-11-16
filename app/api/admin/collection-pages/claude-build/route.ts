@@ -6,6 +6,7 @@ import {
   attachSet,
   cancelJob,
   claimJob,
+  peerBuilds,
   failJob,
   finishJob,
   fireTrigger,
@@ -38,7 +39,8 @@ import { fail, failFrom, firstIssue, buildGuardOrKey } from "../shared";
      { action: "fire" }                    fire the routine again by hand
 
    POST  key (the routine):
-     { action: "claim" }                   → { job, criteria } — or job null: nothing to build
+     { action: "claim" }                   → { job, criteria, existing, inProgress } — or job null: nothing to build
+     { action: "peers", id }               → { inProgress } — the other builds running now and their concept so far
      { action: "step", id, step, detail?, progress? }  → { cancel } — stop if true
      { action: "set", id, name, blurb? }   → { set: { id, slug } } — the set to upload into
      { action: "built", id, pages: [{ slug, label, title, pageId?, editorUrl?, previewUrl? }] }
@@ -80,6 +82,7 @@ const adminBody = z.discriminatedUnion("action", [
 
 const scriptBody = z.discriminatedUnion("action", [
   z.object({ action: z.literal("claim") }),
+  z.object({ action: z.literal("peers"), id: z.string().max(64) }),
   z.object({
     action: z.literal("step"),
     id: z.string().max(64),
@@ -135,8 +138,12 @@ export async function POST(request: Request) {
       /* Every set we already have, so the routine builds something none of
          them is: a new industry and concept, a look of its own. */
       const existing = job ? (await getRepo().listCollectionSets()).map((s) => ({ name: s.name, blurb: s.blurb })) : null;
-      return Response.json({ ok: true, job, criteria: job ? ((await readSetting("criteria")) ?? "") : null, existing }, nocache);
+      /* …and the sets being built right now in other sessions, not in
+         `existing` until their HTML is up */
+      const inProgress = job ? await peerBuilds(job.id) : null;
+      return Response.json({ ok: true, job, criteria: job ? ((await readSetting("criteria")) ?? "") : null, existing, inProgress }, nocache);
     }
+    if (b.action === "peers") return Response.json({ ok: true, inProgress: await peerBuilds(b.id) }, nocache);
     if (b.action === "step") {
       if (!isBuildStep(b.step)) return fail("step must be one of: claimed, idea, style, html, review, pagefly, check, upload.");
       return Response.json({ ok: true, ...(await reportStep(b.id, b.step, b.detail ?? null, b.progress ?? null)) }, nocache);
