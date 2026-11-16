@@ -279,7 +279,16 @@ export async function claimJob(): Promise<BuildJob | null> {
 }
 
 /** A build running alongside — what it is making, so a parallel session makes something else. */
-export type PeerBuild = { id: string; note: string | null; startedAt: string | null; setName: string | null; idea: string | null; style: string | null };
+export type PeerBuild = {
+  id: string;
+  note: string | null;
+  startedAt: string | null;
+  setName: string | null;
+  idea: string | null;
+  style: string | null;
+  /** the Home page's section sequence, once its HTML is built ("layout: … → …") */
+  layout: string | null;
+};
 
 /**
  * The other builds running now (alive in the last 30 minutes), with the
@@ -299,7 +308,8 @@ export async function peerBuilds(exceptId: string | null): Promise<PeerBuild[]> 
   return rows.map((r) => {
     const job = toJob(r);
     const last = (step: string) => [...job.log].reverse().find((e) => e.step === step && e.detail)?.detail ?? null;
-    return { id: job.id, note: job.note, startedAt: job.startedAt, setName: job.setName, idea: last("idea"), style: last("style") };
+    const layout = [...job.log].reverse().find((e) => e.detail?.startsWith("layout:"))?.detail ?? null;
+    return { id: job.id, note: job.note, startedAt: job.startedAt, setName: job.setName, idea: last("idea"), style: last("style"), layout };
   });
 }
 
@@ -316,7 +326,7 @@ export async function reportStep(id: string, step: BuildStepKey, detail: string 
   return inTx(async (c) => {
     const job = await running(c, id);
     const at = new Date().toISOString();
-    const log = [...job.log, { at, step, detail: detail?.slice(0, 300) ?? null }].slice(-60);
+    const log = [...job.log, { at, step, detail: detail?.slice(0, 300) ?? null }].slice(-200);
     const place = BUILD_STEPS.findIndex((s) => s.key === step);
     const pct =
       progress !== null && Number.isFinite(progress)
@@ -373,7 +383,7 @@ export async function markBuilt(id: string, pages: LoganPage[]): Promise<void> {
     const job = await running(c, id);
     if (!job.setId) throw new ClaudeBuildFailure("Create the set (action \"set\") before reporting the pages built.", 409);
     const at = new Date().toISOString();
-    const log = [...job.log, { at, step: "upload", detail: `${pages.length} page dựng xong trong store Logan — chờ export` }].slice(-60);
+    const log = [...job.log, { at, step: "upload", detail: `${pages.length} page dựng xong trong store Logan — chờ export` }].slice(-200);
     await c.query(
       `update claude_build_jobs
           set status = 'export', logan_pages = $2, progress = greatest(progress, 95), log = $3, heartbeat_at = now()
