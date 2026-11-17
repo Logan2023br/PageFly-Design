@@ -39,7 +39,8 @@ import {
 } from "@/lib/upsell/adminQueries";
 import { hasUpsellDatabase } from "@/lib/upsell/db";
 import { ROUTINES, approvalMode, lastFire, triggerToken, type RoutineId } from "@/lib/upsell/routines";
-import { NUMERIC_KEYS, SETTING_HELP, getSettings, maskSettings } from "@/lib/upsell/settings";
+import { NUMERIC_KEYS, SETTING_HELP, getSettings, maskSettings, sendPause } from "@/lib/upsell/settings";
+import { PauseSending } from "@/components/admin/PauseSending";
 
 /* /design/admin/upsell — Upsell Build Pages. Read on the server per request,
    like the other admin screens; the tab and filters are in the URL. */
@@ -82,7 +83,7 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
     );
   }
 
-  const [counts, options, cfg, activity] = await Promise.all([tabCounts(), filterOptions(), getSettings(), activityCounts()]);
+  const [counts, options, cfg, activity, pause] = await Promise.all([tabCounts(), filterOptions(), getSettings(), activityCounts(), sendPause()]);
   const window = { start: cfg.send_hour_start, end: cfg.send_hour_end };
 
   let body: React.ReactNode;
@@ -216,7 +217,12 @@ export default async function UpsellAdminPage(props: PageProps<"/design/admin/up
     <AdminShell
       current="upsell"
       title="Upsell Build 2 pages"
-      actions={<ReportsLink upsell="bpu" />}
+      actions={
+        <div className="flex flex-wrap items-center gap-2">
+          <PauseSending url="/api/admin/upsell/routines" paused={!!pause} at={pause?.at} by={pause?.by} note="tin đã duyệt chờ ở Chờ gửi" />
+          <ReportsLink upsell="bpu" />
+        </div>
+      }
       subtitle="BPU: page Claude dựng cho store mới cài — duyệt page, duyệt tin, theo dõi kết quả. Không tin nào tới khách khi chưa được duyệt."
     >
       <div className="grid gap-4">

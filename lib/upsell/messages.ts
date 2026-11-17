@@ -5,7 +5,7 @@ import { designUrl, newMessageId, recordEvent, recordStatus, ttlDays, isoOrNull,
 import { lockLead, updateLead } from "./leads";
 import { notifySlack } from "./notify";
 import { READY_SQL, kickSoon } from "./routines";
-import { getSettings } from "./settings";
+import { getSettings, sendPause } from "./settings";
 import { MESSAGE_KINDS, UpsellError, type LeadRow, type MessageKind, type MessageRow, type SendMode } from "./types";
 
 /* ==========================================================================
@@ -100,6 +100,11 @@ export type OutgoingMessage = Pick<MessageRow, "id" | "lead_id" | "kind" | "cont
     same message twice. `waiting` counts the rest, for the run's summary. */
 export async function approvedForSending(opts: { claim?: boolean } = {}): Promise<{ messages: OutgoingMessage[]; waiting?: number }> {
   const p = await db();
+  /* Tạm dừng gửi: nothing goes out; what is approved waits, counted. */
+  if (await sendPause()) {
+    const w = await p.query<{ n: number }>("select count(*)::int as n from upsell_messages where status = 'approved'");
+    return { messages: [], waiting: w.rows[0].n };
+  }
   let where = `m.status = 'approved'
         and l.status <> 'uninstalled'
         and coalesce(l.app_status, '') <> 'uninstalled'

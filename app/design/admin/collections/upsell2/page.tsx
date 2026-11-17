@@ -5,7 +5,8 @@ import { adminGate } from "@/components/admin/adminGate";
 import { FIELD } from "@/components/admin/fieldClass";
 import { RunNow } from "@/components/admin/ucp2/RunNow";
 import { CrispLink } from "@/components/admin/upsell/bits";
-import { SHEET_COLUMNS, TRACK_DAYS, getState, vnTime, type TrackState } from "@/lib/ucp2/core";
+import { SHEET_COLUMNS, TRACK_DAYS, getState, ucp2Pause, vnTime, type TrackState } from "@/lib/ucp2/core";
+import { PauseSending } from "@/components/admin/PauseSending";
 import { hasUcp2Database } from "@/lib/ucp2/db";
 import { FUNNEL, UCP2_DID, ucp2List, ucp2Stats, ucp2Types, type Funnel, type Ucp2Filters } from "@/lib/ucp2/queries";
 
@@ -51,13 +52,14 @@ export default async function Ucp2Page(props: PageProps<"/design/admin/collectio
   };
   const f: Ucp2Filters = { q: one("q"), from: one("from"), to: one("to"), type: one("type"), did: one("did"), page: Number(one("page")) || 1 };
 
-  const [stats, list, types, imported, pulled, tracked] = await Promise.all([
+  const [stats, list, types, imported, pulled, tracked, pause] = await Promise.all([
     ucp2Stats(f),
     ucp2List(f),
     ucp2Types(),
     getState<{ at: string; received: number; added: number; updated: number; skipped: number }>("imported"),
     getState<{ at: string; rows: number }>("pulled"),
     getState<TrackState>("tracked"),
+    ucp2Pause(),
   ]);
 
   const qs = (patch: Record<string, string | undefined>) => {
@@ -74,6 +76,7 @@ export default async function Ucp2Page(props: PageProps<"/design/admin/collectio
       subtitle="Tin mời Collection Pages ghi ở sheet User Testing — khách đã đọc, click link, tải template, phản hồi, nâng cấp, review tới đâu."
       actions={
         <div className="flex flex-wrap items-start gap-2">
+          <PauseSending url="/api/ucp2/pause" paused={!!pause} at={pause?.at} by={pause?.by} />
           <ReportsLink upsell="ucp2" />
           <RunNow />
         </div>

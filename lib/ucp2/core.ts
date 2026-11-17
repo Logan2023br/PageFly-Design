@@ -457,3 +457,20 @@ export async function pullRows(since: string | null): Promise<{ columns: readonl
 }
 
 export { getState };
+
+/* ---- Tạm dừng gửi -------------------------------------------------------------
+
+   The invite goes out from another flow, not from here: it asks
+   GET /api/ucp2/pause (and sees `paused` on GET /api/ucp2/rows) and sends
+   nothing while paused. Tracking the rows already sent goes on. */
+
+export type Ucp2Pause = { paused: boolean; at: string; by: string };
+
+export async function ucp2Pause(): Promise<Ucp2Pause | null> {
+  const v = await getState<Ucp2Pause>("paused");
+  return v?.paused ? v : null;
+}
+
+export async function setUcp2Pause(paused: boolean, by: string): Promise<void> {
+  await setState("paused", { paused, at: new Date().toISOString(), by } satisfies Ucp2Pause);
+}

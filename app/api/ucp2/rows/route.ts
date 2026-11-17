@@ -1,7 +1,7 @@
 import { fail, json, requireKey } from "@/lib/upsell/api";
 import { UpsellError } from "@/lib/upsell/types";
 import { readAdminSection } from "@/lib/session";
-import { importRows, pullRows } from "@/lib/ucp2/core";
+import { importRows, pullRows, ucp2Pause } from "@/lib/ucp2/core";
 
 /* ==========================================================================
    Upsell Collection Pages 2 ⇄ the "User Testing" sheet, through n8n.
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
   const denied = await allowed(req);
   if (denied) return denied;
   try {
-    return json({ ok: true, ...(await importRows(await body(req))) });
+    return json({ ok: true, paused: !!(await ucp2Pause()), ...(await importRows(await body(req))) });
   } catch (err) {
     return fail(err);
   }
@@ -55,7 +55,8 @@ export async function GET(req: Request) {
   const denied = await allowed(req);
   if (denied) return denied;
   try {
-    return json({ ok: true, ...(await pullRows(new URL(req.url).searchParams.get("since"))) });
+    /* `paused`: the sending flow sends no invite while true (see /api/ucp2/pause) */
+    return json({ ok: true, paused: !!(await ucp2Pause()), ...(await pullRows(new URL(req.url).searchParams.get("since"))) });
   } catch (err) {
     return fail(err);
   }

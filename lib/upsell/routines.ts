@@ -1,7 +1,7 @@
 import "server-only";
 
 import { db } from "./db";
-import { getInternal, getSettings, saveSettings, setInternal } from "./settings";
+import { getInternal, getSettings, saveSettings, sendPause, setInternal, setSendPause } from "./settings";
 import { recordEvent } from "./common";
 import { UpsellError } from "./types";
 
@@ -162,7 +162,7 @@ export async function kickRoutines(reason: string): Promise<{ builder?: FireStat
     /* One Builder session at a time: a running one picked its list already,
        and its finishing upload kicks again for what is left. */
     if (n.queued > 0 && n.building === 0) out.builder = await fireRoutine("builder", reason);
-    if (n.ready > 0) out.ops = await fireRoutine("ops", reason);
+    if (n.ready > 0 && !(await sendPause())) out.ops = await fireRoutine("ops", reason);
   } catch (err) {
     console.error("[upsell] kick", err);
   }
@@ -197,4 +197,10 @@ export async function setApprovalMode(mode: "review" | "auto"): Promise<void> {
   }
   await saveSettings(patch);
   if (mode === "auto") kickSoon("chuyển sang Không duyệt");
+}
+
+/** Tạm dừng / Tiếp tục gửi. Resuming calls BPU Ops at once for what waited. */
+export async function pauseSending(paused: boolean, by: string): Promise<void> {
+  await setSendPause(paused, by);
+  if (!paused) kickSoon("tiếp tục gửi");
 }

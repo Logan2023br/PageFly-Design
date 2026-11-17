@@ -160,3 +160,22 @@ export async function setInternal(key: string, value: unknown): Promise<void> {
     [`_${key}`, JSON.stringify(value)],
   );
 }
+
+/* ---- Tạm dừng gửi ----------------------------------------------------------
+
+   One switch over everything BPU sends a customer. While paused the send
+   list (approvedForSending) is empty, so BPU Ops sends nothing — approved
+   messages stay approved and go out once it is resumed — and BPU Ops is not
+   called to send. Building pages, drafting and tracking go on as usual. */
+
+export type SendPause = { paused: boolean; at: string; by: string };
+
+/** The pause, when sending is paused; null when it runs. */
+export async function sendPause(): Promise<SendPause | null> {
+  const v = (await getInternal("sending_paused")) as SendPause | null;
+  return v?.paused ? v : null;
+}
+
+export async function setSendPause(paused: boolean, by: string): Promise<void> {
+  await setInternal("sending_paused", { paused, at: new Date().toISOString(), by } satisfies SendPause);
+}

@@ -10,6 +10,18 @@ credentials; n8n moves the data both ways.
 All calls: base `https://pagefly-design.pagefly.io`, header `X-API-Key:` the
 upsell API key (`UPSELL_API_KEY`, the same one BPU Ops uses).
 
+## 0. Tạm dừng gửi — check before sending
+
+The admin screen has a **Tạm dừng gửi** button. PageFly Design does not send
+the invite, so the flow that sends it must ask first and send nothing while
+paused:
+
+```
+GET /api/ucp2/pause      → { "ok": true, "paused": true, "at": "…", "by": "…" }
+```
+
+`paused` is also on the answers of `POST` and `GET /api/ucp2/rows`.
+
 ## 1. New rows → PageFly Design
 
 Right after the flow appends a row (or on a schedule, with the whole tab):
