@@ -70,11 +70,11 @@ export function ClaudeReview() {
     };
   }, []);
 
-  const act = async (action: "start" | "stop") => {
+  const act = async (action: "start" | "stop" | "disable" | "enable" | "pause" | "resume", slug?: string) => {
     setBusy(true);
     const res = await api<{ state: ClaudeReviewState }>("/api/admin/collection-pages/claude-review", {
       method: "POST",
-      body: JSON.stringify({ action }),
+      body: JSON.stringify(slug ? { action, slug } : { action }),
     });
     if (res.ok) {
       setState(res.state);
@@ -102,8 +102,10 @@ export function ClaudeReview() {
   const nextUp = state.queue.find((q) => q.slug !== state.current?.slug);
   const active = state.status === "running" || state.status === "requested" || state.status === "stopping";
 
-  const headline =
-    state.status === "requested"
+  const paused = new Set(state.paused ?? []);
+  const headline = state.disabled
+    ? `Đã tắt ${ago(state.disabled.at, now)}${state.disabled.by ? ` (${state.disabled.by})` : ""} — không chạy gì nữa cho tới khi bật lại`
+    : state.status === "requested"
       ? `Requested ${ago(state.requestedAt, now)} — Claude picks it up within the hour`
       : state.status === "running"
         ? stale
@@ -136,7 +138,16 @@ export function ClaudeReview() {
           <p className="text-[12.5px] text-pf-muted">{headline}</p>
         </div>
         <div className="flex items-center gap-2">
-          {active ? (
+          {state.disabled ? (
+            <Button icon="Play" onClick={() => void act("enable")} disabled={busy}>
+              Bật lại
+            </Button>
+          ) : (
+            <Button variant="ghost" icon="Pause" onClick={() => void act("disable")} disabled={busy}>
+              Tắt hẳn
+            </Button>
+          )}
+          {state.disabled ? null : active ? (
             <Button variant="ghost" icon="X" onClick={() => void act("stop")} disabled={busy || state.status === "stopping"}>
               {state.status === "requested" ? "Cancel" : "Stop"}
             </Button>
@@ -207,11 +218,24 @@ export function ClaudeReview() {
               </div>
               <div className="grid content-start gap-1">
                 <p className="text-[12px] font-semibold uppercase tracking-wide text-pf-faint">Waiting, in order</p>
-                {state.queue.map((q, i) => (
-                  <p key={q.slug} className="text-[12.5px] text-pf-body">
-                    <span className="text-pf-faint">{i + 1}.</span> {q.name}
-                  </p>
-                ))}
+                {state.queue.map((q, i) => {
+                  const p = paused.has(q.slug);
+                  return (
+                    <p key={q.slug} className="flex items-center gap-2 text-[12.5px] text-pf-body">
+                      <span className="text-pf-faint">{i + 1}.</span>
+                      <span className={p ? "text-pf-faint line-through" : ""}>{q.name}</span>
+                      {p && <span className="text-[11.5px] text-amber-400">Tạm dừng</span>}
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void act(p ? "resume" : "pause", q.slug)}
+                        className="ml-auto text-[12px] font-semibold text-pf-muted hover:text-pf-text disabled:opacity-50"
+                      >
+                        {p ? "▶ Tiếp tục" : "⏸ Tạm dừng"}
+                      </button>
+                    </p>
+                  );
+                })}
               </div>
             </div>
           )}

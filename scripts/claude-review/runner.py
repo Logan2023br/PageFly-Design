@@ -45,6 +45,8 @@ def age(iso):
 
 def begin():
     s = state()
+    if s.get("disabled"):
+        return print("NOOP disabled by the admin")
     if s["status"] not in ("requested", "running"):
         return print("NOOP status", s["status"])
     if s["status"] == "running" and age(s.get("heartbeatAt")) < STALE and "--force" not in sys.argv:
@@ -68,7 +70,9 @@ def begin():
 
 
 def nxt():
-    q = state()["queue"]; print(q[0]["slug"] if q else "NONE")
+    s = state(); paused = set(s.get("paused") or [])
+    q = [x for x in s["queue"] if x["slug"] not in paused]   # a paused set waits, never picked
+    print(q[0]["slug"] if q else "NONE")
 
 
 def step(slug, text):
@@ -125,7 +129,8 @@ def finish(slug, result, note=None, folder=None, secs=None):
     timed = [d["secs"] for d in done if d.get("secs") and d["result"] in ("done", "reimport")]
     queue = [q for q in s["queue"] if q["slug"] != slug]
     status = s["status"]
-    if not queue: status = "finished"
+    paused = set(s.get("paused") or [])
+    if not [q for q in queue if q["slug"] not in paused]: status = "finished"   # only paused sets left
     put(done=done, queue=queue, current=None, status=status,
         avgSecs=(sum(timed) / len(timed)) if timed else s.get("avgSecs"))
     print("finished", slug, result, "left", len(queue))
@@ -133,7 +138,7 @@ def finish(slug, result, note=None, folder=None, secs=None):
 
 def stopq():
     s = state()
-    if s["status"] == "stopping":
+    if s["status"] == "stopping" or s.get("disabled"):
         put(status="stopped", current=None); print("STOP")
     else: print("GO")
 

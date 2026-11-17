@@ -7,7 +7,8 @@ import { fail, firstIssue, guardOrKey } from "../shared";
    /api/admin/collection-pages/claude-review
 
    GET   the run's state                              admin cookie or key
-   POST  { action: "start" | "stop" }                 admin cookie only
+   POST  { action: "start" | "stop" | "disable" | "enable" }   admin cookie only
+         { action: "pause" | "resume", slug }         one set skipped / picked again
    PUT   { ...fields of ClaudeReviewState }           key only — the runner's progress
 
    The button asks; the scheduled Claude task does the work and reports here.
@@ -33,7 +34,10 @@ export async function GET(request: Request) {
   }
 }
 
-const act = z.object({ action: z.enum(["start", "stop"]) });
+const act = z.union([
+  z.object({ action: z.enum(["start", "stop", "disable", "enable"]) }),
+  z.object({ action: z.enum(["pause", "resume"]), slug: z.string().min(1).max(300) }),
+]);
 
 export async function POST(request: Request) {
   const who = await guardOrKey(request);
@@ -42,7 +46,7 @@ export async function POST(request: Request) {
   const parsed = act.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return fail(firstIssue(parsed.error));
   try {
-    return Response.json({ ok: true, state: await adminAct(parsed.data.action, await readAdminName()) }, nocache);
+    return Response.json({ ok: true, state: await adminAct(parsed.data, await readAdminName()) }, nocache);
   } catch (err) {
     return failFrom(err);
   }

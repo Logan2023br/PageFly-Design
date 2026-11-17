@@ -42,6 +42,10 @@ export type ClaudeReviewState = {
   message: string | null;
   /** every error the runner met, newest last (kept to the last 200) */
   errors: ClaudeReviewError[];
+  /** Tắt: the admin turned Claude Review off — no firing does anything until it is turned on again */
+  disabled: { at: string; by: string | null } | null;
+  /** sets the admin paused: left in the queue, never picked, until resumed */
+  paused: string[];
 };
 
 export type ClaudeReviewError = {
@@ -66,6 +70,8 @@ export const EMPTY_STATE: ClaudeReviewState = {
   avgSecs: null,
   message: null,
   errors: [],
+  disabled: null,
+  paused: [],
 };
 
 let pool: Pool | null = null;
@@ -114,11 +120,29 @@ async function writeState(s: ClaudeReviewState): Promise<ClaudeReviewState> {
   return s;
 }
 
+export type AdminAction = { action: "start" | "stop" | "disable" | "enable" } | { action: "pause" | "resume"; slug: string };
+
 /** The admin's buttons. */
-export async function adminAct(action: "start" | "stop", who: string | null): Promise<ClaudeReviewState> {
+export async function adminAct(a: AdminAction, who: string | null): Promise<ClaudeReviewState> {
   const s = await readState();
   const now = new Date().toISOString();
+  const action = a.action;
+  /* Tắt: nothing runs — a run on the bench stops after its current set, and
+     the hourly firing finds it off (runner.py begin → NOOP disabled). */
+  if (action === "disable") {
+    const status = s.status === "running" ? "stopping" : s.status === "requested" ? "idle" : s.status;
+    return writeState({ ...s, status, disabled: { at: now, by: who }, message: "Đã tắt Claude Review — không chạy gì nữa cho tới khi bật lại." });
+  }
+  if (action === "enable") return writeState({ ...s, disabled: null, message: null });
+  /* Tạm dừng / Tiếp tục one set: a paused set is skipped by the runner. */
+  if (a.action === "pause" || a.action === "resume") {
+    const paused = new Set(s.paused ?? []);
+    if (a.action === "pause") paused.add(a.slug);
+    else paused.delete(a.slug);
+    return writeState({ ...s, paused: [...paused] });
+  }
   if (action === "start") {
+    if (s.disabled) throw new ClaudeReviewFailure("Claude Review đang tắt — bấm Bật lại trước.", 409);
     if (s.status === "running" || s.status === "requested") return s;
     return writeState({ ...s, status: "requested", requestedAt: now, requestedBy: who, message: null });
   }
