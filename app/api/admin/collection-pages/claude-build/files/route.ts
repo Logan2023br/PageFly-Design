@@ -1,3 +1,4 @@
+import { zipSync } from "fflate";
 import { SLUG_RE } from "@/lib/collectionPages";
 import { rejectFile, storeFile } from "@/lib/collectionPagesServer";
 import { ClaudeBuildFailure, jobOf } from "@/lib/claudeBuild";
@@ -10,6 +11,10 @@ import { fail, failFrom, buildGuardOrKey } from "../../shared";
    The routine's upload: one file of one page into the set its running job
    created — the same tables every set's files live in. A new page slug adds
    the page. The body is the file itself. Key only.
+
+   GET /api/admin/collection-pages/claude-build/files?job=<id>
+   A resumed build (Tiếp tục) takes back what its set already holds: every
+   page's .html (and .pagefly, if any) as one zip, "<page slug>.<kind>".
    ========================================================================== */
 
 export const dynamic = "force-dynamic";
@@ -43,6 +48,34 @@ export async function PUT(request: Request) {
       if (page && page.label !== label) await repo.saveCollectionPage(set.id, { ...page, label });
     }
     return Response.json({ ok: true });
+  } catch (err) {
+    if (err instanceof ClaudeBuildFailure) return fail(err.message, err.status);
+    return failFrom(err);
+  }
+}
+
+export async function GET(request: Request) {
+  const who = await buildGuardOrKey(request);
+  if (who instanceof Response) return who;
+  const jobId = new URL(request.url).searchParams.get("job") ?? "";
+  try {
+    const job = await jobOf(jobId);
+    if (!job || job.status !== "running" || !job.setId) return fail("No running build with a set for this job.", 409);
+    const repo = getRepo();
+    const set = await repo.getCollectionSet(job.setId);
+    if (!set) return fail("The build's set no longer exists.", 404);
+    const files: Record<string, Uint8Array> = {};
+    for (const page of set.pages) {
+      for (const kind of ["html", "pagefly"] as const) {
+        if ((kind === "html" ? page.htmlSize : page.pageflySize) === null) continue;
+        const bytes = await repo.getCollectionFile(set.id, page.id, kind);
+        if (bytes) files[`${page.slug}.${kind}`] = bytes;
+      }
+    }
+    if (Object.keys(files).length === 0) return fail("The set has no files yet.", 404);
+    return new Response(Buffer.from(zipSync(files)), {
+      headers: { "Content-Type": "application/zip", "Cache-Control": "private, no-store" },
+    });
   } catch (err) {
     if (err instanceof ClaudeBuildFailure) return fail(err.message, err.status);
     return failFrom(err);

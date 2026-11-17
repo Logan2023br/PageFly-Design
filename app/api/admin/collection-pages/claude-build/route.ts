@@ -34,7 +34,9 @@ import { fail, failFrom, firstIssue, buildGuardOrKey } from "../shared";
    POST  admin cookie:
      { action: "start", count, note? }     queue `count` sets and fire the routine
      { action: "cancel", id }              a waiting job at once, a running one at its next step
-     { action: "retry", id }               a failed or cancelled job back to the queue
+     { action: "retry", id, mode? }        a failed or cancelled job back to the queue —
+                                           mode "resume": Tiếp tục at the step it stopped (set kept),
+                                           "fresh" (default): Build lại từ đầu
      { action: "criteria", text }          the build criteria the routine follows
      { action: "fire" }                    fire the routine again by hand
 
@@ -74,7 +76,7 @@ export async function GET(request: Request) {
 const adminBody = z.discriminatedUnion("action", [
   z.object({ action: z.literal("start"), count: z.number().int().min(1).max(20), note: z.string().max(2000).optional() }),
   z.object({ action: z.literal("cancel"), id: z.string().max(64) }),
-  z.object({ action: z.literal("retry"), id: z.string().max(64) }),
+  z.object({ action: z.literal("retry"), id: z.string().max(64), mode: z.enum(["resume", "fresh"]).optional() }),
   z.object({ action: z.literal("criteria"), text: z.string().max(50_000) }),
   z.object({ action: z.literal("fire") }),
   z.object({ action: z.literal("token"), token: z.string().max(400) }),
@@ -123,7 +125,7 @@ export async function POST(request: Request) {
       const b = parsed.data;
       if (b.action === "start") await startBuild(b.count, b.note ?? null, await readAdminName());
       else if (b.action === "cancel") await cancelJob(b.id);
-      else if (b.action === "retry") await retryJob(b.id);
+      else if (b.action === "retry") await retryJob(b.id, b.mode ?? "fresh");
       else if (b.action === "criteria") await saveCriteria(b.text);
       else if (b.action === "token") await saveTriggerToken(b.token);
       else await fireTrigger("by hand", true);

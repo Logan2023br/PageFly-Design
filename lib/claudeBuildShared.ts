@@ -35,6 +35,14 @@ export type LoganPage = {
   previewUrl: string | null;
 };
 
+export type BuildResume = {
+  /** the step the last run was on when it stopped */
+  fromStep: string | null;
+  detail: string | null;
+  error: string | null;
+  at: string;
+};
+
 export type BuildJob = {
   id: string;
   /** what the admin typed for this batch — a theme, an industry, or nothing */
@@ -53,6 +61,8 @@ export type BuildJob = {
   pages: number;
   /** the pages built in the Logan store, once the routine reported them ("built") */
   loganPages: LoganPage[];
+  /** set by "Tiếp tục": where the last run stopped — the routine picks up there, keeping the set and its files */
+  resume: BuildResume | null;
   error: string | null;
   cancelRequested: boolean;
   requestedBy: string | null;

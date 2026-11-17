@@ -22,7 +22,7 @@ import { databaseUrl } from "@/lib/db";
    POSTGRES ONLY, its own small pool, like Claude Review and Upsell.
    ========================================================================== */
 
-import { BUILD_STEPS, isBuildStep, type BuildJob, type BuildJobStatus, type BuildStepKey, type BuildTrigger, type LoganPage } from "./claudeBuildShared";
+import { BUILD_STEPS, isBuildStep, type BuildJob, type BuildJobStatus, type BuildStepKey, type BuildTrigger, type LoganPage, type BuildResume } from "./claudeBuildShared";
 
 export { BUILD_STEPS, isBuildStep };
 export type { BuildJob, BuildJobStatus, BuildStepKey, BuildTrigger, LoganPage };
@@ -74,6 +74,7 @@ function db(): Pool {
        );
        create index if not exists claude_build_jobs_status on claude_build_jobs (status, created_at);
        alter table claude_build_jobs add column if not exists logan_pages jsonb not null default '[]';
+       alter table claude_build_jobs add column if not exists resume jsonb;
        create table if not exists claude_build_settings (
          key        text primary key,
          value      text,
@@ -109,6 +110,7 @@ function toJob(r: Record<string, unknown>): BuildJob {
     setName: (r.set_name as string) ?? null,
     pages: Number(r.pages ?? 0),
     loganPages: Array.isArray(r.logan_pages) ? (r.logan_pages as LoganPage[]) : [],
+    resume: r.resume && typeof r.resume === "object" ? (r.resume as BuildResume) : null,
     error: (r.error as string) ?? null,
     cancelRequested: Boolean(r.cancel_requested),
     requestedBy: (r.requested_by as string) ?? null,
@@ -228,16 +230,37 @@ export async function cancelJob(id: string): Promise<void> {
   if (!waiting) await p.query(`update claude_build_jobs set cancel_requested = true where id = $1 and status = 'running'`, [id]);
 }
 
-/** A failed or cancelled job goes back to the queue, and the routine is fired. */
-export async function retryJob(id: string): Promise<void> {
+/**
+ * A failed or cancelled job goes back to the queue, and the routine is fired.
+ *
+ *   "resume"  Tiếp tục — the set, its uploaded files and the log are kept;
+ *             `resume` says where the last run stopped, and the routine
+ *             picks up at that step instead of starting over.
+ *   "fresh"   Build lại từ đầu — a new build of the same note: new concept,
+ *             new set. The old set stays in the library as it was.
+ */
+export async function retryJob(id: string, mode: "resume" | "fresh" = "fresh"): Promise<void> {
   const p = await ready();
-  const { rowCount } = await p.query(
-    `update claude_build_jobs
-        set status = 'queued', step = null, detail = null, progress = 0, log = '[]', error = null,
-            cancel_requested = false, started_at = null, finished_at = null, heartbeat_at = null
-      where id = $1 and status in ('failed', 'cancelled')`,
-    [id],
-  );
+  const at = new Date().toISOString();
+  const { rowCount } =
+    mode === "resume"
+      ? await p.query(
+          `update claude_build_jobs
+              set status = 'queued',
+                  resume = jsonb_build_object('fromStep', step, 'detail', detail, 'error', error, 'at', $2::text),
+                  log = (log || jsonb_build_array(jsonb_build_object('at', $2::text, 'step', coalesce(step, 'claimed'), 'detail', 'Tiếp tục từ bước này'))),
+                  error = null, cancel_requested = false, finished_at = null, heartbeat_at = null
+            where id = $1 and status in ('failed', 'cancelled')`,
+          [id, at],
+        )
+      : await p.query(
+          `update claude_build_jobs
+              set status = 'queued', step = null, detail = null, progress = 0, log = '[]', error = null, resume = null,
+                  set_id = null, set_slug = null, set_name = null, pages = 0, logan_pages = '[]',
+                  cancel_requested = false, started_at = null, finished_at = null, heartbeat_at = null
+            where id = $1 and status in ('failed', 'cancelled')`,
+          [id],
+        );
   if (!rowCount) throw new ClaudeBuildFailure("Only a failed or cancelled build can be tried again.", 409);
   await fireTrigger("retry");
 }
@@ -267,10 +290,15 @@ export async function claimJob(): Promise<BuildJob | null> {
     );
     if (!rows[0]) return null;
     const now = new Date().toISOString();
-    const log = [{ at: now, step: "claimed", detail: null }];
+    const prev = toJob(rows[0]);
+    /* Tiếp tục: the earlier log stays, so the panel shows the whole build */
+    const log = prev.resume
+      ? [...prev.log, { at: now, step: "claimed", detail: `tiếp tục từ bước ${prev.resume.fromStep ?? "đầu"}` }].slice(-200)
+      : [{ at: now, step: "claimed", detail: null }];
     const { rows: out } = await c.query(
       `update claude_build_jobs
-          set status = 'running', step = 'claimed', progress = 2, started_at = now(), heartbeat_at = now(), log = $2
+          set status = 'running', step = 'claimed', progress = case when resume is null then 2 else greatest(progress, 2) end,
+              started_at = now(), heartbeat_at = now(), log = $2
         where id = $1 returning *`,
       [rows[0].id, JSON.stringify(log)],
     );

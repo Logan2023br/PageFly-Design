@@ -308,7 +308,7 @@ export function ClaudeBuild() {
         ) : (
           <ul className="grid gap-1.5">
             {rows.map((j) => (
-              <JobRow key={j.id} job={j} busy={busy} onCancel={() => void post({ action: "cancel", id: j.id })} onRetry={() => void post({ action: "retry", id: j.id })} />
+              <JobRow key={j.id} job={j} busy={busy} onCancel={() => void post({ action: "cancel", id: j.id })} onRetry={(mode) => void post({ action: "retry", id: j.id, mode })} />
             ))}
           </ul>
         )}
@@ -468,7 +468,7 @@ function ExportJob({ job, busy, onDone, onCancel }: { job: BuildJob; busy: boole
   );
 }
 
-function JobRow({ job, busy, onCancel, onRetry }: { job: BuildJob; busy: boolean; onCancel: () => void; onRetry: () => void }) {
+function JobRow({ job, busy, onCancel, onRetry }: { job: BuildJob; busy: boolean; onCancel: () => void; onRetry: (mode: "resume" | "fresh") => void }) {
   const [open, setOpen] = useState(false);
   const s = STATUS[job.status];
   return (
@@ -499,9 +499,14 @@ function JobRow({ job, busy, onCancel, onRetry }: { job: BuildJob; busy: boolean
             Huỷ
           </Button>
         )}
+        {(job.status === "failed" || job.status === "cancelled") && job.log.length > 0 && (
+          <Button size="sm" icon="Play" disabled={busy} onClick={() => onRetry("resume")} title={`Giữ bộ và các file đã upload, chạy tiếp từ bước ${job.step ?? "đầu"}`}>
+            Tiếp tục
+          </Button>
+        )}
         {(job.status === "failed" || job.status === "cancelled") && (
-          <Button size="sm" icon="RefreshCw" disabled={busy} onClick={onRetry}>
-            Build lại
+          <Button size="sm" variant="ghost" icon="RefreshCw" disabled={busy} onClick={() => onRetry("fresh")} title="Bỏ bản cũ, build một bộ mới hoàn toàn theo ghi chú này">
+            Build lại từ đầu
           </Button>
         )}
       </div>
