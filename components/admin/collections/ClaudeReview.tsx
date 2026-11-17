@@ -41,8 +41,13 @@ const RESULT: Record<string, { label: string; cls: string }> = {
   failed: { label: "Failed", cls: "text-red-400" },
 };
 
-export function ClaudeReview() {
+/** A set the admin can pick for a review. */
+export type ReviewPick = { slug: string; name: string; reviewable: boolean; why?: string; reviewed: boolean };
+
+export function ClaudeReview({ sets = [] }: { sets?: ReviewPick[] }) {
   const [state, setState] = useState<ClaudeReviewState | null>(null);
+  const [picking, setPicking] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [folded, flip] = useFolded("claude-review");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -70,15 +75,16 @@ export function ClaudeReview() {
     };
   }, []);
 
-  const act = async (action: "start" | "stop" | "disable" | "enable" | "pause" | "resume", slug?: string) => {
+  const act = async (action: "start" | "stop" | "disable" | "enable" | "pause" | "resume", slug?: string, slugs?: string[]) => {
     setBusy(true);
     const res = await api<{ state: ClaudeReviewState }>("/api/admin/collection-pages/claude-review", {
       method: "POST",
-      body: JSON.stringify(slug ? { action, slug } : { action }),
+      body: JSON.stringify(slugs ? { action, slugs } : slug ? { action, slug } : { action }),
     });
     if (res.ok) {
       setState(res.state);
       setNow(Date.now());
+      setPicking(false);
     } else setError(res.error);
     setBusy(false);
   };
@@ -114,7 +120,7 @@ export function ClaudeReview() {
         : state.status === "stopping"
           ? "Stopping after the current set"
           : state.status === "finished"
-            ? "Finished — every set has been reviewed"
+            ? "Finished — the sets of this run are reviewed"
             : state.status === "stopped"
               ? "Stopped"
               : "Not running";
@@ -152,12 +158,16 @@ export function ClaudeReview() {
               {state.status === "requested" ? "Cancel" : "Stop"}
             </Button>
           ) : (
-            <Button icon="Sparkles" onClick={() => void act("start")} disabled={busy}>
+            <Button icon="Sparkles" onClick={() => setPicking(!picking)} disabled={busy}>
               Claude Review
             </Button>
           )}
         </div>
       </div>
+
+      {picking && !active && !state.disabled && (
+        <Picker sets={sets} busy={busy} onCancel={() => setPicking(false)} onStart={(slugs) => void act("start", undefined, slugs)} />
+      )}
 
       {total > 0 && (
         <>
@@ -268,7 +278,102 @@ export function ClaudeReview() {
           )}
         </div>
       )}
+      {(state.history?.length ?? 0) > 0 && (
+        <div className="grid gap-1.5">
+          <button
+            type="button"
+            onClick={() => setShowHistory(!showHistory)}
+            className="flex items-center gap-1 justify-self-start text-[12.5px] font-semibold text-pf-muted hover:text-pf-text"
+          >
+            <Icon name={showHistory ? "ChevronDown" : "ChevronRight"} size={14} />
+            Lịch sử review ({state.history.length} bộ)
+          </button>
+          {showHistory && <History items={state.history} />}
+        </div>
+      )}
       {error && <p className="text-[12.5px] text-red-400">{error}</p>}
     </Panel>
+  );
+}
+
+/** Earlier runs: newest first, grouped by day — when, which set, what came of it. */
+function History({ items }: { items: ClaudeReviewState["history"] }) {
+  const days = new Map<string, typeof items>();
+  for (const d of [...items].sort((a, b) => b.finishedAt.localeCompare(a.finishedAt))) {
+    const day = new Date(d.finishedAt).toLocaleDateString("vi-VN");
+    days.set(day, [...(days.get(day) ?? []), d]);
+  }
+  return (
+    <div className="grid max-h-[420px] gap-3 overflow-y-auto rounded-pf-md border border-pf-border bg-pf-bg-deep p-3">
+      {[...days].map(([day, list]) => (
+        <div key={day} className="grid gap-1">
+          <p className="text-[12px] font-semibold uppercase tracking-wide text-pf-faint">
+            {day} · {list.length} bộ
+          </p>
+          {list.map((d) => (
+            <p key={d.slug + d.finishedAt} className="text-[12.5px] text-pf-body" title={d.note}>
+              <span className="text-pf-faint">{new Date(d.finishedAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</span>{" "}
+              · <b>{d.name}</b> · <span className={RESULT[d.result]?.cls}>{RESULT[d.result]?.label}</span>
+              {d.secs ? <span className="text-pf-faint"> · {duration(d.secs)}</span> : null}
+              {d.note && <span className="block text-[12px] text-pf-faint">{d.note}</span>}
+            </p>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Pick the sets to review: search, tick, start. */
+function Picker({ sets, busy, onCancel, onStart }: { sets: ReviewPick[]; busy: boolean; onCancel: () => void; onStart: (slugs: string[]) => void }) {
+  const [q, setQ] = useState("");
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const shown = sets.filter((s) => !q.trim() || `${s.name} ${s.slug}`.toLowerCase().includes(q.trim().toLowerCase()));
+  const flip = (slug: string) =>
+    setPicked((p) => {
+      const n = new Set(p);
+      if (n.has(slug)) n.delete(slug);
+      else n.add(slug);
+      return n;
+    });
+  return (
+    <div className="grid gap-2 rounded-pf-md border border-pf-border bg-pf-bg-deep p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-[13px] font-semibold text-pf-text">Chọn bộ muốn review</p>
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Tìm theo tên…"
+          className="h-8 min-w-[200px] flex-1 rounded-pf-md border border-pf-border bg-pf-card px-2.5 text-[12.5px] text-pf-text outline-none focus:border-pf-border-hi"
+        />
+        <button type="button" className="text-[12px] font-semibold text-pf-muted hover:text-pf-text" onClick={() => setPicked(new Set())}>
+          Bỏ chọn
+        </button>
+      </div>
+      <div className="grid max-h-[320px] gap-0.5 overflow-y-auto">
+        {shown.map((s) => (
+          <label
+            key={s.slug}
+            className={`flex items-center gap-2 rounded px-1.5 py-1 text-[12.5px] ${s.reviewable ? "cursor-pointer text-pf-body hover:bg-pf-card" : "text-pf-faint"}`}
+            title={s.why}
+          >
+            <input type="checkbox" disabled={!s.reviewable} checked={picked.has(s.slug)} onChange={() => flip(s.slug)} />
+            <span className="truncate">{s.name}</span>
+            {s.reviewed && <span className="text-[11px] text-emerald-400">đã review</span>}
+            {!s.reviewable && s.why && <span className="text-[11px]">· {s.why}</span>}
+          </label>
+        ))}
+        {shown.length === 0 && <p className="text-[12.5px] text-pf-faint">Không có bộ nào.</p>}
+      </div>
+      <div className="flex items-center gap-2">
+        <Button icon="Sparkles" disabled={busy || picked.size === 0} onClick={() => onStart([...picked])}>
+          Bắt đầu review ({picked.size} bộ)
+        </Button>
+        <Button variant="ghost" onClick={onCancel} disabled={busy}>
+          Huỷ
+        </Button>
+        <span className="text-[12px] text-pf-faint">Claude nhận việc trong vòng 1 giờ (lần chạy kế tiếp của routine).</span>
+      </div>
+    </div>
   );
 }

@@ -127,7 +127,12 @@ export function CollectionSetsAdmin({
 
   return (
     <div className="grid gap-4">
-      <ClaudeReview />
+      <ClaudeReview
+        sets={sets.map((s) => {
+          const why = s.visibility === "hidden" ? "đang ẩn" : s.access === "paid" ? "bộ trả phí" : !s.pages.some((p) => p.pageflySize !== null) ? "chưa có .pagefly" : undefined;
+          return { slug: s.slug, name: s.name, reviewable: !why, why, reviewed: !!s.review?.doneAt };
+        })}
+      />
       <ClaudeBuild />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-[13px] text-pf-muted">

@@ -52,8 +52,17 @@ def begin():
     if s["status"] == "running" and age(s.get("heartbeatAt")) < STALE and "--force" not in sys.argv:
         return print("NOOP another run is alive (heartbeat %ds ago)" % age(s["heartbeatAt"]))
     finished = {d["slug"] for d in s.get("done", []) if d["result"] in ("done", "skipped", "reimport")}
+    picked = set(s.get("selected") or [])   # the sets the admin picked; empty: every unreviewed set
     queue, skipped = [], []
     for x in all_sets():
+        if picked:
+            if x["slug"] not in picked or x["slug"] in finished: continue
+            if x["visibility"] == "hidden" or x["access"] == "paid":
+                skipped.append({"slug": x["slug"], "name": x["name"], "result": "skipped", "finishedAt": now(),
+                                "note": f"{x['visibility']}/{x['access']}: the public API gives no .pagefly"})
+            else:
+                queue.append({"slug": x["slug"], "name": x["name"]})   # picked: reviewed again even if done before
+            continue
         rv = x.get("review")
         if rv and rv["reviewer"] != "Claude": continue           # a TS member has it
         if rv and rv.get("doneAt"): continue                     # already reviewed (Claude Done too)

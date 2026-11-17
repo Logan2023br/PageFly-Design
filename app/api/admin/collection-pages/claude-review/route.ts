@@ -7,7 +7,8 @@ import { fail, firstIssue, guardOrKey } from "../shared";
    /api/admin/collection-pages/claude-review
 
    GET   the run's state                              admin cookie or key
-   POST  { action: "start" | "stop" | "disable" | "enable" }   admin cookie only
+   POST  { action: "start", slugs? }                   review the sets picked (or every unreviewed one)
+         { action: "stop" | "disable" | "enable" }    admin cookie only
          { action: "pause" | "resume", slug }         one set skipped / picked again
    PUT   { ...fields of ClaudeReviewState }           key only — the runner's progress
 
@@ -35,7 +36,8 @@ export async function GET(request: Request) {
 }
 
 const act = z.union([
-  z.object({ action: z.enum(["start", "stop", "disable", "enable"]) }),
+  z.object({ action: z.literal("start"), slugs: z.array(z.string().min(1).max(300)).max(500).optional() }),
+  z.object({ action: z.enum(["stop", "disable", "enable"]) }),
   z.object({ action: z.enum(["pause", "resume"]), slug: z.string().min(1).max(300) }),
 ]);
 

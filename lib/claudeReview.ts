@@ -46,6 +46,10 @@ export type ClaudeReviewState = {
   disabled: { at: string; by: string | null } | null;
   /** sets the admin paused: left in the queue, never picked, until resumed */
   paused: string[];
+  /** the sets the admin picked for this run — null: every set nobody has reviewed */
+  selected: string[] | null;
+  /** every set finished by earlier runs, oldest first (the last 1000): when, which, what came of it */
+  history: ClaudeReviewItem[];
 };
 
 export type ClaudeReviewError = {
@@ -72,6 +76,8 @@ export const EMPTY_STATE: ClaudeReviewState = {
   errors: [],
   disabled: null,
   paused: [],
+  selected: null,
+  history: [],
 };
 
 let pool: Pool | null = null;
@@ -106,7 +112,30 @@ export async function readState(): Promise<ClaudeReviewState> {
   const p = db();
   await ensured;
   const r = await p.query<{ state: ClaudeReviewState }>("select state from claude_review_state where id = 1");
-  return { ...EMPTY_STATE, ...(r.rows[0]?.state ?? {}) };
+  const raw = r.rows[0]?.state;
+  const s: ClaudeReviewState = { ...EMPTY_STATE, ...(raw ?? {}) };
+  /* Once, for the state from before the history: a run that is over goes
+     into the history and the progress starts empty. */
+  if (raw && !("history" in raw) && s.status !== "running" && s.status !== "requested" && s.status !== "stopping")
+    return writeState(archived(s));
+  return s;
+}
+
+/** The run's finished sets moved into the history; the progress empty again. */
+function archived(s: ClaudeReviewState): ClaudeReviewState {
+  return {
+    ...s,
+    history: [...(s.history ?? []), ...s.done].slice(-1000),
+    done: [],
+    queue: [],
+    current: null,
+    errors: [],
+    paused: [],
+    selected: null,
+    startedAt: null,
+    status: "idle",
+    message: null,
+  };
 }
 
 async function writeState(s: ClaudeReviewState): Promise<ClaudeReviewState> {
@@ -120,7 +149,10 @@ async function writeState(s: ClaudeReviewState): Promise<ClaudeReviewState> {
   return s;
 }
 
-export type AdminAction = { action: "start" | "stop" | "disable" | "enable" } | { action: "pause" | "resume"; slug: string };
+export type AdminAction =
+  | { action: "start"; slugs?: string[] }
+  | { action: "stop" | "disable" | "enable" }
+  | { action: "pause" | "resume"; slug: string };
 
 /** The admin's buttons. */
 export async function adminAct(a: AdminAction, who: string | null): Promise<ClaudeReviewState> {
@@ -144,7 +176,9 @@ export async function adminAct(a: AdminAction, who: string | null): Promise<Clau
   if (action === "start") {
     if (s.disabled) throw new ClaudeReviewFailure("Claude Review đang tắt — bấm Bật lại trước.", 409);
     if (s.status === "running" || s.status === "requested") return s;
-    return writeState({ ...s, status: "requested", requestedAt: now, requestedBy: who, message: null });
+    /* A new run: the last one's results go to the history first. */
+    const slugs = a.action === "start" && a.slugs?.length ? [...new Set(a.slugs)] : null;
+    return writeState({ ...archived(s), avgSecs: s.avgSecs, status: "requested", requestedAt: now, requestedBy: who, selected: slugs });
   }
   if (s.status === "requested") return writeState({ ...s, status: "idle", message: "Cancelled before it started." });
   if (s.status === "running") return writeState({ ...s, status: "stopping" });
