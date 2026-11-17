@@ -333,6 +333,8 @@ export function CollectionSetsAdmin({
                       }
                     />
                     <div className="flex items-center gap-1.5">
+                      <DownloadLink href={`/api/admin/collection-pages/${set.id}/html`} count={set.pages.filter((p) => p.htmlSize !== null).length} label="HTML" />
+                      <DownloadLink href={`/api/admin/collection-pages/${set.id}/pagefly`} count={set.pages.filter((p) => p.pageflySize !== null).length} label=".pagefly" />
                       <Button
                         variant="ghost"
                         size="sm"
@@ -384,6 +386,24 @@ export function CollectionSetsAdmin({
 }
 
 /** A set's editable fields, as PATCH takes them. */
+/** Every page's file of one kind, as a zip — greyed out when the set has none. */
+function DownloadLink({ href, count, label }: { href: string; count: number; label: string }) {
+  const cls = "inline-flex h-8 items-center gap-1.5 rounded-pf-md border border-pf-border px-2.5 text-[12.5px] font-semibold transition-colors";
+  if (count === 0)
+    return (
+      <span className={`${cls} cursor-not-allowed text-pf-faint opacity-50`} title={`Chưa có file ${label}`}>
+        <Icon name="Download" size={13} />
+        {label}
+      </span>
+    );
+  return (
+    <a href={href} download className={`${cls} text-pf-body hover:border-pf-border-hi hover:text-pf-text`} title={`Tải ${count} file ${label} (zip)`}>
+      <Icon name="Download" size={13} />
+      {label}
+    </a>
+  );
+}
+
 export function settingsOf(set: CollectionSetRecord) {
   return {
     name: set.name,
