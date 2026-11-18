@@ -22,7 +22,7 @@ type Tab = "running" | "export" | "queued" | "done" | "closed";
 
 const TABS: { id: Tab; label: string; statuses: BuildJobStatus[] }[] = [
   { id: "running", label: "Đang build", statuses: ["running"] },
-  { id: "export", label: "Chờ export", statuses: ["export"] },
+  { id: "export", label: "Chờ upload .pagefly", statuses: ["export"] },
   { id: "queued", label: "Chờ build", statuses: ["queued"] },
   { id: "done", label: "Đã build", statuses: ["done"] },
   { id: "closed", label: "Lỗi / Huỷ", statuses: ["failed", "cancelled"] },
@@ -30,7 +30,7 @@ const TABS: { id: Tab; label: string; statuses: BuildJobStatus[] }[] = [
 
 const STATUS: Record<BuildJobStatus, { label: string; cls: string }> = {
   running: { label: "Đang build", cls: "border-pf-primary-hi/30 bg-pf-primary/10 text-pf-primary-hi" },
-  export: { label: "Chờ export", cls: "border-pf-primary-hi/40 bg-pf-card-hi text-pf-text" },
+  export: { label: "Chờ upload .pagefly", cls: "border-pf-primary-hi/40 bg-pf-card-hi text-pf-text" },
   queued: { label: "Chờ build", cls: "border-pf-warn/30 bg-pf-warn/10 text-pf-warn" },
   done: { label: "Đã build", cls: "border-pf-success/30 bg-pf-success/10 text-pf-success" },
   failed: { label: "Lỗi", cls: "border-pf-danger/30 bg-pf-danger/10 text-pf-danger" },
@@ -121,7 +121,7 @@ export function ClaudeBuild() {
         <FoldTitle icon="Rocket" title="Claude Build Premium" folded onFlip={flip} />
         <span className="text-[12.5px] text-pf-muted">
           Đang build {counts.running}
-          {counts.export ? ` · Chờ export ${counts.export}` : ""} · Chờ build {counts.queued} · Đã build {counts.done}
+          {counts.export ? ` · Chờ upload .pagefly ${counts.export}` : ""} · Chờ build {counts.queued} · Đã build {counts.done}
           {counts.closed ? ` · Lỗi / huỷ ${counts.closed}` : ""}
         </span>
       </Panel>
@@ -262,7 +262,7 @@ export function ClaudeBuild() {
         {(
           [
             ["Đang build", counts.running, "text-pf-primary-hi"],
-            ["Chờ export", counts.export, "text-pf-text"],
+            ["Chờ upload .pagefly", counts.export, "text-pf-text"],
             ["Chờ build", counts.queued, "text-pf-warn"],
             ["Đã build", counts.done, "text-pf-success"],
             ["Lỗi / Huỷ", counts.closed, "text-pf-danger"],
@@ -401,7 +401,7 @@ function ExportJob({ job, busy, onDone, onCancel }: { job: BuildJob; busy: boole
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[13.5px] font-semibold text-pf-text">
           {job.setName ?? "Bộ mới"}
-          <span className="ml-2 text-[12px] font-normal text-pf-faint">đã dựng xong {job.loganPages.length} page trong store Logan · chờ export</span>
+          <span className="ml-2 text-[12px] font-normal text-pf-faint">{job.loganPages.length} page đã có HTML · chờ upload file .pagefly</span>
         </p>
         <div className="flex items-center gap-2">
           {job.setId && (
@@ -513,7 +513,7 @@ function JobRow({
           </Button>
         )}
         {(job.status === "failed" || job.status === "cancelled" || job.status === "done") && job.setId && (
-          <Button size="sm" variant="ghost" icon="Upload" disabled={busy} onClick={onAwaitExport} title="Coi như đã build xong (đã có HTML) — chuyển sang Chờ export để upload file .pagefly">
+          <Button size="sm" variant="ghost" icon="Upload" disabled={busy} onClick={onAwaitExport} title="Coi như đã build xong (đã có HTML) — chuyển sang Chờ upload .pagefly">
             Chờ upload .pagefly
           </Button>
         )}

@@ -411,7 +411,7 @@ export async function markBuilt(id: string, pages: LoganPage[]): Promise<void> {
     const job = await running(c, id);
     if (!job.setId) throw new ClaudeBuildFailure("Create the set (action \"set\") before reporting the pages built.", 409);
     const at = new Date().toISOString();
-    const log = [...job.log, { at, step: "upload", detail: `${pages.length} page dựng xong trong store Logan — chờ export` }].slice(-200);
+    const log = [...job.log, { at, step: "upload", detail: `${pages.length} page dựng xong trong store Logan — chờ upload .pagefly` }].slice(-200);
     await c.query(
       `update claude_build_jobs
           set status = 'export', logan_pages = $2, progress = greatest(progress, 95), log = $3, heartbeat_at = now()
