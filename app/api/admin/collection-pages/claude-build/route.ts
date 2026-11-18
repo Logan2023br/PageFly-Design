@@ -4,6 +4,7 @@ import { newId } from "@/lib/collectionPagesServer";
 import {
   ClaudeBuildFailure,
   attachSet,
+  awaitExport,
   cancelJob,
   claimJob,
   peerBuilds,
@@ -34,6 +35,7 @@ import { fail, failFrom, firstIssue, buildGuardOrKey } from "../shared";
    POST  admin cookie:
      { action: "start", count, note? }     queue `count` sets and fire the routine
      { action: "cancel", id }              a waiting job at once, a running one at its next step
+     { action: "await_export", id }        a stopped or HTML-only build counted as built: waits for .pagefly
      { action: "retry", id, mode? }        a failed or cancelled job back to the queue —
                                            mode "resume": Tiếp tục at the step it stopped (set kept),
                                            "fresh" (default): Build lại từ đầu
@@ -77,6 +79,7 @@ const adminBody = z.discriminatedUnion("action", [
   z.object({ action: z.literal("start"), count: z.number().int().min(1).max(20), note: z.string().max(2000).optional() }),
   z.object({ action: z.literal("cancel"), id: z.string().max(64) }),
   z.object({ action: z.literal("retry"), id: z.string().max(64), mode: z.enum(["resume", "fresh"]).optional() }),
+  z.object({ action: z.literal("await_export"), id: z.string().max(64) }),
   z.object({ action: z.literal("criteria"), text: z.string().max(50_000) }),
   z.object({ action: z.literal("fire") }),
   z.object({ action: z.literal("token"), token: z.string().max(400) }),
@@ -126,6 +129,17 @@ export async function POST(request: Request) {
       if (b.action === "start") await startBuild(b.count, b.note ?? null, await readAdminName());
       else if (b.action === "cancel") await cancelJob(b.id);
       else if (b.action === "retry") await retryJob(b.id, b.mode ?? "fresh");
+      else if (b.action === "await_export") {
+        /* The set's pages with their HTML: what the .pagefly upload is matched against. */
+        const job = await jobOf(b.id);
+        const set = job?.setId ? await getRepo().getCollectionSet(job.setId) : null;
+        if (!job || !set) return fail("Bộ này chưa có set — không có gì để chờ .pagefly.", 409);
+        const pages = set.pages
+          .filter((pg) => pg.htmlSize !== null)
+          .map((pg) => ({ slug: pg.slug, label: pg.label, title: `${set.name} - ${pg.label}`, pageId: null, editorUrl: null, previewUrl: null }));
+        if (pages.length === 0) return fail("Set chưa có trang HTML nào.", 409);
+        await awaitExport(b.id, pages);
+      }
       else if (b.action === "criteria") await saveCriteria(b.text);
       else if (b.action === "token") await saveTriggerToken(b.token);
       else await fireTrigger("by hand", true);

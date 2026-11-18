@@ -308,7 +308,8 @@ export function ClaudeBuild() {
         ) : (
           <ul className="grid gap-1.5">
             {rows.map((j) => (
-              <JobRow key={j.id} job={j} busy={busy} onCancel={() => void post({ action: "cancel", id: j.id })} onRetry={(mode) => void post({ action: "retry", id: j.id, mode })} />
+              <JobRow key={j.id} job={j} busy={busy} onCancel={() => void post({ action: "cancel", id: j.id })} onRetry={(mode) => void post({ action: "retry", id: j.id, mode })}
+                onAwaitExport={() => void post({ action: "await_export", id: j.id })} />
             ))}
           </ul>
         )}
@@ -468,7 +469,19 @@ function ExportJob({ job, busy, onDone, onCancel }: { job: BuildJob; busy: boole
   );
 }
 
-function JobRow({ job, busy, onCancel, onRetry }: { job: BuildJob; busy: boolean; onCancel: () => void; onRetry: (mode: "resume" | "fresh") => void }) {
+function JobRow({
+  job,
+  busy,
+  onCancel,
+  onRetry,
+  onAwaitExport,
+}: {
+  job: BuildJob;
+  busy: boolean;
+  onCancel: () => void;
+  onRetry: (mode: "resume" | "fresh") => void;
+  onAwaitExport: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const s = STATUS[job.status];
   return (
@@ -497,6 +510,11 @@ function JobRow({ job, busy, onCancel, onRetry }: { job: BuildJob; busy: boolean
         {(job.status === "queued" || job.status === "export") && (
           <Button size="sm" variant="danger" icon="X" className="border-transparent bg-pf-danger text-white hover:bg-pf-danger/85 disabled:bg-pf-card disabled:text-pf-faint" disabled={busy} onClick={onCancel}>
             Huỷ
+          </Button>
+        )}
+        {(job.status === "failed" || job.status === "cancelled" || job.status === "done") && job.setId && (
+          <Button size="sm" variant="ghost" icon="Upload" disabled={busy} onClick={onAwaitExport} title="Coi như đã build xong (đã có HTML) — chuyển sang Chờ export để upload file .pagefly">
+            Chờ upload .pagefly
           </Button>
         )}
         {(job.status === "failed" || job.status === "cancelled") && job.log.length > 0 && (

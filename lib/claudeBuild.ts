@@ -421,6 +421,25 @@ export async function markBuilt(id: string, pages: LoganPage[]): Promise<void> {
   });
 }
 
+/**
+ * The admin's "Chờ upload .pagefly": a build that stopped (failed, cancelled)
+ * or finished with HTML only is counted as built — its set has every page's
+ * HTML — and waits for the .pagefly files on the panel, like a build the
+ * routine finished in the Logan store. `pages` names the set's pages.
+ */
+export async function awaitExport(id: string, pages: LoganPage[]): Promise<void> {
+  const p = await ready();
+  const at = new Date().toISOString();
+  const { rowCount } = await p.query(
+    `update claude_build_jobs
+        set status = 'export', logan_pages = $2, error = null, progress = greatest(progress, 95), heartbeat_at = now(),
+            log = (log || jsonb_build_array(jsonb_build_object('at', $3::text, 'step', 'upload', 'detail', 'Admin chuyển sang chờ upload .pagefly')))
+      where id = $1 and status in ('failed', 'cancelled', 'done') and set_id is not null`,
+    [id, JSON.stringify(pages), at],
+  );
+  if (!rowCount) throw new ClaudeBuildFailure("Chỉ bộ đã có set (lỗi, đã huỷ hoặc xong) mới chuyển sang chờ .pagefly được.", 409);
+}
+
 /** Every page of a set waiting for its export has its .pagefly now: done. */
 export async function completeExport(id: string, pages: number): Promise<void> {
   const p = await ready();
