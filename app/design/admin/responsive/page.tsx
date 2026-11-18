@@ -285,7 +285,14 @@ function StatusBar({
         </Pill>
         <Pill tone="muted">≤ {cfg.max_published_pages} page publish · Shopify trả phí</Pill>
       </div>
-      <div className="grid gap-1 text-pf-muted">
+      {/* Hidden by default: how the runs went, opened only when needed. A
+          run error still shows on the line that opens it. */}
+      <details className="text-pf-muted">
+        <summary className="cursor-pointer select-none text-[12.5px] font-semibold hover:text-pf-text">
+          Chi tiết lần chạy (Recap, Active)
+          {(job?.errors.length ?? 0) > 0 || active?.error ? <span className="font-normal text-pf-warn"> · có lỗi</span> : null}
+        </summary>
+        <div className="mt-1 grid gap-1">
         <p>
           <strong className="text-pf-text">Recap</strong>
           {!cfg.recap_enabled ? " — đang tắt" : ""}:{" "}
@@ -331,7 +338,8 @@ function StatusBar({
             {job.errors.length > 0 && <span className="text-pf-warn"> · Lỗi: {job.errors.join("; ")}</span>}
           </p>
         )}
-      </div>
+        </div>
+      </details>
     </section>
   );
 }
