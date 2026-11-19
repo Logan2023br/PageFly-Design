@@ -9,6 +9,7 @@ import type { IconName } from "@/lib/icons";
 import { Icon } from "../ui";
 import { useAdminAccess } from "./AdminAccess";
 import { AdminNotifier, NotificationBell } from "./AdminNotifier";
+import { PageTranslator } from "./PageTranslator";
 
 /* ==========================================================================
    Admin chrome: left sidebar, content on the right.
@@ -251,10 +252,11 @@ export function AdminShell({
             {/* The bell stays in the top right corner of the window on every
                 admin screen, scrolled or not; its list opens down and to the
                 left from there. The header keeps clear of it (pr-14). */}
-            <div className="fixed right-4 top-4 z-40">
+            <div className="fixed right-4 top-4 z-40 flex items-center gap-2">
+              <PageTranslator />
               <NotificationBell />
             </div>
-            <header className="flex flex-wrap items-end justify-between gap-3 border-b border-pf-border pb-3.5 pr-14">
+            <header className="flex flex-wrap items-end justify-between gap-3 border-b border-pf-border pb-3.5 pr-36">
               <div className="grid gap-1">
                 <h1 className="font-display text-[22px] font-bold tracking-[-0.025em] text-pf-text sm:text-[26px]">
                   {title}
