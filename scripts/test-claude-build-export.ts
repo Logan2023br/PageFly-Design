@@ -52,6 +52,14 @@ const o2 = splitExport(one, PAGES);
 check(o2.pages.length === 1 && o2.pages[0].slug === "sale", "the one page", o2.pages.map((p) => p.slug));
 check(o2.unmatched.length === 1 && o2.unmatched[0] === "7 - Other - Landing.json", "a JSON of no page is reported, assets are skipped", o2.unmatched);
 
+console.log("files saved elsewhere, matched by their own name");
+check(matchEntry("muroka-home.pagefly", PAGES)?.slug === "home", "<set>-<slug>.pagefly, as a set's download names them");
+check(matchEntry("product-page.pagefly", PAGES)?.slug === "product-page", "<slug>.pagefly");
+const odd = zipSync({ "page-data.json": json("about-us") });
+const o3 = splitExport(odd, PAGES, "About.pagefly");
+check(o3.pages.length === 1 && o3.pages[0].slug === "about-us" && o3.unmatched.length === 0, "a one-page file whose JSON is named anything", o3);
+check(splitExport(odd, PAGES).pages.length === 0, "without the file's name it matches nothing");
+
 console.log("not a zip");
 let threw = false;
 try {

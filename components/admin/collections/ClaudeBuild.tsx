@@ -381,19 +381,36 @@ function ExportJob({ job, busy, onDone, onCancel }: { job: BuildJob; busy: boole
   const [error, setError] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
 
-  const send = async (file: File | undefined) => {
-    if (!file) return;
+  /* Every dropped file goes up one after another; the answers add up, so
+     seven single-page .pagefly files tick off seven pages. */
+  const send = async (list: FileList | null | undefined) => {
+    const files = Array.from(list ?? []);
+    if (files.length === 0) return;
     setSending(true);
     setError(null);
-    const res = await api<ExportAnswer>(`/api/admin/collection-pages/claude-build/export?job=${encodeURIComponent(job.id)}`, {
-      method: "PUT",
-      body: file,
-      headers: { "Content-Type": "application/octet-stream" },
-    });
+    const errors: string[] = [];
+    let last: ExportAnswer | null = null;
+    const stored: ExportAnswer["stored"] = [...(answer?.stored ?? [])];
+    const unmatched: string[] = [];
+    for (const file of files) {
+      const res = await api<ExportAnswer>(
+        `/api/admin/collection-pages/claude-build/export?job=${encodeURIComponent(job.id)}&name=${encodeURIComponent(file.name)}`,
+        { method: "PUT", body: file, headers: { "Content-Type": "application/octet-stream" } },
+      );
+      if (!res.ok) {
+        errors.push(`${file.name}: ${res.error}`);
+        continue;
+      }
+      last = res;
+      for (const s of res.stored) if (!stored.some((x) => x.slug === s.slug)) stored.push(s);
+      unmatched.push(...res.unmatched);
+    }
     setSending(false);
-    if (!res.ok) return setError(res.error);
-    setAnswer(res);
-    onDone();
+    if (errors.length) setError(errors.join(" · "));
+    if (last) {
+      setAnswer({ ...last, stored, unmatched });
+      onDone();
+    }
   };
 
   return (
@@ -415,8 +432,8 @@ function ExportJob({ job, busy, onDone, onCancel }: { job: BuildJob; busy: boole
         </div>
       </div>
       <p className="text-[12px] text-pf-muted">
-        Mở PageFly editor của store Logan, export các page dưới đây (từng page hoặc “All Pages”), rồi thả file .pagefly vào ô bên dưới. File được tách ra
-        từng page và lưu vào bộ; đủ page là bộ xong.
+        Thả các file .pagefly của bộ vào ô bên dưới — nhiều file một lúc được. Mỗi file tự khớp đúng page theo tên (Home, Product…) và được lưu vào bộ;
+        “Download .pagefly” của bộ sẽ tải đúng các file đã upload. Đủ page là bộ xong.
       </p>
       <ul className="grid gap-1 text-[12.5px]">
         {job.loganPages.map((p) => (
@@ -447,15 +464,15 @@ function ExportJob({ job, busy, onDone, onCancel }: { job: BuildJob; busy: boole
         onDrop={(e) => {
           e.preventDefault();
           setDrag(false);
-          void send(e.dataTransfer.files[0]);
+          void send(e.dataTransfer.files);
         }}
         className={`flex cursor-pointer flex-col items-center gap-1 rounded-pf-md border border-dashed px-3 py-4 text-center text-[12.5px] ${
           drag ? "border-pf-primary-hi bg-pf-primary/10 text-pf-text" : "border-pf-border text-pf-muted hover:text-pf-text"
         }`}
       >
         <Icon name={sending ? "Loader" : "Upload"} size={16} className={sending ? "animate-spin" : undefined} />
-        {sending ? "Đang lưu…" : "Thả file export (.pagefly) vào đây, hoặc bấm để chọn"}
-        <input type="file" accept=".pagefly,.zip" className="hidden" disabled={sending} onChange={(e) => void send(e.target.files?.[0])} />
+        {sending ? "Đang lưu…" : "Thả cả 7 file .pagefly (hoặc 1 file All Pages) vào đây, hoặc bấm để chọn"}
+        <input type="file" accept=".pagefly,.zip" multiple className="hidden" disabled={sending} onChange={(e) => void send(e.target.files)} />
       </label>
       {answer && (
         <p className="text-[12px] text-pf-muted">

@@ -22,7 +22,9 @@ export async function PUT(request: Request) {
   const who = await buildGuardOrKey(request);
   if (who instanceof Response) return who;
   if (who !== "admin") return fail("The export is uploaded from the admin panel.", 403);
-  const jobId = new URL(request.url).searchParams.get("job") ?? "";
+  const params = new URL(request.url).searchParams;
+  const jobId = params.get("job") ?? "";
+  const fileName = params.get("name") ?? undefined;
   if (Number(request.headers.get("content-length") ?? 0) > MAX_BYTES) return fail("The file is over 25 MB.", 413);
   try {
     const job = await jobOf(jobId);
@@ -37,10 +39,10 @@ export async function PUT(request: Request) {
     const rejected = rejectFile("pagefly", bytes);
     if (rejected) return fail(rejected);
 
-    const { pages, unmatched } = splitExport(bytes, job.loganPages);
+    const { pages, unmatched } = splitExport(bytes, job.loganPages, fileName);
     if (pages.length === 0)
       return fail(
-        `No page of ${job.setName ?? "this set"} in that file${unmatched.length ? ` (it holds: ${unmatched.slice(0, 5).join(", ")})` : ""}. Export the pages named "${job.loganPages[0].title}" and so on.`,
+        `No page of ${job.setName ?? "this set"} in ${fileName ?? "that file"}${unmatched.length ? ` (it holds: ${unmatched.slice(0, 5).join(", ")})` : ""}. Export the pages named "${job.loganPages[0].title}" and so on.`,
       );
     for (const p of pages) {
       const one = rejectFile("pagefly", p.bytes);
