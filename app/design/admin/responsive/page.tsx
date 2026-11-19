@@ -375,7 +375,7 @@ function Filters({ tab, f }: { tab: UrspTab; f: UrspFilters }) {
           ))}
         </select>
       )}
-      {(tab === "replied" || tab === "working" || tab === "done" || tab === "closed" || tab === "dismissed" || tab === "sent") && (
+      {(tab === "replied" || tab === "working" || tab === "done" || tab === "closed" || tab === "upgraded" || tab === "review5" || tab === "dismissed" || tab === "sent") && (
         <>
           <select name="variant" defaultValue={f.variant ?? ""} className={`${FIELD} w-[150px]!`} aria-label="Bản tin">
             <option value="">Mọi bản tin</option>
@@ -1225,6 +1225,7 @@ function SentTable({ rows, followupHours, notes, focus }: { rows: UrspTarget[]; 
                 <DoneButton
                   id={t.id}
                   pic={t.pic}
+                  review5={t.review5_at ? { by: t.review5_by, at: short(t.review5_at) } : null}
                   done={t.done_at ? { by: t.done_by, at: short(t.done_at) } : null}
                   working={t.working_at ? { by: t.working_by, at: short(t.working_at) } : null}
                   dismissed={t.dismissed_at ? { by: t.dismissed_by, at: short(t.dismissed_at), reason: t.dismiss_reason } : null}

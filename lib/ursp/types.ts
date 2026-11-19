@@ -113,6 +113,9 @@ export type UrspTarget = {
   working_by: string | null;
   /** the case's PIC — one of URSP_PICS */
   pic: string | null;
+  /** marked "Đã review 5★" by hand */
+  review5_at: string | null;
+  review5_by: string | null;
   dismissed_at: string | null;
   dismissed_by: string | null;
   dismiss_reason: string | null;

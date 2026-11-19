@@ -19,6 +19,8 @@ export const URSP_TABS = [
   { id: "working", label: "Đang xử lý" },
   { id: "done", label: "Đã xử lý" },
   { id: "closed", label: "Kết thúc" },
+  { id: "upgraded", label: "Đã nâng cấp" },
+  { id: "review5", label: "Review 5★" },
   { id: "dismissed", label: "Đã bỏ qua" },
   { id: "skipped", label: "Bị loại" },
   { id: "ab", label: "A/B test" },
@@ -34,6 +36,10 @@ const TAB_SQL: Record<Exclude<UrspTab, "overview" | "settings">, string> = {
   working: "t.status = 'sent' and t.working_at is not null and t.done_at is null and t.dismissed_at is null",
   done: "t.status = 'sent' and t.done_at is not null and t.closed_at is null",
   closed: "t.status = 'sent' and t.closed_at is not null",
+  /* upgraded after we fixed their pages: the upgrade came on or after Đã xử lý xong */
+  upgraded: "t.status = 'sent' and t.upgraded_at is not null and t.done_at is not null and t.upgraded_at >= t.done_at",
+  /* marked by hand: the store gave a 5★ review (the row stays in Đã xử lý / Kết thúc too) */
+  review5: "t.status = 'sent' and t.review5_at is not null",
   dismissed: "t.status = 'sent' and t.dismissed_at is not null",
   skipped: "t.status = 'skipped'",
   /* the A/B tab lists the stores held for B */
@@ -301,6 +307,10 @@ export async function listTargets(
           ? "t.done_at desc"
           : tab === "closed"
             ? "t.closed_at desc"
+          : tab === "upgraded"
+            ? "t.upgraded_at desc"
+          : tab === "review5"
+            ? "t.review5_at desc"
           : tab === "dismissed"
             ? "t.dismissed_at desc"
           : tab === "queue"

@@ -126,6 +126,9 @@ alter table ursp_targets add column if not exists working_at timestamptz;
 alter table ursp_targets add column if not exists working_by text;
 -- who on the team owns the case (PIC), chosen when it is taken in hand (or let go)
 alter table ursp_targets add column if not exists pic text;
+-- "Đã review 5★": marked by hand when the store left a 5★ review
+alter table ursp_targets add column if not exists review5_at timestamptz;
+alter table ursp_targets add column if not exists review5_by text;
 -- "Bỏ qua": the team let this one go, and said why
 alter table ursp_targets add column if not exists dismissed_at timestamptz;
 alter table ursp_targets add column if not exists dismissed_by text;

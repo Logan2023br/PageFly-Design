@@ -1615,6 +1615,8 @@ export type TargetAction =
   | "ask_review"
   | "close"
   | "reopen"
+  | "review5"
+  | "unreview5"
   | "approve_followup"
   | "skip_followup"
   | "edit_followup"
@@ -1745,6 +1747,14 @@ export async function targetAction(id: string, action: TargetAction, by: string,
     case "reopen":
       only("sent");
       return set("closed_at = null, closed_by = null", [], "reopened");
+    case "review5":
+      only("sent");
+      if (!t.done_at) throw new UpsellError("Chỉ đánh dấu review 5★ cho case đã xử lý xong.", 409);
+      if (t.review5_at) return;
+      return set("review5_at = now(), review5_by = $2", [by], "review5");
+    case "unreview5":
+      only("sent");
+      return set("review5_at = null, review5_by = null", [], "unreview5");
     case "track":
       only("sent");
       return trackOne(t, cfg, { force: true, actor: by });

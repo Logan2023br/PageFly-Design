@@ -156,8 +156,11 @@ export function DoneButton({
   closed,
   reviewAsked,
   pic,
+  review5,
 }: {
   id: string;
+  /** marked "Đã review 5★" (by, at), or null */
+  review5?: Who | null;
   /** who owns the case, shown in every state once chosen */
   pic?: string | null;
   done: Who | null;
@@ -176,6 +179,22 @@ export function DoneButton({
       PIC: {pic}
     </span>
   ) : null;
+  /* "Đã review 5★": a toggle on a done (or closed) case — lit once marked, pressed again to unmark */
+  const review5Line = () => (
+    <div className="grid justify-items-start gap-0.5">
+      <button
+        type="button"
+        disabled={busy}
+        aria-pressed={!!review5}
+        title={review5 ? "Bấm lần nữa để bỏ đánh dấu" : "Đánh dấu store này đã cho review 5★"}
+        onClick={() => void go(review5 ? "unreview5" : "review5")}
+        className={`${lit} ${review5 ? "border-pf-warn/60 bg-pf-warn/20 text-pf-warn" : "border-pf-border-hi text-pf-muted hover:text-pf-text"}`}
+      >
+        {review5 ? "★ Đã review 5★" : "☆ Đã review 5★?"}
+      </button>
+      {review5 && who(review5)}
+    </div>
+  );
   const lit = "inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-pf-md border px-3 text-[12.5px] font-semibold transition-colors disabled:opacity-60";
   const go = (action: string, body: Record<string, unknown> = {}) => run(row(id), { action, ...body });
   const who = (w: Who) => (
@@ -193,6 +212,7 @@ export function DoneButton({
           ■ Đã kết thúc
         </button>
         {who(closed)}
+        {review5Line()}
         <ErrorLine error={error} />
       </div>
     );
@@ -205,6 +225,7 @@ export function DoneButton({
           ✓ Đã xử lý xong
         </button>
         {who(done)}
+        {review5Line()}
         {!reviewAsked && (
           <Button size="sm" variant="ghost" className="whitespace-nowrap" disabled={busy} onClick={() => void go("ask_review")}>
             ⭐ Gửi xin review
