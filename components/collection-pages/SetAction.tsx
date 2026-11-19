@@ -21,16 +21,22 @@ export function SetAction({
   set,
   size = "sm",
   place,
+  label,
+  className,
 }: {
   set: PublicCollectionSet;
   size?: "sm" | "lg";
   /** which of the three buttons this is, for the Buy press */
   place: "card" | "detail" | "viewer";
+  /** the free button's words, in place of "Download free · 7 pages" (/collection-pages/ja) */
+  label?: string;
+  /** replaces the button's size classes */
+  className?: string;
 }) {
-  const cls =
+  const cls = className ?? (
     size === "lg"
       ? "inline-flex min-h-11 items-center gap-2 rounded-pf-md px-5 py-2.5 text-[14px]"
-      : "inline-flex items-center gap-1.5 rounded-pf-md px-3 py-2 text-[12.5px]";
+      : "inline-flex items-center gap-1.5 rounded-pf-md px-3 py-2 text-[12.5px]");
   const count = set.pages.length;
 
   if (set.access === "paid") {
@@ -53,7 +59,7 @@ export function SetAction({
   }
 
   if (!set.download) return null;
-  return <FreeDownload set={set} cls={cls} size={size} place={place} count={count} />;
+  return <FreeDownload set={set} cls={cls} size={size} place={place} count={count} label={label} />;
 }
 
 /* The free button opens the download form rather than handing over the file —
@@ -64,8 +70,10 @@ function FreeDownload({
   size,
   place,
   count,
+  label,
 }: {
   set: PublicCollectionSet;
+  label?: string;
   cls: string;
   size: "sm" | "lg";
   place: "card" | "detail" | "viewer";
@@ -80,9 +88,10 @@ function FreeDownload({
         className={`${cls} bg-pf-primary font-semibold text-white shadow-pf-button transition-colors hover:bg-pf-primary-hi`}
       >
         <Icon name="Download" size={size === "lg" ? 15 : 13} />
-        {size === "lg" && count > 1
+        {label ??
+          (size === "lg" && count > 1
           ? `Download free · all ${pagesLabel(count)}`
-          : `Download free · ${pagesLabel(count)}`}
+          : `Download free · ${pagesLabel(count)}`)}
       </button>
       {open && <DownloadGate set={set} page={null} place={place} onClose={() => setOpen(false)} />}
     </>

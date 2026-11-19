@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo, useState } from "react";
+import { JP_COPY, JP_FEATURED, JP_INDUSTRIES, LANGS, langInfo, type LangCode } from "@/lib/collectionMarkets";
 import { EV, track } from "@/lib/analytics";
 import { entryFor, refHost, screenBucket, useSeenOnce, useTrackOnce } from "./cpTrack";
 import { ORDERS_OPEN, countLabel, pagesLabel, type PublicCollectionSet } from "@/lib/collectionPages";
@@ -46,32 +48,134 @@ export function SetList({
     });
   });
 
+  const [query, setQuery] = useState("");
+  const [lang, setLang] = useState<LangCode | "all">("all");
+  const languages = useMemo(
+    () => LANGS.map((l) => ({ ...l, count: free.filter((s) => (s.lang ?? "en") === l.code).length })).filter((l) => l.count > 0),
+    [free],
+  );
+  const shown = useMemo(() => {
+    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    return free.filter((s) => (lang === "all" || (s.lang ?? "en") === lang) && words.every((w) => haystack(s).includes(w)));
+  }, [free, query, lang]);
+  const featured = JP_FEATURED.map((slug) => free.find((s) => s.id === slug)).filter((s): s is PublicCollectionSet => !!s);
+  const jpCount = free.filter((s) => s.lang === "ja").length;
+  const finder = !preview && free.length > 0;
+
   return (
     <>
-      <div className="max-w-[720px]">
+      <div className="max-w-[760px]">
         <p className="text-[13px] font-semibold uppercase tracking-[0.08em] text-pf-primary-hi">
-          {preview ? "Collection pages · Preview" : "Collection pages"}
+          {preview
+            ? "Collection pages · Preview"
+            : `Free page sets · ${free.length} sets · ${languages.length} ${languages.length === 1 ? "language" : "languages"}`}
         </p>
-        <h1 className="mt-3 font-display text-[34px] font-bold leading-[1.1] tracking-[-0.02em] text-pf-text sm:text-[44px]">
+        <h1 className="mt-3 font-display text-[34px] font-bold leading-[1.1] tracking-[-0.02em] text-pf-text sm:text-[48px]">
           Complete page sets, one store each.
         </h1>
         <p className="mt-4 text-[16px] leading-relaxed text-pf-muted">
-          Pick a set to see every page in it, then open any page to read the full mockup at
-          desktop, tablet and mobile widths.
+          Pick a set to see every page in it. Download the whole set in one file and import it into PageFly — free,
+          no sign-up.
         </p>
         {preview && sets.length === 0 && (
           <p className="mt-6 text-[14px] text-pf-faint">No set is in preview right now.</p>
         )}
       </div>
 
+      {finder && (
+        <section aria-label="Find a set" className="mt-8 grid gap-4">
+          <form role="search" onSubmit={(e) => e.preventDefault()} className="grid gap-2">
+            <label htmlFor="cp-search" className="text-[13px] font-semibold text-pf-body">
+              Search sets
+            </label>
+            <div className="relative">
+              <Icon name="Search" size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-pf-faint" />
+              <input
+                id="cp-search"
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Try “jewelry”, “skincare”, “日本語”, “Arabic”…"
+                className="h-[52px] w-full rounded-pf-md border border-pf-border-hi bg-pf-card pl-11 pr-4 text-[16px] text-pf-text placeholder:text-pf-faint focus:border-pf-primary-hi focus:outline-none"
+              />
+            </div>
+          </form>
+          <div role="group" aria-label="Filter by language" className="flex flex-wrap items-center gap-2">
+            <span className="mr-1 text-[13px] text-pf-faint">Language</span>
+            <Chip on={lang === "all"} onClick={() => setLang("all")} label="All" count={free.length} />
+            {languages.map((l) => (
+              <Chip key={l.code} on={lang === l.code} jp={l.code === "ja"} onClick={() => setLang(l.code)} label={l.label} count={l.count} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {finder && featured.length > 0 && !query && (lang === "all" || lang === "ja") && (
+        <section aria-labelledby="jp-h" className="mt-12 rounded-[24px] border border-pf-primary/40 bg-pf-primary/[.06] p-5 sm:p-7">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div className="grid gap-2">
+              <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-pf-danger">Made for Japan · New</p>
+              <h2 id="jp-h" className="font-display text-[24px] font-bold tracking-[-0.01em] text-pf-text sm:text-[30px]">
+                日本のストア向けテンプレート{" "}
+                <span className="text-[16px] font-semibold text-pf-faint sm:text-[20px]">Japanese page sets</span>
+              </h2>
+              <p className="text-[15px] text-pf-muted">All copy in Japanese, 7 pages each, built around Japanese brands and buying habits.</p>
+            </div>
+            <Link
+              href="/collection-pages/ja"
+              className="rounded-pf-md bg-pf-primary px-5 py-3.5 text-[15px] font-bold text-white transition-colors hover:bg-pf-primary-hi"
+            >
+              すべて見る · See all {jpCount} →
+            </Link>
+          </div>
+          <ul className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
+            {featured.map((set) => (
+              <li key={set.id}>
+                <Link
+                  href={`/collection-pages/${set.id}`}
+                  className="group flex h-full flex-col overflow-hidden rounded-pf-card border border-pf-border bg-pf-card transition-colors hover:border-pf-primary-hi/50"
+                >
+                  <span className="relative block aspect-[4/3] overflow-hidden">
+                    <PageThumb set={set} page={set.pages[0]} lazy />
+                  </span>
+                  <span className="flex flex-1 flex-col gap-1.5 border-t border-pf-border p-3.5">
+                    <span className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                      <span className="text-[15px] font-bold text-pf-text">{set.name}</span>
+                      <LangBadge lang="ja" />
+                    </span>
+                    {JP_COPY[set.id] && <span className="text-[13px] text-pf-muted">{JP_COPY[set.id].category}</span>}
+                    <span className="text-[12px] text-pf-faint">Free · {pagesLabel(set.pages.length)}</span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {free.length > 0 && (
         <Group
           eyebrow="Free to download"
-          title="Free page sets"
+          title={finder ? "All free page sets" : "Free page sets"}
           sub="Every page is yours to keep. Download a whole set in one file and import it straight into your PageFly editor — no cost, no sign-up."
-          sets={free}
+          sets={finder ? shown : free}
           section="free"
           quiet={preview}
+          aside={
+            finder && shown.length !== free.length ? (
+              <span className="text-[13px] font-medium text-pf-faint">
+                Showing {shown.length} of {free.length}
+              </span>
+            ) : undefined
+          }
+          empty={
+            <p className="col-span-full rounded-pf-card border border-dashed border-pf-border px-5 py-10 text-center text-[14px] text-pf-muted">
+              No set matches that.{" "}
+              <button type="button" className="font-semibold text-pf-primary-hi hover:underline" onClick={() => (setQuery(""), setLang("all"))}>
+                Show every set
+              </button>
+            </p>
+          }
         />
       )}
 
@@ -101,6 +205,7 @@ function Group({
   section,
   aside,
   quiet = false,
+  empty,
 }: {
   eyebrow: string;
   title: string;
@@ -115,6 +220,8 @@ function Group({
   aside?: React.ReactNode;
   /** not reported when seen */
   quiet?: boolean;
+  /** in the grid when `sets` is empty */
+  empty?: React.ReactNode;
 }) {
   const seen = useSeenOnce<HTMLElement>(() => {
     if (!quiet) track(EV.cpSectionSeen, { section });
@@ -147,6 +254,7 @@ function Group({
       </div>
 
       <ul className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {sets.length === 0 && empty}
         {sets.map((set) => (
           <li key={set.id} className="relative">
             <Link
@@ -166,8 +274,11 @@ function Group({
               </span>
               <span className="flex flex-1 flex-col border-t border-pf-border px-4 py-4">
                 <span className="flex items-center justify-between gap-3">
-                  <span className="font-display text-[18px] font-semibold tracking-[-0.011em] text-pf-text">
-                    {set.name}
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate font-display text-[18px] font-semibold tracking-[-0.011em] text-pf-text">
+                      {set.name}
+                    </span>
+                    {set.lang && <LangBadge lang={set.lang} />}
                   </span>
                   <span className="shrink-0 text-[12px] font-medium text-pf-faint">
                     {premium ? (
@@ -232,3 +343,47 @@ export function SetCount({ set }: { set: PublicCollectionSet }) {
   );
 }
 
+
+/* What a search reads of a set: its name, its blurb, its language in both
+   spellings ("日本語", "Japanese") and, for a Japanese set, its Japanese
+   category and description. */
+function haystack(set: PublicCollectionSet): string {
+  const l = langInfo(set.lang ?? "en");
+  const jp = JP_COPY[set.id];
+  const industry = jp ? JP_INDUSTRIES.find((i) => i.id === jp.industry)?.label : "";
+  return [set.name, set.id, set.blurb, l.label, l.badge, jp?.category, jp?.desc, industry].join(" ").toLowerCase();
+}
+
+function Chip({ on, jp = false, onClick, label, count }: { on: boolean; jp?: boolean; onClick: () => void; label: string; count: number }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      className={`min-h-[40px] rounded-pf-pill border px-4 text-[14px] font-semibold transition-colors ${
+        on
+          ? "border-pf-text bg-pf-text text-pf-bg"
+          : jp
+            ? "border-pf-primary bg-pf-primary/15 text-pf-text hover:border-pf-primary-hi"
+            : "border-pf-border bg-pf-card text-pf-body hover:border-pf-border-hi"
+      }`}
+    >
+      {label} <span className="font-medium opacity-70">{count}</span>
+    </button>
+  );
+}
+
+/** "JP 日本語", "EN" — the language a set is written in, on its card. */
+export function LangBadge({ lang }: { lang: LangCode }) {
+  const badge = langInfo(lang).badge;
+  if (!badge) return null;
+  return (
+    <span
+      className={`shrink-0 whitespace-nowrap rounded-pf-pill px-2 py-0.5 text-[10.5px] font-bold ${
+        lang === "ja" ? "bg-pf-primary/20 text-pf-primary-hi" : "bg-pf-border text-pf-muted"
+      }`}
+    >
+      {badge}
+    </span>
+  );
+}

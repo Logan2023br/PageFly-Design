@@ -1,28 +1,20 @@
 import { CollectionShell } from "@/components/collection-pages/Shell";
 import { SetList } from "@/components/collection-pages/SetList";
-import { toPublicSet } from "@/lib/collectionPages";
-import { collectionStats, refreshBuiltInPages } from "@/lib/collectionPagesServer";
-import { getRepo } from "@/lib/db";
+import { visiblePublicSets } from "@/lib/collectionLanguage";
 
-/* /collection-pages — every visible set, in the order admin gave them.
+/* /collection-pages — every visible set, in the order admin gave them, with a
+   search, a language filter and the Japanese sets up front.
    Public: deliberately outside `proxy.ts`'s matcher. Read per request, so a
    set switched on in admin is here on the next load. */
-export const metadata = { title: "Collection pages — PageFly Design" };
+export const metadata = {
+  title: "Collection pages — PageFly Design",
+  description: "Free page sets for PageFly, one store each — in English, Japanese, Chinese, Arabic and more. Download a whole set in one file.",
+  alternates: { languages: { ja: "/collection-pages/ja" } },
+};
 export const dynamic = "force-dynamic";
 
 export default async function CollectionPagesPage() {
-  await refreshBuiltInPages();
-  const [sets, stats] = await Promise.all([
-    getRepo().listCollectionSets().catch(() => []),
-    collectionStats(),
-  ]);
-  const shown = sets
-    .filter((s) => s.visibility === "visible")
-    .map((s) => toPublicSet(s, stats))
-    /* A visible set with nothing to preview would be a card that opens onto
-       an empty page. */
-    .filter((s) => s.pages.length > 0);
-
+  const shown = await visiblePublicSets();
   return (
     <CollectionShell>
       <SetList sets={shown} />

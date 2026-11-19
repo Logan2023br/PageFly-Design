@@ -1,3 +1,4 @@
+import type { LangCode } from "./collectionMarkets";
 import type { CollectionSetRecord, CollectionVisibility } from "./db/types";
 import type { ShowcasePage, ShowcaseSet } from "./showcasePages";
 
@@ -125,6 +126,8 @@ export type PublicCollectionSet = ShowcaseSet & {
   visibility: CollectionVisibility;
   /** people who downloaded it (free) or confirmed orders (paid) */
   count: number;
+  /** the language its pages are written in, when the list knows it (lib/collectionLanguage) */
+  lang?: LangCode;
 };
 
 /** "1,234 downloads" / "3 purchases", or null for a set nobody has taken yet. */
