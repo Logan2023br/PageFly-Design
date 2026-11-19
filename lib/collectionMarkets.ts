@@ -118,5 +118,11 @@ export const JP_COPY: Record<string, JpCopy> = {
   },
 };
 
-/** The five new Japanese sets, in the order the "Made for Japan" strip shows them. */
-export const JP_FEATURED = ["sunpodo", "hosaki", "shinogi", "sekka", "muroka"];
+/** The five new Japanese sets, in the order the "Made for Japan" strip and /ja show them — HOSAKI first. */
+export const JP_FEATURED = ["hosaki", "sunpodo", "shinogi", "sekka", "muroka"];
+
+/** Where a Japanese set stands: the featured ones in their order, then the rest as admin ordered them. */
+export const jpRank = (slug: string) => {
+  const i = JP_FEATURED.indexOf(slug);
+  return i < 0 ? JP_FEATURED.length : i;
+};

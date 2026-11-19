@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { JP_COPY, JP_INDUSTRIES, type JpIndustry } from "@/lib/collectionMarkets";
+import { JP_COPY, JP_INDUSTRIES, jpRank, type JpIndustry } from "@/lib/collectionMarkets";
 import type { PublicCollectionSet } from "@/lib/collectionPages";
 import { PageThumb } from "../landing/PagePreview";
 import { SetAction } from "./SetAction";
@@ -19,7 +19,7 @@ import { SetAction } from "./SetAction";
 export function JapanSets({ sets }: { sets: PublicCollectionSet[] }) {
   const [industry, setIndustry] = useState<JpIndustry | "all">("all");
   const ordered = useMemo(
-    () => [...sets].sort((a, b) => Number(!!JP_COPY[b.id]?.isNew) - Number(!!JP_COPY[a.id]?.isNew)),
+    () => [...sets].sort((a, b) => jpRank(a.id) - jpRank(b.id)),
     [sets],
   );
   const industryOf = (s: PublicCollectionSet): JpIndustry => JP_COPY[s.id]?.industry ?? "other";

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { JP_COPY, JP_FEATURED, JP_INDUSTRIES, LANGS, langInfo, type LangCode } from "@/lib/collectionMarkets";
+import { JP_COPY, JP_FEATURED, JP_INDUSTRIES, LANGS, jpRank, langInfo, type LangCode } from "@/lib/collectionMarkets";
 import { EV, track } from "@/lib/analytics";
 import { entryFor, refHost, screenBucket, useSeenOnce, useTrackOnce } from "./cpTrack";
 import { ORDERS_OPEN, countLabel, pagesLabel, type PublicCollectionSet } from "@/lib/collectionPages";
@@ -56,7 +56,9 @@ export function SetList({
   );
   const shown = useMemo(() => {
     const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    return free.filter((s) => (lang === "all" || (s.lang ?? "en") === lang) && words.every((w) => haystack(s).includes(w)));
+    const hits = free.filter((s) => (lang === "all" || (s.lang ?? "en") === lang) && words.every((w) => haystack(s).includes(w)));
+    /* Japanese alone: the same order as /ja, HOSAKI first. */
+    return lang === "ja" ? [...hits].sort((a, b) => jpRank(a.id) - jpRank(b.id)) : hits;
   }, [free, query, lang]);
   const featured = JP_FEATURED.map((slug) => free.find((s) => s.id === slug)).filter((s): s is PublicCollectionSet => !!s);
   const jpCount = free.filter((s) => s.lang === "ja").length;
