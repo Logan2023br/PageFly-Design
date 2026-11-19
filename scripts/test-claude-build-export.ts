@@ -60,6 +60,20 @@ const o3 = splitExport(odd, PAGES, "About.pagefly");
 check(o3.pages.length === 1 && o3.pages[0].slug === "about-us" && o3.unmatched.length === 0, "a one-page file whose JSON is named anything", o3);
 check(splitExport(odd, PAGES).pages.length === 0, "without the file's name it matches nothing");
 
+console.log("PageFly's own All Pages names");
+const P7 = [page("home", "Home"), page("product", "Product"), page("collection", "Collection"), page("about-us", "About"), page("contact", "Contact"), page("blog-article", "Blog Article"), page("sale", "Sale")];
+const real: [string, string][] = [
+  ["1 - 1 _ 1 _ HOSAKI Home _ 2026_11_.json", "home"],
+  ["2 - 3 _ 3 _ HOSAKI Collection _ 20.json", "collection"],
+  ["3 - 2 _ 2 _ HOSAKI About us _ 2026.json", "about-us"],
+  ["4 - 6 _ 6 _ HOSAKI Blog article _.json", "blog-article"],
+  ["5 - 5 _ 5 _ HOSAKI Sale _ 2026_11_.json", "sale"],
+  ["6 - 4 _ 4 _ HOSAKI Product _ 2026_.json", "product"],
+  ["7 - 7 _ 7 _ HOSAKI Contact _ 2026_.json", "contact"],
+];
+for (const [n, slug] of real) check(matchEntry(n, P7)?.slug === slug, `${n} → ${slug}`, matchEntry(n, P7)?.slug);
+check(matchEntry("1 - Home & Co - Product.json", P7)?.slug === "product", "a set named after a page: the label nearer the end");
+
 console.log("not a zip");
 let threw = false;
 try {

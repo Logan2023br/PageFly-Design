@@ -29,31 +29,36 @@ const norm = (s: string) =>
 /** The entry's name without the leading "<n> - " of an export. */
 const bare = (entry: string) => norm(entry.split("/").pop()!.replace(/^\s*\d+\s*-\s*/, ""));
 
+/** Where `words` first runs in a row inside `name`, scanning from the end; -1 when not at all. */
+function lastRun(name: string[], words: string[]): number {
+  for (let i = name.length - words.length; i >= 0; i--) if (words.every((w, k) => name[i + k] === w)) return i;
+  return -1;
+}
+
 /**
- * Which page an entry is: its full title first ("Solvane - Home"), then a
- * name ending in the page's label (" … Home"), then the label alone. The
- * longest label wins, so "Product Page" is never taken for "Page". Last,
- * the page's slug ("muroka-home.pagefly" is the "home" page) — the name a
- * set's own "Download .pagefly" gives each file.
+ * Which page an entry is: its full title first ("Solvane - Home"), then the
+ * page's label or slug found anywhere in the name as whole words — PageFly's
+ * own export names carry more around it ("1 - 1 _ 1 _ HOSAKI Home _ 2026_11_",
+ * "HOSAKI About us _ 2026" for the "about-us" page). The longest label wins,
+ * so "Blog Article" is never taken for "Article"; between equals, the one
+ * nearer the end (a set called "Home & Co" still has its Product page).
  */
 export function matchEntry(entry: string, pages: LoganPage[]): LoganPage | null {
   const name = bare(entry);
   const byTitle = pages.find((p) => norm(p.title) === name);
   if (byTitle) return byTitle;
-  const byLabel = [...pages]
-    .sort((a, b) => norm(b.label).length - norm(a.label).length)
-    .find((p) => {
-      const l = norm(p.label);
-      return l && (name === l || name.endsWith(` ${l}`));
-    });
-  if (byLabel) return byLabel;
-  const bySlug = [...pages]
-    .sort((a, b) => norm(b.slug).length - norm(a.slug).length)
-    .find((p) => {
-      const l = norm(p.slug);
-      return l && (name === l || name.endsWith(` ${l}`));
-    });
-  return bySlug ?? null;
+  const words = name.split(" ").filter(Boolean);
+  let best: { page: LoganPage; len: number; at: number } | null = null;
+  for (const page of pages) {
+    for (const key of [page.label, page.slug]) {
+      const k = norm(key).split(" ").filter(Boolean);
+      if (k.length === 0) continue;
+      const at = lastRun(words, k);
+      if (at < 0) continue;
+      if (!best || k.length > best.len || (k.length === best.len && at > best.at)) best = { page, len: k.length, at };
+    }
+  }
+  return best?.page ?? null;
 }
 
 /**
