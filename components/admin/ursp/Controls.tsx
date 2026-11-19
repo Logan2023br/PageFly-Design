@@ -4,6 +4,7 @@ import { useState } from "react";
 import { FIELD } from "../collections/shared";
 import { Button } from "../../ui";
 import { ErrorLine, useAct } from "../upsell/bits";
+import { URSP_PICS } from "@/lib/ursp/types";
 
 /* The Upsell Responsive screen's buttons. Each posts, then the server-rendered
    screen is read again (useAct). */
@@ -154,8 +155,11 @@ export function DoneButton({
   dismissed,
   closed,
   reviewAsked,
+  pic,
 }: {
   id: string;
+  /** who owns the case, shown in every state once chosen */
+  pic?: string | null;
   done: Who | null;
   closed?: Who | null;
   working: Who | null;
@@ -165,6 +169,13 @@ export function DoneButton({
   const [run, busy, error] = useAct();
   const [asking, setAsking] = useState(false);
   const [why, setWhy] = useState("");
+  const [picking, setPicking] = useState(false);
+  const [dismissPic, setDismissPic] = useState(pic ?? "");
+  const picLine = pic ? (
+    <span className="inline-flex items-center gap-1 rounded-pf-pill border border-pf-primary-hi/40 bg-pf-primary/15 px-2 py-0.5 text-[11.5px] font-semibold text-pf-primary-hi">
+      PIC: {pic}
+    </span>
+  ) : null;
   const lit = "inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-pf-md border px-3 text-[12.5px] font-semibold transition-colors disabled:opacity-60";
   const go = (action: string, body: Record<string, unknown> = {}) => run(row(id), { action, ...body });
   const who = (w: Who) => (
@@ -177,6 +188,7 @@ export function DoneButton({
   if (closed)
     return (
       <div className="grid justify-items-start gap-1">
+        {picLine}
         <button type="button" disabled={busy} title="Bấm lần nữa để mở lại, về Đã xử lý" onClick={() => void go("reopen")} className={`${lit} border-pf-border-hi bg-pf-card-hi text-pf-muted hover:text-pf-text`}>
           ■ Đã kết thúc
         </button>
@@ -188,6 +200,7 @@ export function DoneButton({
   if (done)
     return (
       <div className="grid justify-items-start gap-1">
+        {picLine}
         <button type="button" disabled={busy} title="Bấm lần nữa để trở lại Đang xử lý" onClick={() => void go("undone")} className={`${lit} border-pf-success/50 bg-pf-success/15 text-pf-success hover:bg-pf-success/25`}>
           ✓ Đã xử lý xong
         </button>
@@ -213,6 +226,7 @@ export function DoneButton({
   if (dismissed)
     return (
       <div className="grid max-w-[220px] justify-items-start gap-1">
+        {picLine}
         <button type="button" disabled={busy} title="Bấm lần nữa để bỏ đánh dấu" onClick={() => void go("undismiss")} className={`${lit} border-pf-border-hi bg-pf-card-hi text-pf-muted hover:text-pf-text`}>
           ⊘ Đã bỏ qua
         </button>
@@ -225,6 +239,7 @@ export function DoneButton({
   if (working)
     return (
       <div className="grid justify-items-start gap-1.5">
+        {picLine}
         <span className={`${lit} border-pf-warn/50 bg-pf-warn/15 text-pf-warn`}>● Đang tiến hành xử lý</span>
         {who(working)}
         <Button size="sm" variant="ghost" icon="Check" className="whitespace-nowrap" disabled={busy} onClick={() => void go("done")}>
@@ -239,9 +254,21 @@ export function DoneButton({
 
   return (
     <div className="grid justify-items-start gap-1.5">
-      <Button size="sm" icon="Play" className="whitespace-nowrap" disabled={busy} onClick={() => void go("start").then((ok) => ok && freshTo(`/design/admin/responsive?tab=working&focus=${id}#case-${id}`))}>
+      {picLine}
+      <Button size="sm" icon="Play" className="whitespace-nowrap" disabled={busy} onClick={() => setPicking(true)}>
         Tiến hành xử lý
       </Button>
+      {picking && (
+        <PicDialog
+          busy={busy}
+          initial={pic ?? ""}
+          onCancel={() => setPicking(false)}
+          onConfirm={(chosen) =>
+            void go("start", { pic: chosen }).then((ok) => ok && freshTo(`/design/admin/responsive?tab=working&focus=${id}#case-${id}`))
+          }
+          error={error}
+        />
+      )}
       {asking ? (
         <div className="grid w-[220px] gap-1.5 text-[13px]">
           <textarea
@@ -253,8 +280,16 @@ export function DoneButton({
             className={`${FIELD} text-[12.5px]!`}
             aria-label="Lý do bỏ qua"
           />
+          <select value={dismissPic} onChange={(e) => setDismissPic(e.target.value)} className={`${FIELD} text-[12.5px]!`} aria-label="Người xử lý (PIC)">
+            <option value="">Người xử lý (PIC)…</option>
+            {URSP_PICS.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
           <div className="flex gap-1.5">
-            <Button size="sm" variant="ghost" disabled={busy || why.trim().length < 2} onClick={() => void go("dismiss", { text: why.trim() }).then((ok) => ok && setAsking(false))}>
+            <Button size="sm" variant="ghost" disabled={busy || why.trim().length < 2 || !dismissPic} onClick={() => void go("dismiss", { text: why.trim(), pic: dismissPic }).then((ok) => ok && setAsking(false))}>
               Xác nhận bỏ qua
             </Button>
             <Button size="sm" variant="quiet" disabled={busy} onClick={() => setAsking(false)}>
@@ -268,6 +303,62 @@ export function DoneButton({
         </Button>
       )}
       <ErrorLine error={error} />
+    </div>
+  );
+}
+
+/** "Tiến hành xử lý": who takes the case, then Xác nhận. */
+function PicDialog({
+  busy,
+  initial,
+  onCancel,
+  onConfirm,
+  error,
+}: {
+  busy: boolean;
+  initial: string;
+  onCancel: () => void;
+  onConfirm: (pic: string) => void;
+  error: string | null;
+}) {
+  const [chosen, setChosen] = useState(initial);
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="pic-title"
+      className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
+      onClick={(e) => e.target === e.currentTarget && !busy && onCancel()}
+      onKeyDown={(e) => e.key === "Escape" && !busy && onCancel()}
+    >
+      <div className="grid w-full max-w-[360px] gap-4 rounded-pf-card border border-pf-border bg-pf-card p-5 shadow-pf-card">
+        <div className="grid gap-1">
+          <h2 id="pic-title" className="text-[16px] font-bold text-pf-text">
+            Tiến hành xử lý
+          </h2>
+          <p className="text-[13px] text-pf-muted">Chọn người xử lý (PIC) cho case này.</p>
+        </div>
+        <label className="grid gap-1.5 text-[12.5px] font-semibold text-pf-body">
+          Người xử lý
+          <select autoFocus value={chosen} onChange={(e) => setChosen(e.target.value)} className={FIELD}>
+            <option value="">Chọn người…</option>
+            {URSP_PICS.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+        <ErrorLine error={error} />
+        <div className="flex justify-end gap-2">
+          <Button size="sm" variant="quiet" disabled={busy} onClick={onCancel}>
+            Huỷ
+          </Button>
+          <Button size="sm" icon="Play" disabled={busy || !chosen} onClick={() => onConfirm(chosen)}>
+            {busy ? "Đang chuyển…" : "Xác nhận"}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

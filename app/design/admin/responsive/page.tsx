@@ -1224,6 +1224,7 @@ function SentTable({ rows, followupHours, notes, focus }: { rows: UrspTarget[]; 
               <td className={TD}>
                 <DoneButton
                   id={t.id}
+                  pic={t.pic}
                   done={t.done_at ? { by: t.done_by, at: short(t.done_at) } : null}
                   working={t.working_at ? { by: t.working_by, at: short(t.working_at) } : null}
                   dismissed={t.dismissed_at ? { by: t.dismissed_by, at: short(t.dismissed_at), reason: t.dismiss_reason } : null}

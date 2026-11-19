@@ -25,7 +25,7 @@ import { UpsellError } from "@/lib/upsell/types";
 import { classifyCategories, readAfterDone, readReply, summarizeReply } from "./ai";
 import { db, getState, hasUrspDatabase, logEvent, setState, tx } from "./db";
 import { campaignOver, getUrspSettings, runState, type UrspSettings } from "./settings";
-import { SEGMENTS, SKIP_REASONS, unnumbered, type Segment, type SkipCode, type UrspTarget } from "./types";
+import { SEGMENTS, SKIP_REASONS, URSP_PICS, isPic, unnumbered, type Segment, type SkipCode, type UrspTarget } from "./types";
 
 /* ==========================================================================
    Upsell Responsive: who gets Logan's offer, the offer, and what came of it.
@@ -1630,7 +1630,7 @@ const FOLLOWUP_FROM: Record<string, string[]> = {
 const CANCEL_REASON = "Huỷ khi đang xử lý";
 
 /** What an admin does to one row. Each is allowed only from the states it makes sense in. */
-export async function targetAction(id: string, action: TargetAction, by: string, text?: string): Promise<void> {
+export async function targetAction(id: string, action: TargetAction, by: string, text?: string, pic?: string): Promise<void> {
   if (!/^\d+$/.test(id)) throw new UpsellError("Không có row này.", 404);
   const p = await db();
   const { rows } = await p.query<UrspTarget>("select * from ursp_targets where id = $1", [id]);
@@ -1703,9 +1703,10 @@ export async function targetAction(id: string, action: TargetAction, by: string,
     }
     case "start":
       only("sent");
+      if (!isPic(pic)) throw new UpsellError(`Chọn người xử lý (PIC): ${URSP_PICS.join(", ")}.`, 422);
       if (t.dismissed_at) throw new UpsellError("Store này đã bị bỏ qua — hoàn tác trước.", 409);
-      if (t.working_at) return;
-      return set("working_at = now(), working_by = $2", [by], "working");
+      if (t.working_at) return set("pic = $2", [pic], "pic", { pic });
+      return set("working_at = now(), working_by = $2, pic = $3", [by, pic], "working", { pic });
     case "cancel":
       only("sent");
       if (!t.working_at) return;
@@ -1720,7 +1721,8 @@ export async function targetAction(id: string, action: TargetAction, by: string,
       const why = text?.trim() ?? "";
       if (why.length < 2 || why.length > 500) throw new UpsellError("Ghi lý do bỏ qua (2–500 ký tự).", 422);
       if (t.done_at || t.working_at) throw new UpsellError("Store này đang / đã xử lý — huỷ trước rồi mới bỏ qua.", 409);
-      return set("dismissed_at = now(), dismissed_by = $2, dismiss_reason = $3", [by, why], "dismissed", { reason: why });
+      if (!isPic(pic)) throw new UpsellError(`Chọn người xử lý (PIC): ${URSP_PICS.join(", ")}.`, 422);
+      return set("dismissed_at = now(), dismissed_by = $2, dismiss_reason = $3, pic = $4", [by, why, pic], "dismissed", { reason: why, pic });
     }
     case "undismiss":
       only("sent");

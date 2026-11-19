@@ -111,6 +111,8 @@ export type UrspTarget = {
   followup_error: string | null;
   working_at: string | null;
   working_by: string | null;
+  /** the case's PIC — one of URSP_PICS */
+  pic: string | null;
   dismissed_at: string | null;
   dismissed_by: string | null;
   dismiss_reason: string | null;
@@ -139,3 +141,8 @@ export type UrspTarget = {
   created_at: string;
   updated_at: string;
 };
+
+/** Who can be a case's PIC — picked in a popup on "Tiến hành xử lý" and on "Bỏ qua". */
+export const URSP_PICS = ["Logan", "Hew", "Bevis", "Alfie", "Max", "Aasim"] as const;
+export type UrspPic = (typeof URSP_PICS)[number];
+export const isPic = (v: unknown): v is UrspPic => typeof v === "string" && (URSP_PICS as readonly string[]).includes(v);
