@@ -21,7 +21,8 @@ import { useEffect, useState } from "react";
 
 type Target = "en" | "vi";
 const PREF = "pfd-admin-translate";
-const CACHE = (t: Target) => `pfd-admin-translate-cache-${t}`;
+/* v2: v1 kept a failed answer (the original) as if it were the translation. */
+const CACHE = (t: Target) => `pfd-admin-translate-cache-v2-${t}`;
 const MAX_CACHE = 4000;
 
 const VI = /[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/i;
@@ -55,6 +56,7 @@ function saveCache(t: Target) {
   const m = cacheOf(t);
   while (m.size > MAX_CACHE) m.delete(m.keys().next().value!);
   try {
+    localStorage.removeItem(`pfd-admin-translate-cache-${t}`);
     localStorage.setItem(CACHE(t), JSON.stringify(Object.fromEntries(m)));
   } catch {
     /* full or blocked: the memory copy still works */
@@ -96,9 +98,15 @@ const split = (s: string) => {
   return { lead: m[1], core: m[2], tail: m[3] };
 };
 
+/* A text the server could not translate is asked again only after a while,
+   not on every re-render. */
+const failedAt = new Map<string, number>();
+const RETRY_MS = 5 * 60_000;
+
 let running = false;
-async function pass(target: Target, live: () => boolean) {
-  if (running) return;
+/** Translates what is on screen; resolves to an error message, or null. */
+async function pass(target: Target, live: () => boolean): Promise<string | null> {
+  if (running) return null;
   running = true;
   try {
     const cache = cacheOf(target);
@@ -112,7 +120,10 @@ async function pass(target: Target, live: () => boolean) {
       if (!needs(core, target)) continue;
       want.push({ node, orig: value });
     }
-    const missing = [...new Set(want.map((w) => split(w.orig).core).filter((c) => !cache.has(c)))];
+    const now = Date.now();
+    const missing = [
+      ...new Set(want.map((w) => split(w.orig).core).filter((c) => !cache.has(c) && now - (failedAt.get(c) ?? 0) > RETRY_MS)),
+    ];
     for (let i = 0; i < missing.length; i += 100) {
       const texts = missing.slice(i, i + 100);
       const res = await fetch("/api/admin/translate", {
@@ -120,12 +131,16 @@ async function pass(target: Target, live: () => boolean) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ target, texts }),
       }).catch(() => null);
-      const body = res?.ok ? ((await res.json()) as { translations?: string[] }) : null;
-      if (!body?.translations) break;
-      texts.forEach((t, k) => cache.set(t, body.translations![k]));
+      const body = res ? ((await res.json().catch(() => null)) as { translations?: (string | null)[]; error?: string } | null) : null;
+      if (!res?.ok || !body?.translations) return body?.error ?? (res ? `Lỗi ${res.status}` : "Không gọi được máy chủ");
+      texts.forEach((t, k) => {
+        const done = body.translations![k];
+        if (typeof done === "string" && done) cache.set(t, done);
+        else failedAt.set(t, Date.now());
+      });
     }
     if (missing.length) saveCache(target);
-    if (!live()) return;
+    if (!live()) return null;
     for (const { node, orig } of want) {
       if (!node.isConnected || node.nodeValue !== orig) continue;
       const { lead, core, tail } = split(orig);
@@ -136,6 +151,7 @@ async function pass(target: Target, live: () => boolean) {
       touched.add(node);
       node.nodeValue = shown;
     }
+    return null;
   } finally {
     running = false;
   }
@@ -144,6 +160,7 @@ async function pass(target: Target, live: () => boolean) {
 export function PageTranslator() {
   const [target, setTarget] = useState<Target | null>(null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -162,7 +179,11 @@ export function PageTranslator() {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const run = () => {
       setBusy(true);
-      void pass(target, () => live).finally(() => live && setBusy(false));
+      void pass(target, () => live).then((err) => {
+        if (!live) return;
+        setBusy(false);
+        setError(err);
+      });
     };
     run();
     const obs = new MutationObserver(() => {
@@ -175,6 +196,7 @@ export function PageTranslator() {
       obs.disconnect();
       if (timer) clearTimeout(timer);
       restore();
+      setError(null);
     };
   }, [target]);
 
@@ -206,12 +228,17 @@ export function PageTranslator() {
   return (
     <div
       data-no-translate
+      title={error ?? undefined}
       role="group"
       aria-label="Dịch trang"
-      className={`flex h-11 items-center rounded-full border border-pf-border bg-pf-bg/90 p-[3px] backdrop-blur ${busy ? "opacity-80" : ""}`}
+      className={`flex h-11 items-center rounded-full border p-[3px] backdrop-blur ${error ? "border-pf-danger/60" : "border-pf-border"} bg-pf-bg/90`}
     >
       {side("en", "EN", "Dịch trang sang tiếng Anh")}
       {side("vi", "VI", "Dịch trang sang tiếng Việt")}
+      {busy && <span className="mx-1.5 size-2 animate-pulse rounded-full bg-pf-primary-hi" aria-label="Đang dịch" />}
+      {error && !busy && (
+        <span className="mx-1.5 size-2 rounded-full bg-pf-danger" role="img" aria-label={error} />
+      )}
     </div>
   );
 }
