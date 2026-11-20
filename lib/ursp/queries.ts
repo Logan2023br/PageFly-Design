@@ -28,7 +28,7 @@ export const URSP_TABS = [
 ] as const;
 export type UrspTab = (typeof URSP_TABS)[number]["id"];
 
-const TAB_SQL: Record<Exclude<UrspTab, "overview" | "settings">, string> = {
+export const TAB_SQL: Record<Exclude<UrspTab, "overview" | "settings">, string> = {
   queue: "(t.status in ('pending', 'approved', 'sending', 'failed') or t.followup_status in ('pending', 'approved', 'sending', 'failed'))",
   sent: "t.status = 'sent'",
   /* the inbox: replies no one has taken up or let go yet */
