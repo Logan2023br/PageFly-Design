@@ -1712,12 +1712,18 @@ export async function targetAction(id: string, action: TargetAction, by: string,
     case "cancel":
       only("sent");
       if (!t.working_at) return;
-      /* a case called off goes to Đã bỏ qua, not back into the inbox */
-      return set(
-        "working_at = null, working_by = null, done_at = null, done_by = null, dismissed_at = now(), dismissed_by = $2, dismiss_reason = $3",
-        [by, CANCEL_REASON],
-        "cancelled",
-      );
+      {
+        /* a case called off goes to Đã bỏ qua, not back into the inbox — with why and who */
+        const why = text?.trim() || CANCEL_REASON;
+        if (why.length > 500) throw new UpsellError("Lý do huỷ tối đa 500 ký tự.", 422);
+        if (pic !== undefined && !isPic(pic)) throw new UpsellError(`Chọn người xử lý (PIC): ${URSP_PICS.join(", ")}.`, 422);
+        return set(
+          "working_at = null, working_by = null, done_at = null, done_by = null, dismissed_at = now(), dismissed_by = $2, dismiss_reason = $3, pic = coalesce($4, pic)",
+          [by, why, pic ?? null],
+          "cancelled",
+          { reason: why, pic: pic ?? t.pic },
+        );
+      }
     case "dismiss": {
       only("sent");
       const why = text?.trim() ?? "";

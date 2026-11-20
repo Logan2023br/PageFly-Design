@@ -1232,7 +1232,9 @@ function SentTable({ rows, followupHours, notes, focus }: { rows: UrspTarget[]; 
                   closed={t.closed_at ? { by: t.closed_by, at: short(t.closed_at) } : null}
                   reviewAsked={t.review_ask_status === "sent" || t.review_ask_status === "skipped"}
                 />
-                <div className="mt-2">
+                {/* no notes on a case nobody has taken yet (Khách phản hồi) */}
+                {(t.working_at || t.done_at || t.dismissed_at || t.closed_at) && (
+                  <div className="mt-2">
                   {/* keyed on open: a <details> keeps whatever it was when the row moves from tab to tab, so it starts over open */}
                   <CaseNotes
                     key={t.working_at || t.done_at ? "open" : "shut"}
@@ -1248,7 +1250,8 @@ function SentTable({ rows, followupHours, notes, focus }: { rows: UrspTarget[]; 
                       auto: n.kind === "auto",
                     }))}
                   />
-                </div>
+                  </div>
+                )}
               </td>
             </tr>
           ))}

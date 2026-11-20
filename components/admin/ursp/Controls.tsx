@@ -137,8 +137,8 @@ type Who = { by: string | null; at: string | null };
 
 /**
  * A sent row's handling, one step at a time:
- *   not started   ▶ Tiến hành xử lý (and the screen follows it to Đang xử lý) · ⊘ Bỏ qua (asks why)
- *   in hand       ● Đang tiến hành xử lý (lit) · ✓ Đã xử lý xong · ✕ Huỷ (to Đã bỏ qua)
+ *   not started   ▶ Tiến hành xử lý (and the screen follows it to Đang xử lý)
+ *   in hand       ● Đang tiến hành xử lý (lit) · ✓ Đã xử lý xong · ✕ Huỷ (asks why and the PIC, to Đã bỏ qua)
  *   done          ✓ Đã xử lý xong (lit) — pressed again, back in hand · ⭐ Gửi xin review (by hand, once)
  *   dismissed     ⊘ Đã bỏ qua (lit, with the reason) — pressed again, back to not started
  */
@@ -266,9 +266,44 @@ export function DoneButton({
         <Button size="sm" variant="ghost" icon="Check" className="whitespace-nowrap" disabled={busy} onClick={() => void go("done")}>
           Đã xử lý xong
         </Button>
-        <Button size="sm" variant="quiet" className="whitespace-nowrap" disabled={busy} onClick={() => void go("cancel")}>
-          ✕ Huỷ
-        </Button>
+        {asking ? (
+          <div className="grid w-[220px] gap-1.5 text-[13px]">
+            <textarea
+              value={why}
+              onChange={(e) => setWhy(e.target.value)}
+              rows={3}
+              autoFocus
+              placeholder="Lý do huỷ…"
+              className={`${FIELD} text-[12.5px]!`}
+              aria-label="Lý do huỷ"
+            />
+            <select value={dismissPic} onChange={(e) => setDismissPic(e.target.value)} className={`${FIELD} text-[12.5px]!`} aria-label="Người xử lý (PIC)">
+              <option value="">Người xử lý (PIC)…</option>
+              {URSP_PICS.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+            <div className="flex gap-1.5">
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={busy || why.trim().length < 2 || !dismissPic}
+                onClick={() => void go("cancel", { text: why.trim(), pic: dismissPic }).then((ok) => ok && freshTo("/design/admin/responsive?tab=dismissed"))}
+              >
+                Xác nhận huỷ
+              </Button>
+              <Button size="sm" variant="quiet" disabled={busy} onClick={() => setAsking(false)}>
+                Thôi
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button size="sm" variant="quiet" className="whitespace-nowrap" disabled={busy} onClick={() => setAsking(true)}>
+            ✕ Huỷ
+          </Button>
+        )}
         <ErrorLine error={error} />
       </div>
     );
@@ -289,39 +324,6 @@ export function DoneButton({
           }
           error={error}
         />
-      )}
-      {asking ? (
-        <div className="grid w-[220px] gap-1.5 text-[13px]">
-          <textarea
-            value={why}
-            onChange={(e) => setWhy(e.target.value)}
-            rows={3}
-            autoFocus
-            placeholder="Lý do bỏ qua…"
-            className={`${FIELD} text-[12.5px]!`}
-            aria-label="Lý do bỏ qua"
-          />
-          <select value={dismissPic} onChange={(e) => setDismissPic(e.target.value)} className={`${FIELD} text-[12.5px]!`} aria-label="Người xử lý (PIC)">
-            <option value="">Người xử lý (PIC)…</option>
-            {URSP_PICS.map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-          <div className="flex gap-1.5">
-            <Button size="sm" variant="ghost" disabled={busy || why.trim().length < 2 || !dismissPic} onClick={() => void go("dismiss", { text: why.trim(), pic: dismissPic }).then((ok) => ok && setAsking(false))}>
-              Xác nhận bỏ qua
-            </Button>
-            <Button size="sm" variant="quiet" disabled={busy} onClick={() => setAsking(false)}>
-              Huỷ
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <Button size="sm" variant="ghost" className="whitespace-nowrap" disabled={busy} onClick={() => setAsking(true)}>
-          ⊘ Bỏ qua
-        </Button>
       )}
       <ErrorLine error={error} />
     </div>
