@@ -2,12 +2,14 @@ import { fail, json, readJson } from "@/lib/upsell/api";
 import { readAdminName, readAdminSection } from "@/lib/session";
 import { releaseHeldB, runJob, setAbMode, type AbMode, runSend, startRecapBackfill, startSegmentCleanup } from "@/lib/ursp/core";
 import { runState, setRunning } from "@/lib/ursp/settings";
+import { syncSheetLog } from "@/lib/ursp/sheetLog";
 
 /* POST /api/admin/ursp/run — {action: "start"} Bắt đầu, {action: "pause"}
    Tạm dừng, {action: "run"} Cập nhật ngay: read Recap and AC2 now, send,
    track (only while running). {action: "backfill", from: "YYYY-MM-DD"}:
    the Recap rows already in the sheet since that day, in the background.
    {action: "release_b"}: the stores held for the A/B test's B get the B message.
+   {action: "sheet_sync"}: write the log sheet now.
    {action: "ab_mode", mode: "A" | "B" | "split"}: stop the A/B test on one message, or run it again. */
 export const dynamic = "force-dynamic";
 
@@ -23,6 +25,10 @@ export async function POST(req: Request) {
       return json({ ok: true, run });
     }
     if (action === "segment_cleanup") return json({ ok: true, cleanup: await startSegmentCleanup(by) });
+    if (action === "sheet_sync") {
+      const sheet = await syncSheetLog();
+      return sheet.ok ? json({ ok: true, sheet }) : json({ ok: false, error: sheet.error }, 502);
+    }
     if (action === "ab_mode") return json({ ok: true, ab: await setAbMode(mode as AbMode, by) });
     if (action === "release_b") return json({ ok: true, released: await releaseHeldB(by) });
     if (action === "backfill") return json({ ok: true, backfill: await startRecapBackfill(String(from ?? ""), by, split === true) });

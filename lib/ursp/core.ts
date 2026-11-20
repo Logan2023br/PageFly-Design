@@ -1637,6 +1637,8 @@ export function startUrspTimer(): void {
     );
     /* beside the job, not after it: a long tracking batch never holds the sending up */
     runSend().catch((err) => console.error("[ursp] send failed", err));
+    /* the log sheet, paused or not: buttons on the screen change it too */
+    void import("./sheetLog").then((m) => m.sheetSyncTick()).catch((err) => console.error("[ursp] sheet log failed", err));
   };
   setTimeout(tick, 75_000).unref?.();
   setInterval(tick, TICK_MS).unref?.();

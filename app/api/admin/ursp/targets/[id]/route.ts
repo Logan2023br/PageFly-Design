@@ -1,6 +1,7 @@
 import { fail, json, readJson } from "@/lib/upsell/api";
 import { readAdminName, readAdminSection } from "@/lib/session";
 import { targetAction, type TargetAction } from "@/lib/ursp/core";
+import { scheduleSheetSync } from "@/lib/ursp/sheetLog";
 
 /* POST /api/admin/ursp/targets/{id} — {action, text?}: approve (with an
    edited text), edit, skip, retry, send_anyway (a skipped store, by hand),
@@ -40,6 +41,7 @@ export async function POST(req: Request, ctx: RouteContext<"/api/admin/ursp/targ
     const action = body.action as TargetAction;
     if (!ACTIONS.includes(action)) return json({ ok: false, error: `action: ${ACTIONS.join(", ")}.` }, 400);
     await targetAction(id, action, (await readAdminName()) ?? "admin", typeof body.text === "string" ? body.text : undefined, typeof body.pic === "string" ? body.pic : undefined);
+    scheduleSheetSync();
     return json({ ok: true });
   } catch (err) {
     return fail(err);

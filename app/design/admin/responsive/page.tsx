@@ -4,10 +4,11 @@ import { ReportsLink } from "@/components/admin/reports/ReportsLink";
 import { adminGate } from "@/components/admin/adminGate";
 import { FIELD } from "@/components/admin/fieldClass";
 import { CrispLink, Pill } from "@/components/admin/upsell/bits";
-import { AbStop, CaseNotes, DoneButton, ModeSwitch, RecapBackfill, ReleaseB, QueueActions, RunControls, SendAnyway, SettingsForm, TrackButton } from "@/components/admin/ursp/Controls";
+import { AbStop, CaseNotes, SheetSync, DoneButton, ModeSwitch, RecapBackfill, ReleaseB, QueueActions, RunControls, SendAnyway, SettingsForm, TrackButton } from "@/components/admin/ursp/Controls";
 import { vnTime } from "@/lib/ucp2/core";
 import { RECAP_SHEET_URL, abMode, composeMessage, recapServiceAccount, deadlineText, offerUntil, reviewMessages, withDeadline, type ActiveResult, type BackfillState, type JobState, type RecapResult } from "@/lib/ursp/core";
 import { getState, hasUrspDatabase } from "@/lib/ursp/db";
+import { LOG_SHEET_URL, logSheetEmail, type SheetLogState } from "@/lib/ursp/sheetLog";
 import {
   OUTCOME,
   SEEN,
@@ -97,10 +98,18 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
 
   let body: React.ReactNode;
   if (tab === "overview") {
-    const [stats, days, recent, arms] = await Promise.all([segmentStats(f), byDay(), recentRecapRows(), abStats()]);
+    const [stats, days, recent, arms, sheetLog] = await Promise.all([segmentStats(f), byDay(), recentRecapRows(), abStats(), getState<SheetLogState>("sheet_log")]);
     const rate = (a: AbArm) => (a.sent ? `${((a.replied / a.sent) * 100).toFixed(1)}%` : "—");
     body = (
       <>
+        <SheetSync
+          url={LOG_SHEET_URL}
+          at={sheetLog ? vnTime(sheetLog.at).slice(0, 16) : null}
+          ok={sheetLog?.ok ?? false}
+          cases={sheetLog?.cases ?? null}
+          error={sheetLog?.error ?? null}
+          email={logSheetEmail()}
+        />
         {arms.A.sent + arms.B.sent + arms.B.held > 0 && (
           <Link href={`${HREF}?tab=ab`} className="flex flex-wrap items-center gap-2 rounded-pf-card border border-pf-border bg-pf-card px-4 py-2.5 text-[13px] transition-colors hover:border-pf-primary">
             <strong className="text-pf-text">A/B test:</strong>

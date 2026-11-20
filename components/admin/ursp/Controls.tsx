@@ -101,6 +101,39 @@ export function RecapBackfill({ defaultFrom }: { defaultFrom: string }) {
   );
 }
 
+/** The log sheet: when it was last written, a link, and Đồng bộ ngay. */
+export function SheetSync({ url, at, ok, cases, error, email }: { url: string; at: string | null; ok: boolean; cases: number | null; error: string | null; email: string | null }) {
+  const [run, busy, err] = useAct();
+  return (
+    <div className="grid gap-1.5 rounded-pf-card border border-pf-border bg-pf-card px-4 py-2.5 text-[13px]">
+      <div className="flex flex-wrap items-center gap-2">
+        <strong className="text-pf-text">Google Sheet log:</strong>
+        {at ? (
+          <span className={ok ? "text-pf-body" : "text-pf-danger"}>
+            {ok ? `đồng bộ lúc ${at}${cases !== null ? ` · ${cases} case` : ""}` : `lỗi lúc ${at}`}
+          </span>
+        ) : (
+          <span className="text-pf-muted">chưa đồng bộ lần nào</span>
+        )}
+        <span className="text-[12px] text-pf-faint">· tự cập nhật 5 phút / lần và ngay sau mỗi thao tác</span>
+        <a href={url} target="_blank" rel="noreferrer" className="ml-auto text-pf-primary-hi hover:underline">
+          Mở sheet ↗
+        </a>
+        <Button size="sm" variant="ghost" icon="RefreshCw" disabled={busy} onClick={() => void run(RUN, { action: "sheet_sync" })}>
+          {busy ? "Đang đồng bộ…" : "Đồng bộ ngay"}
+        </Button>
+      </div>
+      {!ok && error && <span className="text-[12px] text-pf-danger">{error}</span>}
+      {!ok && email && (
+        <span className="text-[12px] text-pf-muted">
+          Share sheet cho <b data-no-translate className="select-all text-pf-text">{email}</b> quyền Editor rồi bấm Đồng bộ ngay.
+        </span>
+      )}
+      <ErrorLine error={err} />
+    </div>
+  );
+}
+
 type AbLine = { label: string; a: string; b: string; diff: number | null; p: number | null; lead: "A" | "B" | null };
 
 /**

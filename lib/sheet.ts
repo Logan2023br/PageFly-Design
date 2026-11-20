@@ -220,12 +220,43 @@ export function rowsToStores(rows: string[][]): SheetRow[] {
 
 /* ---- service account ---------------------------------------------------- */
 
+const serviceAccountKey = (raw: string) =>
+  JSON.parse(raw.trim().startsWith("{") ? raw : Buffer.from(raw, "base64").toString("utf8")) as { client_email: string; private_key: string };
+
+/** The address a sheet is shared with for this service account to open it. */
+export function serviceAccountEmail(raw: string | null | undefined): string | null {
+  try {
+    return raw ? serviceAccountKey(raw).client_email : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A Sheets API call that may write (the sheet shared with the service
+ * account as Editor). `path` follows /v4/spreadsheets/{id}, e.g.
+ * "/values:batchUpdate" or ":batchUpdate"; `body` is sent as JSON.
+ */
+export async function sheetsWrite<T = unknown>(sheetId: string, path: string, serviceAccount: string, body?: unknown, method = "POST"): Promise<T> {
+  const token = await serviceAccountToken(serviceAccount, true);
+  const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}${path}`, {
+    method,
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    cache: "no-store",
+  });
+  if (!res.ok)
+    throw new Error(
+      `Sheets API returned ${res.status}${res.status === 403 || res.status === 404 ? ` (chưa share sheet cho ${serviceAccountEmail(serviceAccount) ?? "service account"} quyền Editor)` : ""}`,
+    );
+  return (await res.json()) as T;
+}
+
 /** Signs the assertion Google expects and trades it for an access token. Done
     by hand because a full Google SDK is a large dependency for one RSA sign. */
 /** `raw`: the service account's JSON — as is, or base64 of it. */
-async function serviceAccountToken(raw = process.env.SHEET_SERVICE_ACCOUNT_JSON!): Promise<string> {
-  const text = raw.trim().startsWith("{") ? raw : Buffer.from(raw, "base64").toString("utf8");
-  const key = JSON.parse(text) as { client_email: string; private_key: string };
+async function serviceAccountToken(raw = process.env.SHEET_SERVICE_ACCOUNT_JSON!, write = false): Promise<string> {
+  const key = serviceAccountKey(raw);
 
   const now = Math.floor(Date.now() / 1000);
   const b64 = (obj: unknown) =>
@@ -237,7 +268,7 @@ async function serviceAccountToken(raw = process.env.SHEET_SERVICE_ACCOUNT_JSON!
     "." +
     b64({
       iss: key.client_email,
-      scope: "https://www.googleapis.com/auth/spreadsheets.readonly",
+      scope: write ? "https://www.googleapis.com/auth/spreadsheets" : "https://www.googleapis.com/auth/spreadsheets.readonly",
       aud: "https://oauth2.googleapis.com/token",
       iat: now,
       exp: now + 3600,
