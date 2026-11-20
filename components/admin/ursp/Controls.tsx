@@ -138,7 +138,7 @@ type Who = { by: string | null; at: string | null };
 /**
  * A sent row's handling, one step at a time:
  *   not started   ▶ Tiến hành xử lý (and the screen follows it to Đang xử lý)
- *   in hand       ● Đang tiến hành xử lý (lit) · ✓ Đã xử lý xong · ✕ Huỷ (asks why and the PIC, to Đã bỏ qua)
+ *   in hand       ● Đang tiến hành xử lý (lit) · ✓ Đã xử lý xong · ✕ Huỷ (asks why, to Đã bỏ qua; the PIC stays)
  *   done          ✓ Đã xử lý xong (lit) — pressed again, back in hand · ⭐ Gửi xin review (by hand, once)
  *   dismissed     ⊘ Đã bỏ qua (lit, with the reason) — pressed again, back to not started
  */
@@ -173,7 +173,6 @@ export function DoneButton({
   const [asking, setAsking] = useState(false);
   const [why, setWhy] = useState("");
   const [picking, setPicking] = useState(false);
-  const [dismissPic, setDismissPic] = useState(pic ?? "");
   const picLine = pic ? (
     <span className="inline-flex items-center gap-1 rounded-pf-pill border border-pf-primary-hi/40 bg-pf-primary/15 px-2 py-0.5 text-[11.5px] font-semibold text-pf-primary-hi">
       PIC: {pic}
@@ -277,20 +276,12 @@ export function DoneButton({
               className={`${FIELD} text-[12.5px]!`}
               aria-label="Lý do huỷ"
             />
-            <select value={dismissPic} onChange={(e) => setDismissPic(e.target.value)} className={`${FIELD} text-[12.5px]!`} aria-label="Người xử lý (PIC)">
-              <option value="">Người xử lý (PIC)…</option>
-              {URSP_PICS.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
             <div className="flex gap-1.5">
               <Button
                 size="sm"
                 variant="ghost"
-                disabled={busy || !dismissPic}
-                onClick={() => void go("cancel", { text: why.trim(), pic: dismissPic }).then((ok) => ok && freshTo("/design/admin/responsive?tab=dismissed"))}
+                disabled={busy}
+                onClick={() => void go("cancel", { text: why.trim() }).then((ok) => ok && freshTo("/design/admin/responsive?tab=dismissed"))}
               >
                 Xác nhận huỷ
               </Button>
