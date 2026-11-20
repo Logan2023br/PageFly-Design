@@ -1640,7 +1640,7 @@ export async function targetAction(id: string, action: TargetAction, by: string,
   if (!t) throw new UpsellError("Không có row này.", 404);
   const msg = text?.trim();
   /* the text is a message, except for Bỏ qua (the reason) and a note */
-  if (action !== "dismiss" && action !== "note" && msg !== undefined && (msg.length < 20 || msg.length > 5000)) throw new UpsellError("Tin nhắn phải từ 20 tới 5000 ký tự.", 422);
+  if (action !== "dismiss" && action !== "cancel" && action !== "note" && msg !== undefined && (msg.length < 20 || msg.length > 5000)) throw new UpsellError("Tin nhắn phải từ 20 tới 5000 ký tự.", 422);
   const cfg = await getUrspSettings();
   const only = (...st: string[]) => {
     if (!st.includes(t.status)) throw new UpsellError(`Row đang ở trạng thái "${t.status}" — không làm được việc này.`, 409);
@@ -1715,7 +1715,6 @@ export async function targetAction(id: string, action: TargetAction, by: string,
       {
         /* a case called off goes to Đã bỏ qua, not back into the inbox — with why and who */
         const why = text?.trim() || CANCEL_REASON;
-        if (why.length > 500) throw new UpsellError("Lý do huỷ tối đa 500 ký tự.", 422);
         if (pic !== undefined && !isPic(pic)) throw new UpsellError(`Chọn người xử lý (PIC): ${URSP_PICS.join(", ")}.`, 422);
         return set(
           "working_at = null, working_by = null, done_at = null, done_by = null, dismissed_at = now(), dismissed_by = $2, dismiss_reason = $3, pic = coalesce($4, pic)",

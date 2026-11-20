@@ -289,7 +289,7 @@ export function DoneButton({
               <Button
                 size="sm"
                 variant="ghost"
-                disabled={busy || why.trim().length < 2 || !dismissPic}
+                disabled={busy || !dismissPic}
                 onClick={() => void go("cancel", { text: why.trim(), pic: dismissPic }).then((ok) => ok && freshTo("/design/admin/responsive?tab=dismissed"))}
               >
                 Xác nhận huỷ
