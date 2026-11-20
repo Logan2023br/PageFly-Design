@@ -4,9 +4,9 @@ import { ReportsLink } from "@/components/admin/reports/ReportsLink";
 import { adminGate } from "@/components/admin/adminGate";
 import { FIELD } from "@/components/admin/fieldClass";
 import { CrispLink, Pill } from "@/components/admin/upsell/bits";
-import { CaseNotes, DoneButton, ModeSwitch, RecapBackfill, ReleaseB, QueueActions, RunControls, SendAnyway, SettingsForm, TrackButton } from "@/components/admin/ursp/Controls";
+import { AbStop, CaseNotes, DoneButton, ModeSwitch, RecapBackfill, ReleaseB, QueueActions, RunControls, SendAnyway, SettingsForm, TrackButton } from "@/components/admin/ursp/Controls";
 import { vnTime } from "@/lib/ucp2/core";
-import { RECAP_SHEET_URL, composeMessage, recapServiceAccount, deadlineText, offerUntil, reviewMessages, withDeadline, type ActiveResult, type BackfillState, type JobState, type RecapResult } from "@/lib/ursp/core";
+import { RECAP_SHEET_URL, abMode, composeMessage, recapServiceAccount, deadlineText, offerUntil, reviewMessages, withDeadline, type ActiveResult, type BackfillState, type JobState, type RecapResult } from "@/lib/ursp/core";
 import { getState, hasUrspDatabase } from "@/lib/ursp/db";
 import {
   OUTCOME,
@@ -14,6 +14,7 @@ import {
   URSP_TABS,
   abBySegment,
   abStats,
+  abPick,
   abVerdict,
   byDay,
   listTargets,
@@ -151,7 +152,7 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
         held={held}
         heldHref={(p) => qs({ page: String(p) })}
         auto={cfg.mode === "auto"}
-        split={cfg.ab_split === 1}
+        mode={abMode(cfg)}
         messages={{
           A: withDeadline(composeMessage("recap", sample, cfg, "A"), offerUntil(cfg)),
           B: withDeadline(composeMessage("recap", sample, cfg, "B"), offerUntil(cfg)),
@@ -729,7 +730,7 @@ function AbView({
   held,
   heldHref,
   auto,
-  split,
+  mode,
   messages,
 }: {
   arms: Record<"A" | "B", AbArm>;
@@ -737,7 +738,7 @@ function AbView({
   held: Awaited<ReturnType<typeof listTargets>>;
   heldHref: (p: number) => string;
   auto: boolean;
-  split: boolean;
+  mode: "split" | "A" | "B";
   messages: { A: string; B: string; fA: string; fB: string };
 }) {
   const { A, B } = arms;
@@ -776,13 +777,14 @@ function AbView({
             </p>
             <p className="text-[12.5px] text-pf-muted">
               Store mới:{" "}
-              {split
+              {mode === "split"
                 ? "vào bản đang ít store hơn trong cùng phân khúc — B được bù cho bằng A trước, rồi hai bản chia đều; cả 2 bản đều có Recap và Active."
-                : "nhận bản A (bật chia A/B: ab_split = 1 ở Cài đặt)."}
+                : `nhận bản ${mode} — A/B test đã dừng.`}
             </p>
           </div>
-          <ReleaseB held={B.held} auto={auto} />
+          <ReleaseB held={mode === "A" ? A.held : B.held} auto={auto} variant={mode === "A" ? "A" : "B"} />
         </div>
+        <AbStop mode={mode} pick={abPick(A, B)} />
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[
             { label: "Bản A — đã gửi", n: A.sent, note: A.queued ? `${A.queued} đang chờ gửi` : "" },

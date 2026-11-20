@@ -27,7 +27,7 @@ export const URSP_DEFAULTS = {
   recap_template_b: "",
   active_template_b: "",
   followup_template_b: "",
-  /** 1: every new store that qualifies joins the A/B half with fewer stores of its segment; 0: all A */
+  /** 1: every new store that qualifies joins the A/B half with fewer stores of its segment; 0: all A (test stopped on A); 2: all B */
   ab_split: 1,
   active_subject: "Free responsive check for your store pages",
   /** a store with more published pages than this gets no message */
@@ -85,7 +85,7 @@ export const URSP_HELP: Record<UrspKey, string> = {
   recap_template_b: `A/B test — bản B cho phân khúc Recap. Biến: ${VARS}. Để trống dùng mẫu B mặc định.`,
   active_template_b: `A/B test — bản B cho phân khúc Active. Biến: ${VARS}. Để trống dùng mẫu B mặc định.`,
   followup_template_b: `A/B test — tin nhắc lại của bản B. Biến: ${VARS}. Để trống dùng mẫu B mặc định.`,
-  ab_split: "1 = store mới vào bản (A / B) đang ít store hơn trong cùng phân khúc — B được bù cho bằng A trước, rồi chia đều; cả 2 bản đều có Recap và Active · 0 = tất cả nhận bản A",
+  ab_split: "1 = store mới vào bản (A / B) đang ít store hơn trong cùng phân khúc — B được bù cho bằng A trước, rồi chia đều; cả 2 bản đều có Recap và Active · 0 = dừng test, tất cả nhận bản A · 2 = dừng test, tất cả nhận bản B (đổi bằng nút trên tab A/B test)",
   max_published_pages: "Store có nhiều page publish hơn số này thì không gửi",
   recap_skip_resolutions: "Resolution trong file Recap thì bỏ qua (cách nhau dấu phẩy, không phân biệt hoa thường / dấu)",
   recap_only_responsive: "0 = gửi cho mọi row Recap mới (trừ resolution bị bỏ qua) · 1 = chỉ row có category_issue là responsive (Haiku kiểm tra)",

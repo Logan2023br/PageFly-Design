@@ -1,19 +1,20 @@
 import { fail, json, readJson } from "@/lib/upsell/api";
 import { readAdminName, readAdminSection } from "@/lib/session";
-import { releaseHeldB, runJob, runSend, startRecapBackfill, startSegmentCleanup } from "@/lib/ursp/core";
+import { releaseHeldB, runJob, setAbMode, type AbMode, runSend, startRecapBackfill, startSegmentCleanup } from "@/lib/ursp/core";
 import { runState, setRunning } from "@/lib/ursp/settings";
 
 /* POST /api/admin/ursp/run — {action: "start"} Bắt đầu, {action: "pause"}
    Tạm dừng, {action: "run"} Cập nhật ngay: read Recap and AC2 now, send,
    track (only while running). {action: "backfill", from: "YYYY-MM-DD"}:
    the Recap rows already in the sheet since that day, in the background.
-   {action: "release_b"}: the stores held for the A/B test's B get the B message. */
+   {action: "release_b"}: the stores held for the A/B test's B get the B message.
+   {action: "ab_mode", mode: "A" | "B" | "split"}: stop the A/B test on one message, or run it again. */
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   if (!(await readAdminSection("ursp"))) return json({ ok: false, error: "Not signed in." }, 401);
   try {
-    const { action, from, split } = await readJson(req);
+    const { action, from, split, mode } = await readJson(req);
     const by = `admin:${(await readAdminName()) ?? "admin"}`;
     if (action === "start" || action === "pause") {
       const run = await setRunning(action === "start", by);
@@ -22,6 +23,7 @@ export async function POST(req: Request) {
       return json({ ok: true, run });
     }
     if (action === "segment_cleanup") return json({ ok: true, cleanup: await startSegmentCleanup(by) });
+    if (action === "ab_mode") return json({ ok: true, ab: await setAbMode(mode as AbMode, by) });
     if (action === "release_b") return json({ ok: true, released: await releaseHeldB(by) });
     if (action === "backfill") return json({ ok: true, backfill: await startRecapBackfill(String(from ?? ""), by, split === true) });
     if (action === "run") {

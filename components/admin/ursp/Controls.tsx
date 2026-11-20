@@ -101,11 +101,113 @@ export function RecapBackfill({ defaultFrom }: { defaultFrom: string }) {
   );
 }
 
+type AbLine = { label: string; a: string; b: string; diff: number | null; p: number | null; lead: "A" | "B" | null };
+
+/**
+ * Dừng A/B test. While it runs: one button, which opens the reading of
+ * which message is winning (computed on the server: abPick) and the two ways
+ * to stop — keep A, or keep B. Once stopped: which message every store gets
+ * now, a button for the other one, and one to run the test again.
+ */
+export function AbStop({
+  mode,
+  pick,
+}: {
+  mode: "split" | "A" | "B";
+  pick: { winner: "A" | "B"; sure: boolean; why: string; lines: AbLine[] };
+}) {
+  const [run, busy, error] = useAct();
+  const [open, setOpen] = useState(false);
+  const set = (m: "split" | "A" | "B") => void run(RUN, { action: "ab_mode", mode: m }).then((ok) => ok && setOpen(false));
+  const other = mode === "A" ? "B" : "A";
+  const analysis = (
+    <div className="grid gap-2">
+      <p className={`rounded-pf-md border px-3 py-2 text-[13px] ${pick.sure ? "border-pf-success/40 bg-pf-success/10 text-pf-success" : "border-pf-warn/40 bg-pf-warn/10 text-pf-text"}`}>
+        <strong>Bản {pick.winner} đang thắng{pick.sure ? "" : " (chưa chắc chắn)"}.</strong> {pick.why}
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[420px] text-[12.5px]">
+          <thead>
+            <tr className="text-left text-[11px] uppercase tracking-wide text-pf-faint">
+              <th className="py-1 pr-3 font-semibold">Chỉ số</th>
+              <th className="py-1 pr-3 text-right font-semibold">Bản A</th>
+              <th className="py-1 pr-3 text-right font-semibold">Bản B</th>
+              <th className="py-1 font-semibold">Hơn</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pick.lines.map((l) => (
+              <tr key={l.label} className="border-t border-pf-border">
+                <td className="py-1.5 pr-3 text-pf-body">{l.label}</td>
+                <td className={`py-1.5 pr-3 text-right ${l.lead === "A" ? "font-semibold text-pf-text" : "text-pf-muted"}`}>{l.a}</td>
+                <td className={`py-1.5 pr-3 text-right ${l.lead === "B" ? "font-semibold text-pf-text" : "text-pf-muted"}`}>{l.b}</td>
+                <td className="py-1.5 text-pf-muted">
+                  {l.lead ? `Bản ${l.lead} ${l.diff! > 0 ? "+" : ""}${l.diff} điểm` : "Ngang"}
+                  {l.p !== null && <span className={l.p < 0.05 ? "text-pf-success" : "text-pf-faint"}> · p = {l.p}{l.p < 0.05 ? " ✓" : ""}</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  if (mode !== "split")
+    return (
+      <div className="grid gap-2 rounded-pf-md border border-pf-border bg-pf-bg-deep px-3 py-2.5">
+        <div className="flex flex-wrap items-center gap-2 text-[13px]">
+          <span className="rounded-pf-pill border border-pf-border-hi bg-pf-card-hi px-2 py-0.5 text-[11.5px] font-semibold text-pf-muted">A/B test đã dừng</span>
+          <span className="text-pf-text">
+            Mọi store mới nhận <b>bản {mode}</b>.
+          </span>
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => set(other)}>
+            Dừng {mode}, chạy {other}
+          </Button>
+          <Button size="sm" variant="quiet" disabled={busy} onClick={() => set("split")}>
+            ↺ Chạy lại A/B test
+          </Button>
+        </div>
+        <ErrorLine error={error} />
+      </div>
+    );
+
+  return (
+    <div className="grid gap-2">
+      {open ? (
+        <div className="grid gap-3 rounded-pf-md border border-pf-border-hi bg-pf-bg-deep p-3">
+          <h4 className="text-[13px] font-semibold text-pf-text">Dừng A/B test — giữ bản nào?</h4>
+          {analysis}
+          <p className="text-[12px] text-pf-muted">
+            Từ lúc bấm, mọi store mới nhận bản được giữ; store đang chờ gửi của bản bị dừng được chuyển sang bản giữ. Tin đã gửi giữ nguyên, số liệu so sánh không đổi.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(["A", "B"] as const).map((keep) => (
+              <Button key={keep} size="sm" variant={pick.winner === keep ? "primary" : "ghost"} disabled={busy} onClick={() => set(keep)}>
+                Dừng {keep === "A" ? "B" : "A"}, chạy {keep}
+                {pick.winner === keep ? " (đề xuất)" : ""}
+              </Button>
+            ))}
+            <Button size="sm" variant="quiet" disabled={busy} onClick={() => setOpen(false)}>
+              Thôi
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button size="sm" variant="ghost" className="w-fit" onClick={() => setOpen(true)}>
+          ⏹ Dừng A/B test
+        </Button>
+      )}
+      <ErrorLine error={error} />
+    </div>
+  );
+}
+
 /**
  * "Gửi bản B": two presses — the first says what will happen, the second
  * does it. Nothing else sends the held half.
  */
-export function ReleaseB({ held, auto }: { held: number; auto: boolean }) {
+export function ReleaseB({ held, auto, variant = "B" }: { held: number; auto: boolean; variant?: "A" | "B" }) {
   const [run, busy, error] = useAct();
   const [sure, setSure] = useState(false);
   if (!held) return null;
@@ -114,10 +216,10 @@ export function ReleaseB({ held, auto }: { held: number; auto: boolean }) {
       {sure ? (
         <div className="flex flex-wrap items-center gap-2 rounded-pf-md border border-pf-warn/40 bg-pf-warn/10 px-3 py-2 text-[13px]">
           <span className="text-pf-text">
-            Gửi tin bản B cho <b>{held}</b> store? {auto ? "Tin đi dần ~10 tin / 2 phút." : "Tin vào Chờ duyệt để bạn duyệt từng tin."}
+            Gửi tin bản {variant} cho <b>{held}</b> store? {auto ? "Tin đi dần ~10 tin / 2 phút." : "Tin vào Chờ duyệt để bạn duyệt từng tin."}
           </span>
           <Button size="sm" icon="Send" disabled={busy} onClick={() => void run(RUN, { action: "release_b" }).then(() => setSure(false))}>
-            {busy ? "Đang xếp hàng…" : "Xác nhận gửi bản B"}
+            {busy ? "Đang xếp hàng…" : `Xác nhận gửi bản ${variant}`}
           </Button>
           <Button size="sm" variant="quiet" disabled={busy} onClick={() => setSure(false)}>
             Huỷ
@@ -125,7 +227,7 @@ export function ReleaseB({ held, auto }: { held: number; auto: boolean }) {
         </div>
       ) : (
         <Button size="sm" variant="ghost" icon="Send" onClick={() => setSure(true)}>
-          Gửi bản B cho {held} store
+          Gửi bản {variant} cho {held} store
         </Button>
       )}
       <ErrorLine error={error} />

@@ -465,3 +465,59 @@ export async function notesFor(ids: string[]): Promise<Record<string, UrspNote[]
   for (const n of rows) (out[String(n.target_id)] ??= []).push({ ...n, at: new Date(n.at).toISOString() });
   return out;
 }
+
+export type AbPick = {
+  /** the message to keep */
+  winner: "A" | "B";
+  /** a difference the numbers can stand behind (p < 0.05), not a lean */
+  sure: boolean;
+  /** one line: why */
+  why: string;
+  /** each measure compared, the deciding ones first */
+  lines: { label: string; a: string; b: string; diff: number | null; p: number | null; lead: "A" | "B" | null }[];
+};
+
+/**
+ * Which message to keep when the test stops. What a store does further
+ * down counts more — an upgrade over an agreement over a reply over a read.
+ * The first of those where one side is ahead beyond chance (p < 0.05)
+ * decides; with none, the side ahead on more of them, weighed the same way;
+ * a tie keeps A, the message every store has had.
+ */
+export function abPick(A: AbArm, B: AbArm): AbPick {
+  const measures: { label: string; key: keyof AbArm; weight: number }[] = [
+    { label: "Nâng cấp", key: "upgraded", weight: 4 },
+    { label: "Đồng ý", key: "agree", weight: 3 },
+    { label: "Phản hồi", key: "replied", weight: 2 },
+    { label: "Đã xem", key: "read", weight: 1 },
+  ];
+  const pct = (n: number, of: number) => (of ? `${((n / of) * 100).toFixed(1)}%` : "—");
+  const lines = measures.map((m) => {
+    const a = A[m.key] as number;
+    const b = B[m.key] as number;
+    const v = abVerdict(a, A.sent, b, B.sent);
+    return {
+      label: m.label,
+      weight: m.weight,
+      a: `${a} · ${pct(a, A.sent)}`,
+      b: `${b} · ${pct(b, B.sent)}`,
+      diff: v.diff,
+      p: v.p,
+      lead: v.diff === null || v.diff === 0 ? null : v.diff > 0 ? ("B" as const) : ("A" as const),
+    };
+  });
+  const out = (winner: "A" | "B", sure: boolean, why: string): AbPick => ({ winner, sure, why, lines: lines.map((l) => ({ label: l.label, a: l.a, b: l.b, diff: l.diff, p: l.p, lead: l.lead })) });
+  if (!A.sent || !B.sent) return out(A.sent || !B.sent ? "A" : "B", false, "Một bản chưa gửi cho store nào — chưa so được, giữ bản đã gửi.");
+  const decided = lines.find((l) => l.p !== null && l.p < 0.05 && l.lead);
+  if (decided) return out(decided.lead!, true, `Bản ${decided.lead} hơn rõ về ${decided.label.toLowerCase()} (${decided.diff! > 0 ? "+" : ""}${decided.diff} điểm %, p = ${decided.p}).`);
+  const score = lines.reduce((s, l) => s + (l.lead === "B" ? l.weight : l.lead === "A" ? -l.weight : 0), 0);
+  const winner = score > 0 ? "B" : "A";
+  const ahead = lines.filter((l) => l.lead === winner).map((l) => l.label.toLowerCase());
+  return out(
+    winner,
+    false,
+    score === 0
+      ? "Hai bản ngang nhau — giữ bản A (mẫu mọi store đã nhận). Chưa chỉ số nào chênh đủ chắc chắn."
+      : `Bản ${winner} nhỉnh hơn về ${ahead.join(", ")} — nhưng chưa chỉ số nào chênh đủ chắc chắn (p < 0.05), có thể chỉ là ngẫu nhiên.`,
+  );
+}

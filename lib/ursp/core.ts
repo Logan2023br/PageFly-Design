@@ -24,7 +24,7 @@ import { sessionOf, sheetTime } from "@/lib/ucp2/core";
 import { UpsellError } from "@/lib/upsell/types";
 import { classifyCategories, readAfterDone, readReply, summarizeReply } from "./ai";
 import { db, getState, hasUrspDatabase, logEvent, setState, tx } from "./db";
-import { campaignOver, getUrspSettings, runState, type UrspSettings } from "./settings";
+import { campaignOver, getUrspSettings, runState, saveUrspSettings, type UrspSettings } from "./settings";
 import { SEGMENTS, SKIP_REASONS, URSP_PICS, isPic, unnumbered, type Segment, type SkipCode, type UrspTarget } from "./types";
 
 /* ==========================================================================
@@ -371,6 +371,52 @@ async function blockedBy(cfg: UrspSettings, email: string | null, sid: string | 
  * (sent, queued, or held for B) — so B fills up to A first, then the two
  * grow evenly, and both always have Recap and Active alike. Even: at random.
  */
+/**
+ * The A/B test's state, from `ab_split`: 1 = running (new stores split
+ * between A and B), 0 = stopped on A, 2 = stopped on B.
+ */
+export type AbMode = "split" | "A" | "B";
+export const abMode = (cfg: UrspSettings): AbMode => (cfg.ab_split === 1 ? "split" : cfg.ab_split === 2 ? "B" : "A");
+
+/** The message a new store gets: its half while the test runs, else the one kept. */
+const pickVariant = (cfg: UrspSettings, segment: Segment): Promise<"A" | "B"> | "A" | "B" => {
+  const m = abMode(cfg);
+  return m === "split" ? balancedVariant(segment) : m;
+};
+
+/**
+ * Dừng A/B test — keep one message ("A" or "B") for every store from now
+ * on, or run the test again ("split"). Stopping also moves the stores still
+ * waiting to be sent (Chờ gửi / Chờ duyệt, and any held for the test) off
+ * the dropped message, with the kept one written afresh. What has gone keeps
+ * its letter, so the comparison stays as it was.
+ */
+export async function setAbMode(mode: AbMode, by: string): Promise<{ mode: AbMode; moved: number }> {
+  if (mode !== "split" && mode !== "A" && mode !== "B") throw new UpsellError("mode: split, A hoặc B.", 422);
+  const cfg = await saveUrspSettings({ ab_split: mode === "split" ? 1 : mode === "B" ? 2 : 0 });
+  let moved = 0;
+  if (mode !== "split") {
+    const dropped = mode === "A" ? "B" : "A";
+    const { rows } = await (await db()).query<UrspTarget>(
+      "select * from ursp_targets where variant = $1 and status in ('pending', 'approved', 'held')",
+      [dropped],
+    );
+    for (const t of rows) {
+      const ok = await tx(async (c) => {
+        const r = await c.query(
+          `update ursp_targets set variant = $2, message = $3, updated_at = now() where id = $1 and variant = $4 and status in ('pending', 'approved', 'held')`,
+          [t.id, mode, composeMessage(t.segment, t, cfg, mode), dropped],
+        );
+        if (r.rowCount) await logEvent(c, t.id, "ab_switched", by, { from: dropped, to: mode });
+        return !!r.rowCount;
+      });
+      if (ok) moved++;
+    }
+  }
+  await setState("ab_mode", { mode, by, at: new Date().toISOString(), moved });
+  return { mode, moved };
+}
+
 async function balancedVariant(segment: Segment): Promise<"A" | "B"> {
   const { rows } = await (await db()).query<{ a: number; b: number }>(
     `select count(*) filter (where variant = 'A')::int as a, count(*) filter (where variant = 'B')::int as b
@@ -431,8 +477,8 @@ async function addTarget(n: NewTarget, cfg: UrspSettings, actor: string): Promis
   }
 
   const status = skip ? "skipped" : n.hold ? "held" : cfg.mode === "auto" ? "approved" : "pending";
-  /* ab_split on: the half with fewer stores of this segment; off: A. A held one is given its half later. */
-  const variant = skip || n.hold ? null : cfg.ab_split ? await balancedVariant(n.segment) : "A";
+  /* test running: the half with fewer stores of this segment; stopped: the message kept. A held one is given its half later. */
+  const variant = skip || n.hold ? null : await pickVariant(cfg, n.segment);
   const message = skip ? null : composeMessage(n.segment, { store_name: facts.store_name, store_domain: n.store_domain }, cfg, variant);
   return tx(async (c) => {
     const vals = [
@@ -743,7 +789,9 @@ export async function releaseHeldB(by: string): Promise<number> {
   const cfg = await getUrspSettings();
   if (campaignOver(cfg)) throw new UpsellError("Chương trình đã kết thúc — không gửi nữa.", 409);
   const p = await db();
-  const { rows } = await p.query<UrspTarget>("select * from ursp_targets where status = 'held' and variant = 'B'");
+  /* held for B; once the test is stopped on A, those were moved to A and go out as A */
+  const v = abMode(cfg) === "A" ? "A" : "B";
+  const { rows } = await p.query<UrspTarget>("select * from ursp_targets where status = 'held' and variant = $1", [v]);
   let n = 0;
   for (const t of rows) {
     /* sent to meanwhile by another route: never twice */
@@ -752,7 +800,7 @@ export async function releaseHeldB(by: string): Promise<number> {
     await tx(async (c) => {
       await c.query(
         `update ursp_targets set status = $2, message = $3, approved_by = $4, skip_code = $5, skip_reason = $6, updated_at = now() where id = $1 and status = 'held'`,
-        [t.id, st, dup ? null : composeMessage(t.segment, t, cfg, "B"), st === "approved" ? by : null, dup ? "already_sent" : null, dup ? sentReason(dup, t.store_domain) : null],
+        [t.id, st, dup ? null : composeMessage(t.segment, t, cfg, v), st === "approved" ? by : null, dup ? "already_sent" : null, dup ? sentReason(dup, t.store_domain) : null],
       );
       await logEvent(c, t.id, dup ? "skipped" : "released_b", by, {});
     });
@@ -1672,7 +1720,7 @@ export async function targetAction(id: string, action: TargetAction, by: string,
       const dup = await alreadySent(t.id, t.store_domain, t.email);
       if (dup) throw new UpsellError(`Không gửi: ${sentReason(dup, t.store_domain)}.`, 409);
       /* a store sent after all joins the A/B test like any other */
-      const variant = t.variant ?? (cfg.ab_split ? await balancedVariant(t.segment) : "A");
+      const variant = t.variant ?? (await pickVariant(cfg, t.segment));
       const message = msg ?? composeMessage(t.segment, t, cfg, variant);
       return set(
         `status = '${cfg.mode === "auto" ? "approved" : "pending"}', skip_code = null, skip_reason = null, message = $2, approved_by = $3, variant = $4`,
