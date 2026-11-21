@@ -66,7 +66,7 @@ const SUMMARY_ROWS: { label: string; key: string; note: string }[] = [
   { label: "Đang xử lý", key: "working", note: "" },
   { label: "Đã xử lý", key: "done", note: "Đã xử lý xong, chưa kết thúc" },
   { label: "Kết thúc", key: "closed", note: "" },
-  { label: "Đã nâng cấp", key: "upgraded", note: "Nâng cấp sau khi mình đã xử lý responsive" },
+  { label: "Đã nâng cấp", key: "upgraded", note: "Case đã xử lý / kết thúc có lên gói trả phí sau khi nhận tin (trước hay sau lúc xử lý xong đều tính)" },
   { label: "Review 5★", key: "review5", note: "Đánh dấu Đã review 5★" },
   { label: "Đã bỏ qua", key: "dismissed", note: "Gồm cả case huỷ khi đang xử lý" },
 ];

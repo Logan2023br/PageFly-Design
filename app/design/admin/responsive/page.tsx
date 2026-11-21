@@ -452,7 +452,7 @@ function AfterDone({ s, sentA, sentB }: { s: SegmentStats[]; sentA: number; sent
     { label: "Phản hồi", n: sum("replied"), note: `${pct(sum("replied"), sent)} đã gửi` },
     { label: "Đồng ý", n: sum("agree"), note: `${pct(sum("agree"), sum("replied"))} người phản hồi` },
     { label: "Đã xử lý xong", n: done, note: `${sum("working")} đang xử lý · ${sum("done_open")} phản hồi chưa xử lý` },
-    { label: "Nâng cấp sau xử lý", n: sum("upgraded_after_done"), note: `${pct(sum("upgraded_after_done"), done)} đã xử lý · tổng ${sum("upgraded")} (+$${Math.round(sum("mrr"))})` },
+    { label: "Nâng cấp (case đã xử lý)", n: sum("upgraded_after_done"), note: `${pct(sum("upgraded_after_done"), done)} đã xử lý · tổng ${sum("upgraded")} (+$${Math.round(sum("mrr"))})` },
     { label: "Review sau xử lý", n: sum("reviewed_after_done"), note: `${pct(sum("reviewed_after_done"), done)} đã xử lý · tổng ${sum("reviewed")}` },
     { label: "Hài lòng", n: sum("happy"), note: `${pct(sum("happy"), moods)} · ${sum("neutral")} bình thường · ${sum("unhappy")} không` },
   ];
@@ -1209,7 +1209,7 @@ function SentTable({ rows, followupHours, notes, focus }: { rows: UrspTarget[]; 
                     <span className="text-pf-success">
                       Nâng cấp {short(t.upgraded_at)} · {t.upgraded_to}
                       {t.upgraded_price ? ` $${Number(t.upgraded_price)}` : ""}
-                      {t.done_at && t.upgraded_at >= t.done_at ? " (sau xử lý)" : ""}
+                      {t.done_at ? (t.upgraded_at >= t.done_at ? " (sau xử lý)" : " (trước khi xử lý xong)") : ""}
                     </span>
                   ) : (
                     <span className="text-pf-faint">Chưa nâng cấp{t.pf_plan ? ` · ${t.pf_plan}` : ""}</span>

@@ -36,8 +36,9 @@ export const TAB_SQL: Record<Exclude<UrspTab, "overview" | "settings">, string> 
   working: "t.status = 'sent' and t.working_at is not null and t.done_at is null and t.dismissed_at is null",
   done: "t.status = 'sent' and t.done_at is not null and t.closed_at is null",
   closed: "t.status = 'sent' and t.closed_at is not null",
-  /* upgraded after we fixed their pages: the upgrade came on or after Đã xử lý xong */
-  upgraded: "t.status = 'sent' and t.upgraded_at is not null and t.done_at is not null and t.upgraded_at >= t.done_at",
+  /* a case we handled (Đã xử lý or Kết thúc) whose store went paid after the message —
+     before, during or after the fix: customers often upgrade while we work */
+  upgraded: "t.status = 'sent' and t.upgraded_at is not null and (t.done_at is not null or t.closed_at is not null)",
   /* marked by hand: the store gave a 5★ review (the row stays in Đã xử lý / Kết thúc too) */
   review5: "t.status = 'sent' and t.review5_at is not null",
   dismissed: "t.status = 'sent' and t.dismissed_at is not null",
@@ -82,7 +83,7 @@ export const SEEN = {
 /** "Kết quả" — fixed SQL per key; an unknown key filters nothing. */
 export const OUTCOME = {
   upgraded: { label: "Đã nâng cấp", sql: "t.upgraded_at is not null" },
-  upgraded_after_done: { label: "Nâng cấp sau khi xử lý", sql: "t.upgraded_at is not null and t.done_at is not null and t.upgraded_at >= t.done_at" },
+  upgraded_after_done: { label: "Nâng cấp (case đã xử lý)", sql: "t.upgraded_at is not null and (t.done_at is not null or t.closed_at is not null)" },
   reviewed: { label: "Đã review app 5★", sql: "t.reviewed_at is not null" },
   reviewed_after_done: { label: "Review sau khi xử lý", sql: "t.reviewed_at is not null and t.done_at is not null and t.reviewed_at >= t.done_at" },
   reviewed_before: { label: "Đã 5★ từ trước khi gửi", sql: "t.first_review >= 5" },
@@ -187,7 +188,7 @@ const STATS_SQL = `count(*)::int as found,
   count(*) filter (where t.status = 'sent' and t.working_at is not null and t.done_at is null and t.dismissed_at is null)::int as working,
   count(*) filter (where t.dismissed_at is not null)::int as dismissed,
   count(*) filter (where t.upgraded_at is not null)::int as upgraded,
-  count(*) filter (where t.upgraded_at is not null and t.done_at is not null and t.upgraded_at >= t.done_at)::int as upgraded_after_done,
+  count(*) filter (where t.upgraded_at is not null and (t.done_at is not null or t.closed_at is not null))::int as upgraded_after_done,
   coalesce(sum(t.upgraded_price) filter (where t.upgraded_at is not null), 0)::float as mrr,
   count(*) filter (where t.reviewed_at is not null)::int as reviewed,
   count(*) filter (where t.reviewed_at is not null and t.done_at is not null and t.reviewed_at >= t.done_at)::int as reviewed_after_done,
