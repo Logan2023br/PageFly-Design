@@ -65,6 +65,21 @@ export const STAGE_LABEL: Record<string, string> = {
 export type UrspNote = { id: string; target_id: string; stage: string; text: string; by: string; at: string; kind: "team" | "customer" | "auto" };
 
 /** "1: …" typed by hand: the numbering is the screen's, so the typed one goes. */
+/** The plan a store upgraded from: kept at the upgrade, else the plan (or price) first seen. */
+export function upgradeFrom(t: Pick<UrspTarget, "upgraded_from" | "first_plan" | "first_price">): string {
+  if (t.upgraded_from) return t.upgraded_from;
+  if (t.first_plan) return t.first_plan;
+  if (t.first_price === null) return "?";
+  const p = Number(t.first_price);
+  return p > 0 ? `gói $${p}` : "Free";
+}
+
+/** "Free → Builder 5-slot Monthly ($24)" */
+export function upgradePath(t: Pick<UrspTarget, "upgraded_from" | "first_plan" | "first_price" | "upgraded_to" | "upgraded_price">): string {
+  const to = [t.upgraded_to ?? "?", t.upgraded_price ? `($${Number(t.upgraded_price)})` : ""].filter(Boolean).join(" ");
+  return `${upgradeFrom(t)} → ${to}`;
+}
+
 export const unnumbered = (s: string) => s.replace(/^\s*\d+\s*[:.)\-–]\s*/, "").trim();
 
 export type UrspTarget = {
@@ -135,6 +150,8 @@ export type UrspTarget = {
   upgraded_at: string | null;
   upgraded_to: string | null;
   upgraded_price: string | null;
+  first_plan: string | null;
+  upgraded_from: string | null;
   app_review: number | null;
   reviewed_at: string | null;
   uninstalled_at: string | null;

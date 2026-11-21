@@ -502,17 +502,18 @@ async function addTarget(n: NewTarget, cfg: UrspSettings, actor: string): Promis
       status === "approved" ? "auto" : null,
       firstAc2 ? facts.pf_price : null,
       variant,
+      firstAc2 ? (facts.pf_plan ?? (facts.pf_price === 0 ? "Free" : null)) : null,
     ];
     const { rows } = await c.query<{ id: string }>(
       `insert into ursp_targets (segment, store_domain, recap_key, email, store_name, country, shopify_plan, pf_plan, pf_price, pages_published,
-                                 session_id, ticket_link, source, status, skip_code, skip_reason, message, approved_by, first_price, first_ac2_at, variant)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19, case when $19::numeric is null then null else now() end, $20)
+                                 session_id, ticket_link, source, status, skip_code, skip_reason, message, approved_by, first_price, first_ac2_at, variant, first_plan)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19, case when $19::numeric is null then null else now() end, $20, $21)
        on conflict (segment, store_domain) do update set
          recap_key = excluded.recap_key, email = excluded.email, store_name = excluded.store_name, country = excluded.country,
          shopify_plan = excluded.shopify_plan, pf_plan = excluded.pf_plan, pf_price = excluded.pf_price, pages_published = excluded.pages_published,
          session_id = excluded.session_id, ticket_link = excluded.ticket_link, source = excluded.source, status = excluded.status,
          skip_code = excluded.skip_code, skip_reason = excluded.skip_reason, message = excluded.message, approved_by = excluded.approved_by,
-         first_price = excluded.first_price, first_ac2_at = excluded.first_ac2_at, variant = excluded.variant, updated_at = now()
+         first_price = excluded.first_price, first_ac2_at = excluded.first_ac2_at, variant = excluded.variant, first_plan = excluded.first_plan, updated_at = now()
        where ursp_targets.status = 'skipped'
        returning id`,
       vals,
@@ -1393,14 +1394,16 @@ export async function trackOne(t: UrspTarget, cfg: UrspSettings, opts: { force?:
       const price = Number(st.pageflyPrice ?? 0) || 0;
       const plan = str(st.pageflyPlan) ?? "Free";
       Object.assign(patch, { pf_plan: plan, pf_price: price });
-      if (t.first_price === null) Object.assign(patch, { first_price: price, first_ac2_at: new Date().toISOString() });
+      if (t.first_price === null) Object.assign(patch, { first_price: price, first_plan: plan, first_ac2_at: new Date().toISOString() });
       /* an upgrade is a paid plan AC2 activated after the message — or, when
          AC2 gives no time, a store it saw on Free when the message went */
       if (!t.upgraded_at && price > 0) {
         const at = await ac2UpgradeTime(t.store_domain, t.sent_at).catch(() => null);
         const wasFree = t.first_price !== null && Number(t.first_price) === 0 && t.first_ac2_at !== null && new Date(t.first_ac2_at).getTime() - sent < 24 * 3_600_000;
         if (at || wasFree) {
-          Object.assign(patch, { upgraded_at: at ?? new Date().toISOString(), upgraded_to: plan, upgraded_price: price });
+          /* from: the plan when the message went (first seen), else the last plan seen before this one */
+          const from = t.first_plan ?? (t.first_price !== null && Number(t.first_price) === 0 ? "Free" : t.pf_plan !== plan ? t.pf_plan : null);
+          Object.assign(patch, { upgraded_at: at ?? new Date().toISOString(), upgraded_to: plan, upgraded_price: price, upgraded_from: from });
           events.push(["upgraded", { to: plan, price, at }]);
         }
       }

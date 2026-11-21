@@ -30,7 +30,7 @@ import {
   type UrspTab,
 } from "@/lib/ursp/queries";
 import { URSP_HELP, URSP_NUMERIC, campaignOver, getUrspSettings, runState } from "@/lib/ursp/settings";
-import { INTENT_LABEL, MOOD_LABEL, SEGMENTS, SKIP_REASONS, STAGE_LABEL, STATUS_LABEL, unnumbered, type Segment, type UrspNote, type UrspTarget } from "@/lib/ursp/types";
+import { INTENT_LABEL, MOOD_LABEL, SEGMENTS, SKIP_REASONS, STAGE_LABEL, STATUS_LABEL, unnumbered, upgradePath, type Segment, type UrspNote, type UrspTarget } from "@/lib/ursp/types";
 
 /* /design/admin/responsive — Upsell Responsive: Logan offers BFMC customers
    a free review of their pages' responsive layout, and free fixes. Two
@@ -1207,8 +1207,9 @@ function SentTable({ rows, followupHours, notes, focus }: { rows: UrspTarget[]; 
                 <div className="grid gap-1 text-[11.5px]">
                   {t.upgraded_at ? (
                     <span className="text-pf-success">
-                      Nâng cấp {short(t.upgraded_at)} · {t.upgraded_to}
-                      {t.upgraded_price ? ` $${Number(t.upgraded_price)}` : ""}
+                      Nâng cấp {short(t.upgraded_at)}
+                      <br />
+                      <b className="font-semibold">{upgradePath(t)}</b>
                       {t.done_at ? (t.upgraded_at >= t.done_at ? " (sau xử lý)" : " (trước khi xử lý xong)") : ""}
                     </span>
                   ) : (

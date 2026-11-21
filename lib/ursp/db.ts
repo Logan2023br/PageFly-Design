@@ -145,6 +145,9 @@ alter table ursp_targets add column if not exists review_ask_error text;
 alter table ursp_targets add column if not exists review_ask_where text;
 -- what Haiku made of the last reply after Đã xử lý xong: confirmed | more | unhappy | other
 alter table ursp_targets add column if not exists after_done_read text;
+-- the PageFly plan when AC2 first saw the store (beside first_price), and the plan it upgraded from
+alter table ursp_targets add column if not exists first_plan text;
+alter table ursp_targets add column if not exists upgraded_from text;
 create index if not exists ursp_targets_status on ursp_targets (status, created_at desc);
 create index if not exists ursp_targets_domain on ursp_targets (store_domain);
 create index if not exists ursp_targets_sent on ursp_targets (sent_at desc);

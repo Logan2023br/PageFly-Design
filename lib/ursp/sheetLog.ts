@@ -3,7 +3,7 @@ import "server-only";
 import { serviceAccountEmail, sheetsWrite } from "@/lib/sheet";
 import { db, getState, setState } from "./db";
 import { TAB_SQL, tabCounts } from "./queries";
-import { INTENT_LABEL, SEGMENTS, type UrspTarget } from "./types";
+import { INTENT_LABEL, SEGMENTS, upgradePath, type UrspTarget } from "./types";
 
 /* ==========================================================================
    The Upsell Responsive log sheet — what the screen shows, kept in a Google
@@ -87,7 +87,7 @@ const CASE_HEADER = [
   "Xử lý xong",
   "Kết thúc",
   "Nâng cấp lúc",
-  "Nâng cấp lên",
+  "Nâng cấp (gói cũ → gói mới)",
   "Review 5★",
   "Bỏ qua lúc",
   "Lý do bỏ qua",
@@ -110,7 +110,7 @@ const caseRow = (t: UrspTarget) => [
   vn(t.done_at),
   vn(t.closed_at),
   vn(t.upgraded_at),
-  [t.upgraded_to, t.upgraded_price ? `$${Number(t.upgraded_price)}` : ""].filter(Boolean).join(" · "),
+  t.upgraded_at ? upgradePath(t) : "",
   vn(t.review5_at),
   vn(t.dismissed_at),
   t.dismiss_reason ?? "",
