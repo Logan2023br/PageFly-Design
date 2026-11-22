@@ -76,7 +76,7 @@ export async function GET(request: Request) {
 }
 
 const adminBody = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("start"), count: z.number().int().min(1).max(20), note: z.string().max(2000).optional() }),
+  z.object({ action: z.literal("start"), count: z.number().int().min(1).max(20), note: z.string().max(20000, "Ghi chú dài quá 20.000 ký tự — rút gọn lại.").optional() }),
   z.object({ action: z.literal("cancel"), id: z.string().max(64) }),
   z.object({ action: z.literal("retry"), id: z.string().max(64), mode: z.enum(["resume", "fresh"]).optional() }),
   z.object({ action: z.literal("await_export"), id: z.string().max(64) }),

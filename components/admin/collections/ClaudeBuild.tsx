@@ -162,7 +162,7 @@ export function ClaudeBuild() {
             </label>
             <label className="grid min-w-[240px] flex-1 gap-1 text-[12px] text-pf-faint">
               Ghi chú cho lượt này (không bắt buộc) — ngành, phong cách, dịp lễ…
-              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: 3 bộ skincare, phong cách tối giản" className={FIELD} />
+              <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={note.length > 120 ? 5 : 1} placeholder="VD: 3 bộ skincare, phong cách tối giản" className={`${FIELD} resize-y`} />
             </label>
             <Button
               icon="Rocket"
@@ -180,6 +180,7 @@ export function ClaudeBuild() {
               Bắt đầu build {count} bộ
             </Button>
           </div>
+          {error && <p className="text-[12.5px] text-pf-danger">Không bắt đầu được: {error}</p>}
           {!data.criteria.trim() && <p className="text-[12px] text-pf-faint">Chưa có ý tưởng thêm — routine build theo tiêu chí tổng.</p>}
         </div>
       )}

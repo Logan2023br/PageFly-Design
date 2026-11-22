@@ -206,7 +206,7 @@ export async function startBuild(count: number, note: string | null, who: string
   for (let i = 0; i < n; i++) {
     const { rows } = await p.query(
       `insert into claude_build_jobs (id, note, requested_by) values ($1, $2, $3) returning *`,
-      [newJobId(), note?.trim().slice(0, 2000) || null, who],
+      [newJobId(), note?.trim().slice(0, 20000) || null, who],
     );
     made.push(toJob(rows[0]));
   }
