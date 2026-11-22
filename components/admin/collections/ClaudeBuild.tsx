@@ -162,7 +162,7 @@ export function ClaudeBuild() {
             </label>
             <label className="grid min-w-[240px] flex-1 gap-1 text-[12px] text-pf-faint">
               Ghi chú cho lượt này (không bắt buộc) — ngành, phong cách, dịp lễ…
-              <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={note.length > 120 ? 5 : 1} placeholder="VD: 3 bộ skincare, phong cách tối giản" className={`${FIELD} resize-y`} />
+              <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={Math.min(14, Math.max(4, note.split("\n").length + Math.ceil(note.length / 140)))} placeholder="VD: 3 bộ skincare, phong cách tối giản" className={`${FIELD} resize-y`} />
             </label>
             <Button
               icon="Rocket"
