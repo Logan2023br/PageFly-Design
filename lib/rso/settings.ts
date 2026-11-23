@@ -43,7 +43,7 @@ const VARS = "{store_name} {pic} {products} {pages} {visits} {page_link}";
 export const RSO_HELP: Record<RsoKey, string> = {
   mode: "manual = tin nằm ở Chờ duyệt, bấm Duyệt & gửi · auto = gửi luôn khi đủ điều kiện (cả tin báo hết hàng và tin xin review)",
   sender_name: "Tên người gửi trên Crisp ({pic})",
-  ac2_assignee: "Username AC2 ghi vào cột Who trên Radar (vd tutnb)",
+  ac2_assignee: "Username AC2 cho cột Who trên Radar (chưa ghi được: n8n chỉ đọc AC2) — store đã có người khác nhận trên Radar thì bỏ qua",
   max_per_scan: "Mỗi lần quét (1 tiếng) lấy tối đa bấy nhiêu store mới, lượt xem cao trước",
   min_visits: "Store có tổng lượt xem/tháng của các page hết hàng dưới số này thì bỏ qua",
   check_after_days: "Gửi xong bấy nhiêu ngày thì kiểm tra store đã nhập hàng chưa",

@@ -43,7 +43,6 @@ import { SKIP_REASONS, productNames, type RsoPage, type RsoTarget, type SkipCode
    "still out of stock". Nothing runs while the screen says Tạm dừng.
    ========================================================================== */
 
-const AC2 = "https://ac2.pagefly.io";
 const KIND = "out_of_stock_product";
 const REVIEW_URL = "https://apps.shopify.com/pagefly?#modal-show=ReviewListingModal";
 const TICK_MS = 5 * 60_000;
@@ -77,38 +76,20 @@ const STORES = "/api/app-data/stores";
 
 /* AC2 the way the other upsells read it: through BPU Ops' n8n proxy
    (N8N_AC2_URL + N8N_AC2_KEY — the AC2 token stays in n8n). The proxy
-   answers GETs; a store path goes as the proxy takes it ("/{domain}"),
-   any other AC2 path (the Radar) as the full path. AC2_TOKEN, when set,
-   is used directly instead — and is the only way to write on the Radar
-   (Who / Done / note); without it those writes are skipped. */
-async function ac2Call<T>(method: "GET" | "PUT", path: string, body?: unknown): Promise<T> {
-  const token = await connection("ac2_token");
-  if (!token) {
-    if (method !== "GET") throw new Error("AC2 qua n8n chỉ đọc được — ghi lên Radar cần AC2_TOKEN");
-    const [p, qs] = path.split("?");
-    const r = await ac2ProxyGet<T>(p.startsWith(STORES) ? p.slice(STORES.length) : p, Object.fromEntries(new URLSearchParams(qs ?? "")));
-    if (!r) throw new ConfigMissing("AC2 qua n8n (N8N_AC2_URL + N8N_AC2_KEY)");
-    /* The proxy only reaches AC2's stores paths (it puts `path` after
-       /api/app-data/stores): the Radar comes back empty. Say what to do. */
-    if (p.startsWith("/api/radar") && (r.status !== 200 || r.body === null || !Array.isArray((r.body as { items?: unknown }).items)))
-      throw new Error(
-        "Chưa đọc được Radar: n8n chỉ mở các đường store của AC2, Radar trả về trống. Cần 1 trong 2: BPU Ops thêm đường /api/radar vào workflow n8n, hoặc đặt AC2_TOKEN trong .env của VPS.",
-      );
-    if (r.status !== 200 || r.body === null) throw new Error(`AC2 qua n8n ${p} ${r.status}: ${r.text.slice(0, 160) || "(trống)"}`);
-    return r.body;
-  }
-  const sep = path.includes("?") ? "&" : "?";
-  const res = await fetch(`${AC2}${path}${sep}token=${encodeURIComponent(token)}`, {
-    method,
-    headers: { Accept: "application/json", ...(body ? { "Content-Type": "application/json" } : {}) },
-    body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(60_000),
-    cache: "no-store",
-    redirect: "error",
-  });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`AC2 ${method} ${path.split("?")[0]} ${res.status}: ${text.slice(0, 160)}`);
-  return (text ? JSON.parse(text) : null) as T;
+   answers GETs only: a store path goes as the proxy takes it ("/{domain}"),
+   any other AC2 path (the Radar) as the full path. Writes on the Radar
+   (Who / Done / note) do not go through it, so they are skipped. */
+async function ac2Call<T>(method: "GET" | "PUT", path: string): Promise<T> {
+  if (method !== "GET") throw new Error("n8n chỉ đọc AC2 — không ghi lên Radar");
+  const [p, qs] = path.split("?");
+  const r = await ac2ProxyGet<T>(p.startsWith(STORES) ? p.slice(STORES.length) : p, Object.fromEntries(new URLSearchParams(qs ?? "")));
+  if (!r) throw new ConfigMissing("AC2 qua n8n (N8N_AC2_URL + N8N_AC2_KEY)");
+  /* The proxy reaches AC2's stores paths (it puts `path` after
+     /api/app-data/stores): the Radar comes back empty. Say so. */
+  if (p.startsWith("/api/radar") && (r.status !== 200 || r.body === null || !Array.isArray((r.body as { items?: unknown }).items)))
+    throw new Error("Chưa đọc được Radar qua n8n: workflow n8n (N8N_AC2_URL) trả về trống cho đường /api/radar — nó mới mở các đường store của AC2.");
+  if (r.status !== 200 || r.body === null) throw new Error(`AC2 qua n8n ${p} ${r.status}: ${r.text.slice(0, 160) || "(trống)"}`);
+  return r.body;
 }
 
 export async function radarRows(): Promise<RadarItem[]> {
@@ -116,13 +97,12 @@ export async function radarRows(): Promise<RadarItem[]> {
   return (r.items ?? []).filter((i) => i.kind === KIND);
 }
 
-/** Who / Done / note on the Radar row — never stops the job. */
+/** Who / Done / note on the Radar row: n8n only reads AC2, so this is not written —
+    kept as the one place to turn it on if the proxy ever takes writes. */
 async function radarRecord(domain: string, fields: { outcome?: string; note?: string }, cfg: RsoSettings): Promise<void> {
-  try {
-    await ac2Call("PUT", "/api/radar/opportunity", { kind: KIND, shopDomain: domain, assignee: cfg.ac2_assignee || undefined, ...fields });
-  } catch (err) {
-    console.error("[rso] radar record", domain, err instanceof Error ? err.message : err);
-  }
+  void domain;
+  void fields;
+  void cfg;
 }
 
 export async function appReview(domain: string, email: string | null): Promise<number | null> {

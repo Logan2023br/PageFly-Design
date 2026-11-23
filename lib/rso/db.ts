@@ -15,7 +15,7 @@ import { db as upsellDb, hasUpsellDatabase } from "@/lib/upsell/db";
      rso_events    what happened to a target, for its timeline
      rso_state     the jobs' clocks
      rso_settings  the screen's settings (Crisp and AC2 credentials are
-                   Store set upsell's connections, plus ac2_token)
+                   Store set upsell's connections: N8N_AC2_URL + N8N_AC2_KEY)
 
    Same database and pool as the other upsells.
    ========================================================================== */
