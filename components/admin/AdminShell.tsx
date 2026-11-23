@@ -69,6 +69,12 @@ const NAV: { id: AdminSection; label: string; href: string; icon: IconName }[] =
     icon: "Smartphone",
   },
   {
+    id: "rso",
+    label: "Radar Sold Out",
+    href: "/design/admin/radar-sold-out",
+    icon: "PackageSearch",
+  },
+  {
     id: "accounts",
     label: "Tài khoản",
     href: "/design/admin/accounts",

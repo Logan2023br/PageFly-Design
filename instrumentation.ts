@@ -14,6 +14,9 @@
    And Upsell Responsive (Recap sheet + AC2 → Logan's offer on Crisp), every
    two minutes while Bắt đầu is on — see lib/ursp/core.ts.
 
+   And Radar Sold Out (AC2 Radar "out of stock" → Crisp heads-up → review
+   request), every five minutes while Bắt đầu is on — see lib/rso/core.ts.
+
    And the weekly reports of the three upsells, made at 01:00 on Monday —
    see lib/reports/store.ts.
    ========================================================================== */
@@ -27,6 +30,8 @@ export async function register() {
   startUcp2Timer();
   const { startUrspTimer } = await import("./lib/ursp/core");
   startUrspTimer();
+  const { startRsoTimer } = await import("./lib/rso/core");
+  startRsoTimer();
   const { startReportTimer } = await import("./lib/reports/store");
   startReportTimer();
 }

@@ -105,6 +105,8 @@ export const CONNECTIONS = {
      admin account cannot point it (and the key) at another host. */
   n8n_ac2_url: { env: "N8N_AC2_URL", label: "AC2 qua n8n: URL (giống BPU Ops)", fallback: "", secret: false, envOnly: true },
   n8n_ac2_key: { env: "N8N_AC2_KEY", label: "AC2 qua n8n: key (giống BPU Ops)", fallback: "", secret: true },
+  /* AC2's own token (query ?token=): the Radar for Radar Sold Out — the n8n proxy reaches only the stores list */
+  ac2_token: { env: "AC2_TOKEN", label: "AC2 token (Radar Sold Out đọc /api/radar)", fallback: "", secret: true },
 } as const;
 
 export type ConnectionKey = keyof typeof CONNECTIONS;
