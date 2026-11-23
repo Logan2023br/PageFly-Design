@@ -88,10 +88,13 @@ async function ac2Call<T>(method: "GET" | "PUT", path: string, body?: unknown): 
     const [p, qs] = path.split("?");
     const r = await ac2ProxyGet<T>(p.startsWith(STORES) ? p.slice(STORES.length) : p, Object.fromEntries(new URLSearchParams(qs ?? "")));
     if (!r) throw new ConfigMissing("AC2 qua n8n (N8N_AC2_URL + N8N_AC2_KEY)");
-    if (r.status !== 200 || r.body === null)
+    /* The proxy only reaches AC2's stores paths (it puts `path` after
+       /api/app-data/stores): the Radar comes back empty. Say what to do. */
+    if (p.startsWith("/api/radar") && (r.status !== 200 || r.body === null || !Array.isArray((r.body as { items?: unknown }).items)))
       throw new Error(
-        `AC2 qua n8n ${p} ${r.status}: ${r.text.slice(0, 160) || "(trống)"}${p.startsWith("/api/radar") ? " — workflow n8n có thể chưa mở đường /api/radar" : ""}`,
+        "Chưa đọc được Radar: n8n chỉ mở các đường store của AC2, Radar trả về trống. Cần 1 trong 2: BPU Ops thêm đường /api/radar vào workflow n8n, hoặc đặt AC2_TOKEN trong .env của VPS.",
       );
+    if (r.status !== 200 || r.body === null) throw new Error(`AC2 qua n8n ${p} ${r.status}: ${r.text.slice(0, 160) || "(trống)"}`);
     return r.body;
   }
   const sep = path.includes("?") ? "&" : "?";
