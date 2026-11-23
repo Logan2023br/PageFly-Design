@@ -66,6 +66,8 @@ create table if not exists rso_targets (
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now()
 );
+alter table rso_targets add column if not exists reply_seen_at timestamptz;
+alter table rso_targets add column if not exists mentioned_at timestamptz;
 create index if not exists rso_targets_domain on rso_targets (store_domain, created_at desc);
 create index if not exists rso_targets_status on rso_targets (status, created_at desc);
 create index if not exists rso_targets_sent on rso_targets (sent_at desc);

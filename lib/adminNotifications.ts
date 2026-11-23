@@ -129,6 +129,32 @@ export async function recentNotices(sections: AdminSection[]): Promise<AdminNoti
       })(),
     );
   }
+  /* Radar Sold Out: a customer answered the out-of-stock heads-up — only their words about the stock */
+  if (sections.includes("rso") && hasUpsellDatabase()) {
+    reads.push(
+      (async () => {
+        const { rows } = await (await upsellDb())
+          .query(
+            `select store_domain, store_name, last_reply_at, last_reply_text, mood from rso_targets
+              where last_reply_at > now() - make_interval(hours => $1)`,
+            [WINDOW_HOURS],
+          )
+          .catch(() => ({ rows: [] as Record<string, never>[] }));
+        for (const r of rows as { store_domain: string; store_name: string | null; last_reply_at: Date | string; last_reply_text: string | null; mood: string | null }[]) {
+          const at = new Date(r.last_reply_at).toISOString();
+          const said = r.last_reply_text?.replace(/\s+/g, " ").trim();
+          out.push({
+            id: `rso-reply:${r.store_domain}:${at}`,
+            at,
+            tone: "reply",
+            text: `Radar Sold Out: khách ${store(r.store_name, r.store_domain)} vừa phản hồi về sản phẩm hết hàng${r.mood === "unhappy" ? " (không vui)" : ""}.`,
+            detail: said ? (said.length > 160 ? `${said.slice(0, 160)}…` : said) : undefined,
+            href: `/design/admin/radar-sold-out?tab=sent&q=${encodeURIComponent(r.store_domain)}`,
+          });
+        }
+      })(),
+    );
+  }
   if (sections.includes("ursp") && hasUpsellDatabase()) {
     reads.push(
       (async () => {

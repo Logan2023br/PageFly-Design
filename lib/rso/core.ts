@@ -341,6 +341,14 @@ export async function scan(cfg: RsoSettings): Promise<ScanResult> {
 
 /* ---------------------------------------------------------------- send */
 
+/** The private note left after a message: what was sent, and who takes the reply. */
+function sentNote(t: RsoTarget, review: boolean, cfg: RsoSettings): string {
+  const what = review
+    ? "sent the review request (the store restocked)"
+    : `told the customer a product on their PageFly page is out of stock: ${productNames(t.pages).join(", ")}`;
+  return `[Radar Sold Out] ${cfg.sender_name} ${what}. If the customer replies about this, please mention @${cfg.sender_name} to handle it.`;
+}
+
 async function quiet(sid: string, minutes: number): Promise<boolean> {
   if (!minutes) return true;
   const msgs = await conversationMessages(sid).catch(() => []);
@@ -364,23 +372,34 @@ export async function runSend(): Promise<SendResult> {
     const text = (review ? t.review_message : t.message) ?? "";
     try {
       if (!text.trim()) throw new Error("Tin nhắn trống");
+      /* the store's latest Crisp conversation, read now: one opened since the scan wins */
       let sid = t.session_id;
+      if (t.email) {
+        const latest = (await reviewCheck(t.email).catch(() => null))?.conversations[0]?.session_id ?? null;
+        if (latest && latest !== sid) {
+          sid = latest;
+          await pool.query("update rso_targets set session_id = $2, ticket_link = $3 where id = $1", [t.id, sid, ticketLink(await connection("crisp_website_id"), sid)]);
+        }
+      }
+      /* support may be chatting with them: wait until the conversation has been quiet for quiet_minutes */
       if (sid && !(await quiet(sid, cfg.quiet_minutes))) {
         out.waited++;
         continue;
       }
+      const note = sentNote(t, review, cfg);
       if (sid) {
         await sendInConversation(sid, text, sender!);
-        await sendNote(sid, `[Radar Sold Out] ${review ? "Đã gửi tin xin review" : "Đã gửi tin báo sản phẩm hết hàng"}`);
+        await sendNote(sid, note);
         await resolveConversation(sid).catch(() => undefined);
       } else if (t.email) {
+        /* no conversation yet: a new one (it reaches them by email), noted and resolved */
         const created = await sendInNewConversation({
           email: t.email,
           nickname: t.store_name || t.store_domain,
           subject: cfg.subject,
           content: text,
           sender: sender!,
-          note: `[Radar Sold Out] ${review ? "Tin xin review" : "Tin báo sản phẩm hết hàng"} · ${t.store_domain}`,
+          note,
         });
         sid = created.session_id;
         await pool.query("update rso_targets set session_id = $2, ticket_link = $3 where id = $1", [t.id, sid, created.ticket_link]);
@@ -430,8 +449,9 @@ export async function track(t: RsoTarget, cfg: RsoSettings): Promise<void> {
   const ours = msgs.filter((m) => m.from === "operator" && m.type === "text" && (m.timestamp ?? 0) >= since);
   const readAt = ours.find((m) => m.read)?.timestamp ?? null;
   const theirs = msgs.filter((m) => m.from === "user" && (m.timestamp ?? 0) >= since && textOf(m.content).trim());
-  const lastSeen = t.last_reply_at ? new Date(t.last_reply_at).getTime() : 0;
-  const fresh = theirs.filter((m) => (m.timestamp ?? 0) > lastSeen);
+  /* read on from the last message already read — about the stock or not */
+  const seen = Math.max(t.reply_seen_at ? new Date(t.reply_seen_at).getTime() : 0, t.last_reply_at ? new Date(t.last_reply_at).getTime() : 0);
+  const fresh = theirs.filter((m) => (m.timestamp ?? 0) > seen);
   const sets: string[] = ["tracked_at = now()", "updated_at = now()"];
   const args: unknown[] = [t.id];
   const set = (col: string, v: unknown) => {
@@ -440,27 +460,34 @@ export async function track(t: RsoTarget, cfg: RsoSettings): Promise<void> {
   };
   if (readAt && !t.read_at) set("read_at", new Date(readAt).toISOString());
   if (fresh.length) {
-    const all = theirs.map((m) => textOf(m.content)).join("\n---\n");
-    const read = await readReply(t.message ?? "", all);
     const last = fresh[fresh.length - 1];
-    set("last_reply_at", new Date(last.timestamp!).toISOString());
-    set("last_reply_text", textOf(last.content).slice(0, 1000));
-    set("replies", theirs.length);
-    set("reply_intent", read.intent);
-    set("mood", read.mood);
-    set("mood_note", read.note || null);
-    if (!t.replied_at) set("replied_at", new Date(theirs[0].timestamp!).toISOString());
-    const stop = read.intent === "decline" || read.mood === "unhappy";
-    if (stop) {
-      set("stage", "stopped");
-      set("review_status", t.review_status === "pending" || t.review_status === "approved" ? "skipped" : t.review_status);
-      await radarRecord(t.store_domain, { note: `Radar Sold Out: khách không muốn được liên hệ thêm. ${read.note}`.trim() }, cfg);
-    } else if (t.stage === "waiting") set("stage", "replied");
-    await sendNote(
-      t.session_id,
-      `[Radar Sold Out] Khách vừa trả lời (${read.intent}, ${read.mood})${read.note ? `: ${read.note}` : ""}. ${stop ? "Đã dừng liên hệ tự động." : "TS kiểm tra và trả lời nếu cần."}`,
-    ).catch(() => undefined);
-    await logEvent(pool, t.id, "reply", "system", { intent: read.intent, mood: read.mood, by: read.by });
+    set("reply_seen_at", new Date(last.timestamp!).toISOString());
+    /* the same conversation is their support chat: only what answers the heads-up counts */
+    const read = await readReply(t.message ?? "", fresh.map((m) => textOf(m.content)).join("\n---\n"));
+    if (read.related && read.excerpt.trim()) {
+      set("last_reply_at", new Date(last.timestamp!).toISOString());
+      set("last_reply_text", read.excerpt.slice(0, 1000));
+      set("replies", (t.replies ?? 0) + 1);
+      set("reply_intent", read.intent);
+      set("mood", read.mood);
+      set("mood_note", read.note || null);
+      if (!t.replied_at) set("replied_at", new Date(last.timestamp!).toISOString());
+      const stop = read.intent === "decline" || read.mood === "unhappy";
+      if (stop) {
+        set("stage", "stopped");
+        set("review_status", t.review_status === "pending" || t.review_status === "approved" ? "skipped" : t.review_status);
+      } else if (t.stage === "waiting") set("stage", "replied");
+      /* the first reply about the stock: the sender is mentioned, once; later ones are noted */
+      const who = !t.mentioned_at ? await crispSender(cfg.sender_name, "").catch(() => null) : null;
+      await sendNote(
+        t.session_id,
+        `[Radar Sold Out] The customer replied about the out-of-stock heads-up: "${read.excerpt.slice(0, 300)}"` +
+          `${read.note ? ` (${read.note})` : ""}. ${stop ? "They do not want more messages — nothing more is sent automatically." : `@${cfg.sender_name} please take it from here.`}`,
+        who?.user_id ? [who.user_id] : [],
+      ).catch(() => undefined);
+      if (!t.mentioned_at) set("mentioned_at", new Date().toISOString());
+      await logEvent(pool, t.id, "reply", "system", { intent: read.intent, mood: read.mood, by: read.by });
+    } else await logEvent(pool, t.id, "reply_other", "system", { by: read.by });
   }
   await pool.query(`update rso_targets set ${sets.join(", ")} where id = $1`, args);
 }

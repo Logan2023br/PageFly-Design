@@ -89,6 +89,10 @@ export type RsoTarget = {
   app_review: number | null;
   reviewed_at: string | null;
   tracked_at: string | null;
+  /** the last customer message read (about the stock or not) — the next read starts after it */
+  reply_seen_at: string | null;
+  /** when the sender was mentioned on the customer's first reply about the stock */
+  mentioned_at: string | null;
   created_at: string;
   updated_at: string;
 };
