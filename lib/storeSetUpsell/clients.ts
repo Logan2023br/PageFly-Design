@@ -150,6 +150,11 @@ async function ac2Get<T>(path: string, query: Record<string, string> = {}): Prom
   return call<T>(`${proxy}${sep}${new URLSearchParams({ ...query, path })}`, { headers: { "X-BPU-Key": key }, redirect: "error" });
 }
 
+/** Any AC2 GET through the same n8n proxy (`path` as the proxy takes it); null when n8n is not configured. */
+export async function ac2ProxyGet<T>(path: string, query: Record<string, string> = {}): Promise<{ status: number; body: T | null; text: string } | null> {
+  return ac2Get<T>(path, query);
+}
+
 /**
  * When the store's paid plan started: the latest SUBSCRIPTION_CHARGE_ACTIVATED
  * in its AC2 activities at or after `since` — what BPU Ops reads for the same

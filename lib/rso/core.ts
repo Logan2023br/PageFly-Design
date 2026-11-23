@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   ConfigMissing,
+  ac2ProxyGet,
   ac2Store,
   conversationMessages,
   crispSender,
@@ -53,7 +54,7 @@ const CHECK_EVERY_MS = 60 * 60_000;
 const MANUAL_AFTER_DAYS = 10;
 const DAY = 86_400_000;
 
-/* ---------------------------------------------------------------- AC2 (token) */
+/* ---------------------------------------------------------------- AC2 */
 
 type RadarItem = {
   kind: string;
@@ -72,14 +73,27 @@ type RadarItem = {
   };
 };
 
-async function ac2Token(): Promise<string> {
-  const t = await connection("ac2_token");
-  if (!t) throw new ConfigMissing("AC2 token (AC2_TOKEN)");
-  return t;
-}
+const STORES = "/api/app-data/stores";
 
+/* AC2 the way the other upsells read it: through BPU Ops' n8n proxy
+   (N8N_AC2_URL + N8N_AC2_KEY — the AC2 token stays in n8n). The proxy
+   answers GETs; a store path goes as the proxy takes it ("/{domain}"),
+   any other AC2 path (the Radar) as the full path. AC2_TOKEN, when set,
+   is used directly instead — and is the only way to write on the Radar
+   (Who / Done / note); without it those writes are skipped. */
 async function ac2Call<T>(method: "GET" | "PUT", path: string, body?: unknown): Promise<T> {
-  const token = await ac2Token();
+  const token = await connection("ac2_token");
+  if (!token) {
+    if (method !== "GET") throw new Error("AC2 qua n8n chỉ đọc được — ghi lên Radar cần AC2_TOKEN");
+    const [p, qs] = path.split("?");
+    const r = await ac2ProxyGet<T>(p.startsWith(STORES) ? p.slice(STORES.length) : p, Object.fromEntries(new URLSearchParams(qs ?? "")));
+    if (!r) throw new ConfigMissing("AC2 qua n8n (N8N_AC2_URL + N8N_AC2_KEY)");
+    if (r.status !== 200 || r.body === null)
+      throw new Error(
+        `AC2 qua n8n ${p} ${r.status}: ${r.text.slice(0, 160) || "(trống)"}${p.startsWith("/api/radar") ? " — workflow n8n có thể chưa mở đường /api/radar" : ""}`,
+      );
+    return r.body;
+  }
   const sep = path.includes("?") ? "&" : "?";
   const res = await fetch(`${AC2}${path}${sep}token=${encodeURIComponent(token)}`, {
     method,
@@ -94,7 +108,7 @@ async function ac2Call<T>(method: "GET" | "PUT", path: string, body?: unknown): 
   return (text ? JSON.parse(text) : null) as T;
 }
 
-async function radarRows(): Promise<RadarItem[]> {
+export async function radarRows(): Promise<RadarItem[]> {
   const r = await ac2Call<{ items?: RadarItem[] }>("GET", "/api/radar/opportunities");
   return (r.items ?? []).filter((i) => i.kind === KIND);
 }
@@ -108,7 +122,7 @@ async function radarRecord(domain: string, fields: { outcome?: string; note?: st
   }
 }
 
-async function appReview(domain: string, email: string | null): Promise<number | null> {
+export async function appReview(domain: string, email: string | null): Promise<number | null> {
   try {
     const s = await ac2Call<{ appReview?: { rating?: number } }>("GET", `/api/app-data/stores/${encodeURIComponent(domain)}`);
     const n = Number(s?.appReview?.rating ?? 0);
