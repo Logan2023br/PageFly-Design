@@ -31,6 +31,7 @@ export const SKIP_REASONS = {
   no_channel: "Không có email / hội thoại Crisp",
   blocked_segment: "Khách có segment dev / bad-review trên Crisp",
   low_visits: "Lượt xem quá ít",
+  not_selling: "Store đang ngừng bán — không có đơn hàng 60 ngày (Radar)",
   admin: "Admin bỏ qua",
 } as const;
 export type SkipCode = keyof typeof SKIP_REASONS;

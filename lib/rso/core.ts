@@ -63,7 +63,14 @@ type RadarItem = {
   outcome?: string | null;
   assignee?: string | null;
   goneAt?: string | null;
+  /* the Radar's signs on the store, when the feed carries them (R2 = no orders in 60 days) */
+  signs?: { code?: string }[];
   facts?: {
+    /* the store's trading, when the feed carries it */
+    stage?: string;
+    orders30d?: number;
+    orders60d?: number;
+    noOrders?: boolean;
     pages?: { title: string; path: string; sessions?: number; products?: string[]; productCount?: number }[];
     sessions30d?: number;
     reviewed?: boolean;
@@ -159,8 +166,8 @@ function defaultNotify(t: Draft, cfg: RsoSettings): string {
     const seen = v ? ` gets around **${v} visits a month**, but it` : "";
     body =
       p.count <= 1
-        ? `Your PageFly page for **${q(p.products[0] || p.title)}**${seen} is showing the product as **OUT OF STOCK**.\n\n**YOU'RE LOSING REVENUE — SHOPPERS WHO LAND THERE CAN'T PLACE AN ORDER.**${v ? ` That's up to **${v} potential customers a month** leaving without buying.` : ""}`
-        : `Your PageFly page${seen} has **${p.count} products OUT OF STOCK**, including **${p.products.slice(0, 2).map(q).join("** and **")}**.\n\n**YOU'RE LOSING REVENUE — SHOPPERS WHO LAND THERE CAN'T PLACE AN ORDER.**${v ? ` That's up to **${v} potential customers a month** leaving without buying.` : ""}`;
+        ? `Your PageFly page for **${q(p.products[0] || p.title)}**${seen} is showing the product as **OUT OF STOCK**.\n\n**YOU'RE LOSING REVENUE — SHOPPERS WHO LAND THERE CAN'T PLACE AN ORDER.**${v ? ` That's **${v} visits a month** that can't turn into orders.` : ""}`
+        : `Your PageFly page${seen} has **${p.count} products OUT OF STOCK**, including **${p.products.slice(0, 2).map(q).join("** and **")}**.\n\n**YOU'RE LOSING REVENUE — SHOPPERS WHO LAND THERE CAN'T PLACE AN ORDER.**${v ? ` That's **${v} visits a month** that can't turn into orders.` : ""}`;
     body += `\n\n🔗 The page: ${pageLink(t, p)}`;
   } else {
     const list = pages
@@ -174,7 +181,7 @@ function defaultNotify(t: Draft, cfg: RsoSettings): string {
     body =
       `**${pages.length} of your PageFly pages** are showing products as **OUT OF STOCK**:\n\n${list}` +
       (pages.length > 5 ? `\n• …and ${pages.length - 5} more` : "") +
-      `\n\n**YOU'RE LOSING REVENUE — SHOPPERS WHO LAND ON THESE PAGES CAN'T PLACE AN ORDER.**${total ? ` Together they get up to **${total} potential customers a month** leaving without buying.` : ""}`;
+      `\n\n**YOU'RE LOSING REVENUE — SHOPPERS WHO LAND ON THESE PAGES CAN'T PLACE AN ORDER.**${total ? ` Together that's **${total} visits a month** that can't turn into orders.` : ""}`;
   }
   return (
     `Hi **${storeName(t)}** 👋\n\n` +
@@ -223,7 +230,24 @@ const segs = (s: string) =>
       .filter(Boolean),
   );
 
-export type ScanResult = { rows: number; taken: number; skipped: number; error?: string };
+export type ScanResult = { rows: number; taken: number; skipped: number; error?: string; notSelling?: number; tradeUnknown?: string };
+
+/* A store that is not trading: the Radar's R2 (no orders in 60 days), its
+   stage "not_selling", or no orders in its numbers. Telling it that it is
+   "losing revenue" would ring false — it is left out. null: the feed says
+   nothing about trading for this row. */
+function notSelling(i: RadarItem): boolean | null {
+  const f = i.facts ?? {};
+  const said = i.signs !== undefined || f.stage !== undefined || f.orders30d !== undefined || f.orders60d !== undefined || f.noOrders !== undefined;
+  if (!said) return null;
+  return (
+    (i.signs ?? []).some((s) => s.code === "R2") ||
+    f.stage === "not_selling" ||
+    f.noOrders === true ||
+    f.orders60d === 0 ||
+    (f.orders30d === 0 && f.orders60d === undefined && f.stage !== undefined && f.stage !== "selling")
+  );
+}
 
 export async function scan(cfg: RsoSettings): Promise<ScanResult> {
   const pool = await db();
@@ -249,13 +273,20 @@ export async function scan(cfg: RsoSettings): Promise<ScanResult> {
   const blocked = segs(cfg.blocked_segments);
   let taken = 0;
   let skipped = 0;
+  let notSellingN = 0;
+  let unknown = 0;
   for (const { i, pages, visits } of fresh) {
     const base = { store_domain: i.shopDomain, pages, visits, radar_group: i.facts?.radarGroup ?? null, reviewed_before: !!i.facts?.reviewed };
     let skip: SkipCode | null = null;
     const store = await ac2Store(i.shopDomain).catch(() => null);
     let sid: string | null = null;
     let link: string | null = null;
-    if (visits < cfg.min_visits) skip = "low_visits";
+    const idle = notSelling(i);
+    if (idle === null) unknown++;
+    if (idle) {
+      skip = "not_selling";
+      notSellingN++;
+    } else if (visits < cfg.min_visits) skip = "low_visits";
     else if (!store) skip = "no_ac2";
     else if (store.uninstalledAt || /uninstall/i.test(store.status ?? "")) skip = "uninstalled";
     else {
@@ -299,7 +330,13 @@ export async function scan(cfg: RsoSettings): Promise<ScanResult> {
       await radarRecord(i.shopDomain, { note: "Radar Sold Out: đã soạn tin báo hết hàng, chờ gửi" }, cfg);
     }
   }
-  return { rows: rows.length, taken, skipped };
+  /* the feed said nothing about trading on any row: name what it does carry, so the rule can be pointed at it */
+  const sample = rows[0];
+  const tradeUnknown =
+    fresh.length && unknown === fresh.length && sample
+      ? `${Object.keys(sample).join(",")} | facts: ${Object.keys(sample.facts ?? {}).join(",")}`.slice(0, 300)
+      : undefined;
+  return { rows: rows.length, taken, skipped, notSelling: notSellingN, tradeUnknown };
 }
 
 /* ---------------------------------------------------------------- send */
@@ -499,7 +536,7 @@ export type JobState = { at: string; scan?: ScanResult; checked?: { restocked: n
    current form (nothing pending was sent; an admin's edit is sent with its
    approval, never stored while pending). Bump MSG_VERSION when the built-in
    messages change. */
-const MSG_VERSION = "crisp-v4";
+const MSG_VERSION = "crisp-v5";
 
 export async function refreshPendingMessages(): Promise<number> {
   if ((await getState<string>("msg_version")) === MSG_VERSION) return 0;

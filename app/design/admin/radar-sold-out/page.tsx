@@ -93,6 +93,8 @@ export default async function RsoPage(props: PageProps<"/design/admin/radar-sold
             <div className="text-pf-faint">
               Lần chạy gần nhất {short(job.at)}
               {job.scan && ` · Radar ${job.scan.rows} dòng hết hàng, lấy ${job.scan.taken}, loại ${job.scan.skipped}`}
+              {job.scan?.notSelling ? ` (${job.scan.notSelling} store đang ngừng bán)` : ""}
+              {job.scan?.tradeUnknown && <span className="block text-[11.5px]">Radar không gửi kèm số đơn hàng, chưa lọc được store ngừng bán — dữ liệu Radar có: {job.scan.tradeUnknown}</span>}
               {job.checked && ` · nhập hàng ${job.checked.restocked}, vẫn hết ${job.checked.still}, review ${job.checked.reviewed}`}
               {job.errors.length > 0 && <span className="text-pf-danger"> · lỗi: {job.errors.slice(0, 2).join(" | ")}</span>}
             </div>
