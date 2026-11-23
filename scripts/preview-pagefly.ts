@@ -135,11 +135,21 @@ export function previewHtml(bytes: Uint8Array): string {
     const cls = [
       `pf-${k}_`,
       typeof d.classGlobalStyling === "string" ? d.classGlobalStyling : "",
+      /* Attributes > Class and Attributes > ID: PageFly publishes both on the
+         element, and page customCSS / customJS address them. */
+      typeof d.className === "string" ? d.className : "",
     ]
       .filter(Boolean)
       .join(" ");
-    const tag = TAG[item.type] ?? "div";
-    const attrs = `data-pf-type="${item.type}" class="${cls}"`;
+    let tag = TAG[item.type] ?? "div";
+    if (item.type === "Heading2" && typeof d.tag === "string" && /^h[1-6]$/.test(d.tag)) tag = d.tag;
+    const idAttr = typeof d.id === "string" && d.id ? ` id="${d.id}"` : "";
+    const href =
+      typeof d.href === "string" && d.href && (item.type === "Button2" || item.type === "FlexBlock" || item.type === "Image5")
+        ? ` href="${d.href.replace(/"/g, "&quot;")}"`
+        : "";
+    if (href && tag === "div") tag = "a";
+    const attrs = `data-pf-type="${item.type}" class="${cls}"${idAttr}`;
 
     if (item.type === "Custom.HTML") {
       /* Raw by design — this is the one element whose content IS markup. */
@@ -149,7 +159,11 @@ export function previewHtml(bytes: Uint8Array): string {
       const src = typeof d.src === "string" ? d.src : "";
       /* No src is a placeholder in PageFly too; a grey box says so here. */
       return src
-        ? `<img ${attrs} src="${esc(src)}" alt="">`
+        ? (() => {
+            const alt = typeof d.alt === "string" ? d.alt.replace(/"/g, "&quot;") : "";
+            const img = `<img ${attrs} src="${esc(src)}" alt="${alt}">`;
+            return href ? `<a${href} style="display:contents">${img}</a>` : img;
+          })()
         : `<div ${attrs} style="background:#e6e3dc;min-height:80px"></div>`;
     }
 
@@ -167,7 +181,7 @@ export function previewHtml(bytes: Uint8Array): string {
     if (item.type === "FlexSection")
       return `<section ${attrs}><div class="pf-flex-section">${inner}</div></section>`;
 
-    return `<${tag} ${attrs}>${inner}</${tag}>`;
+    return `<${tag} ${attrs}${tag === "img" ? "" : href}>${inner}</${tag}>`;
   };
 
   const body = render(root.id);
