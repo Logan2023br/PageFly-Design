@@ -133,9 +133,9 @@ function seasonHook(now = new Date()): string {
   const d = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" }));
   const m = d.getMonth() + 1;
   const day = d.getDate();
-  if (m === 11 && day <= 27) return " — especially with **Black Friday** coming up";
-  if ((m === 11 && day > 27) || (m === 12 && day <= 2)) return " — especially during the **Black Friday** sales";
-  if (m === 12 && day <= 23) return " — especially during the **holiday season**";
+  if (m === 11 && day <= 27) return ", especially with **Black Friday** coming up";
+  if ((m === 11 && day > 27) || (m === 12 && day <= 2)) return ", especially during the **Black Friday** sales";
+  if (m === 12 && day <= 23) return ", especially during the **holiday season**";
   return "";
 }
 
@@ -143,7 +143,7 @@ type Draft = Pick<RsoTarget, "store_name" | "store_domain" | "pages" | "visits">
 
 const storeName = (t: Draft) => t.store_name?.trim() || t.store_domain.replace(".myshopify.com", "");
 const pageLink = (t: Draft, p: RsoPage) => `https://${t.store_domain}${p.path}`;
-const sign = (cfg: RsoSettings) => `**${cfg.sender_name}** – PageFly Technical Team`;
+const sign = (cfg: RsoSettings) => `**${cfg.sender_name}** – PageFly Support Team`;
 
 /* The built-in messages, written the way the other upsells write on Crisp:
    "Hi **store** 👋", short paragraphs, what matters in bold, the page's own
@@ -156,12 +156,12 @@ function defaultNotify(t: Draft, cfg: RsoSettings): string {
   if (pages.length === 1) {
     const p = pages[0];
     const v = approx(p.visits);
-    const seen = v ? ` — around **${v} visits a month** —` : "";
+    const seen = v ? ` gets around **${v} visits a month**, but it` : "";
     body =
       p.count <= 1
-        ? `your PageFly page for **${q(p.products[0] || p.title)}**${seen} is showing the product as **out of stock**, so shoppers who land there **can't complete a purchase**.`
-        : `your PageFly page${seen} has **${p.count} products out of stock**, including **${p.products.slice(0, 2).map(q).join("** and **")}**, so shoppers who land there **can't complete a purchase**.`;
-    body += `\n\n👉 The page: ${pageLink(t, p)}`;
+        ? `Your PageFly page for **${q(p.products[0] || p.title)}**${seen} is showing the product as **OUT OF STOCK**.\n\n**YOU'RE LOSING REVENUE — SHOPPERS WHO LAND THERE CAN'T PLACE AN ORDER.**${v ? ` That's up to **${v} potential customers a month** leaving without buying.` : ""}`
+        : `Your PageFly page${seen} has **${p.count} products OUT OF STOCK**, including **${p.products.slice(0, 2).map(q).join("** and **")}**.\n\n**YOU'RE LOSING REVENUE — SHOPPERS WHO LAND THERE CAN'T PLACE AN ORDER.**${v ? ` That's up to **${v} potential customers a month** leaving without buying.` : ""}`;
+    body += `\n\n🔗 The page: ${pageLink(t, p)}`;
   } else {
     const list = pages
       .slice(0, 5)
@@ -170,15 +170,18 @@ function defaultNotify(t: Draft, cfg: RsoSettings): string {
         return `• **${q(p.products[0] || p.title)}**${v ? ` (~${v} visits/month)` : ""}: ${pageLink(t, p)}`;
       })
       .join("\n");
+    const total = approx(t.visits);
     body =
-      `**${pages.length} of your PageFly pages** are showing products that are **out of stock**, so shoppers who land there **can't complete a purchase**:\n\n${list}` +
-      (pages.length > 5 ? `\n• …and ${pages.length - 5} more` : "");
+      `**${pages.length} of your PageFly pages** are showing products as **OUT OF STOCK**:\n\n${list}` +
+      (pages.length > 5 ? `\n• …and ${pages.length - 5} more` : "") +
+      `\n\n**YOU'RE LOSING REVENUE — SHOPPERS WHO LAND ON THESE PAGES CAN'T PLACE AN ORDER.**${total ? ` Together they get up to **${total} potential customers a month** leaving without buying.` : ""}`;
   }
   return (
     `Hi **${storeName(t)}** 👋\n\n` +
-    `This is **${cfg.sender_name}** from the PageFly team. While checking your store, we noticed that ${body}\n\n` +
-    `Once ${many ? "they're" : "it's"} restocked, the ${pages.length > 1 ? "pages" : "page"} will work as usual. In the meantime, you could **point visitors to ${many ? "similar products" : "a similar product"}** or **turn on back-in-stock notifications**, so you don't miss those sales${seasonHook()}.\n\n` +
-    `Just a heads-up from our side — feel free to reply here if you'd like any help 🙂\n\n` +
+    `This is **${cfg.sender_name}** from the PageFly team. While checking your store, we found an issue that is ⚠️ **costing you sales right now**.\n\n` +
+    `${body}\n\n` +
+    `👉 **Please fix it as soon as you can:** restock ${many ? "these products" : "the product"}, **point visitors to ${many ? "similar products" : "a similar product"}**, or **turn on back-in-stock notifications** — every day it stays this way means lost orders${seasonHook()}.\n\n` +
+    `Reply here if you'd like a hand — we're happy to help 🙂\n\n` +
     sign(cfg)
   );
 }
@@ -496,7 +499,7 @@ export type JobState = { at: string; scan?: ScanResult; checked?: { restocked: n
    current form (nothing pending was sent; an admin's edit is sent with its
    approval, never stored while pending). Bump MSG_VERSION when the built-in
    messages change. */
-const MSG_VERSION = "crisp-v2";
+const MSG_VERSION = "crisp-v4";
 
 export async function refreshPendingMessages(): Promise<number> {
   if ((await getState<string>("msg_version")) === MSG_VERSION) return 0;
