@@ -4,7 +4,7 @@ import { adminGate } from "@/components/admin/adminGate";
 import { CrispLink, Pill } from "@/components/admin/upsell/bits";
 import { CaseButtons, MessageBox, ModeSwitch, RunControls, SettingsForm } from "@/components/admin/rso/Controls";
 import { vnTime } from "@/lib/ucp2/core";
-import type { JobState } from "@/lib/rso/core";
+import { refreshPendingMessages, type JobState } from "@/lib/rso/core";
 import { getState, hasRsoDatabase } from "@/lib/rso/db";
 import { RSO_TABS, funnel, listTargets, tabCounts, type RsoTab } from "@/lib/rso/queries";
 import { RSO_HELP, RSO_NUMERIC, getRsoSettings, runState } from "@/lib/rso/settings";
@@ -36,6 +36,8 @@ export default async function RsoPage(props: PageProps<"/design/admin/radar-sold
   const sp = await props.searchParams;
   const tab = (RSO_TABS.some((t) => t.id === sp.tab) ? sp.tab : "todo") as RsoTab;
   const q = typeof sp.q === "string" && sp.q ? sp.q : undefined;
+  /* drafts made before the current message form are rewritten once, before they are shown */
+  await refreshPendingMessages().catch(() => 0);
   const [run, cfg, f, counts, job] = await Promise.all([runState(), getRsoSettings(), funnel(), tabCounts(), getState<JobState>("last_job")]);
 
   const steps = [
