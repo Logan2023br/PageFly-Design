@@ -196,7 +196,13 @@ export async function slackTest(cfg: UrspSettings): Promise<{ tagged: string[] }
   try {
     sent = await slackAgree(t, cfg);
   } catch (err) {
-    throw new UpsellError(err instanceof Error ? err.message : String(err), 502);
+    /* say whose token it is (auth.test: the bot's name and workspace, never the token), so a wrong token or a bot not in the channel is plain */
+    const token = (await connection("ursp_slack_bot_token")).trim();
+    const me = token
+      ? await slackApi<{ user?: string; user_id?: string; team?: string; bot_id?: string }>(token, "auth.test").catch((e) => ({ user: undefined, team: undefined, error: String(e) }))
+      : null;
+    const whose = me?.user ? ` — token này là của bot "${me.user}" (workspace ${me.team ?? "?"}); bot đó phải có trong kênh: /invite @${me.user}` : "";
+    throw new UpsellError(`${err instanceof Error ? err.message : String(err)}${whose}`, 502);
   }
   if (!sent) throw new UpsellError("Chưa có Slack bot token (URSP_SLACK_BOT_TOKEN trong .env của VPS) — chưa gửi được", 409);
   return sent;
