@@ -220,6 +220,23 @@ begin
     update ursp_settings set value = '10'::jsonb where key = 'max_published_pages' and value::text in ('5', '"5"');
   end if;
 end $$;
+/* once, 2026-11-24: "our experts", not "my team" / "our team", and no colon mid-sentence — in the messages not sent yet */
+do $$
+begin
+  if not exists (select 1 from ursp_state where key = '_once_our_experts_20261124') then
+    insert into ursp_state (key, value) values ('_once_our_experts_20261124', 'true'::jsonb);
+    update ursp_targets
+       set message = replace(replace(replace(message,
+             'my team is checking stores for free: we go through **every PageFly page** on mobile and **fix anything',
+             '**our experts** are checking stores for free, going through **every PageFly page** on mobile and **fixing anything'),
+             'and our team will start right away', 'and our experts will start right away'),
+             'my team is checking', '**our experts** are checking')
+     where status in ('pending', 'approved', 'held', 'failed') and message is not null;
+    update ursp_targets
+       set followup_message = replace(followup_message, 'and our team will start right away', 'and our experts will start right away')
+     where followup_status in ('pending', 'approved', 'failed') and followup_message is not null;
+  end if;
+end $$;
 /* once: the cases cancelled into the short-lived Đã huỷ list go to Đã bỏ qua, where a cancel now leads */
 do $$
 begin

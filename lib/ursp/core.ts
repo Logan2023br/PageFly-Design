@@ -141,7 +141,7 @@ Your **FREE responsive review & fix** offer expires on **{deadline}** — after 
 
 Your **BLACK FRIDAY** shoppers are on their way. Want us to make sure your store is ready for them?
 
-👉 **Just reply "YES"** and our team will start right away.
+👉 **Just reply "YES"** and our experts will start right away.
 
 Best regards,
 **{pic}** – PageFly Technical Team`;
@@ -158,7 +158,7 @@ Our **FREE responsive review & fix service** is only available **in NOVEMBER** �
 
 Your **BLACK FRIDAY** shoppers are on their way. Want us to make sure your store is ready for them?
 
-👉 **Just reply "YES"** and our team will start right away.
+👉 **Just reply "YES"** and our experts will start right away.
 
 Best regards,
 **{pic}** – PageFly Technical Team`;
@@ -182,7 +182,7 @@ ${OFFER}`,
 
 /* Variant B of the A/B test — another angle: short, opens with a question,
    personal, one ask. Same facts (free, every page, no work, 3 days). */
-const B_BODY = `I'm **{pic}** from PageFly. Before **BLACK FRIDAY**, my team is checking stores for free: we go through **every PageFly page** on mobile and **fix anything that's off — at no cost, no work on your side**.
+const B_BODY = `I'm **{pic}** from PageFly. Before **BLACK FRIDAY**, **our experts** are checking stores for free, going through **every PageFly page** on mobile and **fixing anything that's off — at no cost, no work on your side**.
 
 This free check is open until **{deadline}**.
 
