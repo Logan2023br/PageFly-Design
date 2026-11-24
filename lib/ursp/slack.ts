@@ -16,8 +16,10 @@ import type { UrspSettings } from "./settings";
      Link Ticket: <the Crisp conversation>
      Link Admin:  <the Khách đồng ý tab, opened on that store's row>
 
-   The webhook is a connection (URSP_SLACK_WEBHOOK, encrypted like the other
-   credentials). Who is on shift comes from `ts_roster` (Vietnam time); each
+   Sent by the bot (URSP_SLACK_BOT_TOKEN — BBBot's token, chat:write, to
+   `slack_channel`), or else an incoming webhook (URSP_SLACK_WEBHOOK); both
+   are connections, encrypted like the other credentials. With the bot, each
+   TS's member id is found by name (users:read) unless slack_ts_ids says. Who is on shift comes from `ts_roster` (Vietnam time); each
    name's Slack member id from `slack_ts_ids`, so the tag notifies them. With
    nobody found for the hour, the sender (Logan) is tagged.
    ========================================================================== */
@@ -98,18 +100,67 @@ export const adminRowUrl = (t: Pick<UrspTarget, "store_domain">) =>
 /** Slack's link text must not break its <url|text> syntax. */
 const esc = (s: string) => s.replace(/[<>|&]/g, (c) => ({ "<": "‹", ">": "›", "|": "¦", "&": "and" })[c]!);
 
+/* ---- the bot (BBBot's token): post to a channel, find the TS by name ---- */
+
+type SlackUser = { id: string; deleted?: boolean; is_bot?: boolean; name?: string; real_name?: string; profile?: { display_name?: string; real_name?: string } };
+
+async function slackApi<T>(token: string, method: string, body?: Record<string, unknown>, query = ""): Promise<T> {
+  const res = await fetch(`https://slack.com/api/${method}${query}`, {
+    method: body ? "POST" : "GET",
+    headers: { Authorization: `Bearer ${token}`, ...(body ? { "Content-Type": "application/json; charset=utf-8" } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(15_000),
+    redirect: "error",
+  });
+  const j = (await res.json().catch(() => ({ ok: false, error: `http ${res.status}` }))) as T & { ok: boolean; error?: string; needed?: string };
+  if (!j.ok) throw new Error(`Slack ${method}: ${j.error ?? "lỗi"}${j.needed ? ` (token cần quyền ${j.needed})` : ""}`);
+  return j;
+}
+
+let people: { at: number; users: SlackUser[] } | null = null;
+
+/** Every member, read at most every 6 hours (users:read). */
+async function members(token: string): Promise<SlackUser[]> {
+  if (people && Date.now() - people.at < 6 * 3_600_000) return people.users;
+  const users: SlackUser[] = [];
+  let cursor = "";
+  for (let i = 0; i < 20; i++) {
+    const r = await slackApi<{ members: SlackUser[]; response_metadata?: { next_cursor?: string } }>(token, "users.list", undefined, `?limit=200${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
+    users.push(...r.members.filter((u) => !u.deleted && !u.is_bot));
+    cursor = r.response_metadata?.next_cursor ?? "";
+    if (!cursor) break;
+  }
+  people = { at: Date.now(), users };
+  return users;
+}
+
+/** A TS's member id by their name: "Nguyễn Trung Hiếu (Hew)", display name "Hew", or a name that starts with it. */
+function findMember(users: SlackUser[], ts: string): string | null {
+  const want = ts.toLowerCase();
+  const names = (u: SlackUser) => [u.profile?.display_name, u.profile?.real_name, u.real_name, u.name].filter(Boolean).map((x) => x!.toLowerCase());
+  const exact = users.filter((u) => names(u).some((n) => n === want || n.includes(`(${want})`)));
+  if (exact.length === 1) return exact[0].id;
+  const first = users.filter((u) => names(u).some((n) => n.split(/[\s.(]+/)[0] === want));
+  return first.length === 1 ? first[0].id : null;
+}
+
 /**
  * The yes to Slack. Resolves to who was tagged, or null when nothing was sent
- * (no webhook configured — not an error: the screen still counts it).
+ * (no bot token or webhook configured — not an error: the screen still counts it).
  */
 export async function slackAgree(t: UrspTarget, cfg: UrspSettings, at = new Date()): Promise<{ tagged: string[] } | null> {
+  const token = (await connection("ursp_slack_bot_token")).trim();
   const hook = (await connection("ursp_slack_webhook")).trim();
-  if (!hook) return null;
-  if (!SLACK_WEBHOOK.test(hook)) throw new Error("URSP_SLACK_WEBHOOK phải là https://hooks.slack.com/…");
+  if (!token && !hook) return null;
+  if (token && !cfg.slack_channel.trim()) throw new Error("Chưa đặt slack_channel (ID kênh Slack) trong Cài đặt");
+  if (!token && !SLACK_WEBHOOK.test(hook)) throw new Error("URSP_SLACK_WEBHOOK phải là https://hooks.slack.com/…");
   const onShift = tsOnShift(cfg.ts_roster, at);
   const tagged = onShift.length ? onShift : [cfg.sender_name];
+  /* the ids typed in win; with the bot, the rest are found by name */
   const ids = slackIds(cfg.slack_ts_ids);
-  const who = tagged.map((n) => (ids.get(n.toLowerCase()) ? `<@${ids.get(n.toLowerCase())}>` : `@${n}`)).join(" ");
+  const users = token && tagged.some((n) => !ids.has(n.toLowerCase())) ? await members(token).catch(() => [] as SlackUser[]) : [];
+  const idOf = (n: string) => ids.get(n.toLowerCase()) ?? findMember(users, n);
+  const who = tagged.map((n) => (idOf(n) ? `<@${idOf(n)}>` : `@${n}`)).join(" ");
   const store = esc(t.store_name?.trim() || t.store_domain.replace(/\.myshopify\.com$/, ""));
   const ticket = t.ticket_link ? `<${t.ticket_link}|Mở ticket Crisp>` : "—";
   const text =
@@ -117,6 +168,10 @@ export async function slackAgree(t: UrspTarget, cfg: UrspSettings, at = new Date
     `*TS:* ${who}\n` +
     `*Link Ticket:* ${ticket}\n` +
     `*Link Admin:* <${adminRowUrl(t)}|Mở trong admin (Khách đồng ý)>`;
+  if (token) {
+    await slackApi(token, "chat.postMessage", { channel: cfg.slack_channel.trim().replace(/^#/, ""), text, unfurl_links: false, unfurl_media: false });
+    return { tagged };
+  }
   const res = await fetch(hook, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

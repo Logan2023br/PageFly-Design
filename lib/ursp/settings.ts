@@ -67,7 +67,9 @@ export const URSP_DEFAULTS = {
   skip_app_review: 5,
   /** added to the conversation on Crisp when the customer agrees to the offer */
   crisp_segment: "upsell-responsive",
-  /** each TS's Slack member id, so the yes on Slack tags them: "Logan=U0123, Hew=U0456" */
+  /** the Slack channel the bot posts a yes to — its ID (C0123…) */
+  slack_channel: "",
+  /** each TS's Slack member id, so the yes on Slack tags them: "Logan=U0123, Hew=U0456" — with the bot, found by name when left out */
   slack_ts_ids: "",
   /** who is on shift, Vietnam time, one line per shift: "Mon 08-11: Logan, Hew" */
   ts_roster: "",
@@ -110,8 +112,10 @@ export const URSP_HELP: Record<UrspKey, string> = {
   review_ask_template: "Tin xin review gửi sau tin cảm ơn — link viết {review_link}: form review app trên Shopify, hoặc Trustpilot nếu khách đã review app (≥4★; dưới 4★ chỉ gửi tin cảm ơn). Dạng [chữ]({review_link}), in nghiêng bọc *…*. Biến: {store_name} {pic} {review_link}. Để trống dùng mẫu mặc định.",
   skip_app_review: "Khách có app_review trên Crisp (bất kỳ hội thoại nào) từ số sao này trở lên thì không gửi tin mời, không nhắc lại. 0 = tắt",
   crisp_segment: "Segment gắn vào hội thoại trên Crisp khi khách reply đồng ý (Haiku đọc). Để trống: không gắn",
+  slack_channel:
+    "ID kênh Slack mà BBBot đăng tin khách đồng ý (mở kênh → bấm tên kênh → cuối tab About có Channel ID, dạng C0123ABC). Bot phải được mời vào kênh (/invite @BBBot)",
   slack_ts_ids:
-    "Slack member ID của từng TS, để tin Slack khi khách đồng ý tag đúng người: Logan=U0123ABC, Hew=U0456DEF… (Slack → bấm vào tên → ⋮ → Copy member ID). Webhook Slack đặt ở Kết nối (URSP_SLACK_WEBHOOK)",
+    "(Không bắt buộc khi dùng bot token — bot tự tìm theo tên.) Slack member ID của từng TS, để tin Slack khi khách đồng ý tag đúng người: Logan=U0123ABC, Hew=U0456DEF… (Slack → bấm vào tên → ⋮ → Copy member ID). Webhook Slack đặt ở Kết nối (URSP_SLACK_WEBHOOK)",
   ts_roster:
     "Lịch ca TS (giờ VN), mỗi dòng một ca: \"Mon 08-11: Logan, Hew\" · \"Tue-Fri 14-17: Hew\" · \"* 23-02: Aasim\" (* = mọi ngày; ca qua nửa đêm tính cho ngày bắt đầu). Khách đồng ý thì tag TS đang trong ca; không ai trong ca thì tag sender_name",
 };
