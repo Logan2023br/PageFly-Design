@@ -60,3 +60,8 @@ lerna-debug.log*
 # python
 __pycache__/
 *.pyc
+
+# BPU routine operational files
+replies_to_classify.json
+classified.json
+intents.json
