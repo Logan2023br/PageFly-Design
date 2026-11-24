@@ -1,6 +1,7 @@
 import "server-only";
 
 import { upsellOrigin } from "@/lib/upsell/common";
+import { UpsellError } from "@/lib/upsell/types";
 import { SLACK_WEBHOOK } from "@/lib/upsell/settings";
 import { connection } from "@/lib/storeSetUpsell/settings";
 import { URSP_PICS, type UrspTarget } from "./types";
@@ -182,4 +183,21 @@ export async function slackAgree(t: UrspTarget, cfg: UrspSettings, at = new Date
   });
   if (!res.ok) throw new Error(`Slack ${res.status}: ${(await res.text().catch(() => "")).slice(0, 120)}`);
   return { tagged };
+}
+
+/** "Gửi thử" on the settings tab: the same message, for a made-up store, now. */
+export async function slackTest(cfg: UrspSettings): Promise<{ tagged: string[] }> {
+  const t = {
+    store_domain: "test-store.myshopify.com",
+    store_name: "TEST — gửi thử từ Upsell Responsive",
+    ticket_link: null,
+  } as unknown as UrspTarget;
+  let sent: { tagged: string[] } | null;
+  try {
+    sent = await slackAgree(t, cfg);
+  } catch (err) {
+    throw new UpsellError(err instanceof Error ? err.message : String(err), 502);
+  }
+  if (!sent) throw new UpsellError("Chưa có Slack bot token (URSP_SLACK_BOT_TOKEN trong .env của VPS) — chưa gửi được", 409);
+  return sent;
 }

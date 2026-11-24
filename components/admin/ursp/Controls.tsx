@@ -101,6 +101,44 @@ export function RecapBackfill({ defaultFrom }: { defaultFrom: string }) {
   );
 }
 
+/** Slack, when a customer says yes: is the bot set, who is on shift now, and a test send. */
+export function SlackCard({ token, channel, onShift, fallback }: { token: { from: string | null; hint: string | null }; channel: string; onShift: string[]; fallback: string }) {
+  const [run, busy, error] = useAct();
+  const [sent, setSent] = useState(false);
+  const ready = Boolean(token.from);
+  return (
+    <section className="grid gap-2 rounded-pf-card border border-pf-primary-hi/30 bg-pf-card p-4 text-[13px]">
+      <h3 className="text-[14px] font-semibold text-pf-text">Slack báo khách đồng ý</h3>
+      <ul className="grid gap-1 text-pf-body">
+        <li>
+          <b className="text-pf-text">Bot token:</b>{" "}
+          {ready ? (
+            <span className="text-pf-success">đã đặt {token.hint ?? ""} ({token.from === "env" ? ".env của VPS" : "Cài đặt"})</span>
+          ) : (
+            <span className="text-pf-warn">
+              chưa đặt — thêm dòng <code className="rounded bg-pf-bg-deep px-1">URSP_SLACK_BOT_TOKEN=xoxb-…</code> (token của BBBot) vào .env trên VPS, rồi khởi động lại app
+            </span>
+          )}
+        </li>
+        <li>
+          <b className="text-pf-text">Kênh:</b> {channel.trim() ? <code className="rounded bg-pf-bg-deep px-1">{channel}</code> : <span className="text-pf-warn">chưa đặt — điền slack_channel ngay bên dưới</span>}
+        </li>
+        <li>
+          <b className="text-pf-text">TS trong ca lúc này:</b>{" "}
+          {onShift.length ? onShift.join(", ") : <span className="text-pf-muted">không ai theo ts_roster — sẽ tag {fallback}</span>}
+        </li>
+      </ul>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" variant="ghost" icon="Send" disabled={busy || !ready || !channel.trim()} onClick={() => void run(RUN, { action: "slack_test" }).then((ok) => setSent(ok))}>
+          Gửi thử lên Slack
+        </Button>
+        {sent && <span className="text-[12px] text-pf-success">Đã gửi — xem trong kênh</span>}
+      </div>
+      <ErrorLine error={error} />
+    </section>
+  );
+}
+
 /** The log sheet: when it was last written, a link, and Đồng bộ ngay. */
 export function SheetSync({ url, at, ok, cases, error, email }: { url: string; at: string | null; ok: boolean; cases: number | null; error: string | null; email: string | null }) {
   const [run, busy, err] = useAct();

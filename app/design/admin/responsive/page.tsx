@@ -4,10 +4,12 @@ import { ReportsLink } from "@/components/admin/reports/ReportsLink";
 import { adminGate } from "@/components/admin/adminGate";
 import { FIELD } from "@/components/admin/fieldClass";
 import { CrispLink, Pill } from "@/components/admin/upsell/bits";
-import { AbStop, CaseNotes, SheetSync, DoneButton, ModeSwitch, RecapBackfill, ReleaseB, QueueActions, RunControls, SendAnyway, SettingsForm, TrackButton } from "@/components/admin/ursp/Controls";
+import { AbStop, CaseNotes, SheetSync, SlackCard, DoneButton, ModeSwitch, RecapBackfill, ReleaseB, QueueActions, RunControls, SendAnyway, SettingsForm, TrackButton } from "@/components/admin/ursp/Controls";
 import { vnTime } from "@/lib/ucp2/core";
 import { RECAP_SHEET_URL, abMode, composeMessage, recapServiceAccount, deadlineText, offerUntil, reviewMessages, withDeadline, type ActiveResult, type BackfillState, type JobState, type RecapResult } from "@/lib/ursp/core";
 import { getState, hasUrspDatabase } from "@/lib/ursp/db";
+import { tsOnShift } from "@/lib/ursp/slack";
+import { connectionStates } from "@/lib/storeSetUpsell/settings";
 import { LOG_SHEET_URL, logSheetEmail, type SheetLogState } from "@/lib/ursp/sheetLog";
 import {
   OUTCOME,
@@ -138,7 +140,10 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
       </>
     );
   } else if (tab === "settings") {
+    const conn = (await connectionStates()).find((c) => c.key === "ursp_slack_bot_token");
     body = (
+      <div className="grid gap-4">
+      <SlackCard token={{ from: conn?.from ?? null, hint: conn?.hint ?? null }} channel={cfg.slack_channel} onShift={tsOnShift(cfg.ts_roster)} fallback={cfg.sender_name} />
       <SettingsForm
         initial={cfg}
         help={URSP_HELP}
@@ -151,6 +156,7 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
           review_ask_template: reviewMessages({ store_name: "Sun Coast Elements", store_domain: "x.myshopify.com" }, { ...cfg, review_ask_template: "" }).ask,
         }}
       />
+      </div>
     );
   } else if (tab === "ab") {
     const sample = { store_name: "Sun Coast Elements", store_domain: "x.myshopify.com" };

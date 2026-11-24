@@ -17,6 +17,12 @@ export const URSP_DEFAULTS = {
   /** manual: each message waits on Chờ duyệt; auto: sent as soon as the store qualifies */
   mode: "auto",
   sender_name: "Logan",
+  /** the Slack channel the bot posts a yes to — its ID (C0123…) */
+  slack_channel: "",
+  /** who is on shift, Vietnam time, one line per shift: "Mon 08-11: Logan, Hew" */
+  ts_roster: "",
+  /** each TS's Slack member id, so the yes on Slack tags them: "Logan=U0123, Hew=U0456" — with the bot, found by name when left out */
+  slack_ts_ids: "",
   /** the last day a message goes out (Vietnam time) */
   campaign_end: "2026-11-30",
   /** how long the offer lasts from the moment it is sent — {deadline} in the message */
@@ -67,12 +73,6 @@ export const URSP_DEFAULTS = {
   skip_app_review: 5,
   /** added to the conversation on Crisp when the customer agrees to the offer */
   crisp_segment: "upsell-responsive",
-  /** the Slack channel the bot posts a yes to — its ID (C0123…) */
-  slack_channel: "",
-  /** each TS's Slack member id, so the yes on Slack tags them: "Logan=U0123, Hew=U0456" — with the bot, found by name when left out */
-  slack_ts_ids: "",
-  /** who is on shift, Vietnam time, one line per shift: "Mon 08-11: Logan, Hew" */
-  ts_roster: "",
 } as const;
 
 export type UrspKey = keyof typeof URSP_DEFAULTS;

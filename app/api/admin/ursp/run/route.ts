@@ -1,7 +1,7 @@
 import { fail, json, readJson } from "@/lib/upsell/api";
 import { readAdminName, readAdminSection } from "@/lib/session";
 import { releaseHeldB, runJob, setAbMode, type AbMode, runSend, startRecapBackfill, startSegmentCleanup } from "@/lib/ursp/core";
-import { runState, setRunning } from "@/lib/ursp/settings";
+import { getUrspSettings, runState, setRunning } from "@/lib/ursp/settings";
 import { syncSheetLog } from "@/lib/ursp/sheetLog";
 
 /* POST /api/admin/ursp/run — {action: "start"} Bắt đầu, {action: "pause"}
@@ -25,6 +25,10 @@ export async function POST(req: Request) {
       return json({ ok: true, run });
     }
     if (action === "segment_cleanup") return json({ ok: true, cleanup: await startSegmentCleanup(by) });
+    if (action === "slack_test") {
+      const { slackTest } = await import("@/lib/ursp/slack");
+      return json({ ok: true, slack: await slackTest(await getUrspSettings()) });
+    }
     if (action === "sheet_sync") {
       const sheet = await syncSheetLog();
       return sheet.ok ? json({ ok: true, sheet }) : json({ ok: false, error: sheet.error }, 502);
