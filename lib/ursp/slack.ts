@@ -192,7 +192,7 @@ export async function slackAgree(t: UrspTarget, cfg: UrspSettings, at = new Date
   const store = esc(t.store_name?.trim() || t.store_domain.replace(/\.myshopify\.com$/, ""));
   const ticket = t.ticket_link ? `<${t.ticket_link}|Open Crisp ticket>` : "—";
   const text =
-    `*[Responsive Ticket]* · ${store}${test ? " _(test — no action needed)_" : ""}\n` +
+    `*[Responsive Ticket]* · ${store}\n` +
     `*TS:* ${who}\n` +
     `*Link Ticket:* ${ticket}\n` +
     `*Link Admin:* <${adminRowUrl(t)}|Open in admin (Customer agreed)>`;
