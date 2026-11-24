@@ -13,7 +13,7 @@ import { db } from "./db";
    Each feature's title is its own link, bold. */
 export const DEFAULT_TEMPLATE = `Hi **{name}**,
 
-This is **{pic}** from PageFly Lead Technical Support team.
+This is **{pic}** from the PageFly Lead Technical Support Team.
 Hope you are having a great day.
 
 Great news: PageFly has just launched **new features** to help you build a more professional store and **turn more of your visitors into orders**. Here they are:
@@ -34,7 +34,7 @@ We look forward to hearing from you.
 
 Best regards,
 **{pic}**
-The Lead PageFly support team`;
+PageFly Lead Technical Support Team`;
 
 export const NFF_DEFAULTS = {
   sender_name: "Logan",
