@@ -171,7 +171,7 @@ export async function readReply(offer: string, replies: string): Promise<ReplyRe
         ">>>",
         "Classify the merchant's reply. Answer JSON only:",
         '{"intent": "agree" | "decline" | "question" | "other", "mood": "happy" | "neutral" | "unhappy", "note": "<one short sentence in Vietnamese: what they want>"}',
-        "intent: agree = accepts the free responsive review / fixes; decline = does not want it; question = asks something before deciding; other = anything else.",
+        "intent: agree = says yes to the free responsive review / fixes — a \"yes\", \"sure\", \"please do\", \"go ahead\", or a warm, happy reply that goes along with it; decline = does not want it; question = asks something before deciding; other = anything else (another support question, a bug report, an unrelated message).",
         "mood: how satisfied the merchant sounds with PageFly and with us.",
       ].join("\n"),
       200,

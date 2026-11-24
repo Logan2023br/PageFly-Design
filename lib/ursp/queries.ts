@@ -15,7 +15,8 @@ export const URSP_TABS = [
   { id: "overview", label: "Tổng quan" },
   { id: "queue", label: "Chờ gửi" },
   { id: "sent", label: "Đã gửi" },
-  { id: "replied", label: "Khách phản hồi" },
+  { id: "agreed", label: "Khách đồng ý" },
+  { id: "other_reply", label: "Phản hồi khác" },
   { id: "working", label: "Đang xử lý" },
   { id: "done", label: "Đã xử lý" },
   { id: "closed", label: "Kết thúc" },
@@ -28,11 +29,16 @@ export const URSP_TABS = [
 ] as const;
 export type UrspTab = (typeof URSP_TABS)[number]["id"];
 
-export const TAB_SQL: Record<Exclude<UrspTab, "overview" | "settings">, string> = {
+/* "replied" is no tab of its own any more (Khách đồng ý + Phản hồi khác), but still the count and the sheet's list */
+export const TAB_SQL: Record<Exclude<UrspTab, "overview" | "settings"> | "replied", string> = {
   queue: "(t.status in ('pending', 'approved', 'sending', 'failed') or t.followup_status in ('pending', 'approved', 'sending', 'failed'))",
   sent: "t.status = 'sent'",
   /* the inbox: replies no one has taken up or let go yet */
   replied: "t.status = 'sent' and t.replied_at is not null and t.working_at is null and t.done_at is null and t.dismissed_at is null",
+  /* the replies, split by what Haiku read: a yes (or a happy go-ahead) — the rest is something else */
+  agreed: "t.status = 'sent' and t.replied_at is not null and t.working_at is null and t.done_at is null and t.dismissed_at is null and t.reply_intent = 'agree'",
+  other_reply:
+    "t.status = 'sent' and t.replied_at is not null and t.working_at is null and t.done_at is null and t.dismissed_at is null and coalesce(t.reply_intent, '') <> 'agree'",
   working: "t.status = 'sent' and t.working_at is not null and t.done_at is null and t.dismissed_at is null",
   done: "t.status = 'sent' and t.done_at is not null and t.closed_at is null",
   closed: "t.status = 'sent' and t.closed_at is not null",
@@ -117,7 +123,7 @@ function where(tab: keyof typeof TAB_SQL | null, f: UrspFilters): { sql: string;
   };
   if (f.q?.trim()) add((n) => `(t.store_domain ilike $${n} or t.store_name ilike $${n} or t.email ilike $${n})`, `%${f.q.trim()}%`);
   if (f.seg === "recap" || f.seg === "active") add((n) => `t.segment = $${n}`, f.seg);
-  const day = tab === "sent" || tab === "replied" || tab === "working" || tab === "done" || tab === "dismissed" ? "coalesce(t.sent_at, t.created_at)" : "t.created_at";
+  const day = tab === "sent" || tab === "replied" || tab === "agreed" || tab === "other_reply" || tab === "working" || tab === "done" || tab === "dismissed" ? "coalesce(t.sent_at, t.created_at)" : "t.created_at";
   if (f.from) add((n) => `(${day} at time zone '${VN}')::date >= $${n}::date`, f.from);
   if (f.to) add((n) => `(${day} at time zone '${VN}')::date <= $${n}::date`, f.to);
   if (f.reason?.trim()) add((n) => `t.skip_code = $${n}`, f.reason.trim());
@@ -284,6 +290,10 @@ export async function tabCounts(): Promise<Record<string, number>> {
             count(*) filter (where ${TAB_SQL.sent} and t.variant = 'B')::int as sent_b,
             count(*) filter (where ${TAB_SQL.replied} and t.variant = 'A')::int as replied_a,
             count(*) filter (where ${TAB_SQL.replied} and t.variant = 'B')::int as replied_b,
+            count(*) filter (where ${TAB_SQL.agreed} and t.variant = 'A')::int as agreed_a,
+            count(*) filter (where ${TAB_SQL.agreed} and t.variant = 'B')::int as agreed_b,
+            count(*) filter (where ${TAB_SQL.other_reply} and t.variant = 'A')::int as other_reply_a,
+            count(*) filter (where ${TAB_SQL.other_reply} and t.variant = 'B')::int as other_reply_b,
             count(*) filter (where t.status = 'sent' and t.replied_at is not null and t.done_at is null and t.dismissed_at is null and t.working_at is null)::int as replied_open
        from ursp_targets t`,
   );
@@ -300,7 +310,7 @@ export async function listTargets(
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const page = Math.min(Math.max(1, Math.floor(f.page ?? 1) || 1), pages);
   const order =
-    tab === "replied"
+    tab === "replied" || tab === "agreed" || tab === "other_reply"
       ? "t.last_reply_at desc nulls last"
       : tab === "working"
         ? "t.working_at desc"

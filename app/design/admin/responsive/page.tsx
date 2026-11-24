@@ -237,10 +237,10 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
               >
                 {t.label}
                 {n !== undefined && <span className="rounded-pf-pill bg-pf-card-hi px-1.5 text-[11px] text-pf-muted">{n}</span>}
-                {(t.id === "sent" || t.id === "replied") && (
+                {(t.id === "sent" || t.id === "agreed" || t.id === "other_reply") && (
                   <span className="text-[11px] font-normal text-pf-faint">
-                    <span className="text-pf-primary-hi">A {t.id === "sent" ? counts.sent_a : counts.replied_a}</span> ·{" "}
-                    <span className="text-pf-success">B {t.id === "sent" ? counts.sent_b : counts.replied_b}</span>
+                    <span className="text-pf-primary-hi">A {counts[`${t.id}_a`] ?? 0}</span> ·{" "}
+                    <span className="text-pf-success">B {counts[`${t.id}_b`] ?? 0}</span>
                   </span>
                 )}
                 {t.id === "queue" && counts.pending > 0 && (
@@ -385,7 +385,7 @@ function Filters({ tab, f }: { tab: UrspTab; f: UrspFilters }) {
           ))}
         </select>
       )}
-      {(tab === "replied" || tab === "working" || tab === "done" || tab === "closed" || tab === "upgraded" || tab === "review5" || tab === "dismissed" || tab === "sent") && (
+      {(tab === "agreed" || tab === "other_reply" || tab === "working" || tab === "done" || tab === "closed" || tab === "upgraded" || tab === "review5" || tab === "dismissed" || tab === "sent") && (
         <>
           <select name="variant" defaultValue={f.variant ?? ""} className={`${FIELD} w-[150px]!`} aria-label="Bản tin">
             <option value="">Mọi bản tin</option>
@@ -484,10 +484,10 @@ function SegmentPanel({ seg, s, href }: { seg: Segment; s: SegmentStats; href: (
   const funnel: { label: string; n: number; tab?: string; extra?: Record<string, string> }[] = [
     { label: "Đã xem", n: s.read },
     { label: "Đã nhắc lại (xem mà chưa reply)", n: s.followup_sent },
-    { label: "Phản hồi", n: s.replied, tab: "replied" },
-    { label: "Phản hồi sau nhắc lại", n: s.replied_after_followup, tab: "replied" },
-    { label: "Đồng ý", n: s.agree, tab: "replied", extra: { intent: "agree" } },
-    { label: "Từ chối", n: s.decline, tab: "replied", extra: { intent: "decline" } },
+    { label: "Phản hồi", n: s.replied, tab: "other_reply" },
+    { label: "Phản hồi sau nhắc lại", n: s.replied_after_followup, tab: "other_reply" },
+    { label: "Đồng ý", n: s.agree, tab: "agreed" },
+    { label: "Từ chối", n: s.decline, tab: "other_reply", extra: { intent: "decline" } },
     { label: "Đã xử lý xong", n: s.done, tab: "done" },
     { label: "Nâng cấp", n: s.upgraded },
     { label: "Review 5★", n: s.reviewed },
