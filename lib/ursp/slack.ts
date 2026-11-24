@@ -27,12 +27,25 @@ import type { UrspSettings } from "./settings";
 
 const DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
+export const EXAMPLE_IDS = new Set(["U0123ABC", "U0456DEF"]);
+
+/** What slack_ts_ids holds, as typed — the examples kept, flagged (for the settings card). */
+export function slackIdsAsTyped(raw: string): { name: string; id: string; example: boolean }[] {
+  const out: { name: string; id: string; example: boolean }[] = [];
+  for (const part of raw.split(/[,\n]/)) {
+    const m = /^\s*([^=:]+?)\s*[=:]\s*([UW][A-Z0-9]{6,})\s*$/i.exec(part);
+    if (m) out.push({ name: m[1], id: m[2].toUpperCase(), example: EXAMPLE_IDS.has(m[2].toUpperCase()) });
+  }
+  return out;
+}
+
 /** "Logan=U0123, Hew=U0456" → { logan: "U0123", … } */
 export function slackIds(raw: string): Map<string, string> {
   const out = new Map<string, string>();
   for (const part of raw.split(/[,\n]/)) {
     const m = /^\s*([^=:]+?)\s*[=:]\s*([UW][A-Z0-9]{6,})\s*$/i.exec(part);
-    if (m) out.set(m[1].toLowerCase(), m[2].toUpperCase());
+    /* the examples in the help text are not anyone */
+    if (m && !EXAMPLE_IDS.has(m[2].toUpperCase())) out.set(m[1].toLowerCase(), m[2].toUpperCase());
   }
   return out;
 }
@@ -175,14 +188,14 @@ export async function slackAgree(t: UrspTarget, cfg: UrspSettings, at = new Date
     if (!test) await setState("slack_turn", turn + 1);
   } else pick = inCharge[0] ?? (idOf(cfg.sender_name) ? cfg.sender_name : null);
   const tagged = pick ? [pick] : [];
-  const who = pick ? `<@${idOf(pick)}>` : "_(chưa có TS nào trong ca có Slack ID)_";
+  const who = pick ? `<@${idOf(pick)}>` : "_(no TS on shift has a Slack ID)_";
   const store = esc(t.store_name?.trim() || t.store_domain.replace(/\.myshopify\.com$/, ""));
-  const ticket = t.ticket_link ? `<${t.ticket_link}|Mở ticket Crisp>` : "—";
+  const ticket = t.ticket_link ? `<${t.ticket_link}|Open Crisp ticket>` : "—";
   const text =
-    `*[Responsive Ticket]* · ${store}${test ? " _(gửi thử — không cần xử lý)_" : ""}\n` +
+    `*[Responsive Ticket]* · ${store}${test ? " _(test — no action needed)_" : ""}\n` +
     `*TS:* ${who}\n` +
     `*Link Ticket:* ${ticket}\n` +
-    `*Link Admin:* <${adminRowUrl(t)}|Mở trong admin (Khách đồng ý)>`;
+    `*Link Admin:* <${adminRowUrl(t)}|Open in admin (Customer agreed)>`;
   if (token) {
     await slackApi(token, "chat.postMessage", { channel: cfg.slack_channel.trim().replace(/^#/, ""), text, unfurl_links: false, unfurl_media: false });
     return { tagged, missing };

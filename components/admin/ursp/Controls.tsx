@@ -102,7 +102,20 @@ export function RecapBackfill({ defaultFrom }: { defaultFrom: string }) {
 }
 
 /** Slack, when a customer says yes: is the bot set, who is on shift now, and a test send. */
-export function SlackCard({ token, channel, onShift, fallback }: { token: { from: string | null; hint: string | null }; channel: string; onShift: string[]; fallback: string }) {
+export function SlackCard({
+  token,
+  channel,
+  onShift,
+  fallback,
+  ids,
+}: {
+  token: { from: string | null; hint: string | null };
+  channel: string;
+  onShift: string[];
+  fallback: string;
+  /** what slack_ts_ids holds now: each name and its id; example ids flagged */
+  ids: { name: string; id: string; example: boolean }[];
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<{ tagged: string[]; missing: string[]; store?: string } | null>(null);
@@ -134,6 +147,20 @@ export function SlackCard({ token, channel, onShift, fallback }: { token: { from
         </li>
         <li>
           <b className="text-pf-text">Kênh:</b> {channel.trim() ? <code className="rounded bg-pf-bg-deep px-1">{channel}</code> : <span className="text-pf-warn">chưa đặt — điền slack_channel ngay bên dưới</span>}
+        </li>
+        <li>
+          <b className="text-pf-text">TS phụ trách (slack_ts_ids):</b>{" "}
+          {ids.length ? (
+            ids.map((x, i) => (
+              <span key={x.name}>
+                {i > 0 && ", "}
+                {x.name} → <code className={`rounded bg-pf-bg-deep px-1 ${x.example ? "text-pf-danger" : ""}`}>{x.id}</code>
+                {x.example && <span className="text-pf-danger"> (ID ví dụ, không phải người thật — thay bằng ID thật)</span>}
+              </span>
+            ))
+          ) : (
+            <span className="text-pf-muted">chưa điền — bot tự tìm mọi TS theo tên</span>
+          )}
         </li>
         <li>
           <b className="text-pf-text">TS trong ca lúc này:</b>{" "}

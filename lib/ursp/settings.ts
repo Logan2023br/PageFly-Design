@@ -116,7 +116,7 @@ export const URSP_HELP: Record<UrspKey, string> = {
   slack_channel:
     "ID kênh Slack mà BBBot đăng tin khách đồng ý (mở kênh → bấm tên kênh → cuối tab About có Channel ID, dạng C0123ABC). Bot phải được mời vào kênh (/invite @BBBot)",
   slack_ts_ids:
-    "TS phụ trách case responsive và Slack member ID của họ: Logan=U0123ABC, Hew=U0456DEF… (Slack → bấm vào tên → View full profile → ⋮ → Copy member ID). Chỉ TS có trong danh sách này mới được tag; trong ca có 2 người thì tag 1, luân phiên; không ai thì tag sender_name. Để trống: mọi TS, bot tự tìm theo tên",
+    "TS phụ trách case responsive và Slack member ID thật của họ, dạng Logan=U…, Hew=U… (Slack → bấm vào tên → View full profile → ⋮ → Copy member ID). Chỉ TS có trong danh sách này mới được tag; trong ca có 2 người thì tag 1, luân phiên; không ai thì tag sender_name. Để trống: mọi TS, bot tự tìm theo tên",
   ts_roster:
     "Lịch ca TS (giờ VN), mỗi dòng một ca: \"Mon 08-11: Logan, Hew\" · \"Tue-Fri 14-17: Hew\" · \"* 23-02: Aasim\" (* = mọi ngày; \"Mon 23-02\" là tối thứ Hai tới 2h sáng thứ Ba). Chỉ tag TS (Logan, Hew, Bevis, Alfie, Max, Aasim) — tên FL / SL bị bỏ qua. Để trống = lịch tuần cố định (lấy từ lịch team 24/11). Không ai trong ca thì tag sender_name",
 };

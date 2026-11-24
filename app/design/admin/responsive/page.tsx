@@ -8,7 +8,7 @@ import { AbStop, CaseNotes, SheetSync, SlackCard, DoneButton, ModeSwitch, RecapB
 import { vnTime } from "@/lib/ucp2/core";
 import { RECAP_SHEET_URL, abMode, composeMessage, recapServiceAccount, deadlineText, offerUntil, reviewMessages, withDeadline, type ActiveResult, type BackfillState, type JobState, type RecapResult } from "@/lib/ursp/core";
 import { getState, hasUrspDatabase } from "@/lib/ursp/db";
-import { tsOnShift } from "@/lib/ursp/slack";
+import { slackIdsAsTyped, tsOnShift } from "@/lib/ursp/slack";
 import { connectionStates } from "@/lib/storeSetUpsell/settings";
 import { LOG_SHEET_URL, logSheetEmail, type SheetLogState } from "@/lib/ursp/sheetLog";
 import {
@@ -143,7 +143,7 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
     const conn = (await connectionStates()).find((c) => c.key === "ursp_slack_bot_token");
     body = (
       <div className="grid gap-4">
-      <SlackCard token={{ from: conn?.from ?? null, hint: conn?.hint ?? null }} channel={cfg.slack_channel} onShift={tsOnShift(cfg.ts_roster)} fallback={cfg.sender_name} />
+      <SlackCard token={{ from: conn?.from ?? null, hint: conn?.hint ?? null }} channel={cfg.slack_channel} onShift={tsOnShift(cfg.ts_roster)} fallback={cfg.sender_name} ids={slackIdsAsTyped(cfg.slack_ts_ids)} />
       <SettingsForm
         initial={cfg}
         help={URSP_HELP}
