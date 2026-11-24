@@ -195,7 +195,7 @@ export async function slackAgree(t: UrspTarget, cfg: UrspSettings, at = new Date
     `*[Responsive Ticket]* · ${store}\n` +
     `*TS:* ${who}\n` +
     `*Link Ticket:* ${ticket}\n` +
-    `*Link Admin:* <${adminRowUrl(t)}|Open in admin (Customer agreed)>`;
+    `*Link Admin:* <${adminRowUrl(t)}|Link handle>`;
   if (token) {
     await slackApi(token, "chat.postMessage", { channel: cfg.slack_channel.trim().replace(/^#/, ""), text, unfurl_links: false, unfurl_media: false });
     return { tagged, missing };
