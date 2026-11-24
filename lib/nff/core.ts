@@ -88,7 +88,7 @@ export async function collect(): Promise<number> {
 }
 
 /* Bump when the built-in message changes: the messages still on Chờ duyệt are written again, once. */
-const MSG_VERSION = "bold-v3";
+const MSG_VERSION = "links-v4";
 
 /** The built-in message changed since the drafts were written: rewrite them (a custom template is left alone). */
 export async function refreshDrafts(): Promise<number> {

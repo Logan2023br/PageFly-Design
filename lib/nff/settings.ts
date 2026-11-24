@@ -18,9 +18,9 @@ Hope you are having a great day.
 
 Great news: PageFly has just launched **new features** to help you build a more professional store and **turn more of your visitors into orders**. Here they are:
 
-1. **[Funnel Builder](https://admin.shopify.com/store/{store}/apps/pagefly/builder/funnel)**: see where shoppers drop off on the way to buying a product, and the one fix to make next.
-2. **[Bundles](https://admin.shopify.com/store/{store}/apps/pagefly/builder/discounts)**: offer quantity breaks, bundles and buy X get Y right on your product page.
-3. **[Post-purchase offer](https://admin.shopify.com/store/{store}/apps/pagefly/builder/post-purchase)**: right after checkout, customers can add one more item to the same order with a single click.
+1. [Funnel Builder](https://admin.shopify.com/store/{store}/apps/pagefly/builder/funnel): see where shoppers drop off on the way to buying a product, and the one fix to make next.
+2. [Bundles](https://admin.shopify.com/store/{store}/apps/pagefly/builder/discounts): offer quantity breaks, bundles and buy X get Y right on your product page.
+3. [Post-purchase offer](https://admin.shopify.com/store/{store}/apps/pagefly/builder/post-purchase): right after checkout, customers can add one more item to the same order with a single click.
 
 You can open and try each one right from your **PageFly dashboard**.
 
@@ -56,7 +56,7 @@ export const NFF_HELP: Record<NffKey, string> = {
   sender_name: "Tên người gửi trên Crisp ({pic})",
   sender_avatar: "Link ảnh avatar người gửi trên Crisp (mặc định: avatar của Logan). Để trống: tự lấy avatar của operator cùng tên trên Crisp",
   template:
-    "Tin giới thiệu tính năng mới. Biến: {name} (tên store) {store} (domain bỏ .myshopify.com, dùng trong link) {pic}. Link: [chữ](https://…), in đậm **…**. Để trống dùng mẫu mặc định. Đổi mẫu thì tin đang Chờ duyệt được soạn lại",
+    "Tin giới thiệu tính năng mới. Biến: {name} (tên store) {store} (domain bỏ .myshopify.com, dùng trong link) {pic}. Link: [chữ](https://…) — đừng bọc link trong **…** (Crisp không hiểu, hiện nguyên ký tự); in đậm chữ thường: **…**. Để trống dùng mẫu mặc định. Đổi mẫu thì tin đang Chờ duyệt được soạn lại",
   quiet_minutes: "Hội thoại có tin nhắn trong bấy nhiêu phút gần nhất (khách đang chat với support) thì tin đợi, gửi sau",
   tracking_days: "Theo dõi đã xem / phản hồi bấy nhiêu ngày sau khi gửi",
 };
