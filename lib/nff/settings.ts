@@ -11,29 +11,29 @@ import { db } from "./db";
 /* The message, as the team wrote it. {name} the store's name, {store} its
    handle (the .myshopify.com domain without .myshopify.com), {pic} the sender.
    Each feature's title is its own link, bold. */
-export const DEFAULT_TEMPLATE = `Hi {name},
+export const DEFAULT_TEMPLATE = `Hi **{name}**,
 
-This is {pic} from PageFly Lead Technical Support team.
+This is **{pic}** from PageFly Lead Technical Support team.
 Hope you are having a great day.
 
-Great news: PageFly has just launched new features to help you build a more professional store and turn more of your visitors into orders. Here they are:
+Great news: PageFly has just launched **new features** to help you build a more professional store and **turn more of your visitors into orders**. Here they are:
 
 1. **[Funnel Builder](https://admin.shopify.com/store/{store}/apps/pagefly/builder/funnel)**: see where shoppers drop off on the way to buying a product, and the one fix to make next.
 2. **[Bundles](https://admin.shopify.com/store/{store}/apps/pagefly/builder/discounts)**: offer quantity breaks, bundles and buy X get Y right on your product page.
 3. **[Post-purchase offer](https://admin.shopify.com/store/{store}/apps/pagefly/builder/post-purchase)**: right after checkout, customers can add one more item to the same order with a single click.
 
-You can open and try each one right from your PageFly dashboard.
+You can open and try each one right from your **PageFly dashboard**.
 
-We'd love to know: are these the features your store needs right now?
+We'd love to know: **are these the features your store needs right now?**
 
-If any of them catches your interest, just reply here with the one you'd like to explore. One of our specialists will walk you through how it works and help you set it up.
+If any of them catches your interest, **just reply here** with the one you'd like to explore. **One of our specialists** will walk you through how it works and help you set it up.
 
 Your feedback truly matters to us. We picked these features carefully to help stores like yours grow, and hearing what you think, even if they're not a fit, helps us build what you actually need.
 
 We look forward to hearing from you.
 
 Best regards,
-{pic}
+**{pic}**
 The Lead PageFly support team`;
 
 export const NFF_DEFAULTS = {

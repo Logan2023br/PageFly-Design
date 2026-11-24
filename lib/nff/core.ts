@@ -87,6 +87,17 @@ export async function collect(): Promise<number> {
   return added;
 }
 
+/* Bump when the built-in message changes: the messages still on Chờ duyệt are written again, once. */
+const MSG_VERSION = "bold-v2";
+
+/** The built-in message changed since the drafts were written: rewrite them (a custom template is left alone). */
+export async function refreshDrafts(): Promise<number> {
+  if ((await getState<string>("msg_version")) === MSG_VERSION) return 0;
+  const n = (await getNffSettings()).template.trim() ? 0 : await recompose();
+  await setState("msg_version", MSG_VERSION);
+  return n;
+}
+
 /** The template changed: what still waits on Chờ duyệt is written again. */
 export async function recompose(): Promise<number> {
   const cfg = await getNffSettings();
@@ -223,6 +234,7 @@ export async function runJob(force = false): Promise<JobState | null> {
     const cfg = await getNffSettings();
     const clock = (await getState<Record<string, string>>("clock")) ?? {};
     if (force || !clock.collect || Date.now() - new Date(clock.collect).getTime() >= COLLECT_EVERY_MS) {
+      await refreshDrafts().catch((err) => state.errors.push(`drafts: ${err instanceof Error ? err.message : err}`));
       state.added = await collect().catch((err) => (state.errors.push(`collect: ${err instanceof Error ? err.message : err}`), 0));
       clock.collect = state.at;
     }

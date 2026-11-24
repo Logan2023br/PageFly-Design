@@ -4,7 +4,7 @@ import { adminGate } from "@/components/admin/adminGate";
 import { CrispLink, Pill } from "@/components/admin/upsell/bits";
 import { MessageBox, RowButton, RunControls, SettingsForm } from "@/components/admin/nff/Controls";
 import { vnTime } from "@/lib/ucp2/core";
-import { collect, composeMessage, type JobState } from "@/lib/nff/core";
+import { collect, composeMessage, refreshDrafts, type JobState } from "@/lib/nff/core";
 import { getState, hasNffDatabase } from "@/lib/nff/db";
 import { NFF_TABS, funnel, listTargets, tabCounts, type NffTab } from "@/lib/nff/queries";
 import { NFF_HELP, NFF_NUMERIC, getNffSettings } from "@/lib/nff/settings";
@@ -35,6 +35,7 @@ export default async function NffPage(props: PageProps<"/design/admin/new-featur
   const tab = (NFF_TABS.some((t) => t.id === sp.tab) ? sp.tab : "pending") as NffTab;
   const q = typeof sp.q === "string" && sp.q ? sp.q : undefined;
   /* the handled stores not here yet are added as the screen opens, not only by the timer */
+  await refreshDrafts().catch(() => 0);
   await collect().catch(() => 0);
   const [cfg, f, counts, job] = await Promise.all([getNffSettings(), funnel(), tabCounts(), getState<JobState>("last_job")]);
 
