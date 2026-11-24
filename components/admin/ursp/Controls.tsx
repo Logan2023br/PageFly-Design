@@ -145,9 +145,12 @@ type AbLine = { label: string; a: string; b: string; diff: number | null; p: num
 export function AbStop({
   mode,
   pick,
+  stopped,
 }: {
   mode: "split" | "A" | "B";
   pick: { winner: "A" | "B"; sure: boolean; why: string; lines: AbLine[] };
+  /** when and by whom the test was stopped */
+  stopped?: { at: string; by: string | null } | null;
 }) {
   const [run, busy, error] = useAct();
   const [open, setOpen] = useState(false);
@@ -186,13 +189,18 @@ export function AbStop({
     </div>
   );
 
+  /* stopped: the final report — both versions side by side — and the one now running */
   if (mode !== "split")
     return (
-      <div className="grid gap-2 rounded-pf-md border border-pf-border bg-pf-bg-deep px-3 py-2.5">
+      <div className="grid gap-3 rounded-pf-md border border-pf-border-hi bg-pf-bg-deep p-3">
+        <h4 className="text-[13px] font-semibold text-pf-text">Báo cáo A/B test</h4>
+        {analysis}
         <div className="flex flex-wrap items-center gap-2 text-[13px]">
           <span className="rounded-pf-pill border border-pf-border-hi bg-pf-card-hi px-2 py-0.5 text-[11.5px] font-semibold text-pf-muted">A/B test đã dừng</span>
           <span className="text-pf-text">
-            Mọi store mới nhận <b>bản {mode}</b>.
+            {stopped?.at ? `Từ ${new Date(stopped.at).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}${stopped.by ? ` (${stopped.by.replace(/^admin:/, "")})` : ""}, ` : ""}
+            mọi store mới nhận <b>bản {mode}</b>
+            {mode === pick.winner ? " — bản đang thắng." : ` — bản ${pick.winner} đang có số liệu tốt hơn.`}
           </span>
           <Button size="sm" variant="ghost" disabled={busy} onClick={() => set(other)}>
             Dừng {mode}, chạy {other}
@@ -209,18 +217,18 @@ export function AbStop({
     <div className="grid gap-2">
       {open ? (
         <div className="grid gap-3 rounded-pf-md border border-pf-border-hi bg-pf-bg-deep p-3">
-          <h4 className="text-[13px] font-semibold text-pf-text">Dừng A/B test — giữ bản nào?</h4>
+          <h4 className="text-[13px] font-semibold text-pf-text">Báo cáo A/B test</h4>
           {analysis}
           <p className="text-[12px] text-pf-muted">
-            Từ lúc bấm, mọi store mới nhận bản được giữ; store đang chờ gửi của bản bị dừng được chuyển sang bản giữ. Tin đã gửi giữ nguyên, số liệu so sánh không đổi.
+            Bấm dừng: từ lúc đó mọi store mới nhận <b>bản {pick.winner}</b> (bản thắng); store đang chờ gửi của bản kia được chuyển sang bản {pick.winner}, viết lại. Tin đã gửi giữ nguyên, báo cáo vẫn ở đây.
           </p>
-          <div className="flex flex-wrap gap-2">
-            {(["A", "B"] as const).map((keep) => (
-              <Button key={keep} size="sm" variant={pick.winner === keep ? "primary" : "ghost"} disabled={busy} onClick={() => set(keep)}>
-                Dừng {keep === "A" ? "B" : "A"}, chạy {keep}
-                {pick.winner === keep ? " (đề xuất)" : ""}
-              </Button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" disabled={busy} onClick={() => set(pick.winner)}>
+              ⏹ Dừng & chạy bản {pick.winner} (bản thắng)
+            </Button>
+            <Button size="sm" variant="quiet" disabled={busy} onClick={() => set(pick.winner === "A" ? "B" : "A")}>
+              hoặc giữ bản {pick.winner === "A" ? "B" : "A"}
+            </Button>
             <Button size="sm" variant="quiet" disabled={busy} onClick={() => setOpen(false)}>
               Thôi
             </Button>

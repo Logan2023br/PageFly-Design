@@ -113,6 +113,7 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
         {arms.A.sent + arms.B.sent + arms.B.held > 0 && (
           <Link href={`${HREF}?tab=ab`} className="flex flex-wrap items-center gap-2 rounded-pf-card border border-pf-border bg-pf-card px-4 py-2.5 text-[13px] transition-colors hover:border-pf-primary">
             <strong className="text-pf-text">A/B test:</strong>
+            {abMode(cfg) !== "split" && <Pill tone="warn">Đã dừng · đang chạy bản {abMode(cfg)}</Pill>}
             <Pill tone="primary">Bản A</Pill>
             <span className="text-pf-body">
               Đã gửi bản A: <b className="text-pf-text">{arms.A.sent}</b> · {rate(arms.A)} phản hồi
@@ -123,7 +124,7 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
               {arms.B.sent ? ` · ${rate(arms.B)} phản hồi` : ""}
               {arms.B.held ? ` · ${arms.B.held} store đang giữ, chưa gửi` : ""}
             </span>
-            <span className="ml-auto text-pf-primary-hi">Xem so sánh →</span>
+            <span className="ml-auto text-pf-primary-hi">{abMode(cfg) === "split" ? "Xem so sánh / dừng A/B test →" : "Xem báo cáo A/B test →"}</span>
           </Link>
         )}
         <AfterDone s={[stats.recap, stats.active]} sentA={arms.A.sent} sentB={arms.B.sent} />
@@ -153,7 +154,12 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
     );
   } else if (tab === "ab") {
     const sample = { store_name: "Sun Coast Elements", store_domain: "x.myshopify.com" };
-    const [arms, held, bySeg] = await Promise.all([abStats(), listTargets("ab", { ...f, page: f.page }), abBySegment()]);
+    const [arms, held, bySeg, abState] = await Promise.all([
+      abStats(),
+      listTargets("ab", { ...f, page: f.page }),
+      abBySegment(),
+      getState<{ mode: string; by: string | null; at: string }>("ab_mode"),
+    ]);
     body = (
       <AbView
         arms={arms}
@@ -162,6 +168,7 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
         heldHref={(p) => qs({ page: String(p) })}
         auto={cfg.mode === "auto"}
         mode={abMode(cfg)}
+        stopped={abMode(cfg) === "split" ? null : abState}
         messages={{
           A: withDeadline(composeMessage("recap", sample, cfg, "A"), offerUntil(cfg)),
           B: withDeadline(composeMessage("recap", sample, cfg, "B"), offerUntil(cfg)),
@@ -740,6 +747,7 @@ function AbView({
   heldHref,
   auto,
   mode,
+  stopped,
   messages,
 }: {
   arms: Record<"A" | "B", AbArm>;
@@ -748,6 +756,7 @@ function AbView({
   heldHref: (p: number) => string;
   auto: boolean;
   mode: "split" | "A" | "B";
+  stopped: { at: string; by: string | null } | null;
   messages: { A: string; B: string; fA: string; fB: string };
 }) {
   const { A, B } = arms;
@@ -793,7 +802,7 @@ function AbView({
           </div>
           <ReleaseB held={mode === "A" ? A.held : B.held} auto={auto} variant={mode === "A" ? "A" : "B"} />
         </div>
-        <AbStop mode={mode} pick={abPick(A, B)} />
+        <AbStop mode={mode} pick={abPick(A, B)} stopped={stopped} />
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[
             { label: "Bản A — đã gửi", n: A.sent, note: A.queued ? `${A.queued} đang chờ gửi` : "" },
