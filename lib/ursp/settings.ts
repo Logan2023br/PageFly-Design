@@ -2,6 +2,7 @@ import "server-only";
 
 import { UpsellError } from "@/lib/upsell/types";
 import { db, getState, setState } from "./db";
+import { DEFAULT_TS_ROSTER } from "./roster";
 
 /* ==========================================================================
    ursp_settings — key/value with the defaults written here, like the other
@@ -19,8 +20,8 @@ export const URSP_DEFAULTS = {
   sender_name: "Logan",
   /** the Slack channel the bot posts a yes to — its ID (C0123…) */
   slack_channel: "",
-  /** who is on shift, Vietnam time, one line per shift: "Mon 08-11: Logan, Hew" */
-  ts_roster: "",
+  /** who is on shift, Vietnam time, one line per shift: "Mon 08-11: Logan, Hew" — empty: the fixed weekly roster */
+  ts_roster: DEFAULT_TS_ROSTER,
   /** each TS's Slack member id, so the yes on Slack tags them: "Logan=U0123, Hew=U0456" — with the bot, found by name when left out */
   slack_ts_ids: "",
   /** the last day a message goes out (Vietnam time) */
@@ -117,7 +118,7 @@ export const URSP_HELP: Record<UrspKey, string> = {
   slack_ts_ids:
     "(Không bắt buộc khi dùng bot token — bot tự tìm theo tên.) Slack member ID của từng TS, để tin Slack khi khách đồng ý tag đúng người: Logan=U0123ABC, Hew=U0456DEF… (Slack → bấm vào tên → ⋮ → Copy member ID). Webhook Slack đặt ở Kết nối (URSP_SLACK_WEBHOOK)",
   ts_roster:
-    "Lịch ca TS (giờ VN), mỗi dòng một ca: \"Mon 08-11: Logan, Hew\" · \"Tue-Fri 14-17: Hew\" · \"* 23-02: Aasim\" (* = mọi ngày; ca qua nửa đêm tính cho ngày bắt đầu). Khách đồng ý thì tag TS đang trong ca; không ai trong ca thì tag sender_name",
+    "Lịch ca TS (giờ VN), mỗi dòng một ca: \"Mon 08-11: Logan, Hew\" · \"Tue-Fri 14-17: Hew\" · \"* 23-02: Aasim\" (* = mọi ngày; \"Mon 23-02\" là tối thứ Hai tới 2h sáng thứ Ba). Chỉ tag TS (Logan, Hew, Bevis, Alfie, Max, Aasim) — tên FL / SL bị bỏ qua. Để trống = lịch tuần cố định (lấy từ lịch team 24/11). Không ai trong ca thì tag sender_name",
 };
 
 export const URSP_NUMERIC = (Object.keys(URSP_DEFAULTS) as UrspKey[]).filter((k) => typeof URSP_DEFAULTS[k] === "number");
@@ -135,6 +136,8 @@ export async function getUrspSettings(): Promise<UrspSettings> {
       out[key] = Number.isFinite(n) ? n : def;
     } else out[key] = String(v ?? "");
   }
+  /* an empty roster (saved before there was a default) is the fixed weekly one */
+  if (!String(out.ts_roster ?? "").trim()) out.ts_roster = DEFAULT_TS_ROSTER;
   return out as UrspSettings;
 }
 

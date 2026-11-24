@@ -149,7 +149,7 @@ function findMember(users: SlackUser[], ts: string): string | null {
  * The yes to Slack. Resolves to who was tagged, or null when nothing was sent
  * (no bot token or webhook configured — not an error: the screen still counts it).
  */
-export async function slackAgree(t: UrspTarget, cfg: UrspSettings, at = new Date()): Promise<{ tagged: string[] } | null> {
+export async function slackAgree(t: UrspTarget, cfg: UrspSettings, at = new Date()): Promise<{ tagged: string[]; missing: string[] } | null> {
   const token = (await connection("ursp_slack_bot_token")).trim();
   const hook = (await connection("ursp_slack_webhook")).trim();
   if (!token && !hook) return null;
@@ -162,6 +162,8 @@ export async function slackAgree(t: UrspTarget, cfg: UrspSettings, at = new Date
   const users = token && tagged.some((n) => !ids.has(n.toLowerCase())) ? await members(token).catch(() => [] as SlackUser[]) : [];
   const idOf = (n: string) => ids.get(n.toLowerCase()) ?? findMember(users, n);
   const who = tagged.map((n) => (idOf(n) ? `<@${idOf(n)}>` : `@${n}`)).join(" ");
+  /* the TS whose Slack id was not found: tagged as plain text, nobody notified */
+  const missing = tagged.filter((n) => !idOf(n));
   const store = esc(t.store_name?.trim() || t.store_domain.replace(/\.myshopify\.com$/, ""));
   const ticket = t.ticket_link ? `<${t.ticket_link}|Mở ticket Crisp>` : "—";
   const text =
@@ -171,7 +173,7 @@ export async function slackAgree(t: UrspTarget, cfg: UrspSettings, at = new Date
     `*Link Admin:* <${adminRowUrl(t)}|Mở trong admin (Khách đồng ý)>`;
   if (token) {
     await slackApi(token, "chat.postMessage", { channel: cfg.slack_channel.trim().replace(/^#/, ""), text, unfurl_links: false, unfurl_media: false });
-    return { tagged };
+    return { tagged, missing };
   }
   const res = await fetch(hook, {
     method: "POST",
@@ -182,17 +184,17 @@ export async function slackAgree(t: UrspTarget, cfg: UrspSettings, at = new Date
     redirect: "error",
   });
   if (!res.ok) throw new Error(`Slack ${res.status}: ${(await res.text().catch(() => "")).slice(0, 120)}`);
-  return { tagged };
+  return { tagged, missing };
 }
 
 /** "Gửi thử" on the settings tab: the same message, for a made-up store, now. */
-export async function slackTest(cfg: UrspSettings): Promise<{ tagged: string[] }> {
+export async function slackTest(cfg: UrspSettings): Promise<{ tagged: string[]; missing: string[] }> {
   const t = {
     store_domain: "test-store.myshopify.com",
     store_name: "TEST — gửi thử từ Upsell Responsive",
     ticket_link: null,
   } as unknown as UrspTarget;
-  let sent: { tagged: string[] } | null;
+  let sent: { tagged: string[]; missing: string[] } | null;
   try {
     sent = await slackAgree(t, cfg);
   } catch (err) {

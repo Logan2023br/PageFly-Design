@@ -103,9 +103,21 @@ export function RecapBackfill({ defaultFrom }: { defaultFrom: string }) {
 
 /** Slack, when a customer says yes: is the bot set, who is on shift now, and a test send. */
 export function SlackCard({ token, channel, onShift, fallback }: { token: { from: string | null; hint: string | null }; channel: string; onShift: string[]; fallback: string }) {
-  const [run, busy, error] = useAct();
-  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useState<{ tagged: string[]; missing: string[] } | null>(null);
   const ready = Boolean(token.from);
+  const test = async () => {
+    setBusy(true);
+    setError(null);
+    setSent(null);
+    const res = await fetch(RUN, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "slack_test" }) })
+      .then((r) => r.json() as Promise<{ ok: boolean; error?: string; slack?: { tagged: string[]; missing: string[] } }>)
+      .catch(() => null);
+    setBusy(false);
+    if (res?.ok && res.slack) setSent(res.slack);
+    else setError(res?.error ?? "Không gọi được máy chủ.");
+  };
   return (
     <section className="grid gap-2 rounded-pf-card border border-pf-primary-hi/30 bg-pf-card p-4 text-[13px]">
       <h3 className="text-[14px] font-semibold text-pf-text">Slack báo khách đồng ý</h3>
@@ -129,10 +141,17 @@ export function SlackCard({ token, channel, onShift, fallback }: { token: { from
         </li>
       </ul>
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="ghost" icon="Send" disabled={busy || !ready || !channel.trim()} onClick={() => void run(RUN, { action: "slack_test" }).then((ok) => setSent(ok))}>
-          Gửi thử lên Slack
+        <Button size="sm" variant="ghost" icon="Send" disabled={busy || !ready || !channel.trim()} onClick={() => void test()}>
+          {busy ? "Đang gửi…" : "Gửi thử lên Slack"}
         </Button>
-        {sent && <span className="text-[12px] text-pf-success">Đã gửi — xem trong kênh</span>}
+        {sent && (
+          <span className="text-[12px] text-pf-success">
+            Đã gửi — tag {sent.tagged.join(", ")}
+            {sent.missing.length > 0 && (
+              <span className="text-pf-warn"> · chưa tìm thấy Slack ID của {sent.missing.join(", ")} (chỉ hiện chữ, không báo) — điền slack_ts_ids bên dưới</span>
+            )}
+          </span>
+        )}
       </div>
       <ErrorLine error={error} />
     </section>
