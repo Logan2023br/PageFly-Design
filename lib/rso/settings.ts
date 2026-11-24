@@ -18,7 +18,7 @@ export const RSO_DEFAULTS = {
   /** at most this many new stores taken per scan (largest traffic first) */
   max_per_scan: 30,
   /** a store whose out-of-stock pages get fewer visits a month than this is left out */
-  min_visits: 50,
+  min_visits: 0,
   /** days after the heads-up before checking whether the store restocked */
   check_after_days: 7,
   /** days after the review request before the case closes without a review */
@@ -45,7 +45,7 @@ export const RSO_HELP: Record<RsoKey, string> = {
   sender_name: "Tên người gửi trên Crisp ({pic})",
   ac2_assignee: "Username AC2 cho cột Who trên Radar (chưa ghi được: n8n chỉ đọc AC2) — store đã có người khác nhận trên Radar thì bỏ qua",
   max_per_scan: "Mỗi lần quét (1 tiếng) lấy tối đa bấy nhiêu store mới, lượt xem cao trước",
-  min_visits: "Store có tổng lượt xem/tháng của các page hết hàng dưới số này thì bỏ qua",
+  min_visits: "Store có tổng lượt xem/tháng của các page hết hàng dưới số này thì bỏ qua. 0 = gửi mọi store, kể cả ít lượt xem",
   check_after_days: "Gửi xong bấy nhiêu ngày thì kiểm tra store đã nhập hàng chưa",
   review_wait_days: "Xin review xong bấy nhiêu ngày không thấy review thì đóng",
   cooldown_days: "Store đã xử lý thì sau bấy nhiêu ngày mới được lấy lại",

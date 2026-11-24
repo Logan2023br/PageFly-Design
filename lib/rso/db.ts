@@ -93,6 +93,17 @@ create table if not exists rso_settings (
   value      jsonb not null,
   updated_at timestamptz not null default now()
 );
+/* once, 2026-11-24: stores with few visits are sent too — a saved threshold
+   goes to 0, and the stores left out for it go back to the next scan */
+do $$
+begin
+  if not exists (select 1 from rso_state where key = '_once_low_visits_0_20261124') then
+    insert into rso_state (key, value) values ('_once_low_visits_0_20261124', 'true'::jsonb);
+    update rso_settings set value = '0'::jsonb, updated_at = now() where key = 'min_visits';
+    delete from rso_events where target_id in (select id from rso_targets where status = 'skipped' and skip_code = 'low_visits');
+    delete from rso_targets where status = 'skipped' and skip_code = 'low_visits';
+  end if;
+end $$;
 `;
 
 let ensured: Promise<void> | null = null;
