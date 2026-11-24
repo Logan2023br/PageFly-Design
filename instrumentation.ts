@@ -17,6 +17,9 @@
    And Radar Sold Out (AC2 Radar "out of stock" → Crisp heads-up → review
    request), every five minutes while Bắt đầu is on — see lib/rso/core.ts.
 
+   And Feedback New Feature (the handled Upsell Responsive stores told about
+   PageFly's new features, on approval), every five minutes — lib/nff/core.ts.
+
    And the weekly reports of the three upsells, made at 01:00 on Monday —
    see lib/reports/store.ts.
    ========================================================================== */
@@ -32,6 +35,8 @@ export async function register() {
   startUrspTimer();
   const { startRsoTimer } = await import("./lib/rso/core");
   startRsoTimer();
+  const { startNffTimer } = await import("./lib/nff/core");
+  startNffTimer();
   const { startReportTimer } = await import("./lib/reports/store");
   startReportTimer();
 }

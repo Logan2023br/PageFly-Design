@@ -1,0 +1,22 @@
+import { fail, json, readJson } from "@/lib/upsell/api";
+import { readAdminName, readAdminSection } from "@/lib/session";
+import { approveAll, recompose, runJob } from "@/lib/nff/core";
+
+/* POST /api/admin/nff/run — {action: "run"} Cập nhật ngay (collect, send what
+   was approved, track), {action: "approve_all"} Duyệt & gửi tất cả,
+   {action: "recompose"} write the Chờ duyệt messages again from the template. */
+export const dynamic = "force-dynamic";
+
+export async function POST(req: Request) {
+  if (!(await readAdminSection("nff"))) return json({ ok: false, error: "Not signed in." }, 401);
+  try {
+    const { action } = await readJson(req);
+    const by = (await readAdminName()) ?? "admin";
+    if (action === "run") return json({ ok: true, job: await runJob(true) });
+    if (action === "approve_all") return json({ ok: true, approved: await approveAll(by) });
+    if (action === "recompose") return json({ ok: true, rewritten: await recompose() });
+    return json({ ok: false, error: "action: run, approve_all hoặc recompose." }, 400);
+  } catch (err) {
+    return fail(err);
+  }
+}

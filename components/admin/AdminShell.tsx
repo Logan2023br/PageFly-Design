@@ -75,6 +75,12 @@ const NAV: { id: AdminSection; label: string; href: string; icon: IconName }[] =
     icon: "PackageSearch",
   },
   {
+    id: "nff",
+    label: "Feedback New Feature",
+    href: "/design/admin/new-feature",
+    icon: "Sparkles",
+  },
+  {
     id: "accounts",
     label: "Tài khoản",
     href: "/design/admin/accounts",

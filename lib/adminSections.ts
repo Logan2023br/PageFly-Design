@@ -24,6 +24,7 @@ export const ADMIN_SECTIONS = [
   { id: "upsell", label: "Upsell Build 2 pages", href: "/design/admin/upsell" },
   { id: "ursp", label: "Upsell Responsive", href: "/design/admin/responsive" },
   { id: "rso", label: "Radar Sold Out", href: "/design/admin/radar-sold-out" },
+  { id: "nff", label: "Feedback New Feature", href: "/design/admin/new-feature" },
   { id: "accounts", label: "Tài khoản", href: "/design/admin/accounts" },
 ] as const;
 
