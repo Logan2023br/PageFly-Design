@@ -146,9 +146,9 @@ export function SlackCard({ token, channel, onShift, fallback }: { token: { from
         </Button>
         {sent && (
           <span className="text-[12px] text-pf-success">
-            Đã gửi{sent.store ? ` (mẫu: ${sent.store})` : ""} — tag {sent.tagged.join(", ")}
+            Đã gửi{sent.store ? ` (mẫu: ${sent.store})` : ""} — {sent.tagged.length ? `tag ${sent.tagged.join(", ")}` : "không tag ai (chưa TS nào trong ca có Slack ID)"}
             {sent.missing.length > 0 && (
-              <span className="text-pf-warn"> · chưa tìm thấy Slack ID của {sent.missing.join(", ")} (chỉ hiện chữ, không báo) — điền slack_ts_ids bên dưới</span>
+              <span className="text-pf-muted"> · trong ca có {sent.missing.join(", ")} nhưng không có trong slack_ts_ids nên không tag</span>
             )}
           </span>
         )}

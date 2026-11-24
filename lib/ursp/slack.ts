@@ -156,14 +156,26 @@ export async function slackAgree(t: UrspTarget, cfg: UrspSettings, at = new Date
   if (token && !cfg.slack_channel.trim()) throw new Error("Chưa đặt slack_channel (ID kênh Slack) trong Cài đặt");
   if (!token && !SLACK_WEBHOOK.test(hook)) throw new Error("URSP_SLACK_WEBHOOK phải là https://hooks.slack.com/…");
   const onShift = tsOnShift(cfg.ts_roster, at);
-  const tagged = onShift.length ? onShift : [cfg.sender_name];
-  /* the ids typed in win; with the bot, the rest are found by name */
+  /* Who handles responsive cases: the TS with an id in slack_ts_ids — a TS
+     left out of it is not on these cases. With no ids typed in at all, every
+     TS counts and the bot finds them by name. */
   const ids = slackIds(cfg.slack_ts_ids);
-  const users = token && tagged.some((n) => !ids.has(n.toLowerCase())) ? await members(token).catch(() => [] as SlackUser[]) : [];
-  const idOf = (n: string) => ids.get(n.toLowerCase()) ?? findMember(users, n);
-  const who = tagged.map((n) => (idOf(n) ? `<@${idOf(n)}>` : `@${n}`)).join(" ");
-  /* the TS whose Slack id was not found: tagged as plain text, nobody notified */
-  const missing = tagged.filter((n) => !idOf(n));
+  const typed = ids.size > 0;
+  const users = !typed && token ? await members(token).catch(() => [] as SlackUser[]) : [];
+  const idOf = (n: string) => ids.get(n.toLowerCase()) ?? (typed ? null : findMember(users, n));
+  const inCharge = onShift.filter((n) => idOf(n));
+  /* the TS on shift who are left out (no id) — said on the test, never tagged */
+  const missing = onShift.filter((n) => !idOf(n));
+  /* one person per case: two in charge on the shift take turns; nobody: the sender */
+  let pick: string | null;
+  if (inCharge.length > 1) {
+    const { getState, setState } = await import("./db");
+    const turn = Number((await getState<number>("slack_turn")) ?? 0) || 0;
+    pick = inCharge[turn % inCharge.length];
+    if (!test) await setState("slack_turn", turn + 1);
+  } else pick = inCharge[0] ?? (idOf(cfg.sender_name) ? cfg.sender_name : null);
+  const tagged = pick ? [pick] : [];
+  const who = pick ? `<@${idOf(pick)}>` : "_(chưa có TS nào trong ca có Slack ID)_";
   const store = esc(t.store_name?.trim() || t.store_domain.replace(/\.myshopify\.com$/, ""));
   const ticket = t.ticket_link ? `<${t.ticket_link}|Mở ticket Crisp>` : "—";
   const text =
