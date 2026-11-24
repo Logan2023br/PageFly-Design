@@ -38,6 +38,9 @@ PageFly Lead Technical Support Team`;
 
 export const NFF_DEFAULTS = {
   sender_name: "Logan",
+  /** the sender's picture on Crisp — Logan's; empty: the Crisp operator of that name, found by the token */
+  sender_avatar:
+    "https://image.crisp.chat/avatar/operator/11c92319-89c1-42be-b4da-2bf5e40568c3/120/?avatar=https%3A%2F%2Fstorage.crisp.chat%2Fusers%2Favatar%2Foperator%2F-%2F6%2F1%2Fa%2F9%2F61a991f5c29c8c00%2Favatar_7ov3o3.jpg",
   /** empty: the built-in message above */
   template: "",
   /** a conversation with a message this recent: support may be mid-chat, the message waits */
@@ -50,7 +53,8 @@ export type NffKey = keyof typeof NFF_DEFAULTS;
 export type NffSettings = { [K in NffKey]: (typeof NFF_DEFAULTS)[K] extends number ? number : string };
 
 export const NFF_HELP: Record<NffKey, string> = {
-  sender_name: "Tên người gửi trên Crisp ({pic}), cũng là người được mention khi khách reply",
+  sender_name: "Tên người gửi trên Crisp ({pic})",
+  sender_avatar: "Link ảnh avatar người gửi trên Crisp (mặc định: avatar của Logan). Để trống: tự lấy avatar của operator cùng tên trên Crisp",
   template:
     "Tin giới thiệu tính năng mới. Biến: {name} (tên store) {store} (domain bỏ .myshopify.com, dùng trong link) {pic}. Link: [chữ](https://…), in đậm **…**. Để trống dùng mẫu mặc định. Đổi mẫu thì tin đang Chờ duyệt được soạn lại",
   quiet_minutes: "Hội thoại có tin nhắn trong bấy nhiêu phút gần nhất (khách đang chat với support) thì tin đợi, gửi sau",

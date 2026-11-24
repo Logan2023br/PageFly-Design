@@ -125,7 +125,7 @@ export async function runSend(): Promise<SendResult> {
   const p = await db();
   const { rows } = await p.query<NffTarget>(`select * from nff_targets where status = 'approved' order by updated_at limit 20`);
   if (!rows.length) return out;
-  const sender = await crispSender(cfg.sender_name, "");
+  const sender = await crispSender(cfg.sender_name, cfg.sender_avatar);
   for (const t of rows) {
     try {
       if (!t.message?.trim()) throw new Error("Tin nhắn trống");
