@@ -49,6 +49,9 @@ create table if not exists nff_targets (
   updated_at       timestamptz not null default now()
 );
 create index if not exists nff_targets_status on nff_targets (status, created_at desc);
+-- where the store came from (Upsell Responsive, or an imported sheet) and a note (the sheet's priority)
+alter table nff_targets add column if not exists source text;
+alter table nff_targets add column if not exists note text;
 
 create table if not exists nff_events (
   id          bigserial primary key,

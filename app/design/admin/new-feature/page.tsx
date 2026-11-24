@@ -2,7 +2,8 @@ import Link from "next/link";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { adminGate } from "@/components/admin/adminGate";
 import { CrispLink, Pill } from "@/components/admin/upsell/bits";
-import { MessageBox, RowButton, RunControls, SettingsForm } from "@/components/admin/nff/Controls";
+import { ImportSheet, MessageBox, RowButton, RunControls, SettingsForm } from "@/components/admin/nff/Controls";
+import { importSheetEmail } from "@/lib/nff/importSheet";
 import { vnTime } from "@/lib/ucp2/core";
 import { collect, composeMessage, refreshDrafts, type JobState } from "@/lib/nff/core";
 import { getState, hasNffDatabase } from "@/lib/nff/db";
@@ -57,6 +58,7 @@ export default async function NffPage(props: PageProps<"/design/admin/new-featur
     const rows = await listTargets(tab, q);
     body = (
       <div className="grid gap-3">
+        {tab === "pending" && <ImportSheet email={importSheetEmail()} />}
         {rows.length === 0 && <p className="rounded-pf-card border border-dashed border-pf-border p-6 text-[13px] text-pf-muted">Không có store nào ở đây.</p>}
         {rows.map((t) => (
           <Card key={t.id} t={t} />
@@ -131,6 +133,8 @@ function Card({ t }: { t: NffTarget }) {
             <span className="text-pf-faint">{t.store_domain}</span>
             <Pill>{STATUS_LABEL[t.status] ?? t.status}</Pill>
             {t.ursp_stage && <Pill tone="primary">Upsell Responsive · {t.ursp_stage === "closed" ? "Kết thúc" : "Đã xử lý"}</Pill>}
+            {t.source && <Pill tone="primary">{t.source}</Pill>}
+            {t.note && <Pill tone="warn">{t.note}</Pill>}
             {t.interest && <Pill tone={t.interest === "none" ? "muted" : "ok"}>Quan tâm: {INTEREST_LABEL[t.interest] ?? t.interest}</Pill>}
           </div>
           {t.email && <span className="text-[12px] text-pf-faint">{t.email}</span>}

@@ -32,6 +32,8 @@ export type NffTarget = {
   ticket_link: string | null;
   ursp_id: string | null;
   ursp_stage: string | null;
+  source: string | null;
+  note: string | null;
   status: string;
   message: string | null;
   error: string | null;

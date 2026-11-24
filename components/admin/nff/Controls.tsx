@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { FIELD } from "../collections/shared";
 import { Button } from "../../ui";
@@ -38,6 +39,48 @@ export function RunControls({ pending }: { pending: number }) {
       </div>
       <ErrorLine error={error} />
     </div>
+  );
+}
+
+/** Nhập từ Google Sheet: a list of stores onto Chờ duyệt. */
+export function ImportSheet({ email }: { email: string | null }) {
+  const router = useRouter();
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const go = async () => {
+    setBusy(true);
+    setError(null);
+    setDone(null);
+    const res = await fetch(RUN, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "import_sheet", url }) })
+      .then((r) => r.json() as Promise<{ ok: boolean; error?: string; imported?: { sheet: string; rows: number; added: number; existing: number; noCrisp: number; bad: number } }>)
+      .catch(() => null);
+    setBusy(false);
+    if (!res?.ok || !res.imported) return setError(res?.error ?? "Không gọi được máy chủ.");
+    const i = res.imported;
+    setDone(
+      `Sheet "${i.sheet}": ${i.rows} store · thêm ${i.added} vào Chờ duyệt${i.existing ? ` · ${i.existing} đã có từ trước` : ""}${i.noCrisp ? ` · ${i.noCrisp} không có link Crisp (sẽ báo lỗi khi gửi)` : ""}${i.bad ? ` · ${i.bad} dòng domain không hợp lệ` : ""}`,
+    );
+    setUrl("");
+    router.refresh();
+  };
+  return (
+    <section className="grid gap-2 rounded-pf-card border border-pf-border bg-pf-card p-4 text-[13px]">
+      <h3 className="text-[13px] font-semibold text-pf-text">Nhập danh sách từ Google Sheet</h3>
+      <p className="text-[12px] text-pf-muted">
+        Sheet cần các cột <b>Store domain</b>, <b>Tên store</b>, <b>Link Crisp</b> (tin gửi vào đúng hội thoại đó, không tạo mới); có cột Mức ưu tiên thì ghi kèm. Mỗi store thành 1 tin Chờ duyệt, link trong tin theo domain của store. Chia sẻ sheet cho{" "}
+        <code className="rounded bg-pf-bg-deep px-1">{email ?? "service account của server"}</code> (Viewer) trước.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/…/edit#gid=…" className={`${FIELD} min-w-[320px] flex-1`} aria-label="Link Google Sheet" />
+        <Button size="sm" icon="Upload" disabled={busy || !url.trim()} onClick={() => void go()}>
+          {busy ? "Đang nhập…" : "Nhập"}
+        </Button>
+      </div>
+      {done && <p className="text-[12px] text-pf-success">{done}</p>}
+      <ErrorLine error={error} />
+    </section>
   );
 }
 
