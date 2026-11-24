@@ -1,4 +1,5 @@
 import "server-only";
+import { slackAgree } from "./slack";
 
 import {
   ConfigMissing,
@@ -1367,6 +1368,18 @@ export async function trackOne(t: UrspTarget, cfg: UrspSettings, opts: { force?:
           if (read.intent === "agree" && cfg.crisp_segment.trim()) {
             await addSegment(t.session_id, cfg.crisp_segment.trim()).catch(() => undefined);
             events.push(["segment", { segment: cfg.crisp_segment.trim() }]);
+          }
+          /* a yes, before anyone took the case: to Slack at once, the TS on shift tagged — once per case */
+          if (read.intent === "agree" && !t.slack_at && !t.working_at && !t.done_at && !t.dismissed_at) {
+            try {
+              const sent = await slackAgree({ ...t, ...(patch as Partial<UrspTarget>) }, cfg);
+              if (sent) {
+                patch.slack_at = new Date().toISOString();
+                events.push(["slack", { tagged: sent.tagged }]);
+              }
+            } catch (err) {
+              errors.push(`Slack: ${errText(err)}`);
+            }
           }
           /* the first reply: Logan is called in, once */
           if (!t.mentioned_at) {

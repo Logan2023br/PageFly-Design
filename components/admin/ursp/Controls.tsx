@@ -652,7 +652,7 @@ export function SettingsForm({
   return (
     <section className="grid gap-4 rounded-pf-card border border-pf-border bg-pf-card p-4 text-[13px]">
       {Object.keys(initial).map((k) => {
-        const long = k.endsWith("_template");
+        const long = k.endsWith("_template") || k === "ts_roster";
         return (
           <label key={k} className="grid gap-1">
             <span className="text-[12.5px] font-semibold text-pf-text">{k}</span>

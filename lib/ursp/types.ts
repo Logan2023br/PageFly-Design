@@ -140,6 +140,7 @@ export type UrspTarget = {
   review_ask_error: string | null;
   review_ask_where: string | null;
   after_done_read: string | null;
+  slack_at: string | null;
   done_at: string | null;
   done_by: string | null;
   closed_at: string | null;

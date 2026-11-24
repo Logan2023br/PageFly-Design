@@ -105,6 +105,8 @@ export const CONNECTIONS = {
      admin account cannot point it (and the key) at another host. */
   n8n_ac2_url: { env: "N8N_AC2_URL", label: "AC2 qua n8n: URL (giống BPU Ops)", fallback: "", secret: false, envOnly: true },
   n8n_ac2_key: { env: "N8N_AC2_KEY", label: "AC2 qua n8n: key (giống BPU Ops)", fallback: "", secret: true },
+  /* Upsell Responsive: a yes goes to the TS channel at once */
+  ursp_slack_webhook: { env: "URSP_SLACK_WEBHOOK", label: "Upsell Responsive: Slack webhook báo khách đồng ý (https://hooks.slack.com/…)", fallback: "", secret: true },
 } as const;
 
 export type ConnectionKey = keyof typeof CONNECTIONS;
