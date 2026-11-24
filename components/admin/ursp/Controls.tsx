@@ -105,14 +105,14 @@ export function RecapBackfill({ defaultFrom }: { defaultFrom: string }) {
 export function SlackCard({ token, channel, onShift, fallback }: { token: { from: string | null; hint: string | null }; channel: string; onShift: string[]; fallback: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] = useState<{ tagged: string[]; missing: string[] } | null>(null);
+  const [sent, setSent] = useState<{ tagged: string[]; missing: string[]; store?: string } | null>(null);
   const ready = Boolean(token.from);
   const test = async () => {
     setBusy(true);
     setError(null);
     setSent(null);
     const res = await fetch(RUN, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "slack_test" }) })
-      .then((r) => r.json() as Promise<{ ok: boolean; error?: string; slack?: { tagged: string[]; missing: string[] } }>)
+      .then((r) => r.json() as Promise<{ ok: boolean; error?: string; slack?: { tagged: string[]; missing: string[]; store?: string } }>)
       .catch(() => null);
     setBusy(false);
     if (res?.ok && res.slack) setSent(res.slack);
@@ -146,7 +146,7 @@ export function SlackCard({ token, channel, onShift, fallback }: { token: { from
         </Button>
         {sent && (
           <span className="text-[12px] text-pf-success">
-            Đã gửi — tag {sent.tagged.join(", ")}
+            Đã gửi{sent.store ? ` (mẫu: ${sent.store})` : ""} — tag {sent.tagged.join(", ")}
             {sent.missing.length > 0 && (
               <span className="text-pf-warn"> · chưa tìm thấy Slack ID của {sent.missing.join(", ")} (chỉ hiện chữ, không báo) — điền slack_ts_ids bên dưới</span>
             )}

@@ -149,7 +149,7 @@ function findMember(users: SlackUser[], ts: string): string | null {
  * The yes to Slack. Resolves to who was tagged, or null when nothing was sent
  * (no bot token or webhook configured — not an error: the screen still counts it).
  */
-export async function slackAgree(t: UrspTarget, cfg: UrspSettings, at = new Date()): Promise<{ tagged: string[]; missing: string[] } | null> {
+export async function slackAgree(t: UrspTarget, cfg: UrspSettings, at = new Date(), test = false): Promise<{ tagged: string[]; missing: string[] } | null> {
   const token = (await connection("ursp_slack_bot_token")).trim();
   const hook = (await connection("ursp_slack_webhook")).trim();
   if (!token && !hook) return null;
@@ -167,7 +167,7 @@ export async function slackAgree(t: UrspTarget, cfg: UrspSettings, at = new Date
   const store = esc(t.store_name?.trim() || t.store_domain.replace(/\.myshopify\.com$/, ""));
   const ticket = t.ticket_link ? `<${t.ticket_link}|Mở ticket Crisp>` : "—";
   const text =
-    `*[Responsive Ticket]* · ${store}\n` +
+    `*[Responsive Ticket]* · ${store}${test ? " _(gửi thử — không cần xử lý)_" : ""}\n` +
     `*TS:* ${who}\n` +
     `*Link Ticket:* ${ticket}\n` +
     `*Link Admin:* <${adminRowUrl(t)}|Mở trong admin (Khách đồng ý)>`;
@@ -187,16 +187,21 @@ export async function slackAgree(t: UrspTarget, cfg: UrspSettings, at = new Date
   return { tagged, missing };
 }
 
-/** "Gửi thử" on the settings tab: the same message, for a made-up store, now. */
-export async function slackTest(cfg: UrspSettings): Promise<{ tagged: string[]; missing: string[] }> {
-  const t = {
-    store_domain: "test-store.myshopify.com",
-    store_name: "TEST — gửi thử từ Upsell Responsive",
-    ticket_link: null,
-  } as unknown as UrspTarget;
+/**
+ * "Gửi thử" on the settings tab: the same message, now, for the latest case on
+ * Khách đồng ý (its real store, ticket and admin link) — marked as a test, and
+ * the case itself untouched (slack_at stays as it was). No such case: a made-up store.
+ */
+export async function slackTest(cfg: UrspSettings): Promise<{ tagged: string[]; missing: string[]; store: string }> {
+  const { db } = await import("./db");
+  const { TAB_SQL } = await import("./queries");
+  const real = (await (await db()).query<UrspTarget>(`select * from ursp_targets t where ${TAB_SQL.agreed} order by t.last_reply_at desc nulls last limit 1`)).rows[0];
+  const t =
+    real ??
+    ({ store_domain: "test-store.myshopify.com", store_name: "TEST — gửi thử từ Upsell Responsive", ticket_link: null } as unknown as UrspTarget);
   let sent: { tagged: string[]; missing: string[] } | null;
   try {
-    sent = await slackAgree(t, cfg);
+    sent = await slackAgree(t, cfg, new Date(), true);
   } catch (err) {
     /* say whose token it is (auth.test: the bot's name and workspace, never the token), so a wrong token or a bot not in the channel is plain */
     const token = (await connection("ursp_slack_bot_token")).trim();
@@ -207,5 +212,5 @@ export async function slackTest(cfg: UrspSettings): Promise<{ tagged: string[]; 
     throw new UpsellError(`${err instanceof Error ? err.message : String(err)}${whose}`, 502);
   }
   if (!sent) throw new UpsellError("Chưa có Slack bot token (URSP_SLACK_BOT_TOKEN trong .env của VPS) — chưa gửi được", 409);
-  return sent;
+  return { ...sent, store: t.store_name || t.store_domain };
 }
