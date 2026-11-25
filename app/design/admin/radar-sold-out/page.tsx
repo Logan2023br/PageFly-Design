@@ -43,6 +43,7 @@ export default async function RsoPage(props: PageProps<"/design/admin/radar-sold
   const steps = [
     { label: "Tìm thấy", n: f.found - f.skipped, of: null as number | null },
     { label: "Đã gửi", n: f.sent, of: f.found - f.skipped },
+    { label: "Đã xem", n: f.read, of: f.sent },
     { label: "Khách trả lời", n: f.replied, of: f.sent },
     { label: "Đã nhập hàng", n: f.restocked, of: f.checked },
     { label: "Đã xin review", n: f.review_asked, of: f.restocked },
@@ -101,7 +102,7 @@ export default async function RsoPage(props: PageProps<"/design/admin/radar-sold
           )}
         </section>
 
-        <section className="grid grid-cols-2 gap-px overflow-hidden rounded-pf-card border border-pf-border bg-pf-border sm:grid-cols-3 xl:grid-cols-6">
+        <section className="grid grid-cols-2 gap-px overflow-hidden rounded-pf-card border border-pf-border bg-pf-border sm:grid-cols-4 xl:grid-cols-7">
           {steps.map((s) => (
             <div key={s.label} className="grid gap-0.5 bg-pf-card px-4 py-3">
               <span className="text-[12px] text-pf-muted">{s.label}</span>
