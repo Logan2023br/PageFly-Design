@@ -86,6 +86,16 @@ check(matchEntry("3 - 5 _ Shahbaz and Sons White Fri.json", SH)?.slug === "white
 check(matchEntry("4 - 6 _ Shahbaz and Sons Blog arti.json", SH)?.slug === "blog-article", "a name cut short: Blog arti → blog-article");
 check(matchEntry("8 - Shahbaz and Sons So.json", SH) === null, "a name cut to 2 letters matches nothing");
 
+/* the one page left: an entry nobody can name is that page */
+const mystery = zipSync({ "9 - something unrecognisable.json": json("x") });
+const o4 = splitExport(mystery, PAGES, "x.pagefly", { open: ["about-us"] });
+check(o4.pages.length === 1 && o4.pages[0].slug === "about-us" && o4.auto.length === 1 && o4.unmatched.length === 0, "one page left, one unnamed entry: matched to it", o4);
+const o5 = splitExport(mystery, PAGES, "x.pagefly", { open: ["about-us", "contact"] });
+check(o5.pages.length === 0 && o5.unmatched.length === 1, "two pages left: not guessed", o5);
+/* the admin's choice wins */
+const o6 = splitExport(mystery, PAGES, "x.pagefly", { assign: { "9 - something unrecognisable.json": "contact" } });
+check(o6.pages.length === 1 && o6.pages[0].slug === "contact" && o6.unmatched.length === 0, "the admin's choice is kept", o6);
+
 console.log("not a zip");
 let threw = false;
 try {

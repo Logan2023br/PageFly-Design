@@ -39,11 +39,21 @@ export async function PUT(request: Request) {
     const rejected = rejectFile("pagefly", bytes);
     if (rejected) return fail(rejected);
 
-    const { pages, unmatched } = splitExport(bytes, job.loganPages, fileName);
-    if (pages.length === 0)
-      return fail(
-        `No page of ${job.setName ?? "this set"} in ${fileName ?? "that file"}${unmatched.length ? ` (it holds: ${unmatched.slice(0, 5).join(", ")})` : ""}. Export the pages named "${job.loganPages[0].title}" and so on.`,
-      );
+    /* the admin's choice for entries the names did not match (?assign={"entry.json":"slug"}) */
+    let assign: Record<string, string> = {};
+    try {
+      const raw = params.get("assign");
+      if (raw) assign = JSON.parse(raw) as Record<string, string>;
+    } catch {
+      return fail("assign is not valid JSON.");
+    }
+    /* the pages still without a .pagefly, before this file */
+    const had = new Set(set.pages.filter((p) => p.pageflySize !== null).map((p) => p.slug));
+    const open = job.loganPages.filter((p) => !had.has(p.slug)).map((p) => p.slug);
+    const { pages, unmatched, auto } = splitExport(bytes, job.loganPages, fileName, { assign, open });
+    /* nothing matched, but there are pages in it: answer with them, so the admin picks */
+    if (pages.length === 0 && unmatched.length === 0)
+      return fail(`No page in ${fileName ?? "that file"}. Export the pages named "${job.loganPages[0].title}" and so on.`);
     for (const p of pages) {
       const one = rejectFile("pagefly", p.bytes);
       if (one) return fail(`${p.entry}: ${one}`);
@@ -60,6 +70,7 @@ export async function PUT(request: Request) {
       ok: true,
       stored: pages.map((p) => ({ slug: p.slug, entry: p.entry })),
       unmatched,
+      auto,
       missing,
       done: missing.length === 0,
     });

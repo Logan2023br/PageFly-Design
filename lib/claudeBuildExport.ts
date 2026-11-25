@@ -15,7 +15,14 @@ import type { LoganPage } from "./claudeBuildShared";
    ========================================================================== */
 
 export type SplitPage = { slug: string; entry: string; bytes: Uint8Array };
-export type SplitResult = { pages: SplitPage[]; unmatched: string[] };
+export type SplitResult = { pages: SplitPage[]; unmatched: string[]; auto: { entry: string; slug: string }[] };
+
+export type SplitOptions = {
+  /** the admin's choice for an entry the names did not match: entry → page slug */
+  assign?: Record<string, string>;
+  /** the pages the set still lacks a .pagefly for: one left and one entry unmatched → that is it */
+  open?: string[];
+};
 
 /** "3 - Solvane – Home Page.json" → "solvane home page" */
 const norm = (s: string) =>
@@ -100,20 +107,29 @@ function truncated(words: string[], pages: LoganPage[]): LoganPage | null {
  * elsewhere keeps whatever name its JSON had.
  * Throws when the bytes are not a zip.
  */
-export function splitExport(bytes: Uint8Array, pages: LoganPage[], fileName?: string): SplitResult {
+export function splitExport(bytes: Uint8Array, pages: LoganPage[], fileName?: string, opts: SplitOptions = {}): SplitResult {
   const files = unzipSync(bytes);
   const jsons = Object.keys(files).filter((e) => e.toLowerCase().endsWith(".json") && !e.endsWith("/"));
   const found = new Map<string, SplitPage>();
   const unmatched: string[] = [];
-  for (const [entry, data] of Object.entries(files)) {
-    if (!entry.toLowerCase().endsWith(".json") || entry.endsWith("/")) continue;
-    const page = matchEntry(entry, pages) ?? (fileName && jsons.length === 1 ? matchEntry(fileName, pages) : null);
-    if (!page) {
-      unmatched.push(entry);
-      continue;
-    }
+  const auto: SplitResult["auto"] = [];
+  const put = (entry: string, slug: string) => {
     const name = entry.split("/").pop()!;
-    found.set(page.slug, { slug: page.slug, entry: name, bytes: zipSync({ [name]: data }, { level: 6 }) });
+    found.set(slug, { slug, entry: name, bytes: zipSync({ [name]: files[entry] }, { level: 6 }) });
+  };
+  for (const entry of jsons) {
+    /* the admin's choice first: it is what they saw and picked */
+    const chosen = opts.assign?.[entry] ?? opts.assign?.[entry.split("/").pop()!];
+    const page = (chosen && pages.find((p) => p.slug === chosen)) || matchEntry(entry, pages) || (fileName && jsons.length === 1 ? matchEntry(fileName, pages) : null);
+    if (page) put(entry, page.slug);
+    else unmatched.push(entry);
   }
-  return { pages: [...found.values()], unmatched };
+  /* one page still missing, one entry nobody could name: it can only be that page */
+  const left = (opts.open ?? []).filter((slug) => !found.has(slug) && pages.some((p) => p.slug === slug));
+  if (unmatched.length === 1 && left.length === 1) {
+    put(unmatched[0], left[0]);
+    auto.push({ entry: unmatched[0].split("/").pop()!, slug: left[0] });
+    unmatched.length = 0;
+  }
+  return { pages: [...found.values()], unmatched, auto };
 }

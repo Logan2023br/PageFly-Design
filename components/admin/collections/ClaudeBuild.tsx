@@ -370,17 +370,44 @@ function RunningJob({ job, now, busy, onCancel }: { job: BuildJob; now: number; 
   );
 }
 
-type ExportAnswer = { stored: { slug: string; entry: string }[]; unmatched: string[]; missing: string[]; done: boolean };
+type ExportAnswer = {
+  stored: { slug: string; entry: string }[];
+  unmatched: string[];
+  missing: string[];
+  done: boolean;
+  /** one page left, one entry unnamed: matched to it, said so */
+  auto?: { entry: string; slug: string }[];
+};
 
 /* A set the routine built in the Logan store. Someone opens each page in the
    PageFly editor, exports it (one by one, or "All Pages" at once), and drops
    the file here: each page's .pagefly goes into the set; when every page has
-   one, the build is done. */
+   one, the build is done. A page whose name in the file matches none (PageFly
+   cuts long names) is picked by hand: a select under the drop zone. */
 function ExportJob({ job, busy, onDone, onCancel }: { job: BuildJob; busy: boolean; onDone: () => void; onCancel: () => void }) {
   const [sending, setSending] = useState(false);
   const [answer, setAnswer] = useState<ExportAnswer | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
+  /* the files that held a page nobody could name, kept to send again with the admin's choice */
+  const [pending, setPending] = useState<{ file: File; entries: string[] }[]>([]);
+  const [choice, setChoice] = useState<Record<string, string>>({});
+  const [autoNotes, setAutoNotes] = useState<string[]>([]);
+  const labelOf = (slug: string) => job.loganPages.find((p) => p.slug === slug)?.label ?? slug;
+
+  const upload = (file: File, assign?: Record<string, string>) =>
+    api<ExportAnswer>(
+      `/api/admin/collection-pages/claude-build/export?job=${encodeURIComponent(job.id)}&name=${encodeURIComponent(file.name)}${
+        assign ? `&assign=${encodeURIComponent(JSON.stringify(assign))}` : ""
+      }`,
+      { method: "PUT", body: file, headers: { "Content-Type": "application/octet-stream" } },
+    );
+
+  const merge = (res: ExportAnswer, prev: ExportAnswer | null): ExportAnswer => {
+    const stored = [...(prev?.stored ?? [])];
+    for (const s of res.stored) if (!stored.some((x) => x.slug === s.slug)) stored.push(s);
+    return { ...res, stored };
+  };
 
   /* Every dropped file goes up one after another; the answers add up, so
      seven single-page .pagefly files tick off seven pages. */
@@ -390,29 +417,45 @@ function ExportJob({ job, busy, onDone, onCancel }: { job: BuildJob; busy: boole
     setSending(true);
     setError(null);
     const errors: string[] = [];
-    let last: ExportAnswer | null = null;
-    const stored: ExportAnswer["stored"] = [...(answer?.stored ?? [])];
-    const unmatched: string[] = [];
+    let acc = answer;
+    const waiting: { file: File; entries: string[] }[] = [];
+    const notes: string[] = [];
     for (const file of files) {
-      const res = await api<ExportAnswer>(
-        `/api/admin/collection-pages/claude-build/export?job=${encodeURIComponent(job.id)}&name=${encodeURIComponent(file.name)}`,
-        { method: "PUT", body: file, headers: { "Content-Type": "application/octet-stream" } },
-      );
+      const res = await upload(file);
       if (!res.ok) {
         errors.push(`${file.name}: ${res.error}`);
         continue;
       }
-      last = res;
-      for (const s of res.stored) if (!stored.some((x) => x.slug === s.slug)) stored.push(s);
-      unmatched.push(...res.unmatched);
+      acc = merge(res, acc);
+      if (res.unmatched.length) waiting.push({ file, entries: res.unmatched });
+      for (const a of res.auto ?? []) notes.push(`${a.entry} → ${labelOf(a.slug)} (page duy nhất còn thiếu)`);
     }
     setSending(false);
     if (errors.length) setError(errors.join(" · "));
-    if (last) {
-      setAnswer({ ...last, stored, unmatched });
+    setPending((prev) => [...prev, ...waiting]);
+    setAutoNotes((prev) => [...prev, ...notes]);
+    if (acc) {
+      setAnswer(acc);
       onDone();
     }
   };
+
+  /* the admin picked a page for each unnamed entry of one file: send it again with the choice */
+  const saveChoice = async (i: number) => {
+    const item = pending[i];
+    const assign = Object.fromEntries(item.entries.map((e) => [e, choice[`${i}:${e}`]]).filter(([, slug]) => slug));
+    if (Object.keys(assign).length === 0) return;
+    setSending(true);
+    setError(null);
+    const res = await upload(item.file, assign);
+    setSending(false);
+    if (!res.ok) return setError(`${item.file.name}: ${res.error}`);
+    setAnswer((prev) => merge(res, prev));
+    setPending((prev) => prev.map((x, k) => (k === i ? { ...x, entries: res.unmatched } : x)).filter((x) => x.entries.length));
+    onDone();
+  };
+
+  const missingLabels = new Set(answer?.missing ?? []);
 
   return (
     <div className="grid gap-3 rounded-pf-md border border-pf-primary-hi/40 bg-pf-card-hi/40 p-3">
@@ -451,7 +494,7 @@ function ExportJob({ job, busy, onDone, onCancel }: { job: BuildJob; busy: boole
                 Xem bản dựng
               </a>
             )}
-            {answer?.stored.some((s) => s.slug === p.slug) && (
+            {(answer?.stored.some((s) => s.slug === p.slug) || (answer && !missingLabels.has(p.label))) && (
               <span className="inline-flex items-center gap-1 text-pf-success">
                 <Icon name="Check" size={12} /> đã có .pagefly
               </span>
@@ -477,10 +520,42 @@ function ExportJob({ job, busy, onDone, onCancel }: { job: BuildJob; busy: boole
       </label>
       {answer && (
         <p className="text-[12px] text-pf-muted">
-          Đã lưu {answer.stored.length} page.
-          {answer.missing.length ? ` Còn thiếu: ${answer.missing.join(", ")}.` : " Đủ page — bộ đã xong."}
-          {answer.unmatched.length ? ` Không khớp page nào: ${answer.unmatched.join(", ")}.` : ""}
+          {answer.missing.length ? `Còn thiếu: ${answer.missing.join(", ")}.` : "Đủ page — bộ đã xong."}
         </p>
+      )}
+      {autoNotes.length > 0 && <p className="text-[12px] text-pf-success">Tự khớp: {autoNotes.join(" · ")}</p>}
+      {pending.length > 0 && (
+        <div className="grid gap-2 rounded-pf-md border border-pf-warn/40 bg-pf-warn/5 p-3 text-[12.5px]">
+          <p className="font-semibold text-pf-text">Chưa biết là page nào — chọn rồi bấm Lưu</p>
+          {pending.map((item, i) => (
+            <div key={`${item.file.name}-${i}`} className="grid gap-1.5">
+              {item.entries.map((e) => (
+                <label key={e} className="flex flex-wrap items-center gap-2">
+                  <span className="min-w-[240px] text-pf-body">{e.split("/").pop()}</span>
+                  <select
+                    value={choice[`${i}:${e}`] ?? ""}
+                    onChange={(ev) => setChoice({ ...choice, [`${i}:${e}`]: ev.target.value })}
+                    className={`${FIELD} w-[220px]`}
+                    aria-label={`Page cho ${e}`}
+                  >
+                    <option value="">— chọn page —</option>
+                    {job.loganPages.map((p) => (
+                      <option key={p.slug} value={p.slug}>
+                        {p.label}
+                        {missingLabels.has(p.label) ? " (còn thiếu)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+              <div>
+                <Button size="sm" icon="Check" disabled={sending || !item.entries.some((e) => choice[`${i}:${e}`])} onClick={() => void saveChoice(i)}>
+                  Lưu {item.file.name}
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
       {error && <p className="text-[12px] text-pf-danger">{error}</p>}
     </div>
