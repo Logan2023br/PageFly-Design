@@ -14,7 +14,14 @@ export const SSU_TABS = [
   { id: "stores", label: "Store dùng page sets", where: null },
   { id: "feed", label: "Mỗi lượt click", where: null },
   { id: "messages", label: "Tin nhắn", where: null },
-  { id: "reviewed", label: "Đã review 5★", where: "c.app_review >= 5" },
+  /* reviewed 5★ after using a set: the App Store review AC2 matched to the store, on or after the day
+     of its first Select (AC2 gives the day, Vietnam midnight) — or a 5★ Crisp saw after our message */
+  {
+    id: "reviewed",
+    label: "Đã review 5★",
+    where:
+      "((c.ac2_review >= 5 and c.ac2_review_at >= (date_trunc('day', c.first_selected_at at time zone 'Asia/Ho_Chi_Minh') at time zone 'Asia/Ho_Chi_Minh')) or (c.app_review >= 5 and c.reviewed_at is not null))",
+  },
   { id: "updated", label: "Đã nâng cấp plan", where: "c.upgraded_at is not null" },
   { id: "pages_updated", label: "Cập nhật page", where: "c.pages_updated_at is not null" },
   { id: "eligible", label: "Đủ điều kiện, chưa gửi", where: "c.status in ('eligible', 'new')" },

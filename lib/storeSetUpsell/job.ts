@@ -170,6 +170,9 @@ function ac2Fields(st: Ac2Store) {
     app_status: str(st.status),
     installed_at: str(st.createdAt),
     uninstalled_at: str(st.uninstalledAt),
+    review: num(st.appReview?.rating),
+    review_at: str(st.appReview?.createdAt),
+    review_text: str(st.appReview?.content)?.slice(0, 2000) ?? null,
   };
 }
 
@@ -182,9 +185,11 @@ async function writeAc2(domain: string, st: Ac2Store): Promise<void> {
         country = coalesce($5, country), timezone = coalesce($6, timezone), shopify_plan = coalesce($7, shopify_plan),
         pf_plan = $8, pf_price = $9, pages = coalesce($10, pages), published = coalesce($11, published),
         app_status = coalesce($12, app_status), installed_at = coalesce($13::timestamptz, installed_at),
-        uninstalled_at = $14::timestamptz, ac2_synced_at = now(), updated_at = now()
+        uninstalled_at = $14::timestamptz,
+        ac2_review = $15, ac2_review_at = $16::timestamptz, ac2_review_text = $17,
+        ac2_synced_at = now(), updated_at = now()
       where store_domain = $1`,
-    [domain, f.store_name, f.email, f.phone, f.country, f.timezone, f.shopify_plan, f.pf_plan, f.pf_price, f.pages, f.published, f.app_status, f.installed_at, f.uninstalled_at],
+    [domain, f.store_name, f.email, f.phone, f.country, f.timezone, f.shopify_plan, f.pf_plan, f.pf_price, f.pages, f.published, f.app_status, f.installed_at, f.uninstalled_at, f.review, f.review_at, f.review_text],
   );
 }
 
@@ -207,6 +212,7 @@ async function load(domain: string): Promise<SsuCustomer | null> {
 /** Why this customer gets no message, or null when they may get one. */
 export function skipReason(cu: SsuCustomer, cfg: SsuSettings): { status: "reviewed" | "skipped"; reason: string } | null {
   if (cu.app_review !== null && Number(cu.app_review) >= 5) return { status: "reviewed", reason: "Đã review 5★ trên Crisp" };
+  if (cu.ac2_review !== null && Number(cu.ac2_review) >= 5) return { status: "reviewed", reason: "Đã review 5★ trên Shopify App Store (AC2)" };
   if (!cu.email) return { status: "skipped", reason: "Không có email" };
   if (cu.app_status && cu.app_status !== "installed") return { status: "skipped", reason: `App ${cu.app_status}` };
   if (cfg.skip_dev_stores && (cu.is_dev_store || /development|partner|staff|affiliate/i.test(cu.shopify_plan ?? "")))

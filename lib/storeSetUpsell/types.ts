@@ -95,6 +95,10 @@ export type SsuCustomer = {
     | { session_id: string; link?: string; updated_at: string | null; app_review: number | null; subject: string | null; state: string | null; inapp?: boolean }[]
     | null;
   app_review: number | null;
+  /** the Shopify App Store review AC2 matched to the store: stars, the day, the words */
+  ac2_review: number | null;
+  ac2_review_at: string | null;
+  ac2_review_text: string | null;
   status: SsuStatus;
   skip_reason: string | null;
   crisp_session: string | null;

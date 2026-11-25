@@ -121,6 +121,8 @@ export async function exportStoreSetSelects(since: Date, domain?: string): Promi
 /* ---------------------------------------------------------------- AC2 */
 
 export type Ac2Store = {
+  /** the store's review on the Shopify App Store, as AC2 matched it (what #pf-goodreviews announces) */
+  appReview?: { rating?: number | string; createdAt?: string; content?: string } | null;
   shopDomain?: string;
   name?: string;
   email?: string;

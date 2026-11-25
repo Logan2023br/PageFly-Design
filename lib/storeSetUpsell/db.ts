@@ -134,6 +134,10 @@ alter table ssu_customers add column if not exists upgraded_price numeric;
 alter table ssu_customers add column if not exists upgrade_exact boolean;
 -- when the conversation's messages were last read (every 6 hours)
 alter table ssu_customers add column if not exists crisp_read_at timestamptz;
+-- the store's Shopify App Store review, from AC2 (by domain): stars, when, what they wrote
+alter table ssu_customers add column if not exists ac2_review numeric;
+alter table ssu_customers add column if not exists ac2_review_at timestamptz;
+alter table ssu_customers add column if not exists ac2_review_text text;
 update ssu_customers set plan_at_send = 'Free' where plan_at_send is null and sent_at is not null and price_at_send = 0;
 update ssu_customers set upgraded_from = coalesce(plan_at_send, case when price_at_send = 0 then 'Free' else '$' || price_at_send end)
  where upgraded_at is not null and upgraded_from is null;

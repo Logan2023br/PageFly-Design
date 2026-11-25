@@ -49,6 +49,9 @@ function statusTone(s: string): "muted" | "warn" | "ok" | "bad" | "primary" {
   return "muted";
 }
 
+/** "2026-11-25" in Vietnam time — a review and a Select compared by the day, as the Đã review 5★ tab does. */
+const vnDay = (t: string) => new Date(t).toLocaleDateString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" });
+
 export function CustomerCards({ rows, editDays }: { rows: CustomerListRow[]; editDays: number }) {
   if (rows.length === 0)
     return <p className="rounded-pf-card border border-pf-border bg-pf-card p-6 text-center text-[13px] text-pf-muted">Không có khách nào ở đây.</p>;
@@ -151,6 +154,21 @@ function CustomerCard({ c, editDays }: { c: CustomerListRow; editDays: number })
         <div className="grid content-start gap-1">
           <Line label="Crisp">
             {c.crisp_checked_at ? `${c.crisp_conversations ?? 0} hội thoại` : "chưa kiểm tra"}
+          </Line>
+          <Line label="Review App Store">
+            {c.ac2_review === null ? (
+              <span className="text-pf-faint">chưa có (AC2)</span>
+            ) : (
+              <span title={c.ac2_review_text ?? undefined} className={Number(c.ac2_review) >= 5 ? "font-semibold text-pf-success" : "text-pf-warn"}>
+                {Number(c.ac2_review)}★
+                {c.ac2_review_at ? ` · ${new Date(c.ac2_review_at).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}` : ""}
+                {c.ac2_review_at && c.first_selected_at
+                  ? vnDay(c.ac2_review_at) >= vnDay(c.first_selected_at)
+                    ? " · sau khi dùng bộ"
+                    : " · trước khi dùng bộ"
+                  : ""}
+              </span>
+            )}
           </Line>
           <Line label="app_review">
             {c.app_review === null ? (
