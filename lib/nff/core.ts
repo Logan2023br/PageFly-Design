@@ -175,7 +175,11 @@ export async function track(t: NffTarget): Promise<void> {
   const readAt = ours.find((m) => m.read)?.timestamp ?? null;
   const theirs = msgs.filter((m) => m.from === "user" && (m.timestamp ?? 0) >= since && textOf(m.content).trim());
   const seen = Math.max(t.reply_seen_at ? new Date(t.reply_seen_at).getTime() : 0, t.last_reply_at ? new Date(t.last_reply_at).getTime() : 0);
-  const fresh = theirs.filter((m) => (m.timestamp ?? 0) > seen);
+  /* compared by the second: the stored time loses Crisp's milliseconds, and a
+     message read already must never look newer than itself (it would be read,
+     and noted on Crisp, again on every run) */
+  const sec = (ms: number) => Math.floor(ms / 1000);
+  const fresh = theirs.filter((m) => sec(m.timestamp ?? 0) > sec(seen));
   const sets: string[] = ["tracked_at = now()", "updated_at = now()"];
   const args: unknown[] = [t.id];
   const set = (col: string, v: unknown) => {
