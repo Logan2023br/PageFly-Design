@@ -163,6 +163,15 @@ create table if not exists ssu_settings (
 );
 /* AC2 is read only through n8n now: a token pasted before that goes. */
 delete from ssu_settings where key = 'conn:ac2_token';
+/* Once, 2026-11-25: the App Store review is read from AC2 now — every store is
+   read again on the next refreshes (20 a minute), not only after its 24 hours. */
+do $$
+begin
+  if not exists (select 1 from ssu_settings where key = '_once_ac2_review_20261125') then
+    insert into ssu_settings (key, value) values ('_once_ac2_review_20261125', 'true'::jsonb);
+    update ssu_customers set ac2_synced_at = null where ac2_review is null;
+  end if;
+end $$;
 /* Once, on 2026-10-26: every message approved by mistake goes back to
    Chờ duyệt, unsent. The marker row keeps it from running again. */
 do $$
