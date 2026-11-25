@@ -58,6 +58,36 @@ export function matchEntry(entry: string, pages: LoganPage[]): LoganPage | null 
       if (!best || k.length > best.len || (k.length === best.len && at > best.at)) best = { page, len: k.length, at };
     }
   }
+  if (best) return best.page;
+  return truncated(words, pages);
+}
+
+/**
+ * PageFly cuts a long page name in its export ("Shahbaz and Sons Collectio",
+ * "… White Fri", "… Blog arti"): the name then ENDS part-way through the
+ * label. Matched when the name's last words are the label's first words, the
+ * very last one cut short (at least 3 letters of it, and 5 letters in all).
+ * The most of the label wins.
+ */
+function truncated(words: string[], pages: LoganPage[]): LoganPage | null {
+  let best: { page: LoganPage; chars: number } | null = null;
+  const last = words[words.length - 1] ?? "";
+  if (last.length < 2) return null;
+  for (const page of pages) {
+    for (const key of [page.label, page.slug]) {
+      const k = norm(key).split(" ").filter(Boolean);
+      for (let j = Math.min(k.length, words.length); j >= 1; j--) {
+        const head = words.slice(words.length - j, -1);
+        if (!head.every((w, i) => w === k[i])) continue;
+        const cut = k[j - 1];
+        if (!cut.startsWith(last) || last === cut) continue;
+        const chars = head.join("").length + last.length;
+        if (last.length < 3 || chars < 5) continue;
+        if (!best || chars > best.chars) best = { page, chars };
+        break;
+      }
+    }
+  }
   return best?.page ?? null;
 }
 

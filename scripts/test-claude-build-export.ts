@@ -74,6 +74,18 @@ const real: [string, string][] = [
 for (const [n, slug] of real) check(matchEntry(n, P7)?.slug === slug, `${n} → ${slug}`, matchEntry(n, P7)?.slug);
 check(matchEntry("1 - Home & Co - Product.json", P7)?.slug === "product", "a set named after a page: the label nearer the end");
 
+/* PageFly cuts long names in its export: the label is then the end of the name, cut short */
+const SH = [
+  ["home", "Home"],
+  ["collection", "Collection"],
+  ["blog-article", "Blog Article"],
+  ["white-friday-sale", "White Friday Sale"],
+].map(([slug, label]) => ({ slug, label, title: `SHAHBAZ & SONS - ${label}`, pageId: null, editorUrl: null, previewUrl: null }));
+check(matchEntry("1 - 3 _ Shahbaz and Sons Collectio.json", SH)?.slug === "collection", "a name cut short: Collectio → collection");
+check(matchEntry("3 - 5 _ Shahbaz and Sons White Fri.json", SH)?.slug === "white-friday-sale", "a name cut short: White Fri → white-friday-sale");
+check(matchEntry("4 - 6 _ Shahbaz and Sons Blog arti.json", SH)?.slug === "blog-article", "a name cut short: Blog arti → blog-article");
+check(matchEntry("8 - Shahbaz and Sons So.json", SH) === null, "a name cut to 2 letters matches nothing");
+
 console.log("not a zip");
 let threw = false;
 try {
