@@ -108,6 +108,7 @@ export function SlackCard({
   onShift,
   fallback,
   ids,
+  unsent,
 }: {
   token: { from: string | null; hint: string | null };
   channel: string;
@@ -115,11 +116,27 @@ export function SlackCard({
   fallback: string;
   /** what slack_ts_ids holds now: each name and its id; example ids flagged */
   ids: { name: string; id: string; example: boolean }[];
+  /** cases on Khách đồng ý not on Slack yet */
+  unsent: number;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<{ tagged: string[]; missing: string[]; store?: string } | null>(null);
   const ready = Boolean(token.from);
+  const [late, setLate] = useState<string | null>(null);
+  const sendUnsent = async () => {
+    setBusy(true);
+    setError(null);
+    setLate(null);
+    const res = await fetch(RUN, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "slack_agreed" }) })
+      .then((r) => r.json() as Promise<{ ok: boolean; error?: string; slack?: { sent: string[]; failed: { store: string; error: string }[] } }>)
+      .catch(() => null);
+    setBusy(false);
+    if (!res?.ok || !res.slack) return setError(res?.error ?? "Không gọi được máy chủ.");
+    const s = res.slack;
+    setLate(s.sent.length ? `Đã báo Slack: ${s.sent.join(" · ")}` : "Không có case nào cần báo.");
+    if (s.failed.length) setError(`Lỗi: ${s.failed.map((f) => `${f.store} — ${f.error}`).join(" · ")}`);
+  };
   const test = async () => {
     setBusy(true);
     setError(null);
@@ -171,6 +188,12 @@ export function SlackCard({
         <Button size="sm" variant="ghost" icon="Send" disabled={busy || !ready || !channel.trim()} onClick={() => void test()}>
           {busy ? "Đang gửi…" : "Gửi thử lên Slack"}
         </Button>
+        {unsent > 0 && (
+          <Button size="sm" icon="Send" disabled={busy || !ready || !channel.trim()} onClick={() => void sendUnsent()}>
+            Báo Slack cho {unsent} khách đồng ý chưa báo
+          </Button>
+        )}
+        {late && <span className="text-[12px] text-pf-success">{late}</span>}
         {sent && (
           <span className="text-[12px] text-pf-success">
             Đã gửi{sent.store ? ` (mẫu: ${sent.store})` : ""} — {sent.tagged.length ? `tag ${sent.tagged.join(", ")}` : "không tag ai (chưa TS nào trong ca có Slack ID)"}

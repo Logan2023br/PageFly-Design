@@ -21,6 +21,7 @@ import {
   abVerdict,
   byDay,
   listTargets,
+  countAgreedUnsent,
   notesFor,
   recentRecapRows,
   segmentStats,
@@ -141,9 +142,10 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
     );
   } else if (tab === "settings") {
     const conn = (await connectionStates()).find((c) => c.key === "ursp_slack_bot_token");
+    const unsentSlack = await countAgreedUnsent();
     body = (
       <div className="grid gap-4">
-      <SlackCard token={{ from: conn?.from ?? null, hint: conn?.hint ?? null }} channel={cfg.slack_channel} onShift={tsOnShift(cfg.ts_roster)} fallback={cfg.sender_name} ids={slackIdsAsTyped(cfg.slack_ts_ids)} />
+      <SlackCard token={{ from: conn?.from ?? null, hint: conn?.hint ?? null }} channel={cfg.slack_channel} onShift={tsOnShift(cfg.ts_roster)} fallback={cfg.sender_name} ids={slackIdsAsTyped(cfg.slack_ts_ids)} unsent={unsentSlack} />
       <SettingsForm
         initial={cfg}
         help={URSP_HELP}
@@ -1213,6 +1215,12 @@ function SentTable({ rows, followupHours, notes, focus }: { rows: UrspTarget[]; 
                     {t.last_reply_text && <div className="line-clamp-4 text-[11.5px] text-pf-body">{t.last_reply_text}</div>}
                     {t.mood_note && <div className="text-[11px] italic text-pf-muted">{t.mood_note}</div>}
                     {t.mentioned_at && <span className="text-[11px] text-pf-faint">Đã note mention Logan</span>}
+                    {t.reply_intent === "agree" &&
+                      (t.slack_at ? (
+                        <span className="text-[11px] text-pf-faint">Đã báo Slack {short(t.slack_at)}</span>
+                      ) : (
+                        <span className="text-[11px] text-pf-warn">Chưa báo Slack — Cài đặt › Báo Slack</span>
+                      ))}
                   </div>
                 ) : (
                   <span className="text-pf-faint">—</span>

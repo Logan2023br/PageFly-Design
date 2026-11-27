@@ -532,3 +532,9 @@ export function abPick(A: AbArm, B: AbArm): AbPick {
       : `Bản ${winner} nhỉnh hơn về ${ahead.join(", ")} — nhưng chưa chỉ số nào chênh đủ chắc chắn (p < 0.05), có thể chỉ là ngẫu nhiên.`,
   );
 }
+
+/** Cases on Khách đồng ý not on Slack yet — the settings tab offers to send them. */
+export async function countAgreedUnsent(): Promise<number> {
+  const { rows } = await (await db()).query<{ n: number }>(`select count(*)::int as n from ursp_targets t where ${TAB_SQL.agreed} and t.slack_at is null`);
+  return rows[0]?.n ?? 0;
+}

@@ -239,3 +239,29 @@ export async function slackTest(cfg: UrspSettings): Promise<{ tagged: string[]; 
   if (!sent) throw new UpsellError("Chưa có Slack bot token (URSP_SLACK_BOT_TOKEN trong .env của VPS) — chưa gửi được", 409);
   return { ...sent, store: t.store_name || t.store_domain };
 }
+
+/**
+ * "Báo Slack" by hand: every case on Khách đồng ý not on Slack yet (the yes
+ * came while Slack could not be reached, or before it was set up) — sent now,
+ * each marked, and what went wrong said per store.
+ */
+export async function slackAgreedNow(cfg: UrspSettings, by: string): Promise<{ sent: string[]; failed: { store: string; error: string }[] }> {
+  const { db, logEvent } = await import("./db");
+  const { TAB_SQL } = await import("./queries");
+  const p = await db();
+  const { rows } = await p.query<UrspTarget>(`select * from ursp_targets t where ${TAB_SQL.agreed} and t.slack_at is null order by t.last_reply_at`);
+  const out = { sent: [] as string[], failed: [] as { store: string; error: string }[] };
+  for (const t of rows) {
+    const store = t.store_name || t.store_domain;
+    try {
+      const r = await slackAgree(t, cfg);
+      if (!r) throw new Error("Chưa có Slack bot token (URSP_SLACK_BOT_TOKEN trong .env của VPS)");
+      await p.query("update ursp_targets set slack_at = now(), updated_at = now() where id = $1", [t.id]);
+      await logEvent(p, t.id, "slack", by, { tagged: r.tagged, by_hand: true });
+      out.sent.push(`${store} → ${r.tagged.join(", ") || "không tag"}`);
+    } catch (err) {
+      out.failed.push({ store, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  return out;
+}

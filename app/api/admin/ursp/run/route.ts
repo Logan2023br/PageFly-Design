@@ -25,6 +25,10 @@ export async function POST(req: Request) {
       return json({ ok: true, run });
     }
     if (action === "segment_cleanup") return json({ ok: true, cleanup: await startSegmentCleanup(by) });
+    if (action === "slack_agreed") {
+      const { slackAgreedNow } = await import("@/lib/ursp/slack");
+      return json({ ok: true, slack: await slackAgreedNow(await getUrspSettings(), by) });
+    }
     if (action === "slack_test") {
       const { slackTest } = await import("@/lib/ursp/slack");
       return json({ ok: true, slack: await slackTest(await getUrspSettings()) });
