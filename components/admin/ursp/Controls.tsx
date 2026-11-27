@@ -108,7 +108,7 @@ export function SlackCard({
   onShift,
   fallback,
   ids,
-  unsent,
+  agreed,
 }: {
   token: { from: string | null; hint: string | null };
   channel: string;
@@ -116,9 +116,10 @@ export function SlackCard({
   fallback: string;
   /** what slack_ts_ids holds now: each name and its id; example ids flagged */
   ids: { name: string; id: string; example: boolean }[];
-  /** cases on Khách đồng ý not on Slack yet */
-  unsent: number;
+  /** cases on Khách đồng ý, and which went to Slack */
+  agreed: { agreed: number; unsent: number; stores: { name: string; slack_at: string | null }[] };
 }) {
+  const unsent = agreed.unsent;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<{ tagged: string[]; missing: string[]; store?: string } | null>(null);
@@ -180,6 +181,17 @@ export function SlackCard({
           )}
         </li>
         <li>
+          <b className="text-pf-text">Khách đồng ý:</b> {agreed.agreed} · đã báo Slack {agreed.agreed - unsent} · <span className={unsent ? "text-pf-warn" : ""}>chưa báo {unsent}</span>
+          {agreed.stores.length > 0 && (
+            <span className="text-pf-faint">
+              {" "}
+              ({agreed.stores
+                .map((s) => `${s.name}: ${s.slack_at ? `đã báo ${new Date(s.slack_at).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}` : "chưa báo"}`)
+                .join(" · ")})
+            </span>
+          )}
+        </li>
+        <li>
           <b className="text-pf-text">TS trong ca lúc này:</b>{" "}
           {onShift.length ? onShift.join(", ") : <span className="text-pf-muted">không ai theo ts_roster — sẽ tag {fallback}</span>}
         </li>
@@ -188,11 +200,9 @@ export function SlackCard({
         <Button size="sm" variant="ghost" icon="Send" disabled={busy || !ready || !channel.trim()} onClick={() => void test()}>
           {busy ? "Đang gửi…" : "Gửi thử lên Slack"}
         </Button>
-        {unsent > 0 && (
-          <Button size="sm" icon="Send" disabled={busy || !ready || !channel.trim()} onClick={() => void sendUnsent()}>
-            Báo Slack cho {unsent} khách đồng ý chưa báo
-          </Button>
-        )}
+        <Button size="sm" icon="Send" disabled={busy || !ready || !channel.trim() || unsent === 0} onClick={() => void sendUnsent()}>
+          {unsent > 0 ? `Báo Slack cho ${unsent} khách đồng ý chưa báo` : "Không còn khách đồng ý nào chưa báo Slack"}
+        </Button>
         {late && <span className="text-[12px] text-pf-success">{late}</span>}
         {sent && (
           <span className="text-[12px] text-pf-success">

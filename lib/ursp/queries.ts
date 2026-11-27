@@ -533,8 +533,14 @@ export function abPick(A: AbArm, B: AbArm): AbPick {
   );
 }
 
-/** Cases on Khách đồng ý not on Slack yet — the settings tab offers to send them. */
-export async function countAgreedUnsent(): Promise<number> {
-  const { rows } = await (await db()).query<{ n: number }>(`select count(*)::int as n from ursp_targets t where ${TAB_SQL.agreed} and t.slack_at is null`);
-  return rows[0]?.n ?? 0;
+/** Cases on Khách đồng ý, and how many are not on Slack yet — the settings tab shows both and offers to send them. */
+export async function countAgreedUnsent(): Promise<{ agreed: number; unsent: number; stores: { name: string; slack_at: string | null }[] }> {
+  const { rows } = await (await db()).query<{ store_name: string | null; store_domain: string; slack_at: string | null }>(
+    `select store_name, store_domain, slack_at from ursp_targets t where ${TAB_SQL.agreed} order by t.last_reply_at desc`,
+  );
+  return {
+    agreed: rows.length,
+    unsent: rows.filter((r) => !r.slack_at).length,
+    stores: rows.map((r) => ({ name: r.store_name || r.store_domain, slack_at: r.slack_at ? new Date(r.slack_at).toISOString() : null })),
+  };
 }

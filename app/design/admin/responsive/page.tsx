@@ -142,10 +142,10 @@ export default async function UrspPage(props: PageProps<"/design/admin/responsiv
     );
   } else if (tab === "settings") {
     const conn = (await connectionStates()).find((c) => c.key === "ursp_slack_bot_token");
-    const unsentSlack = await countAgreedUnsent();
+    const agreedSlack = await countAgreedUnsent();
     body = (
       <div className="grid gap-4">
-      <SlackCard token={{ from: conn?.from ?? null, hint: conn?.hint ?? null }} channel={cfg.slack_channel} onShift={tsOnShift(cfg.ts_roster)} fallback={cfg.sender_name} ids={slackIdsAsTyped(cfg.slack_ts_ids)} unsent={unsentSlack} />
+      <SlackCard token={{ from: conn?.from ?? null, hint: conn?.hint ?? null }} channel={cfg.slack_channel} onShift={tsOnShift(cfg.ts_roster)} fallback={cfg.sender_name} ids={slackIdsAsTyped(cfg.slack_ts_ids)} agreed={agreedSlack} />
       <SettingsForm
         initial={cfg}
         help={URSP_HELP}
