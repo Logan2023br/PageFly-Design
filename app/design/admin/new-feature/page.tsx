@@ -72,7 +72,7 @@ export default async function NffPage(props: PageProps<"/design/admin/new-featur
       current="nff"
       title="Feedback New Feature"
       subtitle="Giới thiệu tính năng mới của PageFly (Funnel Builder, Bundles, Post-purchase offer) cho các store đã xử lý xong ở Upsell Responsive (Đã xử lý / Kết thúc), hỏi khách cần tính năng nào. Tin chờ duyệt mới gửi; mỗi giờ kiểm tra đã xem / phản hồi."
-      actions={<RunControls pending={f.pending} />}
+      actions={<RunControls pending={f.pending} failed={f.failed} />}
     >
       <div className="grid gap-4">
         {job && (

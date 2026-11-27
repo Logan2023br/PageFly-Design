@@ -304,6 +304,18 @@ export async function targetAction(id: string, action: TargetAction, by: string,
   if (action === "approve" || action === "retry") void runSend().catch((err) => console.error("[nff] send after approve", err));
 }
 
+/** Gửi lại tất cả tin lỗi: every failed message goes back to Chờ gửi and is sent
+    again, still waiting for the conversation to be quiet like any approved one. */
+export async function retryAllFailed(by: string): Promise<number> {
+  const p = await db();
+  const { rows } = await p.query<{ id: string }>(
+    `update nff_targets set status = 'approved', error = null, updated_at = now() where status = 'failed' returning id`,
+  );
+  for (const r of rows) await logEvent(r.id, "retry", by);
+  if (rows.length) void runSend().catch((err) => console.error("[nff] send after retry all", err));
+  return rows.length;
+}
+
 /** Duyệt & gửi tất cả: every message on Chờ duyệt, as written. */
 export async function approveAll(by: string): Promise<number> {
   const p = await db();

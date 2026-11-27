@@ -12,9 +12,10 @@ import { ErrorLine, useAct } from "../upsell/bits";
 const RUN = "/api/admin/nff/run";
 const row = (id: string) => `/api/admin/nff/targets/${id}`;
 
-export function RunControls({ pending }: { pending: number }) {
+export function RunControls({ pending, failed }: { pending: number; failed: number }) {
   const [run, busy, error] = useAct();
   const [sure, setSure] = useState(false);
+  const [sureRetry, setSureRetry] = useState(false);
   return (
     <div className="grid justify-items-end gap-1">
       <div className="flex flex-wrap items-center gap-2">
@@ -31,6 +32,21 @@ export function RunControls({ pending }: { pending: number }) {
           ) : (
             <Button size="sm" variant="ghost" icon="Send" disabled={busy} onClick={() => setSure(true)}>
               Duyệt & gửi tất cả ({pending})
+            </Button>
+          ))}
+        {failed > 0 &&
+          (sureRetry ? (
+            <>
+              <Button size="sm" icon="RotateCcw" disabled={busy} onClick={() => void run(RUN, { action: "retry_failed" }).then(() => setSureRetry(false))}>
+                Gửi lại {failed} tin ngay
+              </Button>
+              <Button size="sm" variant="quiet" disabled={busy} onClick={() => setSureRetry(false)}>
+                Thôi
+              </Button>
+            </>
+          ) : (
+            <Button size="sm" variant="ghost" icon="RotateCcw" disabled={busy} onClick={() => setSureRetry(true)}>
+              Gửi lại tất cả tin lỗi ({failed})
             </Button>
           ))}
         <Button size="sm" icon="RefreshCw" disabled={busy} onClick={() => void run(RUN, { action: "run" })}>

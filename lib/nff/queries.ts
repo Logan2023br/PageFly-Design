@@ -24,6 +24,8 @@ const WHERE: Record<Exclude<NffTab, "settings">, string> = {
 export type Funnel = {
   /** on Chờ duyệt, not approved yet */
   pending: number;
+  /** sending failed, waiting for Gửi lại */
+  failed: number;
   queued: number;
   sent: number;
   read: number;
@@ -38,6 +40,7 @@ export type Funnel = {
 export async function funnel(): Promise<Funnel> {
   const { rows } = await (await db()).query<Funnel>(`
     select count(*) filter (where status = 'pending')::int as pending,
+           count(*) filter (where status = 'failed')::int as failed,
            count(*) filter (where status in ('pending','approved','failed'))::int as queued,
            count(*) filter (where status = 'sent')::int as sent,
            count(*) filter (where read_at is not null)::int as read,
