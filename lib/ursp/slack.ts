@@ -245,11 +245,19 @@ export async function slackTest(cfg: UrspSettings): Promise<{ tagged: string[]; 
  * came while Slack could not be reached, or before it was set up) — sent now,
  * each marked, and what went wrong said per store.
  */
-export async function slackAgreedNow(cfg: UrspSettings, by: string): Promise<{ sent: string[]; failed: { store: string; error: string }[] }> {
+export async function slackAgreedNow(
+  cfg: UrspSettings,
+  by: string,
+  /** again: those already on Slack too; store: only that one (its domain) */
+  opts: { again?: boolean; store?: string } = {},
+): Promise<{ sent: string[]; failed: { store: string; error: string }[] }> {
   const { db, logEvent } = await import("./db");
   const { TAB_SQL } = await import("./queries");
   const p = await db();
-  const { rows } = await p.query<UrspTarget>(`select * from ursp_targets t where ${TAB_SQL.agreed} and t.slack_at is null order by t.last_reply_at`);
+  const { rows } = await p.query<UrspTarget>(
+    `select * from ursp_targets t where ${TAB_SQL.agreed}${opts.again ? "" : " and t.slack_at is null"}${opts.store ? " and t.store_domain = $1" : ""} order by t.last_reply_at`,
+    opts.store ? [opts.store] : [],
+  );
   const out = { sent: [] as string[], failed: [] as { store: string; error: string }[] };
   for (const t of rows) {
     const store = t.store_name || t.store_domain;
@@ -257,7 +265,7 @@ export async function slackAgreedNow(cfg: UrspSettings, by: string): Promise<{ s
       const r = await slackAgree(t, cfg);
       if (!r) throw new Error("Chưa có Slack bot token (URSP_SLACK_BOT_TOKEN trong .env của VPS)");
       await p.query("update ursp_targets set slack_at = now(), updated_at = now() where id = $1", [t.id]);
-      await logEvent(p, t.id, "slack", by, { tagged: r.tagged, by_hand: true });
+      await logEvent(p, t.id, "slack", by, { tagged: r.tagged, by_hand: true, again: !!t.slack_at });
       out.sent.push(`${store} → ${r.tagged.join(", ") || "không tag"}`);
     } catch (err) {
       out.failed.push({ store, error: err instanceof Error ? err.message : String(err) });

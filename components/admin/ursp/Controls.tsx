@@ -117,7 +117,7 @@ export function SlackCard({
   /** what slack_ts_ids holds now: each name and its id; example ids flagged */
   ids: { name: string; id: string; example: boolean }[];
   /** cases on Khách đồng ý, and which went to Slack */
-  agreed: { agreed: number; unsent: number; stores: { name: string; slack_at: string | null }[] };
+  agreed: { agreed: number; unsent: number; stores: { name: string; domain: string; slack_at: string | null }[] };
 }) {
   const unsent = agreed.unsent;
   const [busy, setBusy] = useState(false);
@@ -125,11 +125,11 @@ export function SlackCard({
   const [sent, setSent] = useState<{ tagged: string[]; missing: string[]; store?: string } | null>(null);
   const ready = Boolean(token.from);
   const [late, setLate] = useState<string | null>(null);
-  const sendUnsent = async () => {
+  const sendUnsent = async (opts: { again?: boolean; store?: string } = {}) => {
     setBusy(true);
     setError(null);
     setLate(null);
-    const res = await fetch(RUN, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "slack_agreed" }) })
+    const res = await fetch(RUN, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "slack_agreed", ...opts }) })
       .then((r) => r.json() as Promise<{ ok: boolean; error?: string; slack?: { sent: string[]; failed: { store: string; error: string }[] } }>)
       .catch(() => null);
     setBusy(false);
@@ -183,11 +183,20 @@ export function SlackCard({
         <li>
           <b className="text-pf-text">Khách đồng ý:</b> {agreed.agreed} · đã báo Slack {agreed.agreed - unsent} · <span className={unsent ? "text-pf-warn" : ""}>chưa báo {unsent}</span>
           {agreed.stores.length > 0 && (
-            <span className="text-pf-faint">
-              {" "}
-              ({agreed.stores
-                .map((s) => `${s.name}: ${s.slack_at ? `đã báo ${new Date(s.slack_at).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}` : "chưa báo"}`)
-                .join(" · ")})
+            <span className="mt-1 grid gap-1">
+              {agreed.stores.map((s) => (
+                <span key={s.domain} className="flex flex-wrap items-center gap-2 text-pf-faint">
+                  <span className="text-pf-body">{s.name}</span>
+                  <span>
+                    {s.slack_at
+                      ? `đã báo ${new Date(s.slack_at).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}`
+                      : "chưa báo"}
+                  </span>
+                  <Button size="sm" variant="quiet" icon="Send" disabled={busy || !ready || !channel.trim()} onClick={() => void sendUnsent({ again: true, store: s.domain })}>
+                    {s.slack_at ? "Gửi lại" : "Gửi"}
+                  </Button>
+                </span>
+              ))}
             </span>
           )}
         </li>
@@ -200,9 +209,17 @@ export function SlackCard({
         <Button size="sm" variant="ghost" icon="Send" disabled={busy || !ready || !channel.trim()} onClick={() => void test()}>
           {busy ? "Đang gửi…" : "Gửi thử lên Slack"}
         </Button>
-        <Button size="sm" icon="Send" disabled={busy || !ready || !channel.trim() || unsent === 0} onClick={() => void sendUnsent()}>
-          {unsent > 0 ? `Báo Slack cho ${unsent} khách đồng ý chưa báo` : "Không còn khách đồng ý nào chưa báo Slack"}
-        </Button>
+        {unsent > 0 ? (
+          <Button size="sm" icon="Send" disabled={busy || !ready || !channel.trim()} onClick={() => void sendUnsent()}>
+            Báo Slack cho {unsent} khách đồng ý chưa báo
+          </Button>
+        ) : (
+          agreed.agreed > 0 && (
+            <Button size="sm" variant="ghost" icon="Send" disabled={busy || !ready || !channel.trim()} onClick={() => void sendUnsent({ again: true })}>
+              Gửi lại Slack cả {agreed.agreed} khách đồng ý
+            </Button>
+          )
+        )}
         {late && <span className="text-[12px] text-pf-success">{late}</span>}
         {sent && (
           <span className="text-[12px] text-pf-success">

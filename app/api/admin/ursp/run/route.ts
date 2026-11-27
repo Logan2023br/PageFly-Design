@@ -16,7 +16,8 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   if (!(await readAdminSection("ursp"))) return json({ ok: false, error: "Not signed in." }, 401);
   try {
-    const { action, from, split, mode } = await readJson(req);
+    const body = await readJson(req);
+    const { action, from, split, mode } = body;
     const by = `admin:${(await readAdminName()) ?? "admin"}`;
     if (action === "start" || action === "pause") {
       const run = await setRunning(action === "start", by);
@@ -27,7 +28,13 @@ export async function POST(req: Request) {
     if (action === "segment_cleanup") return json({ ok: true, cleanup: await startSegmentCleanup(by) });
     if (action === "slack_agreed") {
       const { slackAgreedNow } = await import("@/lib/ursp/slack");
-      return json({ ok: true, slack: await slackAgreedNow(await getUrspSettings(), by) });
+      return json({
+        ok: true,
+        slack: await slackAgreedNow(await getUrspSettings(), by, {
+          again: body.again === true,
+          store: typeof body.store === "string" && body.store ? body.store : undefined,
+        }),
+      });
     }
     if (action === "slack_test") {
       const { slackTest } = await import("@/lib/ursp/slack");
