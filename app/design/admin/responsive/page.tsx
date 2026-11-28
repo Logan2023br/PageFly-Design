@@ -467,7 +467,11 @@ function AfterDone({ s, sentA, sentB }: { s: SegmentStats[]; sentA: number; sent
     { label: "Phản hồi", n: sum("replied"), note: `${pct(sum("replied"), sent)} đã gửi` },
     { label: "Đồng ý", n: sum("agree"), note: `${pct(sum("agree"), sum("replied"))} người phản hồi` },
     { label: "Đã xử lý xong", n: done, note: `${sum("working")} đang xử lý · ${sum("done_open")} phản hồi chưa xử lý` },
-    { label: "Nâng cấp (case đã xử lý)", n: sum("upgraded_after_done"), note: `${pct(sum("upgraded_after_done"), done)} đã xử lý · tổng ${sum("upgraded")} (+$${Math.round(sum("mrr"))})` },
+    {
+      label: "Nâng cấp",
+      n: sum("upgraded"),
+      note: `${pct(sum("upgraded"), sent)} đã gửi · ${sum("upgraded_after_done")} sau xử lý · ${sum("upgraded_organic")} organic · ${sum("upgraded_normal")} thường (+$${Math.round(sum("mrr"))})`,
+    },
     { label: "Review sau xử lý", n: sum("reviewed_after_done"), note: `${pct(sum("reviewed_after_done"), done)} đã xử lý · tổng ${sum("reviewed")}` },
     { label: "Hài lòng", n: sum("happy"), note: `${pct(sum("happy"), moods)} · ${sum("neutral")} bình thường · ${sum("unhappy")} không` },
   ];
@@ -1233,7 +1237,16 @@ function SentTable({ rows, followupHours, notes, focus }: { rows: UrspTarget[]; 
                       Nâng cấp {short(t.upgraded_at)}
                       <br />
                       <b className="font-semibold">{upgradePath(t)}</b>
-                      {t.done_at ? (t.upgraded_at >= t.done_at ? " (sau xử lý)" : " (trước khi xử lý xong)") : ""}
+                      <br />
+                      <b className="font-semibold">
+                        {t.done_at || t.closed_at
+                          ? t.done_at && t.upgraded_at < t.done_at
+                            ? "Case đã xử lý (nâng cấp trước khi xử lý xong)"
+                            : "Sau xử lý"
+                          : t.read_at && t.read_at <= t.upgraded_at
+                            ? "Organic · đã xem tin"
+                            : "Thường · chưa xem tin"}
+                      </b>
                     </span>
                   ) : (
                     <span className="text-pf-faint">Chưa nâng cấp{t.pf_plan ? ` · ${t.pf_plan}` : ""}</span>

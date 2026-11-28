@@ -42,9 +42,9 @@ export const TAB_SQL: Record<Exclude<UrspTab, "overview" | "settings"> | "replie
   working: "t.status = 'sent' and t.working_at is not null and t.done_at is null and t.dismissed_at is null",
   done: "t.status = 'sent' and t.done_at is not null and t.closed_at is null",
   closed: "t.status = 'sent' and t.closed_at is not null",
-  /* a case we handled (Đã xử lý or Kết thúc) whose store went paid after the message —
-     before, during or after the fix: customers often upgrade while we work */
-  upgraded: "t.status = 'sent' and t.upgraded_at is not null and (t.done_at is not null or t.closed_at is not null)",
+  /* every store that went paid after the message — handled by us (sau xử lý), or not:
+     read the offer first (organic), or never read it (thường) */
+  upgraded: "t.status = 'sent' and t.upgraded_at is not null",
   /* marked by hand: the store gave a 5★ review (the row stays in Đã xử lý / Kết thúc too) */
   review5: "t.status = 'sent' and t.review5_at is not null",
   dismissed: "t.status = 'sent' and t.dismissed_at is not null",
@@ -164,6 +164,9 @@ export type SegmentStats = {
   dismissed: number;
   upgraded: number;
   upgraded_after_done: number;
+  /** not handled: read the offer before upgrading (organic), or never read it (thường) */
+  upgraded_organic: number;
+  upgraded_normal: number;
   mrr: number;
   reviewed: number;
   reviewed_after_done: number;
@@ -195,6 +198,8 @@ const STATS_SQL = `count(*)::int as found,
   count(*) filter (where t.dismissed_at is not null)::int as dismissed,
   count(*) filter (where t.upgraded_at is not null)::int as upgraded,
   count(*) filter (where t.upgraded_at is not null and (t.done_at is not null or t.closed_at is not null))::int as upgraded_after_done,
+  count(*) filter (where t.upgraded_at is not null and t.done_at is null and t.closed_at is null and t.read_at is not null and t.read_at <= t.upgraded_at)::int as upgraded_organic,
+  count(*) filter (where t.upgraded_at is not null and t.done_at is null and t.closed_at is null and (t.read_at is null or t.read_at > t.upgraded_at))::int as upgraded_normal,
   coalesce(sum(t.upgraded_price) filter (where t.upgraded_at is not null), 0)::float as mrr,
   count(*) filter (where t.reviewed_at is not null)::int as reviewed,
   count(*) filter (where t.reviewed_at is not null and t.done_at is not null and t.reviewed_at >= t.done_at)::int as reviewed_after_done,
@@ -245,6 +250,8 @@ export async function segmentStats(f: UrspFilters): Promise<Record<Segment, Segm
     dismissed: 0,
     upgraded: 0,
     upgraded_after_done: 0,
+    upgraded_organic: 0,
+    upgraded_normal: 0,
     mrr: 0,
     reviewed: 0,
     reviewed_after_done: 0,
