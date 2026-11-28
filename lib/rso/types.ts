@@ -91,11 +91,24 @@ export type RsoTarget = {
   tracked_at: string | null;
   /** the last customer message read (about the stock or not) — the next read starts after it */
   reply_seen_at: string | null;
+  upgraded_at: string | null;
+  upgraded_from: string | null;
+  upgraded_to: string | null;
+  upgraded_price: string | null;
+  ac2_checked_at: string | null;
   /** when the sender was mentioned on the customer's first reply about the stock */
   mentioned_at: string | null;
   created_at: string;
   updated_at: string;
 };
+
+/**
+ * How an upgrade came: organic — they had read the heads-up before upgrading;
+ * thường — sent, never read (or read only after), and upgraded anyway.
+ */
+export const upgradeKind = (t: Pick<RsoTarget, "upgraded_at" | "read_at">): "organic" | "normal" | null =>
+  !t.upgraded_at ? null : t.read_at && new Date(t.read_at).getTime() <= new Date(t.upgraded_at).getTime() ? "organic" : "normal";
+export const UPGRADE_KIND_LABEL = { organic: "Nâng cấp organic (đã xem tin)", normal: "Nâng cấp thường (chưa xem tin)" } as const;
 
 /** "VitaTok CGM, SusWel Sensor" — the first product of each page. */
 export const productNames = (pages: RsoPage[]) => [...new Set(pages.map((p) => p.products[0] || p.title).filter(Boolean))];

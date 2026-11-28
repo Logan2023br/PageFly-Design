@@ -4,6 +4,7 @@ import {
   ConfigMissing,
   ac2ProxyGet,
   ac2Store,
+  ac2UpgradeTime,
   conversationMessages,
   crispSender,
   customerMeta,
@@ -49,6 +50,9 @@ const TICK_MS = 5 * 60_000;
 const SCAN_EVERY_MS = 60 * 60_000;
 const TRACK_EVERY_MS = 15 * 60_000;
 const CHECK_EVERY_MS = 60 * 60_000;
+/* each sent store's plan read again on AC2 this often (a batch every tick) */
+const UPGRADE_EVERY_MS = 3 * 60 * 60_000;
+const UPGRADE_BATCH = 30;
 /* the Radar had this long to re-scan after check_after_days; after that, a person looks */
 const MANUAL_AFTER_DAYS = 10;
 const DAY = 86_400_000;
@@ -559,9 +563,51 @@ export async function check(cfg: RsoSettings): Promise<{ restocked: number; stil
   return out;
 }
 
+/* ---------------------------------------------------------------- upgrades */
+
+/**
+ * The stores sent the heads-up, their PageFly plan read again on AC2: a price
+ * above the one when they were taken is an upgrade, timed by AC2's charge
+ * after the heads-up (else when it was seen). Once, per store.
+ */
+export async function checkUpgrades(): Promise<number> {
+  const pool = await db();
+  const { rows } = await pool.query<RsoTarget>(
+    `select * from rso_targets where status = 'sent' and upgraded_at is null
+       and (ac2_checked_at is null or ac2_checked_at < now() - make_interval(secs => $1::int))
+     order by ac2_checked_at nulls first limit $2`,
+    [Math.round(UPGRADE_EVERY_MS / 1000), UPGRADE_BATCH],
+  );
+  let found = 0;
+  for (const t of rows) {
+    const st = await ac2Store(t.store_domain).catch(() => null);
+    await pool.query(`update rso_targets set ac2_checked_at = now() where id = $1`, [t.id]);
+    if (!st) continue;
+    const price = Number(st.pageflyPrice ?? 0) || 0;
+    const before = t.pf_price === null ? 0 : Number(t.pf_price);
+    if (price <= before) continue;
+    const at = await ac2UpgradeTime(t.store_domain, t.sent_at).catch(() => null);
+    const from = t.pf_plan ?? (before === 0 ? "Free" : `$${before}`);
+    await pool.query(
+      `update rso_targets set upgraded_at = $2, upgraded_from = $3, upgraded_to = $4, upgraded_price = $5, updated_at = now() where id = $1`,
+      [t.id, at ?? new Date().toISOString(), from, st.pageflyPlan ?? null, price],
+    );
+    await logEvent(pool, t.id, "upgraded", "system", { from, to: st.pageflyPlan ?? null, price, at });
+    found++;
+  }
+  return found;
+}
+
 /* ---------------------------------------------------------------- job */
 
-export type JobState = { at: string; scan?: ScanResult; checked?: { restocked: number; still: number; reviewed: number }; tracked?: number; errors: string[] };
+export type JobState = {
+  at: string;
+  scan?: ScanResult;
+  checked?: { restocked: number; still: number; reviewed: number };
+  tracked?: number;
+  upgraded?: number;
+  errors: string[];
+};
 
 /* Once per message version: what still waits on Chờ duyệt is rewritten in the
    current form (nothing pending was sent; an admin's edit is sent with its
@@ -610,6 +656,11 @@ export async function runJob(force = false): Promise<JobState | null> {
       for (const t of rows) await track(t, cfg).catch((err) => state.errors.push(`track ${t.store_domain}: ${err instanceof Error ? err.message : err}`));
       state.tracked = rows.length;
       clock.track = state.at;
+    }
+    try {
+      state.upgraded = await checkUpgrades();
+    } catch (err) {
+      state.errors.push(`upgrades: ${err instanceof Error ? err.message : err}`);
     }
     if (due("check", CHECK_EVERY_MS)) {
       try {

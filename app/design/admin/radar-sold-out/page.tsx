@@ -8,7 +8,7 @@ import { refreshPendingMessages, type JobState } from "@/lib/rso/core";
 import { getState, hasRsoDatabase } from "@/lib/rso/db";
 import { RSO_TABS, funnel, listTargets, tabCounts, type RsoTab } from "@/lib/rso/queries";
 import { RSO_HELP, RSO_NUMERIC, getRsoSettings, runState } from "@/lib/rso/settings";
-import { INTENT_LABEL, MOOD_LABEL, STAGE_LABEL, STATUS_LABEL, productNames, type RsoTarget } from "@/lib/rso/types";
+import { INTENT_LABEL, MOOD_LABEL, STAGE_LABEL, STATUS_LABEL, UPGRADE_KIND_LABEL, productNames, upgradeKind, type RsoTarget } from "@/lib/rso/types";
 
 /* /design/admin/radar-sold-out — Radar Sold Out: the Radar's "Tell them a
    product is out of stock" rows → a heads-up on Crisp → restocked? → a
@@ -40,11 +40,12 @@ export default async function RsoPage(props: PageProps<"/design/admin/radar-sold
   await refreshPendingMessages().catch(() => 0);
   const [run, cfg, f, counts, job] = await Promise.all([runState(), getRsoSettings(), funnel(), tabCounts(), getState<JobState>("last_job")]);
 
-  const steps = [
-    { label: "Tìm thấy", n: f.found - f.skipped, of: null as number | null },
+  const steps: { label: string; n: number; of: number | null; note?: string }[] = [
+    { label: "Tìm thấy", n: f.found - f.skipped, of: null },
     { label: "Đã gửi", n: f.sent, of: f.found - f.skipped },
     { label: "Đã xem", n: f.read, of: f.sent },
     { label: "Khách trả lời", n: f.replied, of: f.sent },
+    { label: "Đã nâng cấp", n: f.upgraded, of: f.sent, note: `${f.upgraded_organic} organic · ${f.upgraded_normal} thường${f.upgraded_mrr ? ` · +$${Math.round(f.upgraded_mrr)}` : ""}` },
     { label: "Đã nhập hàng", n: f.restocked, of: f.checked },
     { label: "Đã xin review", n: f.review_asked, of: f.restocked },
     { label: "Đã review", n: f.reviewed, of: f.review_asked },
@@ -97,17 +98,21 @@ export default async function RsoPage(props: PageProps<"/design/admin/radar-sold
               {job.scan?.notSelling ? ` (${job.scan.notSelling} store đang ngừng bán)` : ""}
               {job.scan?.tradeUnknown && <span className="block text-[11.5px]">Radar không gửi kèm số đơn hàng, chưa lọc được store ngừng bán — dữ liệu Radar có: {job.scan.tradeUnknown}</span>}
               {job.checked && ` · nhập hàng ${job.checked.restocked}, vẫn hết ${job.checked.still}, review ${job.checked.reviewed}`}
+              {job.upgraded ? ` · ${job.upgraded} store mới nâng cấp` : ""}
               {job.errors.length > 0 && <span className="text-pf-danger"> · lỗi: {job.errors.slice(0, 2).join(" | ")}</span>}
             </div>
           )}
         </section>
 
-        <section className="grid grid-cols-2 gap-px overflow-hidden rounded-pf-card border border-pf-border bg-pf-border sm:grid-cols-4 xl:grid-cols-7">
+        <section className="grid grid-cols-2 gap-px overflow-hidden rounded-pf-card border border-pf-border bg-pf-border sm:grid-cols-4 xl:grid-cols-8">
           {steps.map((s) => (
             <div key={s.label} className="grid gap-0.5 bg-pf-card px-4 py-3">
               <span className="text-[12px] text-pf-muted">{s.label}</span>
               <span className="text-[26px] font-bold leading-tight text-pf-text tabular-nums">{fmt(s.n)}</span>
-              <span className="text-[11.5px] text-pf-faint">{s.of === null ? `${fmt(f.skipped)} bị loại` : pct(s.n, s.of)}</span>
+              <span className="text-[11.5px] text-pf-faint">
+                {s.of === null ? `${fmt(f.skipped)} bị loại` : pct(s.n, s.of)}
+                {"note" in s && s.note ? ` · ${s.note}` : ""}
+              </span>
             </div>
           ))}
         </section>
@@ -177,6 +182,14 @@ function Card({ t, todo }: { t: RsoTarget; todo: boolean }) {
           {t.sent_at && <span>Gửi {short(t.sent_at)}{t.read_at ? " · đã xem" : ""}</span>}
           {t.review_asked_at && <span>Xin review {short(t.review_asked_at)}</span>}
           {t.app_review ? <span className="text-pf-success">{t.app_review}★</span> : null}
+          {t.upgraded_at && (
+            <span className="text-right text-pf-success">
+              Nâng cấp {short(t.upgraded_at)} · {t.upgraded_from ?? "?"} → {t.upgraded_to ?? "?"}
+              {t.upgraded_price ? ` ($${Number(t.upgraded_price)})` : ""}
+              <br />
+              <b>{UPGRADE_KIND_LABEL[upgradeKind(t)!]}</b>
+            </span>
+          )}
         </div>
       </header>
 

@@ -67,6 +67,12 @@ create table if not exists rso_targets (
   updated_at        timestamptz not null default now()
 );
 alter table rso_targets add column if not exists reply_seen_at timestamptz;
+-- an upgrade after the heads-up (AC2): when, from what, to what — and when AC2 was last read for it
+alter table rso_targets add column if not exists upgraded_at timestamptz;
+alter table rso_targets add column if not exists upgraded_from text;
+alter table rso_targets add column if not exists upgraded_to text;
+alter table rso_targets add column if not exists upgraded_price numeric;
+alter table rso_targets add column if not exists ac2_checked_at timestamptz;
 alter table rso_targets add column if not exists mentioned_at timestamptz;
 create index if not exists rso_targets_domain on rso_targets (store_domain, created_at desc);
 create index if not exists rso_targets_status on rso_targets (status, created_at desc);
