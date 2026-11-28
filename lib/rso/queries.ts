@@ -84,3 +84,9 @@ export async function listTargets(tab: RsoTab, q?: string): Promise<RsoTarget[]>
   const { rows } = await (await db()).query<RsoTarget>(`select * from rso_targets where ${where}${extra} order by ${order} limit 300`, args);
   return rows;
 }
+
+/** The latest upgrades, for the strip under the counts. */
+export async function recentUpgrades(limit = 8): Promise<RsoTarget[]> {
+  const { rows } = await (await db()).query<RsoTarget>(`select * from rso_targets where upgraded_at is not null order by upgraded_at desc limit $1`, [limit]);
+  return rows;
+}

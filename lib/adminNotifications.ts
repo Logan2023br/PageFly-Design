@@ -156,6 +156,19 @@ export async function recentNotices(sections: AdminSection[]): Promise<AdminNoti
   if (sections.includes("rso") && hasUpsellDatabase()) {
     reads.push(
       (async () => {
+        const { rows: ups } = await (await upsellDb())
+          .query(`select store_domain, store_name, upgraded_at, upgraded_to, read_at from rso_targets where upgraded_at > now() - make_interval(hours => $1)`, [WINDOW_HOURS])
+          .catch(() => ({ rows: [] as Record<string, never>[] }));
+        for (const r of ups as { store_domain: string; store_name: string | null; upgraded_at: Date | string; upgraded_to: string | null; read_at: Date | string | null }[]) {
+          const organic = !!r.read_at && new Date(r.read_at).getTime() <= new Date(r.upgraded_at).getTime();
+          out.push({
+            id: `rso-up:${r.store_domain}`,
+            at: new Date(r.upgraded_at).toISOString(),
+            tone: "celebrate",
+            text: `Radar Sold Out: ${store(r.store_name, r.store_domain)} vừa nâng cấp${r.upgraded_to ? ` lên ${r.upgraded_to}` : ""} (${organic ? "organic — đã xem tin" : "thường — chưa xem tin"}).`,
+            href: `/design/admin/radar-sold-out?tab=upgraded&q=${encodeURIComponent(r.store_domain)}`,
+          });
+        }
         const { rows } = await (await upsellDb())
           .query(
             `select store_domain, store_name, last_reply_at, last_reply_text, mood from rso_targets

@@ -6,7 +6,7 @@ import { CaseButtons, MessageBox, ModeSwitch, RunControls, SettingsForm } from "
 import { vnTime } from "@/lib/ucp2/core";
 import { refreshPendingMessages, type JobState } from "@/lib/rso/core";
 import { getState, hasRsoDatabase } from "@/lib/rso/db";
-import { RSO_TABS, funnel, listTargets, tabCounts, type RsoTab } from "@/lib/rso/queries";
+import { RSO_TABS, funnel, listTargets, recentUpgrades, tabCounts, type RsoTab } from "@/lib/rso/queries";
 import { RSO_HELP, RSO_NUMERIC, getRsoSettings, runState } from "@/lib/rso/settings";
 import { INTENT_LABEL, MOOD_LABEL, STAGE_LABEL, STATUS_LABEL, UPGRADE_KIND_LABEL, productNames, upgradeKind, type RsoTarget } from "@/lib/rso/types";
 
@@ -38,7 +38,7 @@ export default async function RsoPage(props: PageProps<"/design/admin/radar-sold
   const q = typeof sp.q === "string" && sp.q ? sp.q : undefined;
   /* drafts made before the current message form are rewritten once, before they are shown */
   await refreshPendingMessages().catch(() => 0);
-  const [run, cfg, f, counts, job] = await Promise.all([runState(), getRsoSettings(), funnel(), tabCounts(), getState<JobState>("last_job")]);
+  const [run, cfg, f, counts, job, ups] = await Promise.all([runState(), getRsoSettings(), funnel(), tabCounts(), getState<JobState>("last_job"), recentUpgrades()]);
 
   const steps: { label: string; n: number; of: number | null; note?: string }[] = [
     { label: "Tìm thấy", n: f.found - f.skipped, of: null },
@@ -116,6 +116,31 @@ export default async function RsoPage(props: PageProps<"/design/admin/radar-sold
             </div>
           ))}
         </section>
+        {ups.length > 0 && (
+          <section className="grid gap-2 rounded-pf-card border border-pf-success/30 bg-pf-success/5 p-4 text-[12.5px]">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-[13px] font-semibold text-pf-text">
+                Store đã nâng cấp gần đây · {f.upgraded} store ({f.upgraded_organic} organic · {f.upgraded_normal} thường)
+              </h3>
+              <Link href={`${HREF}?tab=upgraded`} className="font-semibold text-pf-primary-hi hover:underline">
+                Xem tất cả →
+              </Link>
+            </div>
+            <ul className="grid gap-1">
+              {ups.map((t) => (
+                <li key={t.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                  <span className="text-pf-faint">{short(t.upgraded_at)}</span>
+                  <strong className="text-pf-text">{t.store_name || t.store_domain}</strong>
+                  <span className="text-pf-body">
+                    {t.upgraded_from ?? "?"} → {t.upgraded_to ?? "?"}
+                    {t.upgraded_price ? ` ($${Number(t.upgraded_price)})` : ""}
+                  </span>
+                  <Pill tone={upgradeKind(t) === "organic" ? "ok" : "muted"}>{upgradeKind(t) === "organic" ? "Organic · đã xem tin" : "Thường · chưa xem tin"}</Pill>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         <p className="-mt-2 text-[12px] text-pf-faint">
           {fmt(f.visits_saved)} lượt xem/tháng đã quay lại page mua được hàng · {fmt(f.stopped)} khách không muốn liên hệ thêm
         </p>
